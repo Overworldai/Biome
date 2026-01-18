@@ -38,6 +38,7 @@ const TerminalDisplay = () => {
   const [isDeleting, setIsDeleting] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [error, setError] = useState(null)
+  const [showPlaceholder, setShowPlaceholder] = useState(false)
   const timeoutRef = useRef(null)
   const currentMessageRef = useRef('')
   const displayTextRef = useRef('')
@@ -66,9 +67,13 @@ const TerminalDisplay = () => {
       } else {
         setIsTyping(false)
         currentMessageRef.current = message
-        // Auto-focus input after "ENTER URL:" finishes typing
+        // Show input area after "ENTER URL:" finishes typing
+        // Delay focus so user sees the blinking cursor animation first
         if (message === stateMessages.cold) {
-          document.getElementById('terminal-input')?.focus()
+          setShowPlaceholder(true)
+          setTimeout(() => {
+            document.getElementById('terminal-input')?.focus()
+          }, 1500)
         }
       }
     }
@@ -81,6 +86,7 @@ const TerminalDisplay = () => {
       clearTimeout(timeoutRef.current)
     }
     setIsDeleting(true)
+    setShowPlaceholder(false)
     let currentText = displayTextRef.current
 
     const deleteChar = () => {
@@ -235,7 +241,7 @@ const TerminalDisplay = () => {
         <span className={`terminal-text ${isTyping ? 'typing' : ''} ${isDeleting ? 'deleting' : ''} ${error ? 'error' : ''}`} id="terminal-text">
           {displayText}
         </span>
-        <span className="input-wrapper">
+        <span className={`input-wrapper ${showPlaceholder ? 'show-input' : ''}`}>
           <input
             type="text"
             className="terminal-input"

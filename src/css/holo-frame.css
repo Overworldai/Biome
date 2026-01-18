@@ -1991,10 +1991,18 @@ button.hud-social-link {
   display: none;
   position: relative;
   align-items: center;
+  overflow: hidden;
+  max-width: 0;
+  transition: max-width 1s ease-out;
 }
 
 .terminal-display.state-cold .input-wrapper {
   display: inline-flex;
+}
+
+/* Expand input wrapper when ready */
+.input-wrapper.show-input {
+  max-width: 26cqw;
 }
 
 /* Show input in cold state */
@@ -2022,15 +2030,17 @@ button.hud-social-link {
   opacity: 1;
 }
 
-/* Custom blinking cursor */
+/* Custom blinking cursor - shows before input is focused */
 .input-cursor {
-  position: absolute;
-  right: -0.65em;
+  display: inline-block;
   width: 0.65em;
   height: 1.2em;
+  margin-left: 0.1em;
+  vertical-align: text-bottom;
   background: rgba(120, 255, 245, 0.9);
   animation: inputCursorBlink 1s step-end infinite;
   pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* Hide custom cursor when input is focused - use native caret instead */
