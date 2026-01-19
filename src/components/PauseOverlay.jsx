@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 
 const UNLOCK_DELAY_MS = 1250 // Browsers require ~1s delay before pointer lock can be re-requested
 
@@ -35,6 +36,7 @@ const PauseOverlay = ({ isActive, pausedAt }) => {
             <>Wait {remainingSeconds}s to resume</>
           )}
         </span>
+        <span className="pause-instruction">Press {RESET_KEY_DISPLAY} to reset</span>
       </div>
     </div>
   )

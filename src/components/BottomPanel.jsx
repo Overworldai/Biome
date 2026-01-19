@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStreaming } from '../context/StreamingContextShared'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
+import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 
 const BottomPanel = ({ isOpen }) => {
   const {
@@ -157,7 +158,7 @@ const BottomPanel = ({ isOpen }) => {
             <div className="prompt-divider"></div>
 
             {/* Reset world button */}
-            <div className="prompt-control-group" onClick={handleResetWorld} title="Reset world (U)">
+            <div className="prompt-control-group" onClick={handleResetWorld} title={`Reset world (${RESET_KEY_DISPLAY})`}>
               <span ref={resetButtonRef} className="prompt-control-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path
@@ -168,7 +169,7 @@ const BottomPanel = ({ isOpen }) => {
                   <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
-              <span className="prompt-control-label">RESET(U)</span>
+              <span className="prompt-control-label">RESET({RESET_KEY_DISPLAY})</span>
             </div>
 
             {/* Logout button */}

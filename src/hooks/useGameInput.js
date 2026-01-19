@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
+// Reset key constant - used for resetting the game (works even when paused)
+export const RESET_KEY = 'KeyU'
+export const RESET_KEY_DISPLAY = RESET_KEY.replace('Key', '') // e.g., 'KeyU' -> 'U'
+
 // Map keyboard codes to button names expected by the server
 // Reserved keys (not sent): U (reset), ~ (menu), Escape (menu), alt (for user to alt tab out), tab (but only if alt is held down)
 const KEY_MAP = {}
@@ -9,8 +13,8 @@ for (let i = 65; i <= 90; i++) {
   const letter = String.fromCharCode(i)
   KEY_MAP[`Key${letter}`] = letter
 }
-// Remove U - reserved for reset
-delete KEY_MAP['KeyU']
+// Remove reset key - reserved for reset
+delete KEY_MAP[RESET_KEY]
 
 // Numbers 0-9
 for (let i = 0; i <= 9; i++) {
@@ -58,14 +62,14 @@ export const useGameInput = (enabled = false, containerRef = null, onReset = nul
         return
       }
 
-      if (!enabled) return
-
-      // U - reset game
-      if (e.code === 'KeyU') {
+      // Reset key - works even when paused
+      if (e.code === RESET_KEY) {
         if (onReset) onReset()
         e.preventDefault()
         return
       }
+
+      if (!enabled) return
 
       // Allow Tab to passthrough only when alt is not pressed (so we don't accidentally capture alt+tab)
       // Tested this locally and it works as expected, if alt tabbing out the tab key event is not captured

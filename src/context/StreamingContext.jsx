@@ -87,10 +87,16 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [isStreaming, isReady])
 
+  // Reset and resume feed (used by U key handler)
+  const handleReset = useCallback(() => {
+    reset()
+    requestPointerLock()
+  }, [reset, requestPointerLock])
+
   const { pressedKeys, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
     containerRef,
-    reset,
+    handleReset,
     togglePointerLock
   )
 
