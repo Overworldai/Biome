@@ -43,6 +43,7 @@ export const StreamingProvider = ({ children }) => {
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
   const [fps, setFps] = useState(0)
+  const [connectionLost, setConnectionLost] = useState(false)
 
   // Local endpoint URL (user provides this instead of VIP key)
   const [endpointUrl, setEndpointUrl] = useState(null)
@@ -52,6 +53,9 @@ export const StreamingProvider = ({ children }) => {
 
   // Track when first frame is received (for isVideoReady)
   const hasReceivedFrame = frame !== null
+
+  // Track if we were attempting/had a connection (to detect connection loss)
+  const wasConnectingOrConnectedRef = useRef(false)
 
   const isStreaming = state === states.STREAMING
   const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen
@@ -155,6 +159,32 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [state, states.WARM, states.HOT, states.STREAMING, disconnect, exitPointerLock])
 
+  // Detect connection loss - show overlay when connection drops during WARM/HOT/STREAMING
+  useEffect(() => {
+    const isInConnectionState = state === states.WARM || state === states.HOT || state === states.STREAMING
+
+    // Track when we enter a connection state
+    if (isInConnectionState && (connectionState === 'connecting' || connectionState === 'connected')) {
+      wasConnectingOrConnectedRef.current = true
+    }
+
+    // Detect connection loss: we were connecting/connected but now disconnected or errored
+    if (
+      wasConnectingOrConnectedRef.current &&
+      isInConnectionState &&
+      (connectionState === 'disconnected' || connectionState === 'error')
+    ) {
+      log.info('Connection lost detected')
+      setConnectionLost(true)
+    }
+
+    // Reset tracking when we leave connection states (back to COLD)
+    if (state === states.COLD) {
+      wasConnectingOrConnectedRef.current = false
+      setConnectionLost(false)
+    }
+  }, [connectionState, state, states.WARM, states.HOT, states.STREAMING, states.COLD])
+
   // Render frames to canvas
   useEffect(() => {
     if (!frame || !canvasRef.current || !canvasReady) return
@@ -236,9 +266,22 @@ export const StreamingProvider = ({ children }) => {
     log.info('Logout complete')
   }, [disconnect, exitPointerLock, shutdown])
 
+  // Dismiss connection lost overlay and return to COLD state
+  const dismissConnectionLost = useCallback(async () => {
+    log.info('Dismissing connection lost overlay')
+    setConnectionLost(false)
+    wasConnectingOrConnectedRef.current = false
+    exitPointerLock()
+    disconnect()
+    setSettingsOpen(false)
+    setIsPaused(false)
+    await shutdown()
+  }, [disconnect, exitPointerLock, shutdown])
+
   const value = {
     // Connection state
     connectionState,
+    connectionLost,
     error,
     isConnected,
     isVideoReady: hasReceivedFrame && canvasReady, // Ready when we have frames and canvas
@@ -284,6 +327,7 @@ export const StreamingProvider = ({ children }) => {
     connect,
     disconnect,
     logout,
+    dismissConnectionLost,
     reset,
     sendPrompt,
     sendPromptWithSeed,

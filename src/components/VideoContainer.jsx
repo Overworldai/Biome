@@ -6,6 +6,7 @@ import VideoMask from './VideoMask'
 import TerminalDisplay from './TerminalDisplay'
 import PauseOverlay from './PauseOverlay'
 import ShutdownOverlay from './ShutdownOverlay'
+import ConnectionLostOverlay from './ConnectionLostOverlay'
 
 const VideoContainer = () => {
   const { isConnected: portalConnected, isExpanded, isShuttingDown } = usePortal()
@@ -78,6 +79,7 @@ const VideoContainer = () => {
         />
 
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} />
+        <ConnectionLostOverlay />
         <TerminalDisplay />
         <VideoMask />
         <ShutdownOverlay />
