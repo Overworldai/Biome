@@ -39,6 +39,7 @@ export const StreamingProvider = ({ children }) => {
   } = useWebSocket()
 
   const [isPaused, setIsPaused] = useState(false)
+  const [pausedAt, setPausedAt] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
@@ -103,6 +104,7 @@ export const StreamingProvider = ({ children }) => {
       if (settingsOpen || isPaused) {
         setSettingsOpen(false)
         setIsPaused(false)
+        setPausedAt(null)
         sendPause(false)
         log.info('Pointer locked - settings closed, resumed')
       }
@@ -110,6 +112,7 @@ export const StreamingProvider = ({ children }) => {
       if (!settingsOpen && !isPaused) {
         setSettingsOpen(true)
         setIsPaused(true)
+        setPausedAt(Date.now())
         sendPause(true)
         log.info('Pointer unlocked - settings opened, paused')
       }
@@ -157,6 +160,7 @@ export const StreamingProvider = ({ children }) => {
       exitPointerLock()
       setSettingsOpen(false)
       setIsPaused(false)
+      setPausedAt(null)
     }
   }, [state, states.WARM, states.HOT, states.STREAMING, disconnect, exitPointerLock])
 
@@ -263,6 +267,7 @@ export const StreamingProvider = ({ children }) => {
     disconnect()
     setSettingsOpen(false)
     setIsPaused(false)
+    setPausedAt(null)
     await shutdown()
     log.info('Logout complete')
   }, [disconnect, exitPointerLock, shutdown])
@@ -276,6 +281,7 @@ export const StreamingProvider = ({ children }) => {
     disconnect()
     setSettingsOpen(false)
     setIsPaused(false)
+    setPausedAt(null)
     await shutdown()
   }, [disconnect, exitPointerLock, shutdown])
 
@@ -290,6 +296,7 @@ export const StreamingProvider = ({ children }) => {
     isLoading,
     isStreaming,
     isPaused,
+    pausedAt,
     settingsOpen,
     statusCode,
 

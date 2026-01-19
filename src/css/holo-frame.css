@@ -365,12 +365,20 @@
   pointer-events: none;
 }
 
-/* Pause indicator - centered and prominent */
-.pause-indicator {
+/* Pause content container - centered */
+.pause-content {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1cqw;
+}
+
+/* Pause indicator - prominent title */
+.pause-indicator {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 5cqw;
   font-weight: 700;
@@ -379,6 +387,16 @@
   text-shadow:
     0 0 30px rgba(255, 255, 255, 0.6),
     0 0 60px rgba(255, 255, 255, 0.3);
+}
+
+/* Pause instruction - helpful text below */
+.pause-instruction {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5cqw;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* Stats display - positioned at top right above video container */
