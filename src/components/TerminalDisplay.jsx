@@ -238,7 +238,10 @@ const TerminalDisplay = () => {
         onClick={() => document.getElementById('terminal-input')?.focus()}
       >
         <span className="terminal-prompt">&gt;</span>
-        <span className={`terminal-text ${isTyping ? 'typing' : ''} ${isDeleting ? 'deleting' : ''} ${error ? 'error' : ''}`} id="terminal-text">
+        <span
+          className={`terminal-text ${isTyping ? 'typing' : ''} ${isDeleting ? 'deleting' : ''} ${error ? 'error' : ''}`}
+          id="terminal-text"
+        >
           {displayText}
         </span>
         <span className={`input-wrapper ${showPlaceholder ? 'show-input' : ''}`}>

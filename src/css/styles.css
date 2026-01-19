@@ -14,18 +14,21 @@
   -webkit-font-smoothing: antialiased;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
-  background: transparent;  /* Set dynamically in main.jsx based on build target */
+  background: transparent; /* Set dynamically in main.jsx based on build target */
   overflow: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -68,7 +71,8 @@ a:hover {
   color: #6ee7ef;
 }
 
-input, button {
+input,
+button {
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0.5em 1em;
@@ -140,7 +144,8 @@ button:hover {
 }
 
 @keyframes anchor-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
   }
   50% {

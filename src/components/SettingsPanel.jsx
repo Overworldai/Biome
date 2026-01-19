@@ -117,7 +117,7 @@ const SettingsPanel = () => {
           <span className="panel-title">Settings</span>
           <button className="panel-close" onClick={handleClose}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>
@@ -144,25 +144,26 @@ const SettingsPanel = () => {
                 {engineLoading ? (
                   <div className="engine-status-content">
                     <div className="engine-status-spinner" />
-                    <span className="engine-status-text">
-                      {setupProgress || 'Checking status...'}
-                    </span>
+                    <span className="engine-status-text">{setupProgress || 'Checking status...'}</span>
                   </div>
                 ) : engineError ? (
                   <div className="engine-status-content error">
                     <span className="engine-status-text">{engineError}</span>
-                    <button
-                      className="engine-action-button"
-                      onClick={handleSetupEngine}
-                    >
+                    <button className="engine-action-button" onClick={handleSetupEngine}>
                       Retry Setup
                     </button>
                   </div>
                 ) : isEngineReady ? (
                   <div className="engine-status-content ready">
-                    <svg className="engine-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" strokeLinecap="round" strokeLinejoin="round"/>
-                      <polyline points="22 4 12 14.01 9 11.01" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg
+                      className="engine-status-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="22 4 12 14.01 9 11.01" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     <span className="engine-status-text">World Engine is ready</span>
                     <button
@@ -175,17 +176,19 @@ const SettingsPanel = () => {
                   </div>
                 ) : (
                   <div className="engine-status-content not-ready">
-                    <svg className="engine-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="8" x2="12" y2="12"/>
-                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    <svg
+                      className="engine-status-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
                     <span className="engine-status-text">World Engine not installed</span>
-                    <button
-                      className="engine-action-button"
-                      onClick={handleSetupEngine}
-                      disabled={engineLoading}
-                    >
+                    <button className="engine-action-button" onClick={handleSetupEngine} disabled={engineLoading}>
                       Download & Setup
                     </button>
                   </div>

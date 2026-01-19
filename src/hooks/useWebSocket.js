@@ -138,12 +138,14 @@ export const useWebSocket = () => {
 
   const sendControl = useCallback((buttons = [], mouseDx = 0, mouseDy = 0) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'control',
-        buttons,
-        mouse_dx: mouseDx,
-        mouse_dy: mouseDy
-      }))
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'control',
+          buttons,
+          mouse_dx: mouseDx,
+          mouse_dy: mouseDy
+        })
+      )
       return true
     }
     return false

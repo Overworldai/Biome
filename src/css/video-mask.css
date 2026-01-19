@@ -38,7 +38,6 @@
   initial-value: 50%;
 }
 
-
 @property --glow-angle {
   syntax: '<angle>';
   inherits: false;
@@ -86,7 +85,9 @@
 .portal-background-cold::before,
 .portal-background-cold::after,
 .portal-background-cold .grid-scanlines {
-  transition: opacity 1.2s ease-in, transform 1.2s ease-in;
+  transition:
+    opacity 1.2s ease-in,
+    transform 1.2s ease-in;
 }
 
 .portal-background-cold:not(.active)::before,
@@ -109,7 +110,9 @@
 .portal-background-warm.active {
   opacity: 1;
   transform: scale(1);
-  transition: opacity 1s ease-out 0.2s, transform 1s ease-out 0.2s;
+  transition:
+    opacity 1s ease-out 0.2s,
+    transform 1s ease-out 0.2s;
 }
 
 .portal-background-warm .tunnel-rings,
@@ -128,7 +131,9 @@
 .portal-background-warm:not(.active) {
   opacity: 0;
   transform: scale(1.1);
-  transition: opacity 0.8s ease-in, transform 0.8s ease-in;
+  transition:
+    opacity 0.8s ease-in,
+    transform 0.8s ease-in;
 }
 
 /* Hot state transitions */
@@ -188,7 +193,8 @@
   pointer-events: none;
   overflow: hidden;
   background: radial-gradient(
-    ellipse calc((var(--mask-size) + var(--pulse-offset)) * var(--mask-aspect)) calc(var(--mask-size) + var(--pulse-offset)) at var(--mask-cx) var(--mask-cy),
+    ellipse calc((var(--mask-size) + var(--pulse-offset)) * var(--mask-aspect))
+      calc(var(--mask-size) + var(--pulse-offset)) at var(--mask-cx) var(--mask-cy),
     transparent 0%,
     transparent 85%,
     rgba(80, 200, 220, 0.15) 90%,
@@ -224,20 +230,8 @@
     transparent 360deg
   );
   /* Mask to ring shape */
-  -webkit-mask: radial-gradient(
-    ellipse 50% 50% at center,
-    transparent 68%,
-    white 80%,
-    white 90%,
-    transparent 100%
-  );
-  mask: radial-gradient(
-    ellipse 50% 50% at center,
-    transparent 68%,
-    white 80%,
-    white 90%,
-    transparent 100%
-  );
+  -webkit-mask: radial-gradient(ellipse 50% 50% at center, transparent 68%, white 80%, white 90%, transparent 100%);
+  mask: radial-gradient(ellipse 50% 50% at center, transparent 68%, white 80%, white 90%, transparent 100%);
   filter: blur(8px);
   opacity: 0;
   /* No transition by default - instant resize with container units */
@@ -269,20 +263,8 @@
     transparent 360deg
   );
   /* Mask to ring shape - tight band at the edge */
-  -webkit-mask: radial-gradient(
-    ellipse 50% 50% at center,
-    transparent 72%,
-    white 82%,
-    white 88%,
-    transparent 96%
-  );
-  mask: radial-gradient(
-    ellipse 50% 50% at center,
-    transparent 72%,
-    white 82%,
-    white 88%,
-    transparent 96%
-  );
+  -webkit-mask: radial-gradient(ellipse 50% 50% at center, transparent 72%, white 82%, white 88%, transparent 96%);
+  mask: radial-gradient(ellipse 50% 50% at center, transparent 72%, white 82%, white 88%, transparent 96%);
   filter: blur(4px);
   opacity: 0;
   transition: none;
@@ -293,35 +275,68 @@
    ============================================ */
 
 @keyframes portalRingColorShift {
-  from { --glow-angle: 0deg; }
-  to { --glow-angle: 360deg; }
+  from {
+    --glow-angle: 0deg;
+  }
+  to {
+    --glow-angle: 360deg;
+  }
 }
 
 @keyframes portalRingColorShiftSlow {
-  from { --glow-angle-slow: 0deg; }
-  to { --glow-angle-slow: 360deg; }
+  from {
+    --glow-angle-slow: 0deg;
+  }
+  to {
+    --glow-angle-slow: 360deg;
+  }
 }
 
 @keyframes portalHeartbeat {
-  0%, 20%, 100% { --pulse-offset: 0px; }
-  5% { --pulse-offset: 4px; }
-  10% { --pulse-offset: 0px; }
-  15% { --pulse-offset: 2px; }
+  0%,
+  20%,
+  100% {
+    --pulse-offset: 0px;
+  }
+  5% {
+    --pulse-offset: 4px;
+  }
+  10% {
+    --pulse-offset: 0px;
+  }
+  15% {
+    --pulse-offset: 2px;
+  }
 }
 
 /* Shudder effect for cold→warm transition */
 @keyframes portalShudder {
-  0% { --pulse-offset: 0px; }
-  15% { --pulse-offset: -5px; }
-  30% { --pulse-offset: 3px; }
-  45% { --pulse-offset: -2px; }
-  60% { --pulse-offset: 1px; }
-  80% { --pulse-offset: 0px; }
-  100% { --pulse-offset: 0px; }
+  0% {
+    --pulse-offset: 0px;
+  }
+  15% {
+    --pulse-offset: -5px;
+  }
+  30% {
+    --pulse-offset: 3px;
+  }
+  45% {
+    --pulse-offset: -2px;
+  }
+  60% {
+    --pulse-offset: 1px;
+  }
+  80% {
+    --pulse-offset: 0px;
+  }
+  100% {
+    --pulse-offset: 0px;
+  }
 }
 
 @keyframes portalColdIdle {
-  0%, 100% {
+  0%,
+  100% {
     --pulse-offset: 0px;
     --mask-cy: 50%;
   }
@@ -332,8 +347,13 @@
 }
 
 @keyframes portalWarmIdle {
-  0%, 100% { --pulse-offset: 0px; }
-  50% { --pulse-offset: 2px; }
+  0%,
+  100% {
+    --pulse-offset: 0px;
+  }
+  50% {
+    --pulse-offset: 2px;
+  }
 }
 
 /* ============================================
@@ -345,7 +365,6 @@
   animation: none;
   transition: --mask-size var(--mask-duration) cubic-bezier(0.4, 0, 0.2, 1);
 }
-
 
 /* Hide glow ring when expanded (video fully visible) */
 .video-mask.expanded::before,
@@ -409,10 +428,10 @@
   background: #020617;
 
   /* Scanline fade controls */
-  --scanline-speed: 4s;        /* Duration of one fade cycle */
-  --scanline-bands: 3;         /* Number of fade bands visible at once */
-  --scanline-intensity: 0.85;  /* How much lines fade (0 = no fade, 1 = full fade) */
-  --scanline-softness: 30%;    /* Softness of fade bands (higher = softer) */
+  --scanline-speed: 4s; /* Duration of one fade cycle */
+  --scanline-bands: 3; /* Number of fade bands visible at once */
+  --scanline-intensity: 0.85; /* How much lines fade (0 = no fade, 1 = full fade) */
+  --scanline-softness: 30%; /* Softness of fade bands (higher = softer) */
 }
 
 .portal-background-cold::before {
@@ -424,8 +443,7 @@
   height: 200%;
   transform: translate(-50%, -50%) perspective(500px) rotateX(60deg);
   /* Vertical lines only - no animation to avoid subpixel interference */
-  background-image:
-    linear-gradient(90deg, rgba(80, 200, 200, 0.15) 2px, transparent 2px);
+  background-image: linear-gradient(90deg, rgba(80, 200, 200, 0.15) 2px, transparent 2px);
   background-size: 6.25cqw 11.1cqh; /* 40px / 640px, 40px / 360px */
 }
 
@@ -440,8 +458,7 @@
   pointer-events: none;
   z-index: 1;
   /* Horizontal lines - 2px thick to avoid subpixel fading from perspective compression */
-  background-image:
-    linear-gradient(rgba(80, 200, 200, 0.15) 4px, transparent 4px);
+  background-image: linear-gradient(rgba(80, 200, 200, 0.15) 4px, transparent 4px);
   background-size: 6.25cqw 11.1cqh;
   /* Animated wave mask - fades bands of horizontal lines */
   -webkit-mask-image: repeating-linear-gradient(
@@ -486,20 +503,19 @@
   width: 100%;
   height: 100%;
   z-index: 2;
-  background: radial-gradient(
-    ellipse 50% 50% at 50% 50%,
-    transparent 0%,
-    rgba(2, 6, 23, 0.7) 50%,
-    #020617 80%
-  );
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, transparent 0%, rgba(2, 6, 23, 0.7) 50%, #020617 80%);
 }
 
 @keyframes gridDrift {
   0% {
-    background-position: 0 0, 0 0;
+    background-position:
+      0 0,
+      0 0;
   }
   100% {
-    background-position: 0 11.1cqh, 0 11.1cqh; /* Match background-size */
+    background-position:
+      0 11.1cqh,
+      0 11.1cqh; /* Match background-size */
   }
 }
 
@@ -556,12 +572,7 @@
       rgba(10, 20, 40, 0.2) 60%,
       transparent 100%
     ),
-    radial-gradient(
-      ellipse 60% 70% at 50% 50%,
-      #0a1628 0%,
-      #050d1a 40%,
-      #020617 100%
-    );
+    radial-gradient(ellipse 60% 70% at 50% 50%, #0a1628 0%, #050d1a 40%, #020617 100%);
 }
 
 /* Tunnel rings container */
@@ -608,12 +619,24 @@
 }
 
 /* Stagger ring animations */
-.tunnel-ring:nth-child(1) { animation-delay: 0s; }
-.tunnel-ring:nth-child(2) { animation-delay: -0.33s; }
-.tunnel-ring:nth-child(3) { animation-delay: -0.66s; }
-.tunnel-ring:nth-child(4) { animation-delay: -1s; }
-.tunnel-ring:nth-child(5) { animation-delay: -1.33s; }
-.tunnel-ring:nth-child(6) { animation-delay: -1.66s; }
+.tunnel-ring:nth-child(1) {
+  animation-delay: 0s;
+}
+.tunnel-ring:nth-child(2) {
+  animation-delay: -0.33s;
+}
+.tunnel-ring:nth-child(3) {
+  animation-delay: -0.66s;
+}
+.tunnel-ring:nth-child(4) {
+  animation-delay: -1s;
+}
+.tunnel-ring:nth-child(5) {
+  animation-delay: -1.33s;
+}
+.tunnel-ring:nth-child(6) {
+  animation-delay: -1.66s;
+}
 
 /* Vignette overlay for depth */
 .portal-background-warm::before {
@@ -653,8 +676,15 @@
 }
 
 @keyframes warpPulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
-  50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.3);
+    opacity: 1;
+  }
 }
 
 /* Individual star streaks with depth layers */
@@ -707,18 +737,78 @@
   --travel: 22cqh; /* 80px / 360px */
 }
 
-.streak-1  { --angle: 8deg;   --length: 7cqh;  --speed: 2.8s; animation-delay: 0s; }
-.streak-2  { --angle: 37deg;  --length: 8.3cqh;  --speed: 2.5s; animation-delay: -0.4s; }
-.streak-3  { --angle: 66deg;  --length: 6.1cqh;  --speed: 3.0s; animation-delay: -1.0s; }
-.streak-4  { --angle: 95deg;  --length: 7.8cqh;  --speed: 2.6s; animation-delay: -0.7s; }
-.streak-5  { --angle: 124deg; --length: 8.9cqh;  --speed: 2.4s; animation-delay: -1.5s; }
-.streak-6  { --angle: 153deg; --length: 7.2cqh;  --speed: 2.7s; animation-delay: -0.2s; }
-.streak-7  { --angle: 182deg; --length: 9.7cqh;  --speed: 2.3s; animation-delay: -1.8s; }
-.streak-8  { --angle: 211deg; --length: 6.7cqh;  --speed: 2.9s; animation-delay: -0.9s; }
-.streak-9  { --angle: 240deg; --length: 8.1cqh;  --speed: 2.5s; animation-delay: -1.3s; }
-.streak-10 { --angle: 269deg; --length: 7.5cqh;  --speed: 2.6s; animation-delay: -0.5s; }
-.streak-11 { --angle: 298deg; --length: 8.6cqh;  --speed: 2.4s; animation-delay: -1.6s; }
-.streak-12 { --angle: 327deg; --length: 6.4cqh;  --speed: 2.8s; animation-delay: -0.1s; }
+.streak-1 {
+  --angle: 8deg;
+  --length: 7cqh;
+  --speed: 2.8s;
+  animation-delay: 0s;
+}
+.streak-2 {
+  --angle: 37deg;
+  --length: 8.3cqh;
+  --speed: 2.5s;
+  animation-delay: -0.4s;
+}
+.streak-3 {
+  --angle: 66deg;
+  --length: 6.1cqh;
+  --speed: 3s;
+  animation-delay: -1s;
+}
+.streak-4 {
+  --angle: 95deg;
+  --length: 7.8cqh;
+  --speed: 2.6s;
+  animation-delay: -0.7s;
+}
+.streak-5 {
+  --angle: 124deg;
+  --length: 8.9cqh;
+  --speed: 2.4s;
+  animation-delay: -1.5s;
+}
+.streak-6 {
+  --angle: 153deg;
+  --length: 7.2cqh;
+  --speed: 2.7s;
+  animation-delay: -0.2s;
+}
+.streak-7 {
+  --angle: 182deg;
+  --length: 9.7cqh;
+  --speed: 2.3s;
+  animation-delay: -1.8s;
+}
+.streak-8 {
+  --angle: 211deg;
+  --length: 6.7cqh;
+  --speed: 2.9s;
+  animation-delay: -0.9s;
+}
+.streak-9 {
+  --angle: 240deg;
+  --length: 8.1cqh;
+  --speed: 2.5s;
+  animation-delay: -1.3s;
+}
+.streak-10 {
+  --angle: 269deg;
+  --length: 7.5cqh;
+  --speed: 2.6s;
+  animation-delay: -0.5s;
+}
+.streak-11 {
+  --angle: 298deg;
+  --length: 8.6cqh;
+  --speed: 2.4s;
+  animation-delay: -1.6s;
+}
+.streak-12 {
+  --angle: 327deg;
+  --length: 6.4cqh;
+  --speed: 2.8s;
+  animation-delay: -0.1s;
+}
 
 /* MID layer - medium brightness, thickness, speed */
 .streak-mid {
@@ -727,16 +817,66 @@
   --travel: 42cqh; /* 150px / 360px */
 }
 
-.streak-13 { --angle: 20deg;  --length: 14cqh;  --speed: 1.6s; animation-delay: -0.2s; }
-.streak-14 { --angle: 56deg;  --length: 16.7cqh;  --speed: 1.4s; animation-delay: -0.7s; }
-.streak-15 { --angle: 92deg;  --length: 12.5cqh;  --speed: 1.7s; animation-delay: -1.1s; }
-.streak-16 { --angle: 128deg; --length: 15.3cqh;  --speed: 1.5s; animation-delay: -0.4s; }
-.streak-17 { --angle: 164deg; --length: 18.1cqh;  --speed: 1.3s; animation-delay: -0.9s; }
-.streak-18 { --angle: 200deg; --length: 13.3cqh;  --speed: 1.6s; animation-delay: -1.4s; }
-.streak-19 { --angle: 236deg; --length: 16.1cqh;  --speed: 1.4s; animation-delay: -0.1s; }
-.streak-20 { --angle: 272deg; --length: 14.4cqh;  --speed: 1.5s; animation-delay: -0.6s; }
-.streak-21 { --angle: 308deg; --length: 17.2cqh;  --speed: 1.3s; animation-delay: -1.0s; }
-.streak-22 { --angle: 344deg; --length: 13.1cqh;  --speed: 1.6s; animation-delay: -0.3s; }
+.streak-13 {
+  --angle: 20deg;
+  --length: 14cqh;
+  --speed: 1.6s;
+  animation-delay: -0.2s;
+}
+.streak-14 {
+  --angle: 56deg;
+  --length: 16.7cqh;
+  --speed: 1.4s;
+  animation-delay: -0.7s;
+}
+.streak-15 {
+  --angle: 92deg;
+  --length: 12.5cqh;
+  --speed: 1.7s;
+  animation-delay: -1.1s;
+}
+.streak-16 {
+  --angle: 128deg;
+  --length: 15.3cqh;
+  --speed: 1.5s;
+  animation-delay: -0.4s;
+}
+.streak-17 {
+  --angle: 164deg;
+  --length: 18.1cqh;
+  --speed: 1.3s;
+  animation-delay: -0.9s;
+}
+.streak-18 {
+  --angle: 200deg;
+  --length: 13.3cqh;
+  --speed: 1.6s;
+  animation-delay: -1.4s;
+}
+.streak-19 {
+  --angle: 236deg;
+  --length: 16.1cqh;
+  --speed: 1.4s;
+  animation-delay: -0.1s;
+}
+.streak-20 {
+  --angle: 272deg;
+  --length: 14.4cqh;
+  --speed: 1.5s;
+  animation-delay: -0.6s;
+}
+.streak-21 {
+  --angle: 308deg;
+  --length: 17.2cqh;
+  --speed: 1.3s;
+  animation-delay: -1s;
+}
+.streak-22 {
+  --angle: 344deg;
+  --length: 13.1cqh;
+  --speed: 1.6s;
+  animation-delay: -0.3s;
+}
 
 /* NEAR layer - bright, thick, fast, long travel */
 .streak-near {
@@ -745,14 +885,54 @@
   --travel: 69cqh; /* 250px / 360px */
 }
 
-.streak-23 { --angle: 15deg;  --length: 26cqh;  --speed: 0.75s; animation-delay: -0.1s; }
-.streak-24 { --angle: 63deg;  --length: 29cqh; --speed: 0.65s; animation-delay: -0.35s; }
-.streak-25 { --angle: 111deg; --length: 24cqh;  --speed: 0.8s;  animation-delay: -0.5s; }
-.streak-26 { --angle: 159deg; --length: 31cqh; --speed: 0.6s;  animation-delay: -0.2s; }
-.streak-27 { --angle: 207deg; --length: 25cqh;  --speed: 0.7s;  animation-delay: -0.45s; }
-.streak-28 { --angle: 255deg; --length: 28cqh; --speed: 0.68s; animation-delay: -0.15s; }
-.streak-29 { --angle: 303deg; --length: 24cqh;  --speed: 0.78s; animation-delay: -0.4s; }
-.streak-30 { --angle: 351deg; --length: 27cqh;  --speed: 0.72s; animation-delay: -0.25s; }
+.streak-23 {
+  --angle: 15deg;
+  --length: 26cqh;
+  --speed: 0.75s;
+  animation-delay: -0.1s;
+}
+.streak-24 {
+  --angle: 63deg;
+  --length: 29cqh;
+  --speed: 0.65s;
+  animation-delay: -0.35s;
+}
+.streak-25 {
+  --angle: 111deg;
+  --length: 24cqh;
+  --speed: 0.8s;
+  animation-delay: -0.5s;
+}
+.streak-26 {
+  --angle: 159deg;
+  --length: 31cqh;
+  --speed: 0.6s;
+  animation-delay: -0.2s;
+}
+.streak-27 {
+  --angle: 207deg;
+  --length: 25cqh;
+  --speed: 0.7s;
+  animation-delay: -0.45s;
+}
+.streak-28 {
+  --angle: 255deg;
+  --length: 28cqh;
+  --speed: 0.68s;
+  animation-delay: -0.15s;
+}
+.streak-29 {
+  --angle: 303deg;
+  --length: 24cqh;
+  --speed: 0.78s;
+  animation-delay: -0.4s;
+}
+.streak-30 {
+  --angle: 351deg;
+  --length: 27cqh;
+  --speed: 0.72s;
+  animation-delay: -0.25s;
+}
 
 /* ============================================
    PORTAL STATE: HOT

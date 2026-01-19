@@ -84,20 +84,23 @@ export const useConfig = () => {
   }, [config.gpu_server])
 
   // Save GPU server URL from user input (parses "host:port" format)
-  const saveGpuServerUrl = useCallback(async (url) => {
-    const match = url.match(/^(?:wss?:\/\/)?([^:/]+)(?::(\d+))?/)
-    if (!match) return false
+  const saveGpuServerUrl = useCallback(
+    async (url) => {
+      const match = url.match(/^(?:wss?:\/\/)?([^:/]+)(?::(\d+))?/)
+      if (!match) return false
 
-    const [, host, port] = match
-    return saveConfig({
-      ...config,
-      gpu_server: {
-        ...config.gpu_server,
-        host,
-        port: port ? parseInt(port, 10) : config.gpu_server.port
-      }
-    })
-  }, [config, saveConfig])
+      const [, host, port] = match
+      return saveConfig({
+        ...config,
+        gpu_server: {
+          ...config.gpu_server,
+          host,
+          port: port ? parseInt(port, 10) : config.gpu_server.port
+        }
+      })
+    },
+    [config, saveConfig]
+  )
 
   // Open config file in default application
   const openConfig = useCallback(async () => {

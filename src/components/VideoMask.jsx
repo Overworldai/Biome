@@ -18,7 +18,9 @@ const VideoMask = () => {
     isAnimating ? 'animating' : '',
     isShrinking ? 'shrinking' : '',
     isExpanded ? 'expanded' : ''
-  ].filter(Boolean).join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return <div ref={maskRef} className={classes}></div>
 }

@@ -86,11 +86,12 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [isStreaming, isReady])
 
-  const {
-    pressedKeys,
-    getInputState,
-    isPointerLocked
-  } = useGameInput(inputEnabled, containerRef, reset, togglePointerLock)
+  const { pressedKeys, getInputState, isPointerLocked } = useGameInput(
+    inputEnabled,
+    containerRef,
+    reset,
+    togglePointerLock
+  )
 
   const inputLoopRef = useRef(null)
 
@@ -339,11 +340,7 @@ export const StreamingProvider = ({ children }) => {
     handleContainerClick
   }
 
-  return (
-    <StreamingContext.Provider value={value}>
-      {children}
-    </StreamingContext.Provider>
-  )
+  return <StreamingContext.Provider value={value}>{children}</StreamingContext.Provider>
 }
 
 export default StreamingContext

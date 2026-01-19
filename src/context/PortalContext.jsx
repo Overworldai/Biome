@@ -46,64 +46,67 @@ export const PortalProvider = ({ children }) => {
 
   const notifyListeners = useCallback((newState, previousState) => {
     log.info(`State: ${previousState} → ${newState}`)
-    listenersRef.current.forEach(fn => fn(newState, previousState))
+    listenersRef.current.forEach((fn) => fn(newState, previousState))
   }, [])
 
   const toggleSettings = useCallback(() => {
-    setIsSettingsOpen(prev => !prev)
+    setIsSettingsOpen((prev) => !prev)
   }, [])
 
   const onStateChange = useCallback((callback) => {
     listenersRef.current.push(callback)
     return () => {
-      listenersRef.current = listenersRef.current.filter(fn => fn !== callback)
+      listenersRef.current = listenersRef.current.filter((fn) => fn !== callback)
     }
   }, [])
 
-  const shrinkThenExpand = useCallback((options = {}) => {
-    return new Promise((resolve) => {
-      const shrinkDuration = options.shrinkDuration || '1.5s'
-      const expandDuration = options.expandDuration || '0.4s'
-      const onShrinkComplete = options.onShrinkComplete || (() => {})
+  const shrinkThenExpand = useCallback(
+    (options = {}) => {
+      return new Promise((resolve) => {
+        const shrinkDuration = options.shrinkDuration || '1.5s'
+        const expandDuration = options.expandDuration || '0.4s'
+        const onShrinkComplete = options.onShrinkComplete || (() => {})
 
-      // Target size uses CSS hypot() for diagonal calculation - fallback to 150cqh (always covers corners)
-      const targetSize = options.targetSize || 'hypot(100cqw, 100cqh)'
-      const feather = options.feather || '8cqh'  // 8% feather using container units
+        // Target size uses CSS hypot() for diagonal calculation - fallback to 150cqh (always covers corners)
+        const targetSize = options.targetSize || 'hypot(100cqw, 100cqh)'
+        const feather = options.feather || '8cqh' // 8% feather using container units
 
-      setIsAnimating(true)
-      setIsShrinking(true)
-      setIsExpanded(false)
+        setIsAnimating(true)
+        setIsShrinking(true)
+        setIsExpanded(false)
 
-      // Phase 1: Shrink aperture closed
-      setMaskProperty('--mask-duration', shrinkDuration)
+        // Phase 1: Shrink aperture closed
+        setMaskProperty('--mask-duration', shrinkDuration)
 
-      requestAnimationFrame(() => {
-        setMaskProperty('--mask-size', '0px')
-      })
-
-      setTimeout(() => {
-        // Shrink complete - call callback to swap content
-        onShrinkComplete()
-        setIsShrinking(false)
-
-        // Phase 2: Rapid expansion to reveal video
-        setMaskProperty('--mask-duration', expandDuration)
-        setMaskProperty('--mask-feather', feather)
-        setMaskProperty('--mask-aspect', '1')
-
-        // Trigger expansion
         requestAnimationFrame(() => {
-          setMaskProperty('--mask-size', targetSize)
+          setMaskProperty('--mask-size', '0px')
         })
 
         setTimeout(() => {
-          setIsAnimating(false)
-          setIsExpanded(true)
-          resolve()
-        }, parseDuration(expandDuration))
-      }, parseDuration(shrinkDuration))
-    })
-  }, [setMaskProperty])
+          // Shrink complete - call callback to swap content
+          onShrinkComplete()
+          setIsShrinking(false)
+
+          // Phase 2: Rapid expansion to reveal video
+          setMaskProperty('--mask-duration', expandDuration)
+          setMaskProperty('--mask-feather', feather)
+          setMaskProperty('--mask-aspect', '1')
+
+          // Trigger expansion
+          requestAnimationFrame(() => {
+            setMaskProperty('--mask-size', targetSize)
+          })
+
+          setTimeout(() => {
+            setIsAnimating(false)
+            setIsExpanded(true)
+            resolve()
+          }, parseDuration(expandDuration))
+        }, parseDuration(shrinkDuration))
+      })
+    },
+    [setMaskProperty]
+  )
 
   const shutdown = useCallback(() => {
     return new Promise((resolve) => {
@@ -137,31 +140,34 @@ export const PortalProvider = ({ children }) => {
     })
   }, [state, notifyListeners, setMaskProperty])
 
-  const transitionTo = useCallback(async (newState) => {
-    const previousState = state
+  const transitionTo = useCallback(
+    async (newState) => {
+      const previousState = state
 
-    if (newState === STATES.HOT) {
-      // Set state to HOT immediately so terminal shows "CONNECTED" during shrink
-      setState(newState)
-      notifyListeners(newState, previousState)
+      if (newState === STATES.HOT) {
+        // Set state to HOT immediately so terminal shows "CONNECTED" during shrink
+        setState(newState)
+        notifyListeners(newState, previousState)
 
-      await shrinkThenExpand({
-        onShrinkComplete: () => {
-          setShowFlash(true)
-          setIsConnected(true)
-          setTimeout(() => setShowFlash(false), 600)
+        await shrinkThenExpand({
+          onShrinkComplete: () => {
+            setShowFlash(true)
+            setIsConnected(true)
+            setTimeout(() => setShowFlash(false), 600)
+          }
+        })
+      } else {
+        setState(newState)
+        // Only disconnect when going back to COLD state
+        if (newState === STATES.COLD) {
+          setIsConnected(false)
+          setIsExpanded(false)
         }
-      })
-    } else {
-      setState(newState)
-      // Only disconnect when going back to COLD state
-      if (newState === STATES.COLD) {
-        setIsConnected(false)
-        setIsExpanded(false)
+        notifyListeners(newState, previousState)
       }
-      notifyListeners(newState, previousState)
-    }
-  }, [state, notifyListeners, shrinkThenExpand])
+    },
+    [state, notifyListeners, shrinkThenExpand]
+  )
 
   const value = {
     state,
@@ -181,9 +187,5 @@ export const PortalProvider = ({ children }) => {
     is: (s) => state === s
   }
 
-  return (
-    <PortalContext.Provider value={value}>
-      {children}
-    </PortalContext.Provider>
-  )
+  return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>
 }

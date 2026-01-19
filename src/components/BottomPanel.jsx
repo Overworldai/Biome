@@ -3,7 +3,16 @@ import { useStreaming } from '../context/StreamingContextShared'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 
 const BottomPanel = ({ isOpen }) => {
-  const { sendPrompt, sendPromptWithSeed, requestPointerLock, config, reset, logout, mouseSensitivity, setMouseSensitivity } = useStreaming()
+  const {
+    sendPrompt,
+    sendPromptWithSeed,
+    requestPointerLock,
+    config,
+    reset,
+    logout,
+    mouseSensitivity,
+    setMouseSensitivity
+  } = useStreaming()
   const [textPrompt, setTextPrompt] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
   const generateSeed = true // Always generate seed images
@@ -75,11 +84,7 @@ const BottomPanel = ({ isOpen }) => {
     setStatus('Enhancing prompt...')
 
     try {
-      const { sanitized_prompt, seed_image_url } = await processPrompt(
-        textPrompt.trim(),
-        generateSeed,
-        config
-      )
+      const { sanitized_prompt, seed_image_url } = await processPrompt(textPrompt.trim(), generateSeed, config)
 
       setLastPrompt(textPrompt.trim())
       setTextPrompt(sanitized_prompt)
@@ -94,7 +99,6 @@ const BottomPanel = ({ isOpen }) => {
 
       setStatus(null)
       setIsLoading(false)
-
     } catch (err) {
       console.error('Prompt error:', err)
       setError(err.message)
@@ -111,10 +115,13 @@ const BottomPanel = ({ isOpen }) => {
           <textarea
             ref={textareaRef}
             className="prompt-input-compact"
-            placeholder={lastPrompt || "Describe a scene..."}
-            value={isLoading ? (status || '') : textPrompt}
+            placeholder={lastPrompt || 'Describe a scene...'}
+            value={isLoading ? status || '' : textPrompt}
             onChange={(e) => setTextPrompt(e.target.value)}
-            onKeyDown={(e) => { handleKeyDown(e); handlePromptSubmit(e); }}
+            onKeyDown={(e) => {
+              handleKeyDown(e)
+              handlePromptSubmit(e)
+            }}
             disabled={isLoading}
             rows={1}
           />
@@ -153,7 +160,11 @@ const BottomPanel = ({ isOpen }) => {
             <div className="prompt-control-group" onClick={handleResetWorld} title="Reset world (U)">
               <span ref={resetButtonRef} className="prompt-control-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                   <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
@@ -178,9 +189,18 @@ const BottomPanel = ({ isOpen }) => {
               onClick={() => !(isLoading || !textPrompt.trim()) && applyPrompt()}
               title="Apply prompt"
             >
-              <span ref={promptButtonRef} className={`prompt-submit-btn ${isLoading || !textPrompt.trim() ? 'disabled' : ''}`}>
+              <span
+                ref={promptButtonRef}
+                className={`prompt-submit-btn ${isLoading || !textPrompt.trim() ? 'disabled' : ''}`}
+              >
                 {isLoading ? (
-                  <svg className="prompt-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg
+                    className="prompt-spinner"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
                     <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
                     <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
                   </svg>

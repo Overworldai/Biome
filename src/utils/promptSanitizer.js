@@ -21,7 +21,7 @@ async function sanitizePromptDirect(rawPrompt, openaiKey) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openaiKey}`
+      Authorization: `Bearer ${openaiKey}`
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
@@ -48,7 +48,7 @@ async function generateSeedImageDirect(prompt, falKey) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Key ${falKey}`
+      Authorization: `Key ${falKey}`
     },
     body: JSON.stringify({
       prompt: prompt,

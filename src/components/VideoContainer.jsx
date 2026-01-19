@@ -31,10 +31,13 @@ const VideoContainer = () => {
   }, [registerContainerRef])
 
   // Callback ref for canvas - registers immediately when element mounts
-  const handleCanvasRef = useCallback((element) => {
-    canvasRef.current = element
-    registerCanvasRef(element)
-  }, [registerCanvasRef])
+  const handleCanvasRef = useCallback(
+    (element) => {
+      canvasRef.current = element
+      registerCanvasRef(element)
+    },
+    [registerCanvasRef]
+  )
 
   const containerClasses = [
     'video-container',
@@ -43,7 +46,9 @@ const VideoContainer = () => {
     isPaused ? 'paused' : '',
     isStreaming ? 'streaming' : '',
     isPointerLocked ? 'pointer-locked' : ''
-  ].filter(Boolean).join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   // Show media when we have frames and portal is connected
   // The actual visibility is controlled by CSS opacity based on expanded state
@@ -61,22 +66,12 @@ const VideoContainer = () => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={containerClasses}
-      onClick={handleContainerClick}
-    >
+    <div ref={containerRef} className={containerClasses} onClick={handleContainerClick}>
       <div className="video-container-inner">
         {!showMedia && <PortalBackgrounds />}
 
         {/* Canvas for WebSocket base64 frames */}
-        <canvas
-          ref={handleCanvasRef}
-          width={1280}
-          height={720}
-          className="streaming-frame"
-          style={mediaStyle}
-        />
+        <canvas ref={handleCanvasRef} width={1280} height={720} className="streaming-frame" style={mediaStyle} />
 
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} />
         <ConnectionLostOverlay />

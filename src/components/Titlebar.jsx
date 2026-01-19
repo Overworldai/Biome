@@ -9,10 +9,14 @@ const Titlebar = () => {
       <div className="titlebar-title">BIOME</div>
       <div className="titlebar-controls">
         <button id="titlebar-minimize" className="titlebar-btn" onClick={minimize}>
-          <svg viewBox="0 0 10 10"><path d="M2 5h6" stroke="currentColor" strokeWidth="1.2"/></svg>
+          <svg viewBox="0 0 10 10">
+            <path d="M2 5h6" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
         </button>
         <button id="titlebar-close" className="titlebar-btn titlebar-close" onClick={close}>
-          <svg viewBox="0 0 10 10"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" strokeWidth="1.2"/></svg>
+          <svg viewBox="0 0 10 10">
+            <path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
         </button>
       </div>
     </div>

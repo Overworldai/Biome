@@ -73,10 +73,10 @@
 
 .holo-frame .content-area {
   position: absolute;
-  left: 10%;      /* 80 / 800 - match video container */
-  top: 14%;       /* 70 / 500 */
-  width: 80%;     /* 640 / 800 */
-  height: 72%;    /* 360 / 500 */
+  left: 10%; /* 80 / 800 - match video container */
+  top: 14%; /* 70 / 500 */
+  width: 80%; /* 640 / 800 */
+  height: 72%; /* 360 / 500 */
   z-index: 5;
 }
 
@@ -195,10 +195,10 @@
 /* HUD Video Frame Container - positioned at video anchor area, sits ON TOP of video */
 .hud-video-frame-container {
   position: absolute;
-  left: 10%;      /* 80 / 800 */
-  top: 14%;       /* 70 / 500 */
-  width: 80%;     /* 640 / 800 */
-  height: 72%;    /* 360 / 500 */
+  left: 10%; /* 80 / 800 */
+  top: 14%; /* 70 / 500 */
+  width: 80%; /* 640 / 800 */
+  height: 72%; /* 360 / 500 */
   pointer-events: none;
   z-index: 10; /* Above video container (z-index 0), below panels */
   /* Center the 16:9 SVG within bounds */
@@ -226,7 +226,7 @@
 
 .hud-background .hud,
 .hud-video-frame .hud {
-  stroke: rgba(120,255,245,0.88);
+  stroke: rgba(120, 255, 245, 0.88);
   stroke-width: 1.7;
   fill: none;
   stroke-linecap: round;
@@ -235,15 +235,15 @@
 
 .hud-background .hud-dim,
 .hud-video-frame .hud-dim {
-  stroke: rgba(120,255,245,0.35);
+  stroke: rgba(120, 255, 245, 0.35);
   stroke-width: 1.2;
   fill: none;
 }
 
 .hud-background .hud-ghost,
 .hud-video-frame .hud-ghost {
-  stroke: rgba(120,255,245,0.14);
-  stroke-width: 1.0;
+  stroke: rgba(120, 255, 245, 0.14);
+  stroke-width: 1;
   fill: none;
 }
 
@@ -254,12 +254,12 @@
 
 .hud-background .dot,
 .hud-video-frame .dot {
-  fill: rgba(120,255,245,0.72);
+  fill: rgba(120, 255, 245, 0.72);
 }
 
 .hud-background .dot-dim,
 .hud-video-frame .dot-dim {
-  fill: rgba(120,255,245,0.38);
+  fill: rgba(120, 255, 245, 0.38);
 }
 
 /* HUD draw-in animations */
@@ -384,8 +384,8 @@
 /* Stats display - positioned at top right above video container */
 .stats-display {
   position: absolute;
-  top: 6.5%;       /* Just above video area (14%) */
-  right: 33%;      /* Aligned with right side of video area */
+  top: 6.5%; /* Just above video area (14%) */
+  right: 33%; /* Aligned with right side of video area */
   display: flex;
   gap: 1.5cqw;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -394,7 +394,7 @@
   color: rgba(120, 255, 245, 0.5);
   text-shadow: 0 0 4px rgba(120, 255, 245, 0.2);
   pointer-events: none;
-  z-index: 105;   /* Above HUD overlay background */
+  z-index: 105; /* Above HUD overlay background */
 }
 
 .stats-display .stat {
@@ -410,7 +410,7 @@
   position: absolute;
   top: 0.5%;
   left: 3.7%;
-  right: 5.75%;  /* Adjusted to align with new HUD frame right edge */
+  right: 5.75%; /* Adjusted to align with new HUD frame right edge */
   height: 10%;
   z-index: 110; /* Above HUD overlay (100) */
   display: flex;
@@ -503,7 +503,10 @@
   padding-bottom: 1%;
   border: none;
   border-radius: 2.5% 0 0 2.5%;
-  transition: width 0.3s ease, transform 0.3s ease, visibility 0s ease 0.3s;
+  transition:
+    width 0.3s ease,
+    transform 0.3s ease,
+    visibility 0s ease 0.3s;
   visibility: hidden;
   z-index: 60;
 
@@ -523,13 +526,13 @@
     ),
     /* Main scrim - darker anchor, clean fade */
     linear-gradient(
-      to right,
-      rgba(8, 12, 16, 0.88) 0%,
-      rgba(8, 12, 16, 0.82) 40%,
-      rgba(8, 12, 16, 0.65) 70%,
-      rgba(8, 12, 16, 0.35) 88%,
-      rgba(8, 12, 16, 0.08) 100%
-    );
+        to right,
+        rgba(8, 12, 16, 0.88) 0%,
+        rgba(8, 12, 16, 0.82) 40%,
+        rgba(8, 12, 16, 0.65) 70%,
+        rgba(8, 12, 16, 0.35) 88%,
+        rgba(8, 12, 16, 0.08) 100%
+      );
   backdrop-filter: blur(8px) saturate(0.8);
   -webkit-backdrop-filter: blur(8px) saturate(0.8);
 }
@@ -537,7 +540,9 @@
 .panel-left.open {
   width: 50%;
   visibility: visible;
-  transition: width 0.3s ease, visibility 0s ease 0s;
+  transition:
+    width 0.3s ease,
+    visibility 0s ease 0s;
 }
 
 /* Left edge anchor line - the "solid" side of the perspective */
@@ -576,20 +581,24 @@
 
 .panel-bottom {
   left: 10%;
-  top: 95%;  /* Start below the HUD background */
+  top: 95%; /* Start below the HUD background */
   width: 80%;
-  height: 0;  /* Start with 0 height */
+  height: 0; /* Start with 0 height */
   border-top: none;
   border-radius: 0 0 8px 8px;
-  transition: height 0.3s ease, visibility 0s ease 0.3s;
+  transition:
+    height 0.3s ease,
+    visibility 0s ease 0.3s;
   visibility: hidden;
   overflow: hidden;
 }
 
 .panel-bottom.open {
-  height: 28%;  /* Fixed height for prompt bar */
+  height: 28%; /* Fixed height for prompt bar */
   visibility: visible;
-  transition: height 0.3s ease, visibility 0s ease 0s;
+  transition:
+    height 0.3s ease,
+    visibility 0s ease 0s;
 }
 
 /* Bottom panel content */
@@ -613,7 +622,10 @@
   border: 1px solid rgba(120, 255, 245, 0.15);
   border-radius: 0.5cqw;
   overflow: hidden;
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .panel-bottom .prompt-buttons {
@@ -661,7 +673,6 @@
   padding-left: 5cqw;
   padding-right: 10cqw; /* Asymmetric - more space on receding edge */
 }
-
 
 /* ============================================
    KEYBOARD VISUALIZER
@@ -723,24 +734,28 @@
   color: rgba(120, 255, 245, 1);
   background: rgba(120, 255, 245, 0.3);
   border-color: rgba(120, 255, 245, 0.6);
-  box-shadow: 0 0 12px rgba(120, 255, 245, 0.4),
-              inset 0 0 8px rgba(120, 255, 245, 0.1);
+  box-shadow:
+    0 0 12px rgba(120, 255, 245, 0.4),
+    inset 0 0 8px rgba(120, 255, 245, 0.1);
   transform: scale(0.95);
 }
 
 /* Pulse animation on key press */
 @keyframes keyPulse {
   0% {
-    box-shadow: 0 0 12px rgba(120, 255, 245, 0.4),
-                inset 0 0 8px rgba(120, 255, 245, 0.1);
+    box-shadow:
+      0 0 12px rgba(120, 255, 245, 0.4),
+      inset 0 0 8px rgba(120, 255, 245, 0.1);
   }
   50% {
-    box-shadow: 0 0 20px rgba(120, 255, 245, 0.6),
-                inset 0 0 12px rgba(120, 255, 245, 0.2);
+    box-shadow:
+      0 0 20px rgba(120, 255, 245, 0.6),
+      inset 0 0 12px rgba(120, 255, 245, 0.2);
   }
   100% {
-    box-shadow: 0 0 12px rgba(120, 255, 245, 0.4),
-                inset 0 0 8px rgba(120, 255, 245, 0.1);
+    box-shadow:
+      0 0 12px rgba(120, 255, 245, 0.4),
+      inset 0 0 8px rgba(120, 255, 245, 0.1);
   }
 }
 
@@ -1098,8 +1113,12 @@
 }
 
 @keyframes spinPrompt {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Error bar below prompt */
@@ -1188,12 +1207,7 @@
 
 /* Hover highlight for entire setting group */
 .setting-group:hover {
-  background: linear-gradient(
-    to right,
-    rgba(120, 255, 245, 0.03) 0%,
-    rgba(120, 255, 245, 0.01) 70%,
-    transparent 100%
-  );
+  background: linear-gradient(to right, rgba(120, 255, 245, 0.03) 0%, rgba(120, 255, 245, 0.01) 70%, transparent 100%);
   margin-left: -2cqw;
   padding-left: 2cqw;
   border-radius: 0.5cqw;
@@ -1484,12 +1498,7 @@
   bottom: 0;
   width: 3cqw;
   max-width: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(120, 255, 245, 0.3) 50%,
-    rgba(120, 255, 245, 0.6) 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, rgba(120, 255, 245, 0.3) 50%, rgba(120, 255, 245, 0.6) 100%);
   pointer-events: none;
 }
 
@@ -1744,9 +1753,7 @@
   transition: all 0.15s ease;
   position: relative;
   /* Angled corners using clip-path for HUD aesthetic */
-  clip-path: polygon(
-    15% 0%, 85% 0%, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0% 85%, 0% 15%
-  );
+  clip-path: polygon(15% 0%, 85% 0%, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0% 85%, 0% 15%);
 }
 
 .hud-social-link:hover {
@@ -1803,11 +1810,11 @@ button.hud-social-link {
 }
 
 .panel-toggle-bottom {
-  top: 89%;  /* 445 / 500 - in bottom control bay area */
+  top: 89%; /* 445 / 500 - in bottom control bay area */
 }
 
 .panel-toggle-settings {
-  left: 66.5%;  /* 692 / 800 */
+  left: 66.5%; /* 692 / 800 */
 }
 
 /* Settings button disabled state (before HOT state) */
@@ -1878,7 +1885,9 @@ button.hud-social-link {
 /* Make terminal status clickable in cold state */
 .terminal-display.state-cold .terminal-status {
   cursor: pointer;
-  transition: color 0.15s ease, text-shadow 0.15s ease;
+  transition:
+    color 0.15s ease,
+    text-shadow 0.15s ease;
 }
 
 .terminal-display.state-cold .terminal-status:hover {
@@ -1901,7 +1910,6 @@ button.hud-social-link {
 .terminal-text.typing {
   opacity: 0.6;
 }
-
 
 /* State-specific colors */
 .terminal-display.state-cold .terminal-status {
@@ -1944,8 +1952,14 @@ button.hud-social-link {
 }
 
 @keyframes cursorBlink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .terminal-display.state-hot .terminal-status {
@@ -1955,7 +1969,6 @@ button.hud-social-link {
 .terminal-display.state-hot .terminal-prompt {
   color: rgba(100, 255, 150, 0.5);
 }
-
 
 /* ============================================
    TERMINAL INLINE INPUT (Cold State)
@@ -2049,10 +2062,15 @@ button.hud-social-link {
 }
 
 @keyframes inputCursorBlink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
-
 
 /* Hide input in other states */
 .terminal-display.state-warm .terminal-input,
@@ -2100,13 +2118,17 @@ button.hud-social-link {
   background: transparent;
   position: relative;
   overflow: hidden;
-  transition: width 0.2s ease-in 0.1s, margin 0.2s ease-in 0.1s;
+  transition:
+    width 0.2s ease-in 0.1s,
+    margin 0.2s ease-in 0.1s;
 }
 
 .terminal-display.state-warm .progress-track {
   width: 18cqw;
   margin: 0 0.5cqw;
-  transition: width 0.3s ease-out, margin 0.3s ease-out;
+  transition:
+    width 0.3s ease-out,
+    margin 0.3s ease-out;
 }
 
 /* Segmented bar background */
