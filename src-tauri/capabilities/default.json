@@ -15,6 +15,8 @@
     "core:window:allow-unmaximize",
     "core:window:allow-close",
     "core:window:allow-is-maximized",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
     "fs:default",
     "fs:allow-app-read",
     "fs:allow-app-write",

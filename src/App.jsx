@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider } from './context/StreamingContext'
+import { useAspectRatioConstraint } from './hooks/useTauri'
 import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
 import HudOverlay from './components/HudOverlay'
@@ -42,6 +43,9 @@ const HoloFrame = () => {
 }
 
 const App = () => {
+  // Constrain window aspect ratio: width/height must be between 1.25:1 and 2:1
+  useAspectRatioConstraint(2, 1.25)
+
   return (
     <PortalProvider>
       <StreamingProvider>
