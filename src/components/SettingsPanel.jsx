@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { useStreaming } from '../context/StreamingContextShared'
 import useConfig from '../hooks/useConfig'
 import { useEngine } from '../hooks/useEngine'
 
 const SettingsPanel = () => {
   const { isSettingsOpen, toggleSettings } = usePortal()
+  const { reloadConfig: reloadStreamingConfig } = useStreaming()
   const { config, saveConfig, configPath, openConfig } = useConfig()
   const { status, isLoading: engineLoading, error: engineError, setupProgress, checkStatus, setupEngine } = useEngine()
 
@@ -90,6 +92,8 @@ const SettingsPanel = () => {
     setSaveStatus(success ? 'saved' : 'error')
 
     if (success) {
+      // Reload config in streaming context so other components see the update
+      reloadStreamingConfig()
       setTimeout(() => setSaveStatus(null), 2000)
     }
   }

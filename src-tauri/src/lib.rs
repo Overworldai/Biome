@@ -57,7 +57,7 @@ impl Default for AppConfig {
             },
             features: FeaturesConfig {
                 prompt_sanitizer: true,
-                seed_generation: false,
+                seed_generation: true,
                 use_standalone_engine: true,
             },
         }

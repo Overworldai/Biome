@@ -12,11 +12,37 @@ const BottomPanel = ({ isOpen }) => {
     reset,
     logout,
     mouseSensitivity,
-    setMouseSensitivity
+    setMouseSensitivity,
+    hasOpenAiKey,
+    hasFalKey
   } = useStreaming()
+
   const [textPrompt, setTextPrompt] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
   const generateSeed = true // Always generate seed images
+
+  const seedGenerationEnabled = config?.features?.seed_generation
+  const promptSanitizerEnabled = config?.features?.prompt_sanitizer
+
+  // Determine why the prompt box might be disabled
+  const getDisabledState = () => {
+    // Image generation is the core feature - check code-level and user setting
+    if (!generateSeed || !seedGenerationEnabled) {
+      return { disabled: true, message: 'Image generation is disabled - enable in settings' }
+    }
+    if (!hasFalKey) {
+      return { disabled: true, message: 'FAL key required for image generation - configure in settings' }
+    }
+
+    // Prompt sanitizer is optional, but if enabled needs OpenAI key
+    if (promptSanitizerEnabled && !hasOpenAiKey) {
+      return { disabled: true, message: 'OpenAI key required for prompt enhancement - configure in settings' }
+    }
+
+    return { disabled: false, message: '' }
+  }
+
+  const { disabled: isDisabledByConfig, message: disabledMessage } = getDisabledState()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [status, setStatus] = useState(null)
@@ -116,14 +142,14 @@ const BottomPanel = ({ isOpen }) => {
           <textarea
             ref={textareaRef}
             className="prompt-input-compact"
-            placeholder={lastPrompt || 'Describe a scene...'}
+            placeholder={isDisabledByConfig ? disabledMessage : lastPrompt || 'Describe a scene...'}
             value={isLoading ? status || '' : textPrompt}
             onChange={(e) => setTextPrompt(e.target.value)}
             onKeyDown={(e) => {
               handleKeyDown(e)
               handlePromptSubmit(e)
             }}
-            disabled={isLoading}
+            disabled={isLoading || isDisabledByConfig}
             rows={1}
           />
 
@@ -158,7 +184,11 @@ const BottomPanel = ({ isOpen }) => {
             <div className="prompt-divider"></div>
 
             {/* Reset world button */}
-            <div className="prompt-control-group" onClick={handleResetWorld} title={`Reset world (${RESET_KEY_DISPLAY})`}>
+            <div
+              className="prompt-control-group"
+              onClick={handleResetWorld}
+              title={`Reset world (${RESET_KEY_DISPLAY})`}
+            >
               <span ref={resetButtonRef} className="prompt-control-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path
@@ -186,13 +216,13 @@ const BottomPanel = ({ isOpen }) => {
 
             {/* Submit button */}
             <div
-              className={`prompt-control-group ${isLoading || !textPrompt.trim() ? 'disabled' : ''}`}
-              onClick={() => !(isLoading || !textPrompt.trim()) && applyPrompt()}
-              title="Apply prompt"
+              className={`prompt-control-group ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
+              onClick={() => !(isLoading || !textPrompt.trim() || isDisabledByConfig) && applyPrompt()}
+              title={isDisabledByConfig ? disabledMessage : 'Apply prompt'}
             >
               <span
                 ref={promptButtonRef}
-                className={`prompt-submit-btn ${isLoading || !textPrompt.trim() ? 'disabled' : ''}`}
+                className={`prompt-submit-btn ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
               >
                 {isLoading ? (
                   <svg
