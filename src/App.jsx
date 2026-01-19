@@ -5,6 +5,7 @@ import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
 import HudOverlay from './components/HudOverlay'
 import BottomPanel from './components/BottomPanel'
+import SettingsPanel from './components/SettingsPanel'
 import WindowAnchors from './components/WindowAnchors'
 
 const HoloFrame = () => {
@@ -28,6 +29,7 @@ const HoloFrame = () => {
         <main className="content-area">
           <VideoContainer />
           <div className="logo-container" id="logo-container"></div>
+          <SettingsPanel />
         </main>
 
         <HudOverlay />

@@ -28,6 +28,7 @@ export const PortalProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false)
   const [showFlash, setShowFlash] = useState(false)
   const [isShuttingDown, setIsShuttingDown] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const listenersRef = useRef([])
   const maskElementRef = useRef(null)
 
@@ -46,6 +47,10 @@ export const PortalProvider = ({ children }) => {
   const notifyListeners = useCallback((newState, previousState) => {
     log.info(`State: ${previousState} → ${newState}`)
     listenersRef.current.forEach(fn => fn(newState, previousState))
+  }, [])
+
+  const toggleSettings = useCallback(() => {
+    setIsSettingsOpen(prev => !prev)
   }, [])
 
   const onStateChange = useCallback((callback) => {
@@ -167,6 +172,8 @@ export const PortalProvider = ({ children }) => {
     isConnected,
     showFlash,
     isShuttingDown,
+    isSettingsOpen,
+    toggleSettings,
     transitionTo,
     shutdown,
     onStateChange,

@@ -12,7 +12,8 @@ const defaultConfig = {
   },
   features: {
     prompt_sanitizer: true,
-    seed_generation: false
+    seed_generation: false,
+    use_standalone_engine: true
   }
 }
 

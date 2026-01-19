@@ -2178,3 +2178,420 @@ button.hud-social-link {
   box-shadow: 0 0 12px rgba(100, 255, 150, 0.4);
 }
 
+/* ============================================
+   Settings Panel Overlay
+   ============================================ */
+
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: settingsOverlayFadeIn 0.2s ease;
+}
+
+@keyframes settingsOverlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.settings-panel {
+  width: 65%;
+  max-height: 85%;
+  background: rgba(10, 14, 18, 0.95);
+  border: 1px solid rgba(120, 255, 245, 0.3);
+  border-radius: 1cqw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 0 20px rgba(0, 0, 0, 0.4),
+    0 0 10px rgba(120, 255, 245, 0.08),
+    inset 0 1px 0 rgba(120, 255, 245, 0.1);
+  animation: settingsPanelSlideIn 0.25s ease;
+}
+
+@keyframes settingsPanelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.settings-panel .panel-header {
+  padding: 1cqh 1.5cqw;
+  border-bottom: 1px solid rgba(120, 255, 245, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-panel .panel-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5cqw;
+  letter-spacing: 0.15em;
+  color: rgba(120, 255, 245, 0.85);
+  text-transform: uppercase;
+}
+
+.settings-panel .panel-close {
+  width: 3cqw;
+  height: 4.5cqh;
+  border: 1px solid rgba(120, 255, 245, 0.3);
+  background: rgba(120, 255, 245, 0.05);
+  border-radius: 0.5cqw;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(120, 255, 245, 0.7);
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.settings-panel .panel-close:hover {
+  background: rgba(255, 80, 80, 0.3);
+  border-color: rgba(255, 80, 80, 0.6);
+  color: rgba(255, 120, 120, 1);
+}
+
+.settings-panel .panel-close svg {
+  width: 1.5cqw;
+  height: 2.5cqh;
+}
+
+.settings-panel .panel-content {
+  flex: 1;
+  padding: 1.5cqh 1.5cqw;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 255, 245, 0.3) transparent;
+}
+
+.settings-panel .panel-content::-webkit-scrollbar {
+  width: 0.5cqw;
+}
+
+.settings-panel .panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-panel .panel-content::-webkit-scrollbar-thumb {
+  background: rgba(120, 255, 245, 0.3);
+  border-radius: 0.25cqw;
+}
+
+.settings-section {
+  margin-bottom: 1.5cqh;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.2cqw;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: rgba(120, 255, 245, 0.5);
+  text-transform: uppercase;
+  margin: 0 0 1cqh 0;
+  padding-bottom: 0.5cqh;
+  border-bottom: 1px solid rgba(120, 255, 245, 0.1);
+}
+
+.settings-panel .setting-group {
+  margin-bottom: 1cqh;
+}
+
+.settings-panel .setting-label {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.25cqw;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: rgba(120, 255, 245, 0.6);
+  text-transform: uppercase;
+  margin-bottom: 0.5cqh;
+}
+
+.settings-panel .setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-panel .setting-row .setting-label {
+  margin-bottom: 0;
+}
+
+.settings-panel .setting-input {
+  width: 100%;
+  padding: 0.8cqh 1cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.4cqw;
+  color: rgba(230, 255, 255, 0.9);
+  background: rgba(120, 255, 245, 0.04);
+  border: 1px solid rgba(120, 255, 245, 0.2);
+  border-radius: 0.5cqw;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.settings-panel .setting-input:hover {
+  border-color: rgba(120, 255, 245, 0.35);
+  background: rgba(120, 255, 245, 0.06);
+}
+
+.settings-panel .setting-input:focus {
+  border-color: rgba(120, 255, 245, 0.6);
+  background: rgba(120, 255, 245, 0.1);
+  box-shadow: 0 0 0 2px rgba(120, 255, 245, 0.1);
+}
+
+.settings-panel .setting-input::placeholder {
+  color: rgba(120, 255, 245, 0.3);
+}
+
+.settings-panel .setting-checkbox {
+  width: 5cqw;
+  height: 3.5cqh;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(120, 255, 245, 0.08);
+  border: 1px solid rgba(120, 255, 245, 0.25);
+  border-radius: 1.75cqh;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.settings-panel .setting-checkbox:hover {
+  border-color: rgba(120, 255, 245, 0.4);
+  background: rgba(120, 255, 245, 0.12);
+}
+
+.settings-panel .setting-checkbox::after {
+  content: '';
+  position: absolute;
+  left: 0.4cqw;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.2cqh;
+  height: 2.2cqh;
+  background: rgba(120, 255, 245, 0.5);
+  border-radius: 50%;
+  transition: all 0.25s ease;
+}
+
+.settings-panel .setting-checkbox:checked {
+  background: rgba(120, 255, 245, 0.2);
+  border-color: rgba(120, 255, 245, 0.5);
+}
+
+.settings-panel .setting-checkbox:checked::after {
+  left: calc(100% - 2.2cqh - 0.4cqw);
+  background: rgba(120, 255, 245, 0.95);
+  box-shadow: 0 0 8px rgba(120, 255, 245, 0.5);
+}
+
+.settings-config-path {
+  margin-top: 1cqh;
+  padding: 1cqh 1cqw;
+  background: rgba(120, 255, 245, 0.03);
+  border: 1px solid rgba(120, 255, 245, 0.1);
+  border-radius: 0.5cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1cqw;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-config-path:hover {
+  background: rgba(120, 255, 245, 0.08);
+  border-color: rgba(120, 255, 245, 0.25);
+}
+
+.config-path-label {
+  color: rgba(120, 255, 245, 0.5);
+  margin-right: 1cqw;
+}
+
+.config-path-value {
+  color: rgba(120, 255, 245, 0.7);
+  word-break: break-all;
+}
+
+.settings-config-path:hover .config-path-value {
+  color: rgba(120, 255, 245, 0.9);
+}
+
+.settings-panel .panel-footer {
+  padding: 1cqh 1.5cqw;
+  border-top: 1px solid rgba(120, 255, 245, 0.2);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-panel .setting-button {
+  padding: 0.8cqh 2cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.25cqw;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(120, 255, 245, 0.9);
+  background: rgba(120, 255, 245, 0.1);
+  border: 1px solid rgba(120, 255, 245, 0.4);
+  border-radius: 0.5cqw;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-panel .setting-button:hover {
+  background: rgba(120, 255, 245, 0.2);
+  border-color: rgba(120, 255, 245, 0.6);
+  box-shadow: 0 0 12px rgba(120, 255, 245, 0.2);
+}
+
+.settings-panel .setting-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-panel .setting-button.success {
+  background: rgba(100, 255, 150, 0.2);
+  border-color: rgba(100, 255, 150, 0.5);
+  color: rgba(100, 255, 150, 0.9);
+}
+
+/* ============================================
+   ENGINE STATUS BOX
+   ============================================ */
+
+.engine-status-box {
+  margin-top: 0.5cqh;
+  margin-bottom: 1cqh;
+  padding: 1cqh 1.2cqw;
+  background: rgba(120, 255, 245, 0.03);
+  border: 1px solid rgba(120, 255, 245, 0.15);
+  border-radius: 0.5cqw;
+}
+
+.engine-status-content {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  flex-wrap: wrap;
+}
+
+.engine-status-icon {
+  width: 2cqw;
+  height: 2cqw;
+  min-width: 16px;
+  min-height: 16px;
+  flex-shrink: 0;
+}
+
+.engine-status-content.ready .engine-status-icon {
+  color: rgba(100, 255, 150, 0.9);
+}
+
+.engine-status-content.not-ready .engine-status-icon {
+  color: rgba(255, 200, 100, 0.8);
+}
+
+.engine-status-content.error .engine-status-icon {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.engine-status-text {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.2cqw;
+  color: rgba(120, 255, 245, 0.7);
+}
+
+.engine-status-content.ready .engine-status-text {
+  color: rgba(100, 255, 150, 0.85);
+}
+
+.engine-status-content.error .engine-status-text {
+  color: rgba(255, 100, 100, 0.85);
+}
+
+.engine-action-button {
+  padding: 0.5cqh 1.2cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1cqw;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10, 14, 18, 0.95);
+  background: rgba(120, 255, 245, 0.85);
+  border: none;
+  border-radius: 0.4cqw;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.engine-action-button:hover {
+  background: rgba(120, 255, 245, 1);
+  box-shadow: 0 0 12px rgba(120, 255, 245, 0.4);
+}
+
+.engine-action-button:active {
+  transform: scale(0.97);
+}
+
+.engine-action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.engine-action-button.secondary {
+  color: rgba(120, 255, 245, 0.85);
+  background: rgba(120, 255, 245, 0.1);
+  border: 1px solid rgba(120, 255, 245, 0.3);
+}
+
+.engine-action-button.secondary:hover {
+  background: rgba(120, 255, 245, 0.2);
+  border-color: rgba(120, 255, 245, 0.5);
+}
+
+/* Engine status spinner */
+.engine-status-spinner {
+  width: 2cqw;
+  height: 2cqw;
+  min-width: 16px;
+  min-height: 16px;
+  border: 2px solid rgba(120, 255, 245, 0.2);
+  border-top-color: rgba(120, 255, 245, 0.8);
+  border-radius: 50%;
+  animation: engineSpinner 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes engineSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
