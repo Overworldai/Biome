@@ -2075,17 +2075,21 @@ button.hud-social-link {
   max-width: 26cqw;
 }
 
-/* Show input in cold state */
+/* Show input in cold state - dimmer when unfocused */
 .terminal-display.state-cold .terminal-input {
   opacity: 1;
   pointer-events: auto;
   cursor: text;
   caret-color: transparent; /* Hide native caret by default, show when focused */
+  color: rgba(120, 255, 245, 0.5);
+  transition: color 0.15s ease, text-shadow 0.15s ease;
 }
 
-/* Show native caret when input is focused - it knows the actual caret position */
+/* Bright and glowing when focused */
 .terminal-display.state-cold .terminal-input:focus {
   caret-color: rgba(120, 255, 245, 0.9) !important;
+  color: rgba(120, 255, 245, 1);
+  text-shadow: 0 0 8px rgba(120, 255, 245, 0.6);
 }
 
 /* Make text selection visible */
@@ -2100,33 +2104,25 @@ button.hud-social-link {
   opacity: 1;
 }
 
-/* Custom blinking cursor - shows before input is focused */
+/* Custom cursor - hidden, only native caret used when focused */
 .input-cursor {
-  display: inline-block;
-  width: 0.65em;
-  height: 1.2em;
-  margin-left: 0.1em;
-  vertical-align: text-bottom;
-  background: rgba(120, 255, 245, 0.9);
-  animation: inputCursorBlink 1s step-end infinite;
-  pointer-events: none;
-  flex-shrink: 0;
-}
-
-/* Hide custom cursor when input is focused - use native caret instead */
-.terminal-input:focus ~ .input-cursor {
   display: none;
 }
 
-@keyframes inputCursorBlink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
+/* Enter hint text */
+.terminal-hint {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.2cqw;
+  letter-spacing: 0.1em;
+  color: rgba(120, 255, 245, 0.4);
+  text-transform: uppercase;
+  margin-top: 1cqh;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.terminal-hint.show {
+  opacity: 1;
 }
 
 /* Hide input in other states */

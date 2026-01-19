@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContextShared'
 import useConfig from '../hooks/useConfig'
@@ -31,12 +31,12 @@ const TerminalDisplay = () => {
   const { statusCode, setEndpointUrl } = useStreaming()
   const { config, saveGpuServerUrl } = useConfig()
 
-  // Build default URL from config for placeholder display
+  // Build default URL from config
   const defaultUrl = `${config.gpu_server.host}:${config.gpu_server.port}`
   const [displayText, setDisplayText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [inputValue, setInputValue] = useState('')
+  const [inputValue, setInputValue] = useState(defaultUrl)
   const [error, setError] = useState(null)
   const [showPlaceholder, setShowPlaceholder] = useState(false)
   const timeoutRef = useRef(null)
@@ -50,6 +50,11 @@ const TerminalDisplay = () => {
   useEffect(() => {
     displayTextRef.current = displayText
   }, [displayText])
+
+  // Sync inputValue with config when it changes
+  useEffect(() => {
+    setInputValue(defaultUrl)
+  }, [defaultUrl])
 
   const typeMessage = (message, speed = 30) => {
     if (timeoutRef.current) {
@@ -175,11 +180,14 @@ const TerminalDisplay = () => {
   }, [state, statusCode, error])
 
   useEffect(() => {
-    return onStateChange(() => {
-      setInputValue('')
+    return onStateChange((newState) => {
+      // Reset to default URL when returning to cold state
+      if (newState === states.COLD) {
+        setInputValue(defaultUrl)
+      }
       setError(null)
     })
-  }, [onStateChange])
+  }, [onStateChange, states.COLD, defaultUrl])
 
   const handleInputChange = (e) => {
     setInputValue(e.target.value)
@@ -197,26 +205,42 @@ const TerminalDisplay = () => {
     return urlPattern.test(trimmed)
   }
 
-  const handleKeyDown = async (e) => {
-    if (e.key === 'Enter' && state === states.COLD) {
-      // Use config default if empty, otherwise validate URL
-      const urlToUse = inputValue.trim() || defaultUrl
-      if (!isValidUrl(urlToUse)) {
-        setError('invalid_url')
-        setInputValue('')
-        return
-      }
+  // Connect to the server with the current URL
+  const handleConnect = useCallback(async () => {
+    if (state !== states.COLD) return
 
-      // If user entered a custom URL, save it to config for next time
-      if (inputValue.trim()) {
-        await saveGpuServerUrl(urlToUse)
-      }
+    const urlToUse = inputValue.trim()
+    if (!urlToUse || !isValidUrl(urlToUse)) {
+      setError('invalid_url')
+      return
+    }
 
-      // Always pass the resolved URL (handles both typed input and config default)
-      setEndpointUrl(urlToUse)
-      transitionTo(states.WARM)
+    // Save URL to config
+    await saveGpuServerUrl(urlToUse)
+
+    setEndpointUrl(urlToUse)
+    transitionTo(states.WARM)
+  }, [state, states.COLD, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleConnect()
     }
   }
+
+  // Global Enter key handler - connect if URL is present and input is shown
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (e.key === 'Enter' && state === states.COLD && showPlaceholder && inputValue.trim()) {
+        // Don't double-trigger if input is focused
+        if (document.activeElement?.id === 'terminal-input') return
+        handleConnect()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [state, states.COLD, showPlaceholder, inputValue, handleConnect])
 
   return (
     <div ref={containerRef} className={`terminal-display state-${state}`}>
@@ -251,13 +275,18 @@ const TerminalDisplay = () => {
             id="terminal-input"
             autoComplete="off"
             spellCheck="false"
-            placeholder={defaultUrl}
+            placeholder=""
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
           />
           <span className="input-cursor"></span>
         </span>
+      </div>
+
+      {/* Enter hint */}
+      <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>
+        Press Enter to connect
       </div>
     </div>
   )
