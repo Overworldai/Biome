@@ -17,7 +17,7 @@ export const StreamingProvider = ({ children }) => {
   const canvasRef = useRef(null)
 
   // Config hook for GPU server settings and API keys
-  const { config, isLoaded: configLoaded, reloadConfig, hasOpenAiKey, hasFalKey } = useConfig()
+  const { config, isLoaded: configLoaded, reloadConfig, saveConfig, hasOpenAiKey, hasFalKey } = useConfig()
 
   const {
     connectionState,
@@ -43,6 +43,21 @@ export const StreamingProvider = ({ children }) => {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
+
+  // Bottom panel visibility (persisted in config)
+  const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
+  const setBottomPanelHidden = useCallback(
+    async (hidden) => {
+      await saveConfig({
+        ...config,
+        ui: {
+          ...config.ui,
+          bottom_panel_hidden: hidden
+        }
+      })
+    },
+    [config, saveConfig]
+  )
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
 
@@ -340,6 +355,8 @@ export const StreamingProvider = ({ children }) => {
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
+    bottomPanelHidden,
+    setBottomPanelHidden,
 
     // Input state
     pressedKeys,

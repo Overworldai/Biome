@@ -36,11 +36,19 @@ pub struct FeaturesConfig {
     pub use_standalone_engine: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct UiConfig {
+    #[serde(default)]
+    pub bottom_panel_hidden: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
     pub gpu_server: GpuServerConfig,
     pub api_keys: ApiKeysConfig,
     pub features: FeaturesConfig,
+    #[serde(default)]
+    pub ui: UiConfig,
 }
 
 impl Default for AppConfig {
@@ -60,6 +68,7 @@ impl Default for AppConfig {
                 seed_generation: true,
                 use_standalone_engine: true,
             },
+            ui: UiConfig::default(),
         }
     }
 }

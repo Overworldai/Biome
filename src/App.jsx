@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { PortalProvider, usePortal } from './context/PortalContext'
-import { StreamingProvider } from './context/StreamingContext'
+import { StreamingProvider, useStreaming } from './context/StreamingContext'
 import { useFitWindowToContent } from './hooks/useTauri'
 import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
@@ -12,6 +12,7 @@ import WindowAnchors from './components/WindowAnchors'
 const HoloFrame = () => {
   const [isReady, setIsReady] = useState(false)
   const { isConnected } = usePortal()
+  const { bottomPanelHidden, setBottomPanelHidden } = useStreaming()
 
   // Force animation replay on mount by briefly removing the animated class
   useEffect(() => {
@@ -23,7 +24,7 @@ const HoloFrame = () => {
   }, [])
 
   return (
-    <div className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''}`}>
+    <div className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}>
       <div className="holo-frame-inner">
         <Titlebar />
 
@@ -36,7 +37,13 @@ const HoloFrame = () => {
         <HudOverlay />
 
         {/* Bottom panel - always visible when streaming connected */}
-        {isConnected && <BottomPanel isOpen={true} />}
+        {isConnected && (
+          <BottomPanel
+            isOpen={true}
+            isHidden={bottomPanelHidden}
+            onToggleHidden={() => setBottomPanelHidden(!bottomPanelHidden)}
+          />
+        )}
       </div>
     </div>
   )

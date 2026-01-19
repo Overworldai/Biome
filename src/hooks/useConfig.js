@@ -14,12 +14,28 @@ const defaultConfig = {
     prompt_sanitizer: true,
     seed_generation: true,
     use_standalone_engine: true
+  },
+  ui: {
+    bottom_panel_hidden: false
   }
 }
 
 // Tauri invoke helper
 const invoke = async (cmd, args = {}) => {
   return window.__TAURI_INTERNALS__.invoke(cmd, args)
+}
+
+// Deep merge loaded config with defaults (ensures new fields get default values)
+const mergeWithDefaults = (loaded, defaults) => {
+  const result = { ...defaults }
+  for (const key of Object.keys(loaded)) {
+    if (loaded[key] && typeof loaded[key] === 'object' && !Array.isArray(loaded[key]) && defaults[key]) {
+      result[key] = mergeWithDefaults(loaded[key], defaults[key])
+    } else {
+      result[key] = loaded[key]
+    }
+  }
+  return result
 }
 
 export const useConfig = () => {
@@ -33,7 +49,8 @@ export const useConfig = () => {
     const loadConfig = async () => {
       try {
         const fileConfig = await invoke('read_config')
-        setConfig(fileConfig)
+        // Merge with defaults to ensure new fields get default values
+        setConfig(mergeWithDefaults(fileConfig, defaultConfig))
 
         // Get config path for display
         const path = await invoke('get_config_path_str')
@@ -53,7 +70,8 @@ export const useConfig = () => {
   const reloadConfig = useCallback(async () => {
     try {
       const fileConfig = await invoke('read_config')
-      setConfig(fileConfig)
+      // Merge with defaults to ensure new fields get default values
+      setConfig(mergeWithDefaults(fileConfig, defaultConfig))
       setError(null)
       return true
     } catch (err) {

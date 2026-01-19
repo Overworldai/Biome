@@ -3,7 +3,7 @@ import { useStreaming } from '../context/StreamingContextShared'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 
-const BottomPanel = ({ isOpen }) => {
+const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const {
     sendPrompt,
     sendPromptWithSeed,
@@ -134,8 +134,32 @@ const BottomPanel = ({ isOpen }) => {
     }
   }
 
+  // When hidden, show only a small expand tab
+  if (isHidden) {
+    return (
+      <div
+        id="bottom-panel"
+        className={`panel panel-bottom collapsed ${isOpen ? 'open' : ''}`}
+        onClick={handleClick}
+      >
+        <div className="panel-toggle-bar" onClick={onToggleHidden} title="Show panel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div id="bottom-panel" className={`panel panel-bottom ${isOpen ? 'open' : ''}`} onClick={handleClick}>
+      {/* Toggle button to hide panel */}
+      <div className="panel-toggle-bar" onClick={onToggleHidden} title="Hide panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+
       <div className="panel-content">
         {/* Unified prompt container with textarea and buttons */}
         <div className="prompt-container">

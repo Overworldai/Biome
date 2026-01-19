@@ -44,6 +44,11 @@
   overflow-y: visible; /* Allow keyboard panel to extend downward */
 }
 
+/* When bottom panel is hidden, restore full-size window */
+.holo-frame.keyboard-open.panel-hidden .holo-frame-inner {
+  transform: none;
+}
+
 .holo-frame::-webkit-scrollbar {
   display: none;
 }
@@ -619,10 +624,44 @@
     visibility 0s ease 0s;
 }
 
+/* Collapsed state - just show toggle bar */
+.panel-bottom.collapsed.open {
+  height: 6cqh;
+}
+
+/* Toggle bar at top of panel */
+.panel-toggle-bar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding-left: 25%;
+  height: 6cqh;
+  cursor: pointer;
+  background: rgba(120, 255, 245, 0.06);
+  border-bottom: 1px solid rgba(120, 255, 245, 0.15);
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.panel-toggle-bar:hover {
+  background: rgba(120, 255, 245, 0.12);
+}
+
+.panel-toggle-bar svg {
+  width: 3cqw;
+  height: 3cqw;
+  color: rgba(120, 255, 245, 0.6);
+  transition: color 0.2s ease;
+}
+
+.panel-toggle-bar:hover svg {
+  color: rgba(120, 255, 245, 1);
+}
+
 /* Bottom panel content */
 .panel-bottom .panel-content {
   padding: 1.5cqh 2cqw;
-  padding-top: 6cqh; /* Space so content doesn't overlap with hud background */
+  padding-top: 1cqh; /* Toggle bar now provides spacing from HUD */
   display: flex;
   flex-direction: column;
   align-items: stretch;
