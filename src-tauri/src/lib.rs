@@ -6,6 +6,12 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, RunEvent};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[cfg(not(target_os = "windows"))]
 use flate2::read::GzDecoder;
 #[cfg(not(target_os = "windows"))]
@@ -66,6 +72,14 @@ fn set_app_handle(handle: tauri::AppHandle) {
 
 fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
+}
+
+/// Create a new Command with platform-specific flags to suppress console windows on Windows
+fn new_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -294,7 +308,7 @@ async fn check_engine_status(app: tauri::AppHandle) -> Result<EngineStatus, Stri
 
     // Check if our local uv binary exists and works
     let uv_installed = uv_binary.exists()
-        && Command::new(&uv_binary)
+        && new_command(&uv_binary)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -316,7 +330,7 @@ async fn check_engine_status(app: tauri::AppHandle) -> Result<EngineStatus, Stri
 
         if python_path.exists() {
             // Try to run the Python interpreter to verify it works
-            Command::new(&uv_binary)
+            new_command(&uv_binary)
                 .current_dir(&engine_dir)
                 .arg("run")
                 .arg("python")
@@ -559,7 +573,7 @@ async fn sync_engine_dependencies(app: tauri::AppHandle) -> Result<String, Strin
 
     // Run uv sync with the specified environment variables
     // Note: Not using UV_FROZEN since we install world_engine from git without a lockfile
-    let output = Command::new(&uv_binary)
+    let output = new_command(&uv_binary)
         .current_dir(&engine_dir)
         .arg("sync")
         .arg("--index-strategy")
@@ -701,7 +715,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
 
     // Run uv sync to ensure dependencies are up to date
     println!("[ENGINE] Syncing dependencies...");
-    let sync_output = Command::new(&uv_binary)
+    let sync_output = new_command(&uv_binary)
         .current_dir(&engine_dir)
         .arg("sync")
         .arg("--index-strategy")
@@ -732,7 +746,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
 
     // Spawn the server process with piped stdout/stderr so we can tee to console and file
     // Command: uv run python server.py --port <port>
-    let mut cmd = Command::new(&uv_binary);
+    let mut cmd = new_command(&uv_binary);
     cmd.current_dir(&engine_dir)
         .arg("run")
         .arg("python")
