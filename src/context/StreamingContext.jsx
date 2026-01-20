@@ -6,9 +6,13 @@ import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
 import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
 import useEngine from '../hooks/useEngine'
+import useSeeds from '../hooks/useSeeds'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('Streaming')
+
+// Browsers require ~1s delay before pointer lock can be re-requested
+const UNLOCK_DELAY_MS = 1250
 
 export { useStreaming }
 
@@ -56,14 +60,22 @@ export const StreamingProvider = ({ children }) => {
     sendPause,
     sendPrompt,
     sendPromptWithSeed,
+    sendInitialSeed,
     reset,
     isConnected,
     isReady,
     isLoading
   } = useWebSocket()
+  const {
+    initializeSeeds,
+    getRandomSeedBase64,
+    openSeedsDir,
+    seedsDir
+  } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
   const [pausedAt, setPausedAt] = useState(null)
+  const [pauseElapsedMs, setPauseElapsedMs] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
@@ -82,6 +94,22 @@ export const StreamingProvider = ({ children }) => {
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
   const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen
+  const canUnpause = pauseElapsedMs >= UNLOCK_DELAY_MS
+
+  // Track elapsed time since pause for unlock delay
+  useEffect(() => {
+    if (!isPaused || !pausedAt) {
+      setPauseElapsedMs(0)
+      return
+    }
+
+    // Update elapsed time every 50ms for smooth countdown
+    const interval = setInterval(() => {
+      setPauseElapsedMs(Date.now() - pausedAt)
+    }, 50)
+
+    return () => clearInterval(interval)
+  }, [isPaused, pausedAt])
 
   // Bottom panel visibility (persisted in config)
   const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
@@ -98,6 +126,34 @@ export const StreamingProvider = ({ children }) => {
       checkEngineStatus()
     }
   }, [isStandaloneMode, checkEngineStatus])
+
+  // Initialize seeds on mount
+  useEffect(() => {
+    initializeSeeds().catch((err) => {
+      log.error('Failed to initialize seeds:', err)
+    })
+  }, [initializeSeeds])
+
+  // Send initial seed when server is waiting for it
+  useEffect(() => {
+    if (statusCode === 'waiting_for_seed' && isConnected) {
+      log.info('Server waiting for seed, sending random seed...')
+      getRandomSeedBase64()
+        .then((seedBase64) => {
+          if (seedBase64) {
+            sendInitialSeed(seedBase64)
+            log.info('Initial seed sent to server')
+          } else {
+            log.error('No seeds available to send')
+            setEngineError('No seed images available. Please add images to the seeds folder.')
+          }
+        })
+        .catch((err) => {
+          log.error('Failed to get random seed:', err)
+          setEngineError('Failed to load seed image: ' + (err.message || err))
+        })
+    }
+  }, [statusCode, isConnected, getRandomSeedBase64, sendInitialSeed])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
@@ -504,6 +560,9 @@ export const StreamingProvider = ({ children }) => {
     isStreaming,
     isPaused,
     pausedAt,
+    canUnpause,
+    unlockDelayMs: UNLOCK_DELAY_MS,
+    pauseElapsedMs,
     settingsOpen,
     statusCode,
 
@@ -538,6 +597,10 @@ export const StreamingProvider = ({ children }) => {
     engineSetupError,
     handleModeChoice,
 
+    // Seeds
+    openSeedsDir,
+    seedsDir,
+
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
@@ -557,6 +620,7 @@ export const StreamingProvider = ({ children }) => {
     reset,
     sendPrompt,
     sendPromptWithSeed,
+    sendInitialSeed,
     requestPointerLock,
     exitPointerLock,
     registerContainerRef,

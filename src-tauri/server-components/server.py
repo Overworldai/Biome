@@ -95,8 +95,6 @@ BUTTON_CODES["MOUSE_RIGHT"] = 0x02
 BUTTON_CODES["MOUSE_MIDDLE"] = 0x04
 
 
-# SEED_URL = "https://gist.github.com/user-attachments/assets/5d91c49a-2ae9-418f-99c0-e93ae387e1de"
-SEED_URL = "https://images.gamebanana.com/img/ss/mods/5aaaf43065f65.jpg"
 
 # Default prompt - describes the expected visual style
 DEFAULT_PROMPT = "First-person shooter gameplay footage from a true POV perspective, "
@@ -121,23 +119,23 @@ current_prompt = DEFAULT_PROMPT
 engine_warmed_up = False
 
 
-def load_seed_frame(target_size: tuple[int, int] = (360, 640)) -> torch.Tensor:
-    """Load and preprocess the seed frame."""
-    import os
-    import tempfile
+def load_seed_from_base64(base64_data: str, target_size: tuple[int, int] = (360, 640)) -> torch.Tensor:
+    """Load a seed frame from base64 encoded data."""
+    try:
+        img_data = base64.b64decode(base64_data)
+        img = Image.open(io.BytesIO(img_data)).convert("RGB")
+        import numpy as np
 
-    logger.info("Downloading seed frame...")
-    seed_path = os.path.join(tempfile.gettempdir(), "biome_seed.png")
-    urllib.request.urlretrieve(SEED_URL, seed_path)
-    logger.info("Reading seed image...")
-    img = torchvision.io.read_image(seed_path)
-    img = img[:3].unsqueeze(0).float()
-    frame = F.interpolate(img, size=target_size, mode="bilinear", align_corners=False)[
-        0
-    ]
-    result = frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
-    logger.info(f"Seed frame ready: {result.shape}, {result.dtype}, {result.device}")
-    return result
+        img_tensor = (
+            torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
+        )
+        frame = F.interpolate(
+            img_tensor, size=target_size, mode="bilinear", align_corners=False
+        )[0]
+        return frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
+    except Exception as e:
+        print(f"[ERROR] Failed to load seed from base64: {e}")
+        return None
 
 
 def load_seed_from_url(url, target_size=(360, 640)):
@@ -168,17 +166,17 @@ def load_engine():
     logger.info("BIOME ENGINE STARTUP")
     logger.info("=" * 60)
 
-    logger.info("[1/5] Importing WorldEngine...")
+    logger.info("[1/4] Importing WorldEngine...")
     import_start = time.perf_counter()
     from world_engine import CtrlInput as CI
     from world_engine import WorldEngine
 
     CtrlInput = CI
     logger.info(
-        f"[1/5] WorldEngine imported in {time.perf_counter() - import_start:.2f}s"
+        f"[1/4] WorldEngine imported in {time.perf_counter() - import_start:.2f}s"
     )
 
-    logger.info(f"[2/5] Loading model: {MODEL_URI}")
+    logger.info(f"[2/4] Loading model: {MODEL_URI}")
     logger.info(f"      Quantization: {QUANT}")
     logger.info(f"      Device: {DEVICE}")
     logger.info(f"      N_FRAMES: {N_FRAMES}")
@@ -199,16 +197,16 @@ def load_engine():
         quant=QUANT,
         dtype=torch.bfloat16,
     )
-    logger.info(f"[2/5] Model loaded in {time.perf_counter() - model_start:.2f}s")
+    logger.info(f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s")
 
-    logger.info("[3/5] Loading seed frame...")
-    seed_start = time.perf_counter()
-    seed_frame = load_seed_frame()
-    logger.info(f"[3/5] Seed frame loaded in {time.perf_counter() - seed_start:.2f}s")
+    # Seed frame will be provided by frontend via set_initial_seed message
+    logger.info("[3/4] Seed frame: waiting for client to provide initial seed via base64")
+    seed_frame = None
 
-    logger.info("[4/5] Engine initialization complete")
+    logger.info("[4/4] Engine initialization complete")
     logger.info("=" * 60)
     logger.info("SERVER READY - Waiting for WebSocket connections on /ws")
+    logger.info("         (Client must send set_initial_seed with base64 data)")
     logger.info("=" * 60)
 
 
@@ -271,6 +269,7 @@ async def health():
 
 # Status codes (client maps these to display text)
 class Status:
+    WAITING_FOR_SEED = "waiting_for_seed"  # Waiting for initial seed from client
     INIT = "init"  # Engine resetting
     LOADING = "loading"  # Loading seed frame
     READY = "ready"  # Ready for game loop
@@ -304,56 +303,6 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_json(data: dict):
         await websocket.send_text(json.dumps(data))
 
-    # Warmup on first connection (CUDA graphs will complain if its not all called in the same thread context)
-    if not engine_warmed_up:
-        logger.info("=" * 60)
-        logger.info(
-            "[5/5] WARMUP - First client connected, initializing CUDA graphs..."
-        )
-        logger.info("=" * 60)
-        await send_json({"type": "status", "code": "warmup"})
-
-        def do_warmup():
-            warmup_start = time.perf_counter()
-
-            logger.info("[5/5] Step 1: Resetting engine state...")
-            reset_start = time.perf_counter()
-            engine.reset()
-            logger.info(
-                f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s"
-            )
-
-            logger.info("[5/5] Step 2: Appending seed frame...")
-            append_start = time.perf_counter()
-            engine.append_frame(seed_frame)
-            logger.info(
-                f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s"
-            )
-
-            logger.info("[5/5] Step 3: Setting prompt...")
-            prompt_start = time.perf_counter()
-            engine.set_prompt(current_prompt)
-            logger.info(
-                f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
-            )
-
-            logger.info(
-                "[5/5] Step 4: Generating first frame (compiling CUDA graphs)..."
-            )
-            gen_start = time.perf_counter()
-            _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
-            logger.info(
-                f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s"
-            )
-
-            return time.perf_counter() - warmup_start
-
-        warmup_time = await asyncio.to_thread(do_warmup)
-        logger.info("=" * 60)
-        logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")
-        logger.info("=" * 60)
-        engine_warmed_up = True
-
     async def reset_engine():
         await asyncio.to_thread(engine.reset)
         await asyncio.to_thread(engine.append_frame, seed_frame)
@@ -363,6 +312,86 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Engine Reset")
 
     try:
+        # Wait for initial seed from client
+        await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
+        logger.info(f"[{client_host}] Waiting for initial seed from client...")
+
+        # Wait for set_initial_seed message
+        while seed_frame is None:
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+
+                if msg_type == "set_initial_seed":
+                    seed_base64 = msg.get("seed_base64")
+                    if seed_base64:
+                        logger.info(f"[{client_host}] Received initial seed ({len(seed_base64)} chars)")
+                        loaded_frame = load_seed_from_base64(seed_base64)
+                        if loaded_frame is not None:
+                            seed_frame = loaded_frame
+                            logger.info(f"[{client_host}] Initial seed loaded successfully")
+                        else:
+                            await send_json({"type": "error", "message": "Failed to decode seed image"})
+                    else:
+                        await send_json({"type": "error", "message": "No seed_base64 provided"})
+                else:
+                    logger.info(f"[{client_host}] Ignoring message type '{msg_type}' while waiting for seed")
+
+            except asyncio.TimeoutError:
+                await send_json({"type": "error", "message": "Timeout waiting for initial seed"})
+                return
+
+        # Warmup on first connection AFTER seed is loaded (CUDA graphs require same thread context)
+        if not engine_warmed_up:
+            logger.info("=" * 60)
+            logger.info(
+                "[5/5] WARMUP - First client connected, initializing CUDA graphs..."
+            )
+            logger.info("=" * 60)
+            await send_json({"type": "status", "code": "warmup"})
+
+            def do_warmup():
+                warmup_start = time.perf_counter()
+
+                logger.info("[5/5] Step 1: Resetting engine state...")
+                reset_start = time.perf_counter()
+                engine.reset()
+                logger.info(
+                    f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s"
+                )
+
+                logger.info("[5/5] Step 2: Appending seed frame...")
+                append_start = time.perf_counter()
+                engine.append_frame(seed_frame)
+                logger.info(
+                    f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s"
+                )
+
+                logger.info("[5/5] Step 3: Setting prompt...")
+                prompt_start = time.perf_counter()
+                engine.set_prompt(current_prompt)
+                logger.info(
+                    f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
+                )
+
+                logger.info(
+                    "[5/5] Step 4: Generating first frame (compiling CUDA graphs)..."
+                )
+                gen_start = time.perf_counter()
+                _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
+                logger.info(
+                    f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s"
+                )
+
+                return time.perf_counter() - warmup_start
+
+            warmup_time = await asyncio.to_thread(do_warmup)
+            logger.info("=" * 60)
+            logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")
+            logger.info("=" * 60)
+            engine_warmed_up = True
+
         await send_json({"type": "status", "code": Status.INIT})
 
         logger.info(f"[{client_host}] Calling engine.reset()...")
@@ -471,6 +500,23 @@ async def websocket_endpoint(websocket: WebSocket):
                         await reset_engine()
                     except Exception as e:
                         logger.info(f"[GEN] Failed to set prompt: {e}")
+                case "set_initial_seed":
+                    # Allow updating the seed mid-session
+                    seed_base64 = msg.get("seed_base64")
+                    logger.info(f"[RECV] set_initial_seed received ({len(seed_base64) if seed_base64 else 0} chars)")
+                    try:
+                        if seed_base64:
+                            loaded_frame = load_seed_from_base64(seed_base64)
+                            if loaded_frame is not None:
+                                seed_frame = loaded_frame
+                                logger.info("[RECV] Seed frame updated from base64")
+                                await reset_engine()
+                            else:
+                                await send_json({"type": "error", "message": "Failed to decode seed image"})
+                        else:
+                            await send_json({"type": "error", "message": "No seed_base64 provided"})
+                    except Exception as e:
+                        logger.info(f"[GEN] Failed to set seed: {e}")
                 case "control":
                     if paused:
                         continue
