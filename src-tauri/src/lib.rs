@@ -2,7 +2,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, RunEvent};
@@ -43,20 +43,11 @@ pub enum EngineMode {
 }
 
 // Global state for tracking the running server process
+#[derive(Default)]
 struct ServerState {
     process: Option<Child>,
     port: Option<u16>,
     ready: bool,
-}
-
-impl Default for ServerState {
-    fn default() -> Self {
-        Self {
-            process: None,
-            port: None,
-            ready: false,
-        }
-    }
 }
 
 static SERVER_STATE: std::sync::OnceLock<Mutex<ServerState>> = std::sync::OnceLock::new();
@@ -186,29 +177,28 @@ fn read_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
         .map_err(|e| format!("Failed to parse config file: {}", e))?;
 
     // Check for legacy use_standalone_engine boolean and migrate to engine_mode
-    if let Some(features) = json_value.get_mut("features") {
-        if let Some(features_obj) = features.as_object_mut() {
-            if let Some(use_standalone) = features_obj.remove("use_standalone_engine") {
-                // Migrate: true -> standalone, false -> server
-                let engine_mode = if use_standalone.as_bool().unwrap_or(true) {
-                    "standalone"
-                } else {
-                    "server"
-                };
-                features_obj.insert("engine_mode".to_string(), serde_json::json!(engine_mode));
+    if let Some(features) = json_value.get_mut("features")
+        && let Some(features_obj) = features.as_object_mut()
+        && let Some(use_standalone) = features_obj.remove("use_standalone_engine")
+    {
+        // Migrate: true -> standalone, false -> server
+        let engine_mode = if use_standalone.as_bool().unwrap_or(true) {
+            "standalone"
+        } else {
+            "server"
+        };
+        features_obj.insert("engine_mode".to_string(), serde_json::json!(engine_mode));
 
-                // Save migrated config
-                let migrated_json = serde_json::to_string_pretty(&json_value)
-                    .map_err(|e| format!("Failed to serialize migrated config: {}", e))?;
-                fs::write(&config_path, &migrated_json)
-                    .map_err(|e| format!("Failed to write migrated config: {}", e))?;
+        // Save migrated config
+        let migrated_json = serde_json::to_string_pretty(&json_value)
+            .map_err(|e| format!("Failed to serialize migrated config: {}", e))?;
+        fs::write(&config_path, &migrated_json)
+            .map_err(|e| format!("Failed to write migrated config: {}", e))?;
 
-                println!(
-                    "[CONFIG] Migrated use_standalone_engine to engine_mode: {}",
-                    engine_mode
-                );
-            }
-        }
+        println!(
+            "[CONFIG] Migrated use_standalone_engine to engine_mode: {}",
+            engine_mode
+        );
     }
 
     // Now parse the (potentially migrated) JSON as AppConfig
@@ -452,7 +442,7 @@ fn get_uv_archive_info() -> (&'static str, &'static str) {
 }
 
 #[cfg(target_os = "windows")]
-fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
+fn extract_zip(bytes: &[u8], _uv_dir: &Path, bin_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(bytes);
     let mut archive =
         zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to read zip archive: {}", e))?;
@@ -481,7 +471,7 @@ fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(),
 }
 
 #[cfg(not(target_os = "windows"))]
-fn extract_tar_gz(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
+fn extract_tar_gz(bytes: &[u8], _uv_dir: &Path, bin_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(bytes);
     let gz = GzDecoder::new(cursor);
     let mut archive = Archive::new(gz);
@@ -735,19 +725,19 @@ async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
 
     let mut copied_count = 0;
 
-    if let Some(source) = source_dir {
-        if let Ok(entries) = fs::read_dir(&source) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(ext) = path.extension() {
-                    let ext_lower = ext.to_string_lossy().to_lowercase();
-                    if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" {
-                        if let Some(filename) = path.file_name() {
-                            let dest_path = seeds_dir.join(filename);
-                            if !dest_path.exists() && fs::copy(&path, &dest_path).is_ok() {
-                                copied_count += 1;
-                            }
-                        }
+    if let Some(source) = source_dir
+        && let Ok(entries) = fs::read_dir(&source)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
+                    && let Some(filename) = path.file_name()
+                {
+                    let dest_path = seeds_dir.join(filename);
+                    if !dest_path.exists() && fs::copy(&path, &dest_path).is_ok() {
+                        copied_count += 1;
                     }
                 }
             }
@@ -779,10 +769,10 @@ async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
         let path = entry.path();
         if let Some(ext) = path.extension() {
             let ext_lower = ext.to_string_lossy().to_lowercase();
-            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" {
-                if let Some(filename) = path.file_name() {
-                    seeds.push(filename.to_string_lossy().to_string());
-                }
+            if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
+                && let Some(filename) = path.file_name()
+            {
+                seeds.push(filename.to_string_lossy().to_string());
             }
         }
     }
@@ -980,10 +970,8 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         Some(config.api_keys.huggingface.clone())
     } else if let Ok(token) = std::env::var("HF_TOKEN") {
         Some(token)
-    } else if let Ok(token) = std::env::var("HUGGING_FACE_HUB_TOKEN") {
-        Some(token)
     } else {
-        None
+        std::env::var("HUGGING_FACE_HUB_TOKEN").ok()
     };
 
     if let Some(token) = hf_token {
@@ -1048,13 +1036,11 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
                 .ok();
 
             let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    process_log_line(&line, false);
-                    if let Some(ref mut file) = log_file {
-                        let _ = writeln!(file, "{}", line);
-                        let _ = file.flush();
-                    }
+            for line in reader.lines().map_while(Result::ok) {
+                process_log_line(&line, false);
+                if let Some(ref mut file) = log_file {
+                    let _ = writeln!(file, "{}", line);
+                    let _ = file.flush();
                 }
             }
         });
@@ -1071,13 +1057,11 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
                 .ok();
 
             let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    process_log_line(&line, true);
-                    if let Some(ref mut file) = log_file {
-                        let _ = writeln!(file, "{}", line);
-                        let _ = file.flush();
-                    }
+            for line in reader.lines().map_while(Result::ok) {
+                process_log_line(&line, true);
+                if let Some(ref mut file) = log_file {
+                    let _ = writeln!(file, "{}", line);
+                    let _ = file.flush();
                 }
             }
         });
