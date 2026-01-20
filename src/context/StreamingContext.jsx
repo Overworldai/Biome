@@ -29,6 +29,7 @@ export const StreamingProvider = ({ children }) => {
     isServerMode
   } = useConfig()
   const {
+    status: engineStatus,
     startServer,
     stopServer,
     isServerRunning,
@@ -525,7 +526,10 @@ export const StreamingProvider = ({ children }) => {
     engineError,
     clearEngineError: () => setEngineError(null),
     serverLogPath,
-    // Engine setup state (for front page installation display)
+    // Engine setup/status (shared state for all components)
+    engineStatus,
+    checkEngineStatus,
+    setupEngine,
     engineSetupInProgress,
     setupProgress,
     engineSetupError,

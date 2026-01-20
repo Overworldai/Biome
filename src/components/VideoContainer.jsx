@@ -29,6 +29,8 @@ const VideoContainer = () => {
   } = useStreaming()
   const { isStandaloneMode } = useConfig()
 
+  const showServerLogs = (state === states.WARM && isStandaloneMode) || (state === states.COLD && engineSetupInProgress) || engineError
+
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
@@ -84,9 +86,7 @@ const VideoContainer = () => {
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} pausedAt={pausedAt} />
         <ConnectionLostOverlay />
         {/* Show server logs during: WARM state with standalone mode, front-page installation, or engine error */}
-        {((state === states.WARM && isStandaloneMode) ||
-          (state === states.COLD && engineSetupInProgress) ||
-          engineError) && (
+        {showServerLogs && (
           <ServerLogDisplay
             showDismiss={!!engineError}
             onDismiss={clearEngineError}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { useStreaming } from '../context/StreamingContextShared'
 import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
-import { useEngine } from '../hooks/useEngine'
 
 // Tauri invoke helper
 const invoke = async (cmd, args = {}) => {
@@ -11,7 +11,14 @@ const invoke = async (cmd, args = {}) => {
 const SettingsPanel = () => {
   const { isSettingsOpen, toggleSettings } = usePortal()
   const { config, saveConfig, configPath, openConfig } = useConfig()
-  const { status, isLoading: engineLoading, error: engineError, setupProgress, checkStatus, setupEngine } = useEngine()
+  const {
+    engineStatus: status,
+    engineSetupInProgress: engineLoading,
+    engineSetupError: engineError,
+    setupProgress,
+    checkEngineStatus: checkStatus,
+    setupEngine
+  } = useStreaming()
 
   // Local state for form fields
   const [gpuServer, setGpuServer] = useState('')

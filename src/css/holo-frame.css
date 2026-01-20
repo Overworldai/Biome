@@ -2855,10 +2855,10 @@ button.hud-social-link {
   transform: translate(-50%, -50%);
   width: 70%;
   max-height: 50%;
-  z-index: 60;
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  background: rgba(8, 12, 16, 0.9);
+  background: rgba(8, 12, 16, 0.95);
   border: 1px solid rgba(255, 200, 100, 0.3);
   border-radius: 0.8cqw;
   overflow: hidden;

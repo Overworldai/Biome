@@ -13,9 +13,9 @@ export const useEngine = () => {
   const [serverStarting, setServerStarting] = useState(false)
 
   // Check the current engine status
+  // Note: This does NOT modify isLoading to avoid interfering with setupEngine
   const checkStatus = useCallback(async () => {
     try {
-      setIsLoading(true)
       setError(null)
       const engineStatus = await invoke('check_engine_status')
       setStatus(engineStatus)
@@ -23,8 +23,6 @@ export const useEngine = () => {
     } catch (err) {
       setError(err.message || String(err))
       return null
-    } finally {
-      setIsLoading(false)
     }
   }, [])
 
