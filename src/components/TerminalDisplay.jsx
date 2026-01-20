@@ -29,11 +29,13 @@ const statusCodeMessages = {
 
 const TerminalDisplay = () => {
   const { state, states, transitionTo, onStateChange } = usePortal()
-  const { statusCode, setEndpointUrl, engineError, clearEngineError, cancelConnection } = useStreaming()
-  const { config, saveGpuServerUrl } = useConfig()
+  const { statusCode, setEndpointUrl, engineError, clearEngineError, config, cancelConnection } = useStreaming()
+  const { saveGpuServerUrl } = useConfig()
 
   const useStandaloneEngine = config?.features?.use_standalone_engine ?? true
-  const defaultUrl = useStandaloneEngine ? `localhost:${STANDALONE_PORT}` : `${config?.gpu_server?.host || 'localhost'}:${config?.gpu_server?.port || STANDALONE_PORT}`
+  const defaultUrl = useStandaloneEngine
+    ? `localhost:${STANDALONE_PORT}`
+    : `${config?.gpu_server?.host || 'localhost'}:${config?.gpu_server?.port || STANDALONE_PORT}`
   const [displayText, setDisplayText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -66,68 +68,77 @@ const TerminalDisplay = () => {
     }
   }, [])
 
-  const typeMessage = useCallback((message, speed = 30) => {
-    clearAnimationTimeout()
-    setIsTyping(true)
-    setDisplayText('')
-    let currentIndex = 0
+  const typeMessage = useCallback(
+    (message, speed = 30) => {
+      clearAnimationTimeout()
+      setIsTyping(true)
+      setDisplayText('')
+      let currentIndex = 0
 
-    const type = () => {
-      if (currentIndex < message.length) {
-        currentIndex++
-        setDisplayText(message.slice(0, currentIndex))
-        timeoutRef.current = setTimeout(type, speed)
-      } else {
-        setIsTyping(false)
-        currentMessageRef.current = message
-        // Show input area after "ENTER URL:" finishes typing (only for non-standalone mode)
-        if (message === stateMessages.cold) {
-          setShowPlaceholder(true)
-          setTimeout(() => {
-            document.getElementById('terminal-input')?.focus()
-          }, 1500)
-        } else if (message === stateMessages.cold_standalone) {
-          setShowPlaceholder(true)
+      const type = () => {
+        if (currentIndex < message.length) {
+          currentIndex++
+          setDisplayText(message.slice(0, currentIndex))
+          timeoutRef.current = setTimeout(type, speed)
+        } else {
+          setIsTyping(false)
+          currentMessageRef.current = message
+          // Show input area after "ENTER URL:" finishes typing (only for non-standalone mode)
+          if (message === stateMessages.cold) {
+            setShowPlaceholder(true)
+            setTimeout(() => {
+              document.getElementById('terminal-input')?.focus()
+            }, 1500)
+          } else if (message === stateMessages.cold_standalone) {
+            setShowPlaceholder(true)
+          }
         }
       }
-    }
 
-    timeoutRef.current = setTimeout(type, speed)
-  }, [clearAnimationTimeout])
+      timeoutRef.current = setTimeout(type, speed)
+    },
+    [clearAnimationTimeout]
+  )
 
-  const deleteMessage = useCallback((onComplete, speed = 20) => {
-    clearAnimationTimeout()
-    setIsDeleting(true)
-    setShowPlaceholder(false)
-    let currentText = displayTextRef.current
+  const deleteMessage = useCallback(
+    (onComplete, speed = 20) => {
+      clearAnimationTimeout()
+      setIsDeleting(true)
+      setShowPlaceholder(false)
+      let currentText = displayTextRef.current
 
-    const deleteChar = () => {
-      if (currentText.length > 0) {
-        currentText = currentText.slice(0, -1)
-        setDisplayText(currentText)
-        timeoutRef.current = setTimeout(deleteChar, speed)
-      } else {
-        setIsDeleting(false)
-        currentMessageRef.current = ''
-        onComplete()
+      const deleteChar = () => {
+        if (currentText.length > 0) {
+          currentText = currentText.slice(0, -1)
+          setDisplayText(currentText)
+          timeoutRef.current = setTimeout(deleteChar, speed)
+        } else {
+          setIsDeleting(false)
+          currentMessageRef.current = ''
+          onComplete()
+        }
       }
-    }
 
-    deleteChar()
-  }, [clearAnimationTimeout])
+      deleteChar()
+    },
+    [clearAnimationTimeout]
+  )
 
   // Transition message with delete-then-type animation
-  const transitionMessage = useCallback((newMessage) => {
-    if (currentMessageRef.current === newMessage) return
+  const transitionMessage = useCallback(
+    (newMessage) => {
+      if (currentMessageRef.current === newMessage) return
 
-    if (currentMessageRef.current) {
-      deleteMessage(() => typeMessage(newMessage))
-    } else if (!hasBeenVisible.current) {
-      pendingMessageRef.current = newMessage
-    } else {
-      typeMessage(newMessage)
-    }
-  }, [deleteMessage, typeMessage])
+      if (currentMessageRef.current) {
+        deleteMessage(() => typeMessage(newMessage))
+      } else if (!hasBeenVisible.current) {
+        pendingMessageRef.current = newMessage
+      } else {
+        typeMessage(newMessage)
+      }
+    },
+    [deleteMessage, typeMessage]
+  )
 
   // Watch for fade-in animation completion to trigger initial typing
   useEffect(() => {
@@ -198,7 +209,18 @@ const TerminalDisplay = () => {
     transitionMessage(newMessage)
 
     return clearAnimationTimeout
-  }, [state, statusCode, error, engineError, useStandaloneEngine, defaultUrl, deleteMessage, typeMessage, transitionMessage, clearAnimationTimeout])
+  }, [
+    state,
+    statusCode,
+    error,
+    engineError,
+    useStandaloneEngine,
+    defaultUrl,
+    deleteMessage,
+    typeMessage,
+    transitionMessage,
+    clearAnimationTimeout
+  ])
 
   // Reset state change listener
   useEffect(() => {
@@ -248,7 +270,7 @@ const TerminalDisplay = () => {
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       // In standalone mode, just need showPlaceholder; otherwise also need inputValue
-      const canConnect = useStandaloneEngine ? showPlaceholder : (showPlaceholder && inputValue.trim())
+      const canConnect = useStandaloneEngine ? showPlaceholder : showPlaceholder && inputValue.trim()
       if (e.key === 'Enter' && state === states.COLD && canConnect) {
         if (document.activeElement?.id === 'terminal-input') return
         handleConnect()
@@ -276,7 +298,7 @@ const TerminalDisplay = () => {
       <div
         className="terminal-status"
         id="terminal-status"
-        onClick={() => useStandaloneEngine ? handleConnect() : document.getElementById('terminal-input')?.focus()}
+        onClick={() => (useStandaloneEngine ? handleConnect() : document.getElementById('terminal-input')?.focus())}
       >
         <span className="terminal-prompt">&gt;</span>
         <span
@@ -305,9 +327,7 @@ const TerminalDisplay = () => {
 
       {/* Enter hint - only shown in non-standalone mode */}
       {!useStandaloneEngine && (
-        <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>
-          Press Enter to connect
-        </div>
+        <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>Press Enter to connect</div>
       )}
 
       {/* Cancel button - shown during WARM state */}
