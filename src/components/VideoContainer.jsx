@@ -20,7 +20,8 @@ const VideoContainer = () => {
     registerContainerRef,
     registerCanvasRef,
     handleContainerClick,
-    isPointerLocked
+    isPointerLocked,
+    config
   } = useStreaming()
 
   const containerRef = useRef(null)
@@ -77,7 +78,7 @@ const VideoContainer = () => {
 
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} pausedAt={pausedAt} />
         <ConnectionLostOverlay />
-        {state === states.WARM && <ServerLogDisplay />}
+        {state === states.WARM && config.features?.use_standalone_engine && <ServerLogDisplay />}
         <TerminalDisplay />
         <VideoMask />
         <ShutdownOverlay />

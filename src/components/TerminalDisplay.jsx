@@ -6,6 +6,7 @@ import useConfig, { STANDALONE_PORT } from '../hooks/useConfig'
 // Display text for portal states
 const stateMessages = {
   cold: 'ENTER URL:',
+  cold_standalone: 'PRESS ENTER',
   warm: 'CONNECTING...',
   hot: 'CONNECTED',
   streaming: 'STREAMING'
@@ -85,12 +86,14 @@ const TerminalDisplay = () => {
       } else {
         setIsTyping(false)
         currentMessageRef.current = message
-        // Show input area after "ENTER URL:" finishes typing
+        // Show input area after "ENTER URL:" finishes typing (only for non-standalone mode)
         if (message === stateMessages.cold) {
           setShowPlaceholder(true)
           setTimeout(() => {
             document.getElementById('terminal-input')?.focus()
           }, 1500)
+        } else if (message === stateMessages.cold_standalone) {
+          setShowPlaceholder(true)
         }
       }
     }
@@ -162,12 +165,13 @@ const TerminalDisplay = () => {
       const timeout = setTimeout(() => {
         clearEngineError?.()
         setShowEngineError(false)
-        deleteMessage(() => typeMessage(stateMessages.cold))
+        const coldMessage = useStandaloneEngine ? stateMessages.cold_standalone : stateMessages.cold
+        deleteMessage(() => typeMessage(coldMessage))
       }, 3000)
 
       return () => clearTimeout(timeout)
     }
-  }, [engineError, state, showEngineError, clearEngineError, deleteMessage, typeMessage])
+  }, [engineError, state, showEngineError, useStandaloneEngine, clearEngineError, deleteMessage, typeMessage])
 
   // Handle state/status changes
   useEffect(() => {
@@ -187,14 +191,19 @@ const TerminalDisplay = () => {
     if (showEngineError) return
 
     // Determine new message based on state and status code
-    const newMessage = (state === 'warm' && statusCode)
-      ? (statusCodeMessages[statusCode] || stateMessages.warm)
-      : (stateMessages[state] || '')
+    let newMessage
+    if (state === 'warm' && statusCode) {
+      newMessage = statusCodeMessages[statusCode] || stateMessages.warm
+    } else if (state === 'cold' && useStandaloneEngine) {
+      newMessage = stateMessages.cold_standalone
+    } else {
+      newMessage = stateMessages[state] || ''
+    }
 
     transitionMessage(newMessage)
 
     return clearAnimationTimeout
-  }, [state, statusCode, error, showEngineError, deleteMessage, typeMessage, transitionMessage, clearAnimationTimeout])
+  }, [state, statusCode, error, showEngineError, useStandaloneEngine, deleteMessage, typeMessage, transitionMessage, clearAnimationTimeout])
 
   // Reset input when returning to cold state
   useEffect(() => {
@@ -226,6 +235,12 @@ const TerminalDisplay = () => {
   const handleConnect = useCallback(async () => {
     if (state !== states.COLD) return
 
+    // In standalone mode, just transition - StreamingContext handles the URL
+    if (useStandaloneEngine) {
+      transitionTo(states.WARM)
+      return
+    }
+
     const urlToUse = inputValue.trim()
     if (!urlToUse || !isValidUrl(urlToUse)) {
       setError('invalid_url')
@@ -235,7 +250,7 @@ const TerminalDisplay = () => {
     await saveGpuServerUrl(urlToUse)
     setEndpointUrl(urlToUse)
     transitionTo(states.WARM)
-  }, [state, states.COLD, states.WARM, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
+  }, [state, states.COLD, states.WARM, useStandaloneEngine, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleConnect()
@@ -244,7 +259,9 @@ const TerminalDisplay = () => {
   // Global Enter key handler
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      if (e.key === 'Enter' && state === states.COLD && showPlaceholder && inputValue.trim()) {
+      // In standalone mode, just need showPlaceholder; otherwise also need inputValue
+      const canConnect = useStandaloneEngine ? showPlaceholder : (showPlaceholder && inputValue.trim())
+      if (e.key === 'Enter' && state === states.COLD && canConnect) {
         if (document.activeElement?.id === 'terminal-input') return
         handleConnect()
       }
@@ -252,7 +269,7 @@ const TerminalDisplay = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [state, states.COLD, showPlaceholder, inputValue, handleConnect])
+  }, [state, states.COLD, showPlaceholder, useStandaloneEngine, inputValue, handleConnect])
 
   const hasError = error || showEngineError
 
@@ -273,7 +290,7 @@ const TerminalDisplay = () => {
       <div
         className="terminal-status"
         id="terminal-status"
-        onClick={() => document.getElementById('terminal-input')?.focus()}
+        onClick={() => useStandaloneEngine ? handleConnect() : document.getElementById('terminal-input')?.focus()}
       >
         <span className="terminal-prompt">&gt;</span>
         <span
@@ -282,26 +299,37 @@ const TerminalDisplay = () => {
         >
           {displayText}
         </span>
-        <span className={`input-wrapper ${showPlaceholder ? 'show-input' : ''}`}>
-          <input
-            type="text"
-            className="terminal-input"
-            id="terminal-input"
-            autoComplete="off"
-            spellCheck="false"
-            placeholder=""
-            value={inputValue}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-          />
-          <span className="input-cursor"></span>
-        </span>
+        {!useStandaloneEngine && (
+          <span className={`input-wrapper ${showPlaceholder ? 'show-input' : ''}`}>
+            <input
+              type="text"
+              className="terminal-input"
+              id="terminal-input"
+              autoComplete="off"
+              spellCheck="false"
+              placeholder=""
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+            />
+            <span className="input-cursor"></span>
+          </span>
+        )}
       </div>
 
-      {/* Enter hint */}
-      <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>
-        Press Enter to connect
-      </div>
+      {/* Enter hint - only shown in non-standalone mode */}
+      {!useStandaloneEngine && (
+        <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>
+          Press Enter to connect
+        </div>
+      )}
+
+      {/* Cancel button - shown during WARM state */}
+      {state === states.WARM && (
+        <button className="terminal-cancel-btn" onClick={cancelConnection}>
+          CANCEL
+        </button>
+      )}
     </div>
   )
 }
