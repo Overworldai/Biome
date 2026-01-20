@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { StreamingContext, useStreaming } from './StreamingContextShared'
 import { usePortal } from './PortalContext'
 import useWebSocket from '../hooks/useWebSocket'
@@ -9,7 +10,6 @@ import { createLogger } from '../utils/logger'
 
 const log = createLogger('Streaming')
 
-// Re-export useStreaming for backwards compatibility
 export { useStreaming }
 
 export const StreamingProvider = ({ children }) => {
@@ -17,36 +17,15 @@ export const StreamingProvider = ({ children }) => {
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
-  // Config hook for GPU server settings and API keys
   const { config, isLoaded: configLoaded, reloadConfig, saveConfig, hasOpenAiKey, hasFalKey } = useConfig()
-
-  // Engine hook for standalone server management
   const {
-    startServer,
-    stopServer,
-    isServerRunning,
-    isReady: engineReady,
-    checkStatus: checkEngineStatus,
-    serverLogPath
+    startServer, stopServer, isServerRunning, isReady: engineReady,
+    checkStatus: checkEngineStatus, checkServerReady, checkPortInUse, serverLogPath
   } = useEngine()
-
   const {
-    connectionState,
-    statusCode,
-    error,
-    frame,
-    frameId,
-    genTime,
-    connect,
-    disconnect,
-    sendControl,
-    sendPause,
-    sendPrompt,
-    sendPromptWithSeed,
-    reset,
-    isConnected,
-    isReady,
-    isLoading
+    connectionState, statusCode, error, frame, frameId, genTime,
+    connect, disconnect, sendControl, sendPause, sendPrompt, sendPromptWithSeed,
+    reset, isConnected, isReady, isLoading
   } = useWebSocket()
 
   const [isPaused, setIsPaused] = useState(false)
@@ -54,43 +33,26 @@ export const StreamingProvider = ({ children }) => {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
-
-  // Bottom panel visibility (persisted in config)
-  const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
-  const setBottomPanelHidden = useCallback(
-    async (hidden) => {
-      await saveConfig({
-        ...config,
-        ui: {
-          ...config.ui,
-          bottom_panel_hidden: hidden
-        }
-      })
-    },
-    [config, saveConfig]
-  )
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState(null)
-
-  // Local endpoint URL (user provides this instead of VIP key)
   const [endpointUrl, setEndpointUrl] = useState(null)
-
-  // Track when canvas element is registered
   const [canvasReady, setCanvasReady] = useState(false)
 
-  // Track when first frame is received (for isVideoReady)
-  const hasReceivedFrame = frame !== null
-
-  // Track if we were attempting/had a connection (to detect connection loss)
   const wasConnectingOrConnectedRef = useRef(false)
+  const frameCountRef = useRef(0)
+  const lastFpsUpdateRef = useRef(performance.now())
+  const inputLoopRef = useRef(null)
 
+  const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
   const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen
 
-  // FPS counter
-  const frameCountRef = useRef(0)
-  const lastFpsUpdateRef = useRef(performance.now())
+  // Bottom panel visibility (persisted in config)
+  const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
+  const setBottomPanelHidden = useCallback(async (hidden) => {
+    await saveConfig({ ...config, ui: { ...config.ui, bottom_panel_hidden: hidden } })
+  }, [config, saveConfig])
 
   // Check engine status on mount (for standalone mode)
   useEffect(() => {
@@ -101,9 +63,7 @@ export const StreamingProvider = ({ children }) => {
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
-    if (containerRef?.current) {
-      containerRef.current.requestPointerLock()
-    }
+    containerRef.current?.requestPointerLock()
   }, [])
 
   const exitPointerLock = useCallback(() => {
@@ -114,110 +74,133 @@ export const StreamingProvider = ({ children }) => {
 
   const togglePointerLock = useCallback(() => {
     if (!isStreaming || !isReady) return
-    if (document.pointerLockElement) {
-      document.exitPointerLock()
-    } else {
-      containerRef.current?.requestPointerLock()
-    }
+    document.pointerLockElement ? document.exitPointerLock() : containerRef.current?.requestPointerLock()
   }, [isStreaming, isReady])
 
-  // Reset and resume feed (used by U key handler)
   const handleReset = useCallback(() => {
     reset()
     requestPointerLock()
   }, [reset, requestPointerLock])
 
   const { pressedKeys, getInputState, isPointerLocked } = useGameInput(
-    inputEnabled,
-    containerRef,
-    handleReset,
-    togglePointerLock
+    inputEnabled, containerRef, handleReset, togglePointerLock
   )
-
-  const inputLoopRef = useRef(null)
 
   // Sync settings/pause state with pointer lock
   useEffect(() => {
     if (!isStreaming || !isReady) return
 
-    if (isPointerLocked) {
-      if (settingsOpen || isPaused) {
-        setSettingsOpen(false)
-        setIsPaused(false)
-        setPausedAt(null)
-        sendPause(false)
-        log.info('Pointer locked - settings closed, resumed')
-      }
-    } else {
-      if (!settingsOpen && !isPaused) {
-        setSettingsOpen(true)
-        setIsPaused(true)
-        setPausedAt(Date.now())
-        sendPause(true)
-        log.info('Pointer unlocked - settings opened, paused')
-      }
+    if (isPointerLocked && (settingsOpen || isPaused)) {
+      setSettingsOpen(false)
+      setIsPaused(false)
+      setPausedAt(null)
+      sendPause(false)
+      log.info('Pointer locked - settings closed, resumed')
+    } else if (!isPointerLocked && !settingsOpen && !isPaused) {
+      setSettingsOpen(true)
+      setIsPaused(true)
+      setPausedAt(Date.now())
+      sendPause(true)
+      log.info('Pointer unlocked - settings opened, paused')
     }
   }, [isPointerLocked, isStreaming, isReady, settingsOpen, isPaused, sendPause])
 
-  // Connect when entering WARM state with endpoint URL
-  // If standalone engine is enabled, start the server first
+  // Connect when entering WARM state
   useEffect(() => {
     if (state !== states.WARM) return
+
+    let cancelled = false
+    let unlisten = null
 
     const connectToServer = async () => {
       const useStandalone = config.features?.use_standalone_engine
       const { host, port } = config.gpu_server
 
-      // Clear any previous engine error
       setEngineError(null)
 
-      // If standalone engine is enabled and server isn't running, start it
-      if (useStandalone && !isServerRunning) {
-        log.info('Standalone engine enabled - starting server on port', port)
+      const wsUrl = endpointUrl || `${host}:${port}`
 
-        // Check if engine is ready (dependencies installed)
-        await checkEngineStatus()
-        if (!engineReady) {
-          const errorMsg = 'Engine not ready - please run setup in Settings first'
-          log.error(errorMsg)
-          setEngineError(errorMsg)
-          transitionTo(states.COLD)
-          return
-        }
+      if (useStandalone) {
+        log.info('Standalone mode enabled, checking server state...')
 
-        try {
-          await startServer(port)
-          log.info('Server started, waiting for it to be ready...')
-          // Give the server a moment to start up before connecting
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-        } catch (err) {
-          const errorMsg = err?.message || String(err)
-          log.error('Failed to start server:', errorMsg)
-          setEngineError(errorMsg)
-          transitionTo(states.COLD)
-          return
+        const serverAlreadyReady = await checkServerReady()
+        if (serverAlreadyReady) {
+          log.info('Server already running and ready')
+        } else {
+          const portInUse = await checkPortInUse(port)
+          if (portInUse) {
+            log.info('Port', port, 'already in use - assuming server is ready')
+          } else if (isServerRunning) {
+            // Wait for running server to become ready
+            log.info('Server running but not ready - waiting...')
+            try {
+              await waitForServerReady(() => cancelled, (fn) => { unlisten = fn })
+              if (cancelled) return
+            } catch (err) {
+              if (cancelled) return
+              handleServerError(err)
+              return
+            }
+          } else {
+            // Start new server
+            log.info('Starting server on port', port)
+            const status = await checkEngineStatus()
+            if (!status?.uv_installed || !status?.repo_cloned || !status?.dependencies_synced) {
+              handleServerError(new Error('Engine not ready - please run setup in Settings first'))
+              return
+            }
+
+            try {
+              const readyPromise = waitForServerReady(() => cancelled, (fn) => { unlisten = fn })
+              await startServer(port)
+              log.info('Server started, waiting for ready signal...')
+              await readyPromise
+              if (cancelled) return
+            } catch (err) {
+              if (cancelled) return
+              handleServerError(err)
+              return
+            }
+          }
         }
       }
 
-      // Build WebSocket URL
-      let wsUrl
-      if (endpointUrl) {
-        // User-provided URL from terminal input - connect directly
-        wsUrl = endpointUrl
-      } else {
-        // Build from config: host:port (useWebSocket adds ws:// and /ws)
-        wsUrl = `${host}:${port}`
-      }
-
-      log.info('WARM state - connecting to local WebSocket endpoint:', wsUrl)
-      wasConnectingOrConnectedRef.current = true
+      if (cancelled) return
+      log.info('Connecting to WebSocket endpoint:', wsUrl)
       connect(wsUrl)
     }
 
-    connectToServer()
-  }, [state, states.WARM, states.COLD, endpointUrl, config.gpu_server, config.features?.use_standalone_engine, connect, isServerRunning, engineReady, startServer, checkEngineStatus, transitionTo])
+    const waitForServerReady = (_isCancelled, setUnlisten) => {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Server startup timeout - check logs for errors'))
+        }, 120000)
 
-  // Transition to HOT when we've received frames
+        listen('server-ready', () => {
+          clearTimeout(timeout)
+          log.info('Server ready signal received!')
+          resolve()
+        }).then(setUnlisten)
+      })
+    }
+
+    const handleServerError = (err) => {
+      const errorMsg = err?.message || String(err)
+      log.error('Server error:', errorMsg)
+      setEngineError(errorMsg)
+      transitionTo(states.COLD)
+    }
+
+    connectToServer()
+
+    return () => {
+      cancelled = true
+      unlisten?.()
+    }
+  }, [state, states.WARM, states.COLD, endpointUrl, config.gpu_server, config.features?.use_standalone_engine,
+      connect, isServerRunning, startServer, checkEngineStatus, checkServerReady, checkPortInUse, transitionTo])
+
+  // State transitions
   useEffect(() => {
     if (state === states.WARM && hasReceivedFrame && canvasReady) {
       log.info('First frame received - transitioning to HOT')
@@ -225,7 +208,6 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [state, states.WARM, states.HOT, hasReceivedFrame, canvasReady, transitionTo])
 
-  // Transition to STREAMING when HOT and fully ready
   useEffect(() => {
     if (state === states.HOT && portalConnected && isReady) {
       log.info('Fully ready - transitioning to STREAMING')
@@ -233,7 +215,6 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [state, states.HOT, states.STREAMING, portalConnected, isReady, transitionTo])
 
-  // Auto-grab cursor when entering STREAMING state
   useEffect(() => {
     if (state === states.STREAMING && isReady && containerRef.current) {
       log.info('Auto-requesting pointer lock on stream start')
@@ -252,56 +233,37 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [state, states.WARM, states.HOT, states.STREAMING, disconnect, exitPointerLock])
 
-  // Handle connection errors during WARM state - go back to COLD with error
+  // Handle connection errors during WARM state
   useEffect(() => {
-    if (state === states.WARM && (connectionState === 'error' || connectionState === 'disconnected')) {
-      // Connection failed during warm-up - show error and go back to COLD
-      if (wasConnectingOrConnectedRef.current) {
-        log.error('Connection failed during WARM state')
-        const errorMsg = error || 'Connection failed - server may have crashed'
-        setEngineError(errorMsg)
+    if (state === states.WARM && connectionState === 'connecting') {
+      wasConnectingOrConnectedRef.current = true
+    }
+
+    if (state === states.WARM && wasConnectingOrConnectedRef.current) {
+      if (connectionState === 'error' || connectionState === 'disconnected') {
+        const isError = connectionState === 'error'
+        log.error(isError ? 'Connection error during WARM state' : 'Connection lost during WARM state')
+        setEngineError(error || (isError ? 'Connection failed - server may have crashed' : 'Connection lost - server may have crashed'))
         wasConnectingOrConnectedRef.current = false
         transitionTo(states.COLD)
       }
     }
   }, [state, states.WARM, states.COLD, connectionState, error, transitionTo])
 
-  // Timeout for WARM state - if we don't receive frames within 60 seconds, give up
-  useEffect(() => {
-    if (state !== states.WARM) return
-
-    const timeoutId = setTimeout(() => {
-      if (state === states.WARM && !hasReceivedFrame) {
-        log.error('Connection timeout - no frames received within 60 seconds')
-        setEngineError('Connection timeout - server failed to respond')
-        disconnect()
-        transitionTo(states.COLD)
-      }
-    }, 60000) // 60 second timeout
-
-    return () => clearTimeout(timeoutId)
-  }, [state, states.WARM, states.COLD, hasReceivedFrame, disconnect, transitionTo])
-
-  // Detect connection loss - show overlay when connection drops during HOT/STREAMING
+  // Detect connection loss during HOT/STREAMING
   useEffect(() => {
     const isInConnectionState = state === states.HOT || state === states.STREAMING
 
-    // Track when we enter a connection state
     if (isInConnectionState && (connectionState === 'connecting' || connectionState === 'connected')) {
       wasConnectingOrConnectedRef.current = true
     }
 
-    // Detect connection loss: we were connecting/connected but now disconnected or errored
-    if (
-      wasConnectingOrConnectedRef.current &&
-      isInConnectionState &&
-      (connectionState === 'disconnected' || connectionState === 'error')
-    ) {
+    if (wasConnectingOrConnectedRef.current && isInConnectionState &&
+        (connectionState === 'disconnected' || connectionState === 'error')) {
       log.info('Connection lost detected')
       setConnectionLost(true)
     }
 
-    // Reset tracking when we leave connection states (back to COLD)
     if (state === states.COLD) {
       wasConnectingOrConnectedRef.current = false
       setConnectionLost(false)
@@ -316,7 +278,6 @@ export const StreamingProvider = ({ children }) => {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Count frames for FPS
     frameCountRef.current++
     const now = performance.now()
     if (now - lastFpsUpdateRef.current >= 1000) {
@@ -325,10 +286,8 @@ export const StreamingProvider = ({ children }) => {
       lastFpsUpdateRef.current = now
     }
 
-    // Decode base64 frame and draw to canvas
     const img = new Image()
     img.onload = () => {
-      // Resize canvas if needed
       if (canvas.width !== img.width || canvas.height !== img.height) {
         canvas.width = img.width
         canvas.height = img.height
@@ -350,10 +309,7 @@ export const StreamingProvider = ({ children }) => {
 
     inputLoopRef.current = setInterval(() => {
       const { buttons, mouseDx, mouseDy } = getInputState()
-      // Apply mouse sensitivity multiplier
-      const adjustedDx = Math.round(mouseDx * mouseSensitivity)
-      const adjustedDy = Math.round(mouseDy * mouseSensitivity)
-      sendControl(buttons, adjustedDx, adjustedDy)
+      sendControl(buttons, Math.round(mouseDx * mouseSensitivity), Math.round(mouseDy * mouseSensitivity))
     }, 16)
 
     return () => {
@@ -364,30 +320,27 @@ export const StreamingProvider = ({ children }) => {
     }
   }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
 
-  const registerContainerRef = useCallback((element) => {
-    containerRef.current = element
-  }, [])
-
+  // Ref registration callbacks
+  const registerContainerRef = useCallback((element) => { containerRef.current = element }, [])
   const registerCanvasRef = useCallback((element) => {
     canvasRef.current = element
     setCanvasReady(!!element)
   }, [])
 
   const handleContainerClick = useCallback(() => {
-    if (isStreaming && isReady) {
-      requestPointerLock()
-    }
+    if (isStreaming && isReady) requestPointerLock()
   }, [isStreaming, isReady, requestPointerLock])
 
-  const logout = useCallback(async () => {
-    log.info('Logout initiated')
+  // Cleanup helper for logout/dismiss
+  const cleanupState = useCallback(() => {
     exitPointerLock()
     disconnect()
     setSettingsOpen(false)
     setIsPaused(false)
     setPausedAt(null)
+  }, [exitPointerLock, disconnect])
 
-    // Stop standalone server if it was started
+  const stopServerIfRunning = useCallback(async () => {
     if (config.features?.use_standalone_engine && isServerRunning) {
       log.info('Stopping standalone server...')
       try {
@@ -397,103 +350,59 @@ export const StreamingProvider = ({ children }) => {
         log.error('Failed to stop server:', err)
       }
     }
+  }, [config.features?.use_standalone_engine, isServerRunning, stopServer])
 
+  const logout = useCallback(async () => {
+    log.info('Logout initiated')
+    cleanupState()
+    await stopServerIfRunning()
     await shutdown()
     log.info('Logout complete')
-  }, [disconnect, exitPointerLock, shutdown, config.features?.use_standalone_engine, isServerRunning, stopServer])
+  }, [cleanupState, stopServerIfRunning, shutdown])
 
-  // Dismiss connection lost overlay and return to COLD state
   const dismissConnectionLost = useCallback(async () => {
     log.info('Dismissing connection lost overlay')
     setConnectionLost(false)
     wasConnectingOrConnectedRef.current = false
-    exitPointerLock()
-    disconnect()
-    setSettingsOpen(false)
-    setIsPaused(false)
-    setPausedAt(null)
-
-    // Stop standalone server if it was started
-    if (config.features?.use_standalone_engine && isServerRunning) {
-      log.info('Stopping standalone server...')
-      try {
-        await stopServer()
-      } catch (err) {
-        log.error('Failed to stop server:', err)
-      }
-    }
-
+    cleanupState()
+    await stopServerIfRunning()
     await shutdown()
-  }, [disconnect, exitPointerLock, shutdown, config.features?.use_standalone_engine, isServerRunning, stopServer])
+  }, [cleanupState, stopServerIfRunning, shutdown])
 
   const value = {
     // Connection state
-    connectionState,
-    connectionLost,
-    error,
-    isConnected,
-    isVideoReady: hasReceivedFrame && canvasReady, // Ready when we have frames and canvas
-    isReady,
-    isLoading,
-    isStreaming,
-    isPaused,
-    pausedAt,
-    settingsOpen,
-    statusCode,
+    connectionState, connectionLost, error, isConnected,
+    isVideoReady: hasReceivedFrame && canvasReady,
+    isReady, isLoading, isStreaming, isPaused, pausedAt, settingsOpen, statusCode,
 
     // Stats
-    genTime,
-    frameId,
-    fps,
-    showStats,
-    setShowStats,
+    genTime, frameId, fps, showStats, setShowStats,
 
     // Local mode - no session management
-    sessionRemaining: null,
-    sessionExpired: false,
-    sessionTimeDisplay: null,
-    gpuAssignment: null,
-    setGpuAssignment: () => {},
-    endpointUrl,
-    setEndpointUrl,
+    sessionRemaining: null, sessionExpired: false, sessionTimeDisplay: null,
+    gpuAssignment: null, setGpuAssignment: () => {},
+    endpointUrl, setEndpointUrl,
 
-    // Config for standalone mode
-    config,
-    configLoaded,
-    reloadConfig,
-    hasOpenAiKey,
-    hasFalKey,
+    // Config
+    config, configLoaded, reloadConfig, hasOpenAiKey, hasFalKey,
 
     // Standalone engine state
-    isServerRunning,
-    engineReady,
-    engineError,
+    isServerRunning, engineReady, engineError,
     clearEngineError: () => setEngineError(null),
     serverLogPath,
 
     // Settings
-    mouseSensitivity,
-    setMouseSensitivity,
-    bottomPanelHidden,
-    setBottomPanelHidden,
+    mouseSensitivity, setMouseSensitivity, bottomPanelHidden, setBottomPanelHidden,
 
     // Input state
-    pressedKeys,
-    isPointerLocked,
+    pressedKeys, isPointerLocked,
 
     // Actions
-    connect,
-    disconnect,
-    logout,
-    dismissConnectionLost,
-    reset,
-    sendPrompt,
-    sendPromptWithSeed,
-    requestPointerLock,
-    exitPointerLock,
-    registerContainerRef,
-    registerCanvasRef,
-    registerVideoRef: () => {}, // No-op, WebSocket mode uses canvas
+    connect, disconnect, logout, dismissConnectionLost, reset,
+    sendPrompt, sendPromptWithSeed,
+    requestPointerLock, exitPointerLock,
+    registerContainerRef, registerCanvasRef,
+    registerVideoRef: () => {},
     handleContainerClick
   }
 

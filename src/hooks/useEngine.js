@@ -173,6 +173,28 @@ export const useEngine = () => {
     }
   }, [status?.server_running])
 
+  // Check if server is ready (has finished startup and is accepting connections)
+  const checkServerReady = useCallback(async () => {
+    try {
+      const ready = await invoke('is_server_ready')
+      return ready
+    } catch (err) {
+      console.error(`[useEngine] Failed to check server ready: ${err}`)
+      return false
+    }
+  }, [])
+
+  // Check if a port is already in use (e.g., by an external server)
+  const checkPortInUse = useCallback(async (port) => {
+    try {
+      const inUse = await invoke('is_port_in_use', { port })
+      return inUse
+    } catch (err) {
+      console.error(`[useEngine] Failed to check port in use: ${err}`)
+      return false
+    }
+  }, [])
+
   return {
     status,
     isLoading,
@@ -187,6 +209,8 @@ export const useEngine = () => {
     startServer,
     stopServer,
     checkServerRunning,
+    checkServerReady,
+    checkPortInUse,
     isReady: status?.uv_installed && status?.repo_cloned && status?.dependencies_synced,
     isServerRunning: status?.server_running ?? false,
     serverPort: status?.server_port ?? null,

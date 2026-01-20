@@ -2796,3 +2796,127 @@ button.hud-social-link {
   transform: scale(0.97);
   background: rgba(120, 255, 245, 0.25);
 }
+
+/* ============================================
+   SERVER LOG DISPLAY (Warm State)
+   Shows real-time server output during startup
+   ============================================ */
+
+.server-log-display {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  max-height: 50%;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 12, 16, 0.9);
+  border: 1px solid rgba(255, 200, 100, 0.3);
+  border-radius: 0.8cqw;
+  overflow: hidden;
+  box-shadow:
+    0 0 30px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(255, 200, 100, 0.1);
+  opacity: 0;
+  animation: serverLogFadeIn 0.3s ease forwards;
+}
+
+@keyframes serverLogFadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+.server-log-header {
+  padding: 0.8cqh 1.2cqw;
+  background: rgba(255, 200, 100, 0.08);
+  border-bottom: 1px solid rgba(255, 200, 100, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+}
+
+.server-log-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.2cqw;
+  letter-spacing: 0.1em;
+  color: rgba(255, 200, 100, 0.9);
+  text-transform: uppercase;
+}
+
+.server-log-indicator {
+  width: 0.6cqw;
+  height: 0.6cqw;
+  border-radius: 50%;
+  background: rgba(255, 200, 100, 0.9);
+  animation: indicatorPulse 1s ease-in-out infinite;
+}
+
+@keyframes indicatorPulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 4px rgba(255, 200, 100, 0.8);
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 2px rgba(255, 200, 100, 0.4);
+  }
+}
+
+.server-log-content {
+  flex: 1;
+  padding: 0.8cqh 1cqw;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1cqw;
+  line-height: 1.5;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 200, 100, 0.3) transparent;
+}
+
+.server-log-content::-webkit-scrollbar {
+  width: 0.4cqw;
+}
+
+.server-log-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.server-log-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 200, 100, 0.3);
+  border-radius: 0.2cqw;
+}
+
+.server-log-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 200, 100, 0.5);
+}
+
+.server-log-empty {
+  color: rgba(255, 200, 100, 0.5);
+  font-style: italic;
+}
+
+.server-log-line {
+  color: rgba(200, 200, 200, 0.9);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Colored log lines (applied via className in component) */
+.server-log-line.log-info {
+  color: rgba(120, 255, 245, 0.9);
+}
+
+.server-log-line.log-warning {
+  color: rgba(255, 200, 100, 0.9);
+}
+
+.server-log-line.log-error {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.server-log-line.log-success {
+  color: rgba(100, 255, 150, 0.9);
+}

@@ -26,12 +26,17 @@ const statusCodeMessages = {
   reset: 'RESETTING...'
 }
 
+// Truncate error message to first line, max 60 chars
+const formatErrorMessage = (error) => {
+  const firstLine = error.split('\n')[0].slice(0, 60)
+  return firstLine.length < error.split('\n')[0].length ? firstLine + '...' : firstLine
+}
+
 const TerminalDisplay = () => {
   const { state, states, transitionTo, onStateChange } = usePortal()
   const { statusCode, setEndpointUrl, engineError, clearEngineError } = useStreaming()
   const { config, saveGpuServerUrl } = useConfig()
 
-  // Build default URL from config
   const defaultUrl = `${config.gpu_server.host}:${config.gpu_server.port}`
   const [displayText, setDisplayText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -40,6 +45,7 @@ const TerminalDisplay = () => {
   const [error, setError] = useState(null)
   const [showEngineError, setShowEngineError] = useState(false)
   const [showPlaceholder, setShowPlaceholder] = useState(false)
+
   const timeoutRef = useRef(null)
   const currentMessageRef = useRef('')
   const displayTextRef = useRef('')
@@ -47,7 +53,7 @@ const TerminalDisplay = () => {
   const hasBeenVisible = useRef(false)
   const pendingMessageRef = useRef(null)
 
-  // Keep ref in sync with state
+  // Keep ref in sync with state for deleteMessage to use
   useEffect(() => {
     displayTextRef.current = displayText
   }, [displayText])
@@ -57,10 +63,15 @@ const TerminalDisplay = () => {
     setInputValue(defaultUrl)
   }, [defaultUrl])
 
-  const typeMessage = (message, speed = 30) => {
+  const clearAnimationTimeout = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
+  }, [])
+
+  const typeMessage = useCallback((message, speed = 30) => {
+    clearAnimationTimeout()
     setIsTyping(true)
     setDisplayText('')
     let currentIndex = 0
@@ -74,7 +85,6 @@ const TerminalDisplay = () => {
         setIsTyping(false)
         currentMessageRef.current = message
         // Show input area after "ENTER URL:" finishes typing
-        // Delay focus so user sees the blinking cursor animation first
         if (message === stateMessages.cold) {
           setShowPlaceholder(true)
           setTimeout(() => {
@@ -85,12 +95,10 @@ const TerminalDisplay = () => {
     }
 
     timeoutRef.current = setTimeout(type, speed)
-  }
+  }, [clearAnimationTimeout])
 
-  const deleteMessage = (onComplete, speed = 20) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
+  const deleteMessage = useCallback((onComplete, speed = 20) => {
+    clearAnimationTimeout()
     setIsDeleting(true)
     setShowPlaceholder(false)
     let currentText = displayTextRef.current
@@ -108,11 +116,25 @@ const TerminalDisplay = () => {
     }
 
     deleteChar()
-  }
+  }, [clearAnimationTimeout])
+
+  // Transition message with delete-then-type animation
+  const transitionMessage = useCallback((newMessage) => {
+    if (currentMessageRef.current === newMessage) return
+
+    if (currentMessageRef.current) {
+      deleteMessage(() => typeMessage(newMessage))
+    } else if (!hasBeenVisible.current) {
+      pendingMessageRef.current = newMessage
+    } else {
+      typeMessage(newMessage)
+    }
+  }, [deleteMessage, typeMessage])
 
   // Watch for fade-in animation completion to trigger initial typing
   useEffect(() => {
-    if (!containerRef.current) return
+    const el = containerRef.current
+    if (!el) return
 
     const handleAnimationEnd = (e) => {
       if (e.animationName === 'contentFadeIn' && !hasBeenVisible.current) {
@@ -124,121 +146,82 @@ const TerminalDisplay = () => {
       }
     }
 
-    containerRef.current.addEventListener('animationend', handleAnimationEnd)
-    const el = containerRef.current
+    el.addEventListener('animationend', handleAnimationEnd)
     return () => el.removeEventListener('animationend', handleAnimationEnd)
-  }, [])
+  }, [typeMessage])
 
   // Handle engine errors from context
   useEffect(() => {
     if (engineError && state === 'cold' && !showEngineError) {
       setShowEngineError(true)
-      // Truncate long error messages to first line or 60 chars
-      const shortError = engineError.split('\n')[0].slice(0, 60)
-      const errorMsg = shortError.length < engineError.split('\n')[0].length ? shortError + '...' : shortError
-      deleteMessage(() => {
-        typeMessage(errorMsg.toUpperCase())
-      })
-    } else if (!engineError && showEngineError) {
-      // Engine error was cleared, go back to normal state message
-      setShowEngineError(false)
-    }
-  }, [engineError, state, showEngineError])
+      const errorMsg = formatErrorMessage(engineError).toUpperCase()
+      deleteMessage(() => typeMessage(errorMsg))
 
+      // Auto-clear engine error after 3 seconds and return to normal message
+      const timeout = setTimeout(() => {
+        clearEngineError?.()
+        setShowEngineError(false)
+        deleteMessage(() => typeMessage(stateMessages.cold))
+      }, 3000)
+
+      return () => clearTimeout(timeout)
+    }
+  }, [engineError, state, showEngineError, clearEngineError, deleteMessage, typeMessage])
+
+  // Handle state/status changes
   useEffect(() => {
-    // Show error message if there's a local error (invalid URL etc)
+    // Show local error message (invalid URL etc)
     if (error && state === 'cold') {
       const errorMsg = errorMessages[error] || 'ERROR'
       if (currentMessageRef.current !== errorMsg) {
         deleteMessage(() => {
           typeMessage(errorMsg)
-          // Clear error and show ENTER URL again after 2 seconds
-          setTimeout(() => {
-            setError(null)
-          }, 2000)
+          setTimeout(() => setError(null), 2000)
         })
       }
       return
     }
 
     // Don't update message while showing engine error
-    if (showEngineError) {
-      return
-    }
+    if (showEngineError) return
 
-    // During WARM state, use server status code if available
-    let newMessage
-    if (state === 'warm' && statusCode) {
-      newMessage = statusCodeMessages[statusCode] || stateMessages.warm
-    } else {
-      newMessage = stateMessages[state] || ''
-    }
+    // Determine new message based on state and status code
+    const newMessage = (state === 'warm' && statusCode)
+      ? (statusCodeMessages[statusCode] || stateMessages.warm)
+      : (stateMessages[state] || '')
 
-    // Skip if already showing this message
-    if (currentMessageRef.current === newMessage) {
-      return
-    }
+    transitionMessage(newMessage)
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
+    return clearAnimationTimeout
+  }, [state, statusCode, error, showEngineError, deleteMessage, typeMessage, transitionMessage, clearAnimationTimeout])
 
-    // If there's existing text, delete it first before typing new message
-    if (currentMessageRef.current) {
-      deleteMessage(() => {
-        typeMessage(newMessage)
-      })
-    } else if (!hasBeenVisible.current) {
-      pendingMessageRef.current = newMessage
-    } else {
-      typeMessage(newMessage)
-    }
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [state, statusCode, error, showEngineError])
-
+  // Reset input when returning to cold state
   useEffect(() => {
     return onStateChange((newState) => {
-      // Reset to default URL when returning to cold state
       if (newState === states.COLD) {
         setInputValue(defaultUrl)
       }
       setError(null)
-      // Don't clear engine error here - let user see it
     })
   }, [onStateChange, states.COLD, defaultUrl])
 
-  // Clear engine error when user starts typing
-  const handleClearEngineError = useCallback(() => {
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value)
+    if (error) setError(null)
+    // Clear engine error when user starts typing
     if (showEngineError && clearEngineError) {
       clearEngineError()
       setShowEngineError(false)
     }
-  }, [showEngineError, clearEngineError])
-
-  const handleInputChange = (e) => {
-    setInputValue(e.target.value)
-    // Clear any error when user starts typing
-    if (error) {
-      setError(null)
-    }
-    // Clear engine error when user starts typing
-    handleClearEngineError()
   }
 
   // Validate URL format
   const isValidUrl = (url) => {
     const trimmed = url.trim()
     // Accept formats like: localhost:8080, 192.168.1.100:8080, ws://localhost:8080/ws
-    const urlPattern = /^(ws:\/\/|wss:\/\/)?[\w.-]+(:\d+)?(\/\S*)?$/
-    return urlPattern.test(trimmed)
+    return /^(ws:\/\/|wss:\/\/)?[\w.-]+(:\d+)?(\/\S*)?$/.test(trimmed)
   }
 
-  // Connect to the server with the current URL
   const handleConnect = useCallback(async () => {
     if (state !== states.COLD) return
 
@@ -248,24 +231,19 @@ const TerminalDisplay = () => {
       return
     }
 
-    // Save URL to config
     await saveGpuServerUrl(urlToUse)
-
     setEndpointUrl(urlToUse)
     transitionTo(states.WARM)
-  }, [state, states.COLD, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
+  }, [state, states.COLD, states.WARM, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleConnect()
-    }
+    if (e.key === 'Enter') handleConnect()
   }
 
-  // Global Enter key handler - connect if URL is present and input is shown
+  // Global Enter key handler
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       if (e.key === 'Enter' && state === states.COLD && showPlaceholder && inputValue.trim()) {
-        // Don't double-trigger if input is focused
         if (document.activeElement?.id === 'terminal-input') return
         handleConnect()
       }
@@ -274,6 +252,8 @@ const TerminalDisplay = () => {
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
   }, [state, states.COLD, showPlaceholder, inputValue, handleConnect])
+
+  const hasError = error || showEngineError
 
   return (
     <div ref={containerRef} className={`terminal-display state-${state}`}>
@@ -296,7 +276,7 @@ const TerminalDisplay = () => {
       >
         <span className="terminal-prompt">&gt;</span>
         <span
-          className={`terminal-text ${isTyping ? 'typing' : ''} ${isDeleting ? 'deleting' : ''} ${error || showEngineError ? 'error' : ''}`}
+          className={`terminal-text ${isTyping ? 'typing' : ''} ${isDeleting ? 'deleting' : ''} ${hasError ? 'error' : ''}`}
           id="terminal-text"
         >
           {displayText}

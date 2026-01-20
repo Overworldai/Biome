@@ -7,9 +7,10 @@ import TerminalDisplay from './TerminalDisplay'
 import PauseOverlay from './PauseOverlay'
 import ShutdownOverlay from './ShutdownOverlay'
 import ConnectionLostOverlay from './ConnectionLostOverlay'
+import ServerLogDisplay from './ServerLogDisplay'
 
 const VideoContainer = () => {
-  const { isConnected: portalConnected, isExpanded, isShuttingDown } = usePortal()
+  const { isConnected: portalConnected, isExpanded, isShuttingDown, state, states } = usePortal()
   const {
     isStreaming,
     isPaused,
@@ -76,6 +77,7 @@ const VideoContainer = () => {
 
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} pausedAt={pausedAt} />
         <ConnectionLostOverlay />
+        {state === states.WARM && <ServerLogDisplay />}
         <TerminalDisplay />
         <VideoMask />
         <ShutdownOverlay />

@@ -4,7 +4,7 @@ use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::PathBuf;
 use std::process::{Command, Child, Stdio};
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 
 #[cfg(not(target_os = "windows"))]
 use flate2::read::GzDecoder;
@@ -23,6 +23,7 @@ const PYPROJECT_TOML: &str = include_str!("../server-components/pyproject.toml")
 struct ServerState {
     process: Option<Child>,
     port: Option<u16>,
+    ready: bool,
 }
 
 impl Default for ServerState {
@@ -30,6 +31,7 @@ impl Default for ServerState {
         Self {
             process: None,
             port: None,
+            ready: false,
         }
     }
 }
@@ -38,6 +40,17 @@ static SERVER_STATE: std::sync::OnceLock<Mutex<ServerState>> = std::sync::OnceLo
 
 fn get_server_state() -> &'static Mutex<ServerState> {
     SERVER_STATE.get_or_init(|| Mutex::new(ServerState::default()))
+}
+
+// Global app handle for emitting events from threads
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+fn set_app_handle(handle: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(handle);
+}
+
+fn get_app_handle() -> Option<&'static tauri::AppHandle> {
+    APP_HANDLE.get()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -567,14 +580,31 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         return Err("uv is not installed. Please install it first.".to_string());
     }
 
+    // Reset ready state
+    {
+        let mut state = get_server_state().lock().unwrap();
+        state.ready = false;
+    }
+
     println!("[ENGINE] Starting server on port {}...", port);
     println!("[ENGINE] Engine dir: {:?}", engine_dir);
     println!("[ENGINE] UV binary: {:?}", uv_binary);
 
-    // Always update server.py with the bundled version (ensures latest code is used)
+    // Always update server.py and pyproject.toml with bundled versions (ensures latest code is used)
     println!("[ENGINE] Updating server.py with bundled version...");
     fs::write(engine_dir.join("server.py"), SERVER_PY)
         .map_err(|e| format!("Failed to write server.py: {}", e))?;
+
+    println!("[ENGINE] Updating pyproject.toml with bundled version...");
+    fs::write(engine_dir.join("pyproject.toml"), PYPROJECT_TOML)
+        .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
+
+    // Delete uv.lock to force re-resolution of dependencies
+    let lock_path = engine_dir.join("uv.lock");
+    if lock_path.exists() {
+        println!("[ENGINE] Removing stale uv.lock...");
+        let _ = fs::remove_file(&lock_path);
+    }
 
     // Run uv sync to ensure dependencies are up to date
     println!("[ENGINE] Syncing dependencies...");
@@ -655,7 +685,33 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     let child_stdout = child.stdout.take();
     let child_stderr = child.stderr.take();
 
-    // Spawn thread to tee stdout to console and log file
+    // Helper function to process log lines - emits events and detects server ready
+    fn process_log_line(line: &str, is_stderr: bool) {
+        // Print to console
+        if is_stderr {
+            eprintln!("[SERVER] {}", line);
+        } else {
+            println!("[SERVER] {}", line);
+        }
+
+        // Emit event to frontend
+        if let Some(app) = get_app_handle() {
+            let _ = app.emit("server-log", line);
+        }
+
+        // Check if server is ready (look for the ready message)
+        if line.contains("SERVER READY") || line.contains("Uvicorn running on") {
+            println!("[ENGINE] Server ready signal detected!");
+            let mut state = get_server_state().lock().unwrap();
+            state.ready = true;
+            // Emit ready event
+            if let Some(app) = get_app_handle() {
+                let _ = app.emit("server-ready", true);
+            }
+        }
+    }
+
+    // Spawn thread to tee stdout to console, log file, and emit events
     if let Some(stdout) = child_stdout {
         let log_path = log_file_path_clone.clone();
         std::thread::spawn(move || {
@@ -668,7 +724,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 if let Ok(line) = line {
-                    println!("[SERVER] {}", line);
+                    process_log_line(&line, false);
                     if let Some(ref mut file) = log_file {
                         let _ = writeln!(file, "{}", line);
                         let _ = file.flush();
@@ -678,7 +734,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         });
     }
 
-    // Spawn thread to tee stderr to console and log file
+    // Spawn thread to tee stderr to console, log file, and emit events
     if let Some(stderr) = child_stderr {
         let log_path = log_file_path_clone;
         std::thread::spawn(move || {
@@ -691,7 +747,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
             let reader = BufReader::new(stderr);
             for line in reader.lines() {
                 if let Ok(line) = line {
-                    eprintln!("[SERVER] {}", line);
+                    process_log_line(&line, true);
                     if let Some(ref mut file) = log_file {
                         let _ = writeln!(file, "{}", line);
                         let _ = file.flush();
@@ -816,11 +872,29 @@ async fn is_server_running() -> Result<bool, String> {
     }
 }
 
+#[tauri::command]
+fn is_server_ready() -> bool {
+    let state = get_server_state().lock().unwrap();
+    state.ready
+}
+
+#[tauri::command]
+fn is_port_in_use(port: u16) -> bool {
+    use std::net::TcpListener;
+    // Try to bind to the port - if it fails, port is in use
+    TcpListener::bind(("127.0.0.1", port)).is_err()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // Store app handle for event emission from threads
+            set_app_handle(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_config,
             write_config,
@@ -833,7 +907,9 @@ pub fn run() {
             setup_engine,
             start_engine_server,
             stop_engine_server,
-            is_server_running
+            is_server_running,
+            is_server_ready,
+            is_port_in_use
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
