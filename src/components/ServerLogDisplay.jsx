@@ -30,9 +30,11 @@ const ServerLogDisplay = ({
 
   useEffect(() => {
     let unlisten
+    let mounted = true
 
     const setupListener = async () => {
       unlisten = await listen('server-log', (event) => {
+        if (!mounted) return
         const line = event.payload
         setLogs((prev) => {
           // Keep last 100 lines to prevent memory issues
@@ -48,6 +50,7 @@ const ServerLogDisplay = ({
     setupListener()
 
     return () => {
+      mounted = false
       if (unlisten) {
         unlisten()
       }
