@@ -147,8 +147,7 @@ fn read_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
     let content = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse config file: {}", e))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))
 }
 
 #[tauri::command]
@@ -158,8 +157,7 @@ fn write_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> 
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_path, json)
-        .map_err(|e| format!("Failed to write config file: {}", e))
+    fs::write(&config_path, json).map_err(|e| format!("Failed to write config file: {}", e))
 }
 
 #[tauri::command]
@@ -196,8 +194,7 @@ fn get_engine_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
     // Create data directory if it doesn't exist
     if !data_dir.exists() {
-        fs::create_dir_all(&data_dir)
-            .map_err(|e| format!("Failed to create data dir: {}", e))?;
+        fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
     }
 
     Ok(data_dir.join(WORLD_ENGINE_DIR))
@@ -247,11 +244,12 @@ async fn check_engine_status(app: tauri::AppHandle) -> Result<EngineStatus, Stri
     let uv_dir = get_uv_dir(&app)?;
 
     // Check if our local uv binary exists and works
-    let uv_installed = uv_binary.exists() && Command::new(&uv_binary)
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let uv_installed = uv_binary.exists()
+        && Command::new(&uv_binary)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
 
     // Check if server components are installed (look for server.py as indicator)
     let repo_cloned = engine_dir.exists()
@@ -318,8 +316,7 @@ async fn install_uv(app: tauri::AppHandle) -> Result<String, String> {
     let bin_dir = uv_dir.join("bin");
 
     // Create bin directory
-    fs::create_dir_all(&bin_dir)
-        .map_err(|e| format!("Failed to create uv bin dir: {}", e))?;
+    fs::create_dir_all(&bin_dir).map_err(|e| format!("Failed to create uv bin dir: {}", e))?;
 
     // Determine the download URL based on platform and architecture
     let (archive_name, _binary_name) = get_uv_archive_info();
@@ -334,10 +331,7 @@ async fn install_uv(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to download uv: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!(
-            "Failed to download uv: HTTP {}",
-            response.status()
-        ));
+        return Err(format!("Failed to download uv: HTTP {}", response.status()));
     }
 
     let bytes = response
@@ -395,8 +389,8 @@ fn get_uv_archive_info() -> (&'static str, &'static str) {
 #[cfg(target_os = "windows")]
 fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
     let cursor = Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Failed to read zip archive: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to read zip archive: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -408,8 +402,8 @@ fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(),
         // We only care about uv.exe
         if name.ends_with("uv.exe") {
             let dest_path = bin_dir.join("uv.exe");
-            let mut dest_file = File::create(&dest_path)
-                .map_err(|e| format!("Failed to create uv.exe: {}", e))?;
+            let mut dest_file =
+                File::create(&dest_path).map_err(|e| format!("Failed to create uv.exe: {}", e))?;
 
             io::copy(&mut file, &mut dest_file)
                 .map_err(|e| format!("Failed to write uv.exe: {}", e))?;
@@ -473,8 +467,7 @@ async fn setup_server_components(app: tauri::AppHandle) -> Result<String, String
     let engine_dir = get_engine_dir(&app)?;
 
     // Create engine directory if it doesn't exist
-    fs::create_dir_all(&engine_dir)
-        .map_err(|e| format!("Failed to create engine dir: {}", e))?;
+    fs::create_dir_all(&engine_dir).map_err(|e| format!("Failed to create engine dir: {}", e))?;
 
     // Write bundled server.py
     fs::write(engine_dir.join("server.py"), SERVER_PY)
@@ -569,7 +562,10 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     {
         let state = get_server_state().lock().unwrap();
         if state.process.is_some() {
-            return Err(format!("Server is already running on port {}", state.port.unwrap_or(0)));
+            return Err(format!(
+                "Server is already running on port {}",
+                state.port.unwrap_or(0)
+            ));
         }
     }
 
@@ -632,7 +628,10 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
 
     // Create log file for server output
     let log_file_path = engine_dir.join("server.log");
-    println!("[ENGINE] Server logs will be written to: {:?}", log_file_path);
+    println!(
+        "[ENGINE] Server logs will be written to: {:?}",
+        log_file_path
+    );
 
     // Spawn the server process with piped stdout/stderr so we can tee to console and file
     // Command: uv run python server.py --port <port>
@@ -640,7 +639,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     cmd.current_dir(&engine_dir)
         .arg("run")
         .arg("python")
-        .arg("-u")  // Unbuffered output for real-time logging
+        .arg("-u") // Unbuffered output for real-time logging
         .arg("server.py")
         .arg("--port")
         .arg(port.to_string())
@@ -650,7 +649,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
         .env("UV_TOOL_DIR", uv_dir.join("tool"))
         .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
-        .env("PYTHONUNBUFFERED", "1")  // Ensure Python output is unbuffered
+        .env("PYTHONUNBUFFERED", "1") // Ensure Python output is unbuffered
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -667,14 +666,18 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     };
 
     if let Some(token) = hf_token {
-        println!("[ENGINE] HuggingFace token configured ({}... chars)", token.len().min(4));
+        println!(
+            "[ENGINE] HuggingFace token configured ({}... chars)",
+            token.len().min(4)
+        );
         cmd.env("HF_TOKEN", &token);
         cmd.env("HUGGING_FACE_HUB_TOKEN", &token);
     } else {
         println!("[ENGINE] Warning: No HuggingFace token configured");
     }
 
-    let mut child = cmd.spawn()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| format!("Failed to start server: {}", e))?;
 
     let pid = child.id();
@@ -798,8 +801,7 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
 
                     return Err(format!(
                         "Server process exited immediately with status: {}\n\nLast log output:\n{}",
-                        exit_status,
-                        error_excerpt
+                        exit_status, error_excerpt
                     ));
                 }
                 Ok(None) => {

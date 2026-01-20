@@ -9,6 +9,7 @@ Client connects via WebSocket to ws://localhost:7987/ws
 
 # Immediate startup logging before any imports that could fail
 import sys
+
 print(f"[BIOME] Python {sys.version}", flush=True)
 print(f"[BIOME] Starting server...", flush=True)
 
@@ -36,24 +37,29 @@ try:
     print("[BIOME] Importing torch...", flush=True)
     import torch
     import torch.nn.functional as F
+
     print(f"[BIOME] torch {torch.__version__} imported", flush=True)
 
     print("[BIOME] Importing torchvision...", flush=True)
     import torchvision
+
     print(f"[BIOME] torchvision {torchvision.__version__} imported", flush=True)
 
     print("[BIOME] Importing PIL...", flush=True)
     from PIL import Image
+
     print("[BIOME] PIL imported", flush=True)
 
     print("[BIOME] Importing FastAPI...", flush=True)
+    import uvicorn
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.responses import JSONResponse
-    import uvicorn
+
     print("[BIOME] FastAPI imported", flush=True)
 except Exception as e:
     print(f"[BIOME] FATAL: Import failed: {e}", flush=True)
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -114,20 +120,25 @@ CtrlInput = None
 current_prompt = DEFAULT_PROMPT
 engine_warmed_up = False
 
+
 def load_seed_frame(target_size: tuple[int, int] = (360, 640)) -> torch.Tensor:
     """Load and preprocess the seed frame."""
-    import tempfile
     import os
+    import tempfile
+
     logger.info("Downloading seed frame...")
     seed_path = os.path.join(tempfile.gettempdir(), "biome_seed.png")
     urllib.request.urlretrieve(SEED_URL, seed_path)
     logger.info("Reading seed image...")
     img = torchvision.io.read_image(seed_path)
     img = img[:3].unsqueeze(0).float()
-    frame = F.interpolate(img, size=target_size, mode="bilinear", align_corners=False)[0]
+    frame = F.interpolate(img, size=target_size, mode="bilinear", align_corners=False)[
+        0
+    ]
     result = frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
     logger.info(f"Seed frame ready: {result.shape}, {result.dtype}, {result.device}")
     return result
+
 
 def load_seed_from_url(url, target_size=(360, 640)):
     """Load a seed frame from URL (used for prompt_with_seed)"""
@@ -136,12 +147,18 @@ def load_seed_from_url(url, target_size=(360, 640)):
             img_data = response.read()
         img = Image.open(io.BytesIO(img_data)).convert("RGB")
         import numpy as np
-        img_tensor = torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
-        frame = F.interpolate(img_tensor, size=target_size, mode="bilinear", align_corners=False)[0]
+
+        img_tensor = (
+            torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
+        )
+        frame = F.interpolate(
+            img_tensor, size=target_size, mode="bilinear", align_corners=False
+        )[0]
         return frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
     except Exception as e:
         print(f"[ERROR] Failed to load seed from URL: {e}")
         return None
+
 
 def load_engine():
     """Initialize the WorldEngine with configured model."""
@@ -153,9 +170,13 @@ def load_engine():
 
     logger.info("[1/5] Importing WorldEngine...")
     import_start = time.perf_counter()
-    from world_engine import WorldEngine, CtrlInput as CI
+    from world_engine import CtrlInput as CI
+    from world_engine import WorldEngine
+
     CtrlInput = CI
-    logger.info(f"[1/5] WorldEngine imported in {time.perf_counter() - import_start:.2f}s")
+    logger.info(
+        f"[1/5] WorldEngine imported in {time.perf_counter() - import_start:.2f}s"
+    )
 
     logger.info(f"[2/5] Loading model: {MODEL_URI}")
     logger.info(f"      Quantization: {QUANT}")
@@ -190,9 +211,11 @@ def load_engine():
     logger.info("SERVER READY - Waiting for WebSocket connections on /ws")
     logger.info("=" * 60)
 
+
 # ============================================================================
 # Frame Encoding
 # ============================================================================
+
 
 def frame_to_jpeg(frame: torch.Tensor, quality: int = JPEG_QUALITY) -> bytes:
     """Convert frame tensor to JPEG bytes."""
@@ -208,9 +231,11 @@ def frame_to_jpeg(frame: torch.Tensor, quality: int = JPEG_QUALITY) -> bytes:
 # Session Management
 # ============================================================================
 
+
 @dataclass
 class Session:
     """Tracks state for a single WebSocket connection."""
+
     frame_count: int = 0
     max_frames: int = N_FRAMES - 2
 
@@ -218,6 +243,7 @@ class Session:
 # ============================================================================
 # FastAPI Application
 # ============================================================================
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -227,25 +253,29 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown (if needed in the future)
 
+
 app = FastAPI(title="WorldEngine WebSocket Server", lifespan=lifespan)
 
 
 @app.get("/health")
 async def health():
-    return JSONResponse({
-        "status": "healthy",
-        "model": MODEL_URI,
-        "quant": QUANT,
-        "engine_loaded": engine is not None,
-    })
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "model": MODEL_URI,
+            "quant": QUANT,
+            "engine_loaded": engine is not None,
+        }
+    )
 
 
 # Status codes (client maps these to display text)
 class Status:
-    INIT = "init"          # Engine resetting
-    LOADING = "loading"    # Loading seed frame
-    READY = "ready"        # Ready for game loop
-    RESET = "reset"        # Session reset
+    INIT = "init"  # Engine resetting
+    LOADING = "loading"  # Loading seed frame
+    READY = "ready"  # Ready for game loop
+    RESET = "reset"  # Session reset
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -277,7 +307,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # Warmup on first connection (CUDA graphs will complain if its not all called in the same thread context)
     if not engine_warmed_up:
         logger.info("=" * 60)
-        logger.info("[5/5] WARMUP - First client connected, initializing CUDA graphs...")
+        logger.info(
+            "[5/5] WARMUP - First client connected, initializing CUDA graphs..."
+        )
         logger.info("=" * 60)
         await send_json({"type": "status", "code": "warmup"})
 
@@ -287,22 +319,32 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info("[5/5] Step 1: Resetting engine state...")
             reset_start = time.perf_counter()
             engine.reset()
-            logger.info(f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s")
+            logger.info(
+                f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s"
+            )
 
             logger.info("[5/5] Step 2: Appending seed frame...")
             append_start = time.perf_counter()
             engine.append_frame(seed_frame)
-            logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
+            logger.info(
+                f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s"
+            )
 
             logger.info("[5/5] Step 3: Setting prompt...")
             prompt_start = time.perf_counter()
             engine.set_prompt(current_prompt)
-            logger.info(f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s")
+            logger.info(
+                f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
+            )
 
-            logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
+            logger.info(
+                "[5/5] Step 4: Generating first frame (compiling CUDA graphs)..."
+            )
             gen_start = time.perf_counter()
             _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
-            logger.info(f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s")
+            logger.info(
+                f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s"
+            )
 
             return time.perf_counter() - warmup_start
 
@@ -333,13 +375,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Send initial frame so client has something to display
         jpeg = await asyncio.to_thread(frame_to_jpeg, seed_frame)
-        await send_json({
-            "type": "frame",
-            "data": base64.b64encode(jpeg).decode("ascii"),
-            "frame_id": 0,
-            "client_ts": 0,
-            "gen_ms": 0,
-        })
+        await send_json(
+            {
+                "type": "frame",
+                "data": base64.b64encode(jpeg).decode("ascii"),
+                "frame_id": 0,
+                "client_ts": 0,
+                "gen_ms": 0,
+            }
+        )
 
         await send_json({"type": "status", "code": Status.READY})
         logger.info(f"[{client_host}] Ready for game loop")
@@ -353,7 +397,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             while True:
                 try:
-                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=0.001)
+                    raw = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=0.001
+                    )
                     msg = json.loads(raw)
 
                     # Handle non-control messages immediately
@@ -409,7 +455,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 case "prompt_with_seed":
                     new_prompt = msg.get("prompt", "").strip()
                     seed_url = msg.get("seed_url")
-                    logger.info(f"[RECV] Prompt with seed: '{new_prompt}', URL: {seed_url}")
+                    logger.info(
+                        f"[RECV] Prompt with seed: '{new_prompt}', URL: {seed_url}"
+                    )
                     try:
                         if seed_url:
                             url_frame = load_seed_from_url(seed_url)
@@ -417,13 +465,20 @@ async def websocket_endpoint(websocket: WebSocket):
                                 seed_frame = url_frame
                                 logger.info("[RECV] Seed frame loaded from URL")
                         current_prompt = new_prompt if new_prompt else DEFAULT_PROMPT
-                        logger.info("[RECV] Seed frame prompt loaded from URL, resetting engine")
+                        logger.info(
+                            "[RECV] Seed frame prompt loaded from URL, resetting engine"
+                        )
                         await reset_engine()
                     except Exception as e:
                         logger.info(f"[GEN] Failed to set prompt: {e}")
                 case "control":
-                    if paused: continue
-                    buttons = {BUTTON_CODES[b.upper()] for b in msg.get("buttons", []) if b.upper() in BUTTON_CODES}
+                    if paused:
+                        continue
+                    buttons = {
+                        BUTTON_CODES[b.upper()]
+                        for b in msg.get("buttons", [])
+                        if b.upper() in BUTTON_CODES
+                    }
                     mouse_dx = float(msg.get("mouse_dx", 0))
                     mouse_dy = float(msg.get("mouse_dy", 0))
                     client_ts = msg.get("ts", 0)
@@ -442,17 +497,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # Encode and send frame with timing info
                     jpeg = await asyncio.to_thread(frame_to_jpeg, frame)
-                    await send_json({
-                        "type": "frame",
-                        "data": base64.b64encode(jpeg).decode("ascii"),
-                        "frame_id": session.frame_count,
-                        "client_ts": client_ts,
-                        "gen_ms": gen_time,
-                    })
+                    await send_json(
+                        {
+                            "type": "frame",
+                            "data": base64.b64encode(jpeg).decode("ascii"),
+                            "frame_id": session.frame_count,
+                            "client_ts": client_ts,
+                            "gen_ms": gen_time,
+                        }
+                    )
 
                     # Logging
                     if session.frame_count % 60 == 0:
-                        logger.info(f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)")
+                        logger.info(
+                            f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
+                        )
 
     except Exception as e:
         logger.error(f"[{client_host}] Error: {e}", exc_info=True)
