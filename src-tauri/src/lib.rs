@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::PathBuf;
-use std::process::{Command, Child, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use tauri::{Manager, Emitter};
+use tauri::{Emitter, Manager, RunEvent};
 
 #[cfg(not(target_os = "windows"))]
 use flate2::read::GzDecoder;
@@ -816,33 +816,39 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     Ok(format!("Server started on port {} (PID: {})", port, pid))
 }
 
-#[tauri::command]
-async fn stop_engine_server() -> Result<String, String> {
+// Core sync function to stop the server - used by both the command and cleanup
+fn stop_server_sync() -> Result<String, String> {
     let mut state = get_server_state().lock().unwrap();
 
     if let Some(mut process) = state.process.take() {
         let pid = process.id();
-        println!("[ENGINE] Stopping server (PID: {})...", pid);
+        println!("[ENGINE] Stopping server process tree (PID: {})...", pid);
 
-        // Try to kill the process
-        match process.kill() {
-            Ok(_) => {
-                // Wait for process to fully terminate
-                let _ = process.wait();
-                state.port = None;
-                println!("[ENGINE] Server stopped successfully");
-                Ok(format!("Server stopped (PID: {})", pid))
+        // Kill entire process tree (handles uvicorn child processes)
+        match kill_tree::blocking::kill_tree(pid) {
+            Ok(outputs) => {
+                println!("[ENGINE] Killed {} processes in tree", outputs.len());
             }
             Err(e) => {
-                // Process might have already exited
-                state.port = None;
-                println!("[ENGINE] Server stop - process may have already exited: {}", e);
-                Ok(format!("Server process ended (may have already exited): {}", e))
+                println!("[ENGINE] kill_tree failed, falling back to direct kill: {}", e);
+                let _ = process.kill();
             }
         }
+
+        // Wait for our direct child to fully terminate
+        let _ = process.wait();
+        state.port = None;
+        state.ready = false;
+        println!("[ENGINE] Server stopped successfully");
+        Ok(format!("Server stopped (PID: {})", pid))
     } else {
         Err("No server is currently running".to_string())
     }
+}
+
+#[tauri::command]
+async fn stop_engine_server() -> Result<String, String> {
+    stop_server_sync()
 }
 
 #[tauri::command]
@@ -889,7 +895,7 @@ fn is_port_in_use(port: u16) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
@@ -913,6 +919,12 @@ pub fn run() {
             is_server_ready,
             is_port_in_use
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| {
+        if let RunEvent::Exit = event {
+            let _ = stop_server_sync();
+        }
+    });
 }
