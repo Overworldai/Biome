@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
-import { useStreaming } from '../context/StreamingContextShared'
-import useConfig, { STANDALONE_PORT } from '../hooks/useConfig'
+import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
 import { useEngine } from '../hooks/useEngine'
+
+// Tauri invoke helper
+const invoke = async (cmd, args = {}) => {
+  return window.__TAURI_INTERNALS__.invoke(cmd, args)
+}
 
 const SettingsPanel = () => {
   const { isSettingsOpen, toggleSettings } = usePortal()
-  const { reloadConfig: reloadStreamingConfig } = useStreaming()
   const { config, saveConfig, configPath, openConfig } = useConfig()
   const { status, isLoading: engineLoading, error: engineError, setupProgress, checkStatus, setupEngine } = useEngine()
 
@@ -18,9 +21,10 @@ const SettingsPanel = () => {
   const [huggingfaceKey, setHuggingfaceKey] = useState('')
   const [promptSanitizer, setPromptSanitizer] = useState(true)
   const [seedGeneration, setSeedGeneration] = useState(false)
-  const [useStandaloneEngine, setUseStandaloneEngine] = useState(true)
+  const [engineMode, setEngineMode] = useState(ENGINE_MODES.UNCHOSEN)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
+  const [engineDirPath, setEngineDirPath] = useState(null)
 
   // Sync local state with config
   useEffect(() => {
@@ -34,16 +38,21 @@ const SettingsPanel = () => {
       setHuggingfaceKey(config.api_keys?.huggingface || '')
       setPromptSanitizer(config.features?.prompt_sanitizer ?? true)
       setSeedGeneration(config.features?.seed_generation ?? false)
-      setUseStandaloneEngine(config.features?.use_standalone_engine ?? true)
+      setEngineMode(config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN)
     }
   }, [config])
 
-  // Check engine status when settings panel opens
+  // Fetch engine directory path on mount
   useEffect(() => {
-    if (isSettingsOpen && useStandaloneEngine) {
+    invoke('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
+  }, [])
+
+  // Check engine status when settings panel opens (for standalone mode)
+  useEffect(() => {
+    if (isSettingsOpen && engineMode === ENGINE_MODES.STANDALONE) {
       checkStatus()
     }
-  }, [isSettingsOpen, useStandaloneEngine, checkStatus])
+  }, [isSettingsOpen, engineMode, checkStatus])
 
   const handleSetupEngine = async () => {
     try {
@@ -88,7 +97,7 @@ const SettingsPanel = () => {
       features: {
         prompt_sanitizer: promptSanitizer,
         seed_generation: seedGeneration,
-        use_standalone_engine: useStandaloneEngine
+        engine_mode: engineMode
       }
     }
 
@@ -97,8 +106,6 @@ const SettingsPanel = () => {
     setSaveStatus(success ? 'saved' : 'error')
 
     if (success) {
-      // Reload config in streaming context so other components see the update
-      reloadStreamingConfig()
       setTimeout(() => setSaveStatus(null), 2000)
     }
   }
@@ -106,6 +113,18 @@ const SettingsPanel = () => {
   const handleOpenConfig = () => {
     openConfig()
   }
+
+  const handleOpenEngineDir = async () => {
+    try {
+      await invoke('open_engine_dir')
+    } catch (err) {
+      console.warn('Failed to open engine directory:', err)
+    }
+  }
+
+  // Helper to check if standalone mode is active
+  const isStandaloneMode = engineMode === ENGINE_MODES.STANDALONE
+  const isServerMode = engineMode === ENGINE_MODES.SERVER
 
   const handleClose = () => {
     toggleSettings()
@@ -132,23 +151,55 @@ const SettingsPanel = () => {
         </div>
 
         <div className="panel-content">
-          {/* GPU Server Section */}
+          {/* World Engine Section */}
           <div className="settings-section">
             <h3 className="settings-section-title">World Engine</h3>
 
-            <div className="setting-group">
-              <div className="setting-row">
-                <label className="setting-label">Use Standalone Engine</label>
-                <input
-                  type="checkbox"
-                  className="setting-checkbox"
-                  checked={useStandaloneEngine}
-                  onChange={(e) => setUseStandaloneEngine(e.target.checked)}
-                />
-              </div>
+            {/* Engine Directory - Always visible */}
+            <div className="engine-dir-row">
+              <span className="engine-dir-label">Engine Directory:</span>
+              <button className="engine-dir-button" onClick={handleOpenEngineDir} title={engineDirPath || 'Loading...'}>
+                <span className="engine-dir-path">
+                  {engineDirPath
+                    ? engineDirPath.length > 40
+                      ? '...' + engineDirPath.slice(-37)
+                      : engineDirPath
+                    : 'Loading...'}
+                </span>
+                <svg className="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path
+                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
 
-            {useStandaloneEngine && (
+            {/* Engine Mode Selector */}
+            <div className="setting-group">
+              <label className="setting-label">Engine Mode</label>
+              <div className="engine-mode-selector">
+                <button
+                  className={`mode-option ${isStandaloneMode ? 'active' : ''}`}
+                  onClick={() => setEngineMode(ENGINE_MODES.STANDALONE)}
+                >
+                  Standalone
+                </button>
+                <button
+                  className={`mode-option ${isServerMode ? 'active' : ''}`}
+                  onClick={() => setEngineMode(ENGINE_MODES.SERVER)}
+                >
+                  Server
+                </button>
+              </div>
+              <span className="setting-hint">
+                {isStandaloneMode ? 'Biome manages World Engine automatically' : 'You run the server yourself'}
+              </span>
+            </div>
+
+            {/* Standalone Engine Status */}
+            {isStandaloneMode && (
               <div className="engine-status-box">
                 {engineLoading ? (
                   <div className="engine-status-content">
@@ -192,7 +243,11 @@ const SettingsPanel = () => {
                       stroke="currentColor"
                       strokeWidth="2"
                     >
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                       <line x1="12" y1="9" x2="12" y2="13" />
                       <line x1="12" y1="17" x2="12.01" y2="17" />
                     </svg>
@@ -223,7 +278,8 @@ const SettingsPanel = () => {
               </div>
             )}
 
-            {!useStandaloneEngine && (
+            {/* Server Mode Settings */}
+            {isServerMode && (
               <>
                 <div className="setting-group">
                   <label className="setting-label">Server (host:port)</label>

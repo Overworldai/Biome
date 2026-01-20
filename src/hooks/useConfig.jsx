@@ -1,7 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext } from 'react'
 
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 export const STANDALONE_PORT = 7987
+
+// Engine mode: how the World Engine server should be managed
+export const ENGINE_MODES = {
+  UNCHOSEN: 'unchosen',
+  STANDALONE: 'standalone',
+  SERVER: 'server'
+}
 
 const defaultConfig = {
   gpu_server: {
@@ -17,7 +24,7 @@ const defaultConfig = {
   features: {
     prompt_sanitizer: true,
     seed_generation: true,
-    use_standalone_engine: true
+    engine_mode: ENGINE_MODES.UNCHOSEN
   },
   ui: {
     bottom_panel_hidden: false
@@ -27,6 +34,17 @@ const defaultConfig = {
 // Tauri invoke helper
 const invoke = async (cmd, args = {}) => {
   return window.__TAURI_INTERNALS__.invoke(cmd, args)
+}
+
+// Migrate legacy config fields to new format
+const migrateConfig = (loaded) => {
+  // Migrate legacy use_standalone_engine boolean to engine_mode enum
+  if (loaded.features && typeof loaded.features.use_standalone_engine === 'boolean') {
+    loaded.features.engine_mode = loaded.features.use_standalone_engine ? ENGINE_MODES.STANDALONE : ENGINE_MODES.SERVER
+    delete loaded.features.use_standalone_engine
+    console.log('[Config] Migrated use_standalone_engine to engine_mode:', loaded.features.engine_mode)
+  }
+  return loaded
 }
 
 // Deep merge loaded config with defaults (ensures new fields get default values)
@@ -42,7 +60,11 @@ const mergeWithDefaults = (loaded, defaults) => {
   return result
 }
 
-export const useConfig = () => {
+// Create the config context
+const ConfigContext = createContext(null)
+
+// Config Provider component - must wrap the app
+export const ConfigProvider = ({ children }) => {
   const [config, setConfig] = useState(defaultConfig)
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState(null)
@@ -53,8 +75,9 @@ export const useConfig = () => {
     const loadConfig = async () => {
       try {
         const fileConfig = await invoke('read_config')
-        // Merge with defaults to ensure new fields get default values
-        setConfig(mergeWithDefaults(fileConfig, defaultConfig))
+        // Migrate legacy fields and merge with defaults
+        const migratedConfig = migrateConfig(fileConfig)
+        setConfig(mergeWithDefaults(migratedConfig, defaultConfig))
 
         // Get config path for display
         const path = await invoke('get_config_path_str')
@@ -85,7 +108,7 @@ export const useConfig = () => {
     }
   }, [])
 
-  // Save config to file
+  // Save config to file and update state
   const saveConfig = useCallback(async (newConfig) => {
     try {
       await invoke('write_config', { config: newConfig })
@@ -136,7 +159,10 @@ export const useConfig = () => {
     }
   }, [])
 
-  return {
+  // Engine mode helpers
+  const engineMode = config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN
+
+  const value = {
     config,
     isLoaded,
     error,
@@ -148,8 +174,24 @@ export const useConfig = () => {
     getWsUrl,
     hasOpenAiKey: !!config.api_keys.openai,
     hasFalKey: !!config.api_keys.fal,
-    hasHuggingFaceKey: !!config.api_keys.huggingface
+    hasHuggingFaceKey: !!config.api_keys.huggingface,
+    // Engine mode helpers
+    engineMode,
+    isEngineUnchosen: engineMode === ENGINE_MODES.UNCHOSEN,
+    isStandaloneMode: engineMode === ENGINE_MODES.STANDALONE,
+    isServerMode: engineMode === ENGINE_MODES.SERVER
   }
+
+  return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>
+}
+
+// Hook to use config - must be used within ConfigProvider
+export const useConfig = () => {
+  const context = useContext(ConfigContext)
+  if (!context) {
+    throw new Error('useConfig must be used within a ConfigProvider')
+  }
+  return context
 }
 
 export default useConfig

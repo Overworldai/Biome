@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContextShared'
+import useConfig from '../hooks/useConfig'
 import PortalBackgrounds from './PortalBackgrounds'
 import VideoMask from './VideoMask'
 import TerminalDisplay from './TerminalDisplay'
@@ -21,10 +22,12 @@ const VideoContainer = () => {
     registerCanvasRef,
     handleContainerClick,
     isPointerLocked,
-    config,
     engineError,
-    clearEngineError
+    clearEngineError,
+    engineSetupInProgress,
+    setupProgress
   } = useStreaming()
+  const { isStandaloneMode } = useConfig()
 
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
@@ -80,8 +83,17 @@ const VideoContainer = () => {
 
         <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} pausedAt={pausedAt} />
         <ConnectionLostOverlay />
-        {((state === states.WARM && config?.features?.use_standalone_engine) || engineError) && (
-          <ServerLogDisplay showDismiss={!!engineError} onDismiss={clearEngineError} errorMessage={engineError} />
+        {/* Show server logs during: WARM state with standalone mode, front-page installation, or engine error */}
+        {((state === states.WARM && isStandaloneMode) ||
+          (state === states.COLD && engineSetupInProgress) ||
+          engineError) && (
+          <ServerLogDisplay
+            showDismiss={!!engineError}
+            onDismiss={clearEngineError}
+            errorMessage={engineError}
+            showProgress={engineSetupInProgress}
+            progressMessage={setupProgress}
+          />
         )}
         <TerminalDisplay />
         <VideoMask />

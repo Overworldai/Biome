@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
 import { useFitWindowToContent } from './hooks/useTauri'
+import { useAppStartup } from './hooks/useAppStartup'
 import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
 import HudOverlay from './components/HudOverlay'
@@ -24,7 +26,9 @@ const HoloFrame = () => {
   }, [])
 
   return (
-    <div className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}>
+    <div
+      className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}
+    >
       <div className="holo-frame-inner">
         <Titlebar />
 
@@ -50,16 +54,21 @@ const HoloFrame = () => {
 }
 
 const App = () => {
+  // Run startup tasks (unpack server files, etc.)
+  useAppStartup()
+
   // Snap window to fit content after resize stops
   useFitWindowToContent()
 
   return (
-    <PortalProvider>
-      <StreamingProvider>
-        <WindowAnchors />
-        <HoloFrame />
-      </StreamingProvider>
-    </PortalProvider>
+    <ConfigProvider>
+      <PortalProvider>
+        <StreamingProvider>
+          <WindowAnchors />
+          <HoloFrame />
+        </StreamingProvider>
+      </PortalProvider>
+    </ConfigProvider>
   )
 }
 

@@ -2992,3 +2992,281 @@ button.hud-social-link {
   background: rgba(255, 100, 100, 0.25);
   border-color: rgba(255, 100, 100, 0.6);
 }
+
+/* ============================================
+   ENGINE MODE CHOICE DIALOG
+   First-time setup dialog for choosing engine mode
+   ============================================ */
+
+/* Override terminal-display positioning when showing choice dialog */
+.terminal-display:has(.engine-mode-choice) {
+  position: absolute;
+  inset: 0;
+  top: 0;
+  left: 0;
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.engine-mode-choice {
+  width: 75%;
+  background: rgba(10, 14, 18, 0.95);
+  border: 1px solid rgba(120, 255, 245, 0.3);
+  border-radius: 1.5cqw;
+  padding: 3.75cqh 3.75cqw;
+  z-index: 100;
+  animation: choiceFadeIn 0.3s ease-out;
+  box-shadow:
+    0 0 20px rgba(0, 0, 0, 0.4),
+    0 0 10px rgba(120, 255, 245, 0.08),
+    inset 0 1px 0 rgba(120, 255, 245, 0.1);
+}
+
+@keyframes choiceFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.choice-header {
+  text-align: center;
+  margin-bottom: 3.75cqh;
+}
+
+.choice-header h2 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 3cqw;
+  color: rgba(120, 255, 245, 0.95);
+  letter-spacing: 0.15em;
+  margin: 0 0 1.2cqh 0;
+}
+
+.choice-subtitle {
+  color: rgba(200, 200, 200, 0.7);
+  font-size: 2.1cqw;
+  margin: 0;
+}
+
+.choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2.25cqh;
+  margin-bottom: 3.75cqh;
+}
+
+.choice-option {
+  display: flex;
+  align-items: center;
+  gap: 2.25cqw;
+  padding: 2.25cqh 2.25cqw;
+  background: rgba(120, 255, 245, 0.05);
+  border: 1px solid rgba(120, 255, 245, 0.2);
+  border-radius: 0.9cqw;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.choice-option:hover {
+  background: rgba(120, 255, 245, 0.1);
+  border-color: rgba(120, 255, 245, 0.4);
+}
+
+.choice-option.choice-standalone {
+  border-color: rgba(120, 255, 245, 0.4);
+}
+
+.choice-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.choice-icon {
+  flex-shrink: 0;
+  width: 5.25cqw;
+  height: 5.25cqw;
+}
+
+.choice-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: rgba(120, 255, 245, 0.8);
+}
+
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqh;
+}
+
+.choice-title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 2.25cqw;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.choice-desc {
+  font-size: 1.95cqw;
+  color: rgba(200, 200, 200, 0.7);
+}
+
+.choice-recommended {
+  font-size: 1.8cqw;
+  color: rgba(120, 255, 245, 0.8);
+  font-style: italic;
+}
+
+.choice-dir-link {
+  font-size: 1.8cqw;
+  color: rgba(120, 255, 245, 0.7);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.choice-dir-link:hover {
+  color: rgba(120, 255, 245, 1);
+}
+
+.choice-footer {
+  text-align: center;
+  font-size: 1.8cqw;
+  color: rgba(150, 150, 150, 0.6);
+  margin: 0;
+}
+
+/* ============================================
+   ENGINE DIRECTORY ROW (Settings Panel)
+   ============================================ */
+
+.engine-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  padding: 0.8cqh 0;
+  border-bottom: 1px solid rgba(120, 255, 245, 0.1);
+  margin-bottom: 1cqh;
+}
+
+.engine-dir-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1cqw;
+  color: rgba(200, 200, 200, 0.7);
+  white-space: nowrap;
+}
+
+.engine-dir-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5cqh 0.8cqw;
+  background: rgba(120, 255, 245, 0.05);
+  border: 1px solid rgba(120, 255, 245, 0.15);
+  border-radius: 0.3cqw;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.engine-dir-button:hover {
+  background: rgba(120, 255, 245, 0.1);
+  border-color: rgba(120, 255, 245, 0.3);
+}
+
+.engine-dir-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1cqw;
+  color: rgba(120, 255, 245, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-icon {
+  width: 1.2cqw;
+  height: 1.2cqw;
+  stroke: rgba(120, 255, 245, 0.6);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   ENGINE MODE SELECTOR (Settings Panel)
+   ============================================ */
+
+.engine-mode-selector {
+  display: flex;
+  gap: 0.5cqw;
+  margin-top: 0.5cqh;
+}
+
+.mode-option {
+  flex: 1;
+  padding: 0.6cqh 1cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1cqw;
+  background: rgba(120, 255, 245, 0.05);
+  border: 1px solid rgba(120, 255, 245, 0.15);
+  border-radius: 0.3cqw;
+  color: rgba(200, 200, 200, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-option:hover {
+  background: rgba(120, 255, 245, 0.1);
+  border-color: rgba(120, 255, 245, 0.3);
+}
+
+.mode-option.active {
+  background: rgba(120, 255, 245, 0.15);
+  border-color: rgba(120, 255, 245, 0.5);
+  color: rgba(120, 255, 245, 0.95);
+}
+
+/* ============================================
+   SERVER LOG PROGRESS BANNER
+   ============================================ */
+
+.server-log-progress-banner {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  padding: 0.8cqh 1.2cqw;
+  background: rgba(120, 255, 245, 0.08);
+  border-bottom: 1px solid rgba(120, 255, 245, 0.2);
+}
+
+.progress-spinner {
+  width: 1.2cqw;
+  height: 1.2cqw;
+  border: 2px solid rgba(120, 255, 245, 0.3);
+  border-top-color: rgba(120, 255, 245, 0.9);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.progress-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1cqw;
+  color: rgba(120, 255, 245, 0.9);
+}

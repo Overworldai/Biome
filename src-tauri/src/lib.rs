@@ -21,6 +21,19 @@ const STANDALONE_PORT: u16 = 7987;
 const SERVER_PY: &str = include_str!("../server-components/server.py");
 const PYPROJECT_TOML: &str = include_str!("../server-components/pyproject.toml");
 
+/// Engine mode: how the World Engine server should be managed
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EngineMode {
+    /// User hasn't chosen yet - show the choice dialog
+    #[default]
+    Unchosen,
+    /// Biome manages the World Engine automatically
+    Standalone,
+    /// User runs their own server
+    Server,
+}
+
 // Global state for tracking the running server process
 struct ServerState {
     process: Option<Child>,
@@ -74,7 +87,7 @@ pub struct ApiKeysConfig {
 pub struct FeaturesConfig {
     pub prompt_sanitizer: bool,
     pub seed_generation: bool,
-    pub use_standalone_engine: bool,
+    pub engine_mode: EngineMode,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -108,7 +121,7 @@ impl Default for AppConfig {
             features: FeaturesConfig {
                 prompt_sanitizer: true,
                 seed_generation: true,
-                use_standalone_engine: true,
+                engine_mode: EngineMode::Unchosen,
             },
             ui: UiConfig::default(),
         }
@@ -147,7 +160,43 @@ fn read_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
     let content = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))
+    // Try parsing as new format first
+    if let Ok(config) = serde_json::from_str::<AppConfig>(&content) {
+        return Ok(config);
+    }
+
+    // Try parsing as JSON Value to check for legacy format and migrate
+    let mut json_value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse config file: {}", e))?;
+
+    // Check for legacy use_standalone_engine boolean and migrate to engine_mode
+    if let Some(features) = json_value.get_mut("features") {
+        if let Some(features_obj) = features.as_object_mut() {
+            if let Some(use_standalone) = features_obj.remove("use_standalone_engine") {
+                // Migrate: true -> standalone, false -> server
+                let engine_mode = if use_standalone.as_bool().unwrap_or(true) {
+                    "standalone"
+                } else {
+                    "server"
+                };
+                features_obj.insert("engine_mode".to_string(), serde_json::json!(engine_mode));
+
+                // Save migrated config
+                let migrated_json = serde_json::to_string_pretty(&json_value)
+                    .map_err(|e| format!("Failed to serialize migrated config: {}", e))?;
+                fs::write(&config_path, &migrated_json)
+                    .map_err(|e| format!("Failed to write migrated config: {}", e))?;
+
+                println!(
+                    "[CONFIG] Migrated use_standalone_engine to engine_mode: {}",
+                    engine_mode
+                );
+            }
+        }
+    }
+
+    // Now parse the (potentially migrated) JSON as AppConfig
+    serde_json::from_value(json_value).map_err(|e| format!("Failed to parse config file: {}", e))
 }
 
 #[tauri::command]
@@ -545,13 +594,73 @@ async fn setup_engine(app: tauri::AppHandle) -> Result<String, String> {
         install_uv(app.clone()).await?;
     }
 
-    // Step 2: Setup server components (bundled pyproject.toml + server.py)
-    setup_server_components(app.clone()).await?;
+    // Step 2: Setup server components (bundled pyproject.toml + server.py) - force overwrite
+    unpack_server_files_inner(&app, true)?;
 
     // Step 3: Sync dependencies (installs world_engine from git)
     sync_engine_dependencies(app).await?;
 
     Ok("Engine setup complete".to_string())
+}
+
+/// Unpack bundled server files to the engine directory.
+/// If force is false, only unpacks files that don't already exist.
+/// If force is true, always overwrites existing files.
+fn unpack_server_files_inner(app: &tauri::AppHandle, force: bool) -> Result<String, String> {
+    let engine_dir = get_engine_dir(app)?;
+
+    // Create engine directory if it doesn't exist
+    fs::create_dir_all(&engine_dir).map_err(|e| format!("Failed to create engine dir: {}", e))?;
+
+    let server_py_path = engine_dir.join("server.py");
+    let pyproject_path = engine_dir.join("pyproject.toml");
+
+    let mut unpacked = Vec::new();
+
+    // Only write if file doesn't exist OR force is true
+    if force || !server_py_path.exists() {
+        fs::write(&server_py_path, SERVER_PY)
+            .map_err(|e| format!("Failed to write server.py: {}", e))?;
+        unpacked.push("server.py");
+    }
+
+    if force || !pyproject_path.exists() {
+        fs::write(&pyproject_path, PYPROJECT_TOML)
+            .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
+        unpacked.push("pyproject.toml");
+    }
+
+    if unpacked.is_empty() {
+        Ok("Files already exist, skipped unpacking".to_string())
+    } else {
+        Ok(format!("Unpacked: {}", unpacked.join(", ")))
+    }
+}
+
+#[tauri::command]
+async fn unpack_server_files(app: tauri::AppHandle, force: bool) -> Result<String, String> {
+    unpack_server_files_inner(&app, force)
+}
+
+#[tauri::command]
+fn get_engine_dir_path(app: tauri::AppHandle) -> Result<String, String> {
+    let engine_dir = get_engine_dir(&app)?;
+    Ok(engine_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let engine_dir = get_engine_dir(&app)?;
+
+    // Create directory if it doesn't exist
+    if !engine_dir.exists() {
+        fs::create_dir_all(&engine_dir)
+            .map_err(|e| format!("Failed to create engine dir: {}", e))?;
+    }
+
+    // Open File Explorer with engine directory
+    tauri_plugin_opener::reveal_item_in_dir(engine_dir)
+        .map_err(|e| format!("Failed to open engine directory: {}", e))
 }
 
 #[tauri::command]
@@ -589,22 +698,6 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     println!("[ENGINE] Starting server on port {}...", port);
     println!("[ENGINE] Engine dir: {:?}", engine_dir);
     println!("[ENGINE] UV binary: {:?}", uv_binary);
-
-    // Always update server.py and pyproject.toml with bundled versions (ensures latest code is used)
-    println!("[ENGINE] Updating server.py with bundled version...");
-    fs::write(engine_dir.join("server.py"), SERVER_PY)
-        .map_err(|e| format!("Failed to write server.py: {}", e))?;
-
-    println!("[ENGINE] Updating pyproject.toml with bundled version...");
-    fs::write(engine_dir.join("pyproject.toml"), PYPROJECT_TOML)
-        .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
-
-    // Delete uv.lock to force re-resolution of dependencies
-    let lock_path = engine_dir.join("uv.lock");
-    if lock_path.exists() {
-        println!("[ENGINE] Removing stale uv.lock...");
-        let _ = fs::remove_file(&lock_path);
-    }
 
     // Run uv sync to ensure dependencies are up to date
     println!("[ENGINE] Syncing dependencies...");
@@ -836,7 +929,10 @@ fn stop_server_sync() -> Result<String, String> {
                 println!("[ENGINE] Killed {} processes in tree", outputs.len());
             }
             Err(e) => {
-                println!("[ENGINE] kill_tree failed, falling back to direct kill: {}", e);
+                println!(
+                    "[ENGINE] kill_tree failed, falling back to direct kill: {}",
+                    e
+                );
                 let _ = process.kill();
             }
         }
@@ -919,6 +1015,9 @@ pub fn run() {
             setup_server_components,
             sync_engine_dependencies,
             setup_engine,
+            unpack_server_files,
+            get_engine_dir_path,
+            open_engine_dir,
             start_engine_server,
             stop_engine_server,
             is_server_running,

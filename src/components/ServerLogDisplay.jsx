@@ -18,7 +18,13 @@ const getLogClass = (line) => {
   return ''
 }
 
-const ServerLogDisplay = ({ showDismiss = false, onDismiss, errorMessage = null }) => {
+const ServerLogDisplay = ({
+  showDismiss = false,
+  onDismiss,
+  errorMessage = null,
+  showProgress = false,
+  progressMessage = null
+}) => {
   const [logs, setLogs] = useState([])
   const containerRef = useRef(null)
 
@@ -58,9 +64,15 @@ const ServerLogDisplay = ({ showDismiss = false, onDismiss, errorMessage = null 
   return (
     <div className={`server-log-display ${showDismiss ? 'has-error' : ''}`}>
       <div className="server-log-header">
-        <span className="server-log-title">ENGINE OUTPUT</span>
+        <span className="server-log-title">{showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}</span>
         <span className="server-log-indicator" />
       </div>
+      {showProgress && progressMessage && (
+        <div className="server-log-progress-banner">
+          <div className="progress-spinner" />
+          <span className="progress-text">{progressMessage}</span>
+        </div>
+      )}
       {errorMessage && (
         <div className="server-log-error-banner">
           <span className="server-log-error-text">{errorMessage}</span>

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContextShared'
-import useConfig, { STANDALONE_PORT } from '../hooks/useConfig'
+import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
+import EngineModeChoice from './EngineModeChoice'
 
 // Display text for portal states
 const stateMessages = {
@@ -29,10 +30,12 @@ const statusCodeMessages = {
 
 const TerminalDisplay = () => {
   const { state, states, transitionTo, onStateChange } = usePortal()
-  const { statusCode, setEndpointUrl, engineError, clearEngineError, config, cancelConnection } = useStreaming()
-  const { saveGpuServerUrl } = useConfig()
+  const { statusCode, setEndpointUrl, engineError, clearEngineError, cancelConnection, handleModeChoice } =
+    useStreaming()
+  const { config, saveGpuServerUrl, engineMode, isEngineUnchosen, isStandaloneMode, isServerMode } = useConfig()
 
-  const useStandaloneEngine = config?.features?.use_standalone_engine ?? true
+  // For backwards compatibility: treat unchosen as standalone for URL purposes
+  const useStandaloneEngine = isStandaloneMode || isEngineUnchosen
   const defaultUrl = useStandaloneEngine
     ? `localhost:${STANDALONE_PORT}`
     : `${config?.gpu_server?.host || 'localhost'}:${config?.gpu_server?.port || STANDALONE_PORT}`
@@ -281,6 +284,25 @@ const TerminalDisplay = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
   }, [state, states.COLD, showPlaceholder, useStandaloneEngine, inputValue, handleConnect])
 
+  // Handle mode choice from dialog
+  const onModeChosen = useCallback(
+    (chosenMode) => {
+      if (handleModeChoice) {
+        handleModeChoice(chosenMode)
+      }
+    },
+    [handleModeChoice]
+  )
+
+  // Show choice dialog for unchosen mode
+  if (isEngineUnchosen && state === states.COLD) {
+    return (
+      <div ref={containerRef} className={`terminal-display state-${state}`}>
+        <EngineModeChoice onChoiceMade={onModeChosen} />
+      </div>
+    )
+  }
+
   return (
     <div ref={containerRef} className={`terminal-display state-${state}`}>
       {/* Loading indicator */}
@@ -298,7 +320,7 @@ const TerminalDisplay = () => {
       <div
         className="terminal-status"
         id="terminal-status"
-        onClick={() => (useStandaloneEngine ? handleConnect() : document.getElementById('terminal-input')?.focus())}
+        onClick={() => (isStandaloneMode ? handleConnect() : document.getElementById('terminal-input')?.focus())}
       >
         <span className="terminal-prompt">&gt;</span>
         <span
@@ -307,7 +329,7 @@ const TerminalDisplay = () => {
         >
           {displayText}
         </span>
-        {!useStandaloneEngine && (
+        {isServerMode && (
           <span className={`input-wrapper ${showPlaceholder ? 'show-input' : ''}`}>
             <input
               type="text"
@@ -325,10 +347,8 @@ const TerminalDisplay = () => {
         )}
       </div>
 
-      {/* Enter hint - only shown in non-standalone mode */}
-      {!useStandaloneEngine && (
-        <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>Press Enter to connect</div>
-      )}
+      {/* Enter hint - only shown in server mode */}
+      {isServerMode && <div className={`terminal-hint ${showPlaceholder ? 'show' : ''}`}>Press Enter to connect</div>}
 
       {/* Cancel button - shown during WARM state */}
       {state === states.WARM && (

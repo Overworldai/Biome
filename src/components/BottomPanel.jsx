@@ -1,21 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStreaming } from '../context/StreamingContextShared'
+import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 
 const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
-  const {
-    sendPrompt,
-    sendPromptWithSeed,
-    requestPointerLock,
-    config,
-    reset,
-    logout,
-    mouseSensitivity,
-    setMouseSensitivity,
-    hasOpenAiKey,
-    hasFalKey
-  } = useStreaming()
+  const { sendPrompt, sendPromptWithSeed, requestPointerLock, reset, logout, mouseSensitivity, setMouseSensitivity } =
+    useStreaming()
+  const { config, hasOpenAiKey, hasFalKey } = useConfig()
 
   const [textPrompt, setTextPrompt] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
@@ -137,11 +129,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   // When hidden, show only a small expand tab
   if (isHidden) {
     return (
-      <div
-        id="bottom-panel"
-        className={`panel panel-bottom collapsed ${isOpen ? 'open' : ''}`}
-        onClick={handleClick}
-      >
+      <div id="bottom-panel" className={`panel panel-bottom collapsed ${isOpen ? 'open' : ''}`} onClick={handleClick}>
         <div className="panel-toggle-bar" onClick={onToggleHidden} title="Show panel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
