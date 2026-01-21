@@ -1211,6 +1211,15 @@ pub fn run() {
         .setup(|app| {
             // Store app handle for event emission from threads
             set_app_handle(app.handle().clone());
+
+            // Set up Ctrl+C handler to stop the server on termination
+            ctrlc::set_handler(move || {
+                println!("[ENGINE] Received Ctrl+C, stopping server...");
+                let _ = stop_server_sync();
+                std::process::exit(0);
+            })
+            .expect("Error setting Ctrl+C handler");
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
