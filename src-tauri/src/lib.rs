@@ -1,7 +1,8 @@
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Cursor, Write};
-use std::path::PathBuf;
+use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, RunEvent};
@@ -19,6 +20,7 @@ use tar::Archive;
 
 const CONFIG_FILENAME: &str = "config.json";
 const WORLD_ENGINE_DIR: &str = "world_engine";
+const SEEDS_DIR: &str = "seeds";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
@@ -41,20 +43,11 @@ pub enum EngineMode {
 }
 
 // Global state for tracking the running server process
+#[derive(Default)]
 struct ServerState {
     process: Option<Child>,
     port: Option<u16>,
     ready: bool,
-}
-
-impl Default for ServerState {
-    fn default() -> Self {
-        Self {
-            process: None,
-            port: None,
-            ready: false,
-        }
-    }
 }
 
 static SERVER_STATE: std::sync::OnceLock<Mutex<ServerState>> = std::sync::OnceLock::new();
@@ -184,29 +177,28 @@ fn read_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
         .map_err(|e| format!("Failed to parse config file: {}", e))?;
 
     // Check for legacy use_standalone_engine boolean and migrate to engine_mode
-    if let Some(features) = json_value.get_mut("features") {
-        if let Some(features_obj) = features.as_object_mut() {
-            if let Some(use_standalone) = features_obj.remove("use_standalone_engine") {
-                // Migrate: true -> standalone, false -> server
-                let engine_mode = if use_standalone.as_bool().unwrap_or(true) {
-                    "standalone"
-                } else {
-                    "server"
-                };
-                features_obj.insert("engine_mode".to_string(), serde_json::json!(engine_mode));
+    if let Some(features) = json_value.get_mut("features")
+        && let Some(features_obj) = features.as_object_mut()
+        && let Some(use_standalone) = features_obj.remove("use_standalone_engine")
+    {
+        // Migrate: true -> standalone, false -> server
+        let engine_mode = if use_standalone.as_bool().unwrap_or(true) {
+            "standalone"
+        } else {
+            "server"
+        };
+        features_obj.insert("engine_mode".to_string(), serde_json::json!(engine_mode));
 
-                // Save migrated config
-                let migrated_json = serde_json::to_string_pretty(&json_value)
-                    .map_err(|e| format!("Failed to serialize migrated config: {}", e))?;
-                fs::write(&config_path, &migrated_json)
-                    .map_err(|e| format!("Failed to write migrated config: {}", e))?;
+        // Save migrated config
+        let migrated_json = serde_json::to_string_pretty(&json_value)
+            .map_err(|e| format!("Failed to serialize migrated config: {}", e))?;
+        fs::write(&config_path, &migrated_json)
+            .map_err(|e| format!("Failed to write migrated config: {}", e))?;
 
-                println!(
-                    "[CONFIG] Migrated use_standalone_engine to engine_mode: {}",
-                    engine_mode
-                );
-            }
-        }
+        println!(
+            "[CONFIG] Migrated use_standalone_engine to engine_mode: {}",
+            engine_mode
+        );
     }
 
     // Now parse the (potentially migrated) JSON as AppConfig
@@ -450,7 +442,7 @@ fn get_uv_archive_info() -> (&'static str, &'static str) {
 }
 
 #[cfg(target_os = "windows")]
-fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
+fn extract_zip(bytes: &[u8], _uv_dir: &Path, bin_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(bytes);
     let mut archive =
         zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to read zip archive: {}", e))?;
@@ -479,7 +471,7 @@ fn extract_zip(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(),
 }
 
 #[cfg(not(target_os = "windows"))]
-fn extract_tar_gz(bytes: &[u8], _uv_dir: &PathBuf, bin_dir: &PathBuf) -> Result<(), String> {
+fn extract_tar_gz(bytes: &[u8], _uv_dir: &Path, bin_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(bytes);
     let gz = GzDecoder::new(cursor);
     let mut archive = Archive::new(gz);
@@ -677,6 +669,214 @@ async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to open engine directory: {}", e))
 }
 
+// ============================================================================
+// Seeds Management
+// ============================================================================
+
+// Get the seeds directory path (inside app data dir)
+fn get_seeds_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    Ok(data_dir.join(SEEDS_DIR))
+}
+
+/// Initialize seeds by copying bundled seeds to app_data_dir/seeds/ on first run
+#[tauri::command]
+async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+
+    // Create seeds directory if it doesn't exist
+    if !seeds_dir.exists() {
+        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
+    }
+
+    // Get the resource path for bundled seeds (production)
+    let resource_path = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let bundled_seeds_dir = resource_path.join("seeds");
+
+    // In development, try multiple possible locations for the seeds folder
+    let cwd = std::env::current_dir().ok();
+    let dev_candidates: Vec<PathBuf> = cwd
+        .iter()
+        .flat_map(|cwd| {
+            vec![
+                cwd.join("seeds"),                    // If cwd is project root
+                cwd.join("..").join("seeds"),         // If cwd is src-tauri
+                cwd.parent()
+                    .map(|p| p.join("seeds"))
+                    .unwrap_or_default(), // Parent of cwd
+            ]
+        })
+        .filter(|p| p.exists() && p.is_dir())
+        .collect();
+
+    let source_dir = if bundled_seeds_dir.exists() {
+        Some(bundled_seeds_dir)
+    } else {
+        dev_candidates.into_iter().next()
+    };
+
+    let mut copied_count = 0;
+
+    if let Some(source) = source_dir
+        && let Ok(entries) = fs::read_dir(&source)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
+                    && let Some(filename) = path.file_name()
+                {
+                    let dest_path = seeds_dir.join(filename);
+                    if !dest_path.exists() && fs::copy(&path, &dest_path).is_ok() {
+                        copied_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(format!(
+        "Seeds initialized: {} new files copied to {}",
+        copied_count,
+        seeds_dir.display()
+    ))
+}
+
+/// List available seed filenames (png/jpg/jpeg)
+#[tauri::command]
+async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+
+    if !seeds_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut seeds = Vec::new();
+
+    let entries =
+        fs::read_dir(&seeds_dir).map_err(|e| format!("Failed to read seeds dir: {}", e))?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(ext) = path.extension() {
+            let ext_lower = ext.to_string_lossy().to_lowercase();
+            if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
+                && let Some(filename) = path.file_name()
+            {
+                seeds.push(filename.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    Ok(seeds)
+}
+
+/// Read a seed file and return base64 encoded data
+#[tauri::command]
+async fn read_seed_as_base64(app: tauri::AppHandle, filename: String) -> Result<String, String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+    let seed_path = seeds_dir.join(&filename);
+
+    if !seed_path.exists() {
+        return Err(format!("Seed file not found: {}", filename));
+    }
+
+    // Validate that the file is within the seeds directory (prevent path traversal)
+    let canonical_seeds = seeds_dir
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize seeds dir: {}", e))?;
+    let canonical_seed = seed_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize seed path: {}", e))?;
+
+    if !canonical_seed.starts_with(&canonical_seeds) {
+        return Err("Invalid seed path".to_string());
+    }
+
+    let mut file =
+        File::open(&seed_path).map_err(|e| format!("Failed to open seed file: {}", e))?;
+
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|e| format!("Failed to read seed file: {}", e))?;
+
+    Ok(BASE64_STANDARD.encode(&buffer))
+}
+
+/// Read a seed file and return a small thumbnail as base64 encoded JPEG
+#[tauri::command]
+async fn read_seed_thumbnail(
+    app: tauri::AppHandle,
+    filename: String,
+    max_size: Option<u32>,
+) -> Result<String, String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+    let seed_path = seeds_dir.join(&filename);
+
+    if !seed_path.exists() {
+        return Err(format!("Seed file not found: {}", filename));
+    }
+
+    // Validate path
+    let canonical_seeds = seeds_dir
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize seeds dir: {}", e))?;
+    let canonical_seed = seed_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize seed path: {}", e))?;
+
+    if !canonical_seed.starts_with(&canonical_seeds) {
+        return Err("Invalid seed path".to_string());
+    }
+
+    // Load and resize image
+    let img =
+        image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
+
+    let max_dim = max_size.unwrap_or(80);
+    let thumbnail = img.thumbnail(max_dim, max_dim);
+
+    // Encode as JPEG
+    let mut buffer = Vec::new();
+    let mut cursor = Cursor::new(&mut buffer);
+    thumbnail
+        .write_to(&mut cursor, image::ImageFormat::Jpeg)
+        .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
+
+    Ok(BASE64_STANDARD.encode(&buffer))
+}
+
+/// Get the seeds directory path
+#[tauri::command]
+fn get_seeds_dir_path(app: tauri::AppHandle) -> Result<String, String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+    Ok(seeds_dir.to_string_lossy().to_string())
+}
+
+/// Open the seeds directory in file explorer
+#[tauri::command]
+async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let seeds_dir = get_seeds_dir(&app)?;
+
+    // Create directory if it doesn't exist
+    if !seeds_dir.exists() {
+        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
+    }
+
+    // Open File Explorer with seeds directory
+    tauri_plugin_opener::reveal_item_in_dir(seeds_dir)
+        .map_err(|e| format!("Failed to open seeds directory: {}", e))
+}
+
 #[tauri::command]
 async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String, String> {
     let engine_dir = get_engine_dir(&app)?;
@@ -770,10 +970,8 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         Some(config.api_keys.huggingface.clone())
     } else if let Ok(token) = std::env::var("HF_TOKEN") {
         Some(token)
-    } else if let Ok(token) = std::env::var("HUGGING_FACE_HUB_TOKEN") {
-        Some(token)
     } else {
-        None
+        std::env::var("HUGGING_FACE_HUB_TOKEN").ok()
     };
 
     if let Some(token) = hf_token {
@@ -838,13 +1036,11 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
                 .ok();
 
             let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    process_log_line(&line, false);
-                    if let Some(ref mut file) = log_file {
-                        let _ = writeln!(file, "{}", line);
-                        let _ = file.flush();
-                    }
+            for line in reader.lines().map_while(Result::ok) {
+                process_log_line(&line, false);
+                if let Some(ref mut file) = log_file {
+                    let _ = writeln!(file, "{}", line);
+                    let _ = file.flush();
                 }
             }
         });
@@ -861,13 +1057,11 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
                 .ok();
 
             let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    process_log_line(&line, true);
-                    if let Some(ref mut file) = log_file {
-                        let _ = writeln!(file, "{}", line);
-                        let _ = file.flush();
-                    }
+            for line in reader.lines().map_while(Result::ok) {
+                process_log_line(&line, true);
+                if let Some(ref mut file) = log_file {
+                    let _ = writeln!(file, "{}", line);
+                    let _ = file.flush();
                 }
             }
         });
@@ -1036,7 +1230,13 @@ pub fn run() {
             stop_engine_server,
             is_server_running,
             is_server_ready,
-            is_port_in_use
+            is_port_in_use,
+            initialize_seeds,
+            list_seeds,
+            read_seed_as_base64,
+            read_seed_thumbnail,
+            get_seeds_dir_path,
+            open_seeds_dir
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -1,0 +1,5 @@
+# Ignore all files in the seeds directory
+*
+
+# But keep this .gitignore file
+!.gitignore

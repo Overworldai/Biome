@@ -1,20 +1,41 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { useStreaming } from '../context/StreamingContextShared'
 import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 
 const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
-  const { sendPrompt, sendPromptWithSeed, requestPointerLock, reset, logout, mouseSensitivity, setMouseSensitivity } =
-    useStreaming()
+  const {
+    sendPrompt,
+    sendPromptWithSeed,
+    sendInitialSeed,
+    requestPointerLock,
+    reset,
+    logout,
+    mouseSensitivity,
+    setMouseSensitivity,
+    isPaused,
+    canUnpause
+  } = useStreaming()
   const { config, hasOpenAiKey, hasFalKey } = useConfig()
 
+  const [activeTab, setActiveTab] = useState('prompt')
   const [textPrompt, setTextPrompt] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
   const generateSeed = true // Always generate seed images
 
+  // Seeds gallery state
+  const [seeds, setSeeds] = useState([])
+  const [seedThumbnails, setSeedThumbnails] = useState({})
+  const [loadingSeeds, setLoadingSeeds] = useState(false)
+  const [selectedSeed, setSelectedSeed] = useState(null)
+
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
+
+  // Seeds are disabled during the pointer lock cooldown period
+  const seedsDisabled = isPaused && !canUnpause
 
   // Determine why the prompt box might be disabled
   const getDisabledState = () => {
@@ -90,6 +111,71 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     adjustTextareaHeight()
   }, [textPrompt, status, isLoading])
 
+  // Track which thumbnails are currently being loaded
+  const loadingThumbnailsRef = useRef(new Set())
+
+  // Load seeds list
+  const loadSeeds = useCallback(async () => {
+    setLoadingSeeds(true)
+    try {
+      const seedList = await invoke('list_seeds')
+      setSeeds(seedList)
+    } catch (err) {
+      console.error('Failed to load seeds:', err)
+    } finally {
+      setLoadingSeeds(false)
+    }
+  }, [])
+
+  // Load seeds once when tab first opens
+  useEffect(() => {
+    if (activeTab === 'seeds' && seeds.length === 0 && !loadingSeeds) {
+      loadSeeds()
+    }
+  }, [activeTab, seeds.length, loadingSeeds, loadSeeds])
+
+  // Load thumbnails for seeds (batched, with deduplication)
+  useEffect(() => {
+    if (activeTab !== 'seeds' || seeds.length === 0) return
+
+    const loadBatch = async () => {
+      for (const filename of seeds) {
+        // Skip if already loaded or currently loading
+        if (loadingThumbnailsRef.current.has(filename)) continue
+
+        setSeedThumbnails((prev) => {
+          if (prev[filename]) return prev // Already have it
+
+          // Mark as loading and start the load
+          loadingThumbnailsRef.current.add(filename)
+          invoke('read_seed_thumbnail', { filename, maxSize: 100 })
+            .then((base64) => {
+              setSeedThumbnails((p) => ({ ...p, [filename]: base64 }))
+            })
+            .catch((err) => console.error('Failed to load thumbnail:', filename, err))
+            .finally(() => loadingThumbnailsRef.current.delete(filename))
+
+          return prev
+        })
+      }
+    }
+
+    loadBatch()
+  }, [activeTab, seeds])
+
+  // Handle seed selection - reset server, load full-size image, recapture cursor
+  const handleSeedClick = async (filename) => {
+    setSelectedSeed(filename)
+    try {
+      const base64 = await invoke('read_seed_as_base64', { filename })
+      reset()
+      sendInitialSeed(base64)
+      requestPointerLock()
+    } catch (err) {
+      console.error('Failed to apply seed:', err)
+    }
+  }
+
   const applyPrompt = async () => {
     if (!textPrompt.trim() || isLoading) return
 
@@ -149,117 +235,180 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       </div>
 
       <div className="panel-content">
-        {/* Unified prompt container with textarea and buttons */}
-        <div className="prompt-container">
-          <textarea
-            ref={textareaRef}
-            className="prompt-input-compact"
-            placeholder={isDisabledByConfig ? disabledMessage : lastPrompt || 'Describe a scene...'}
-            value={isLoading ? status || '' : textPrompt}
-            onChange={(e) => setTextPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              handleKeyDown(e)
-              handlePromptSubmit(e)
-            }}
-            disabled={isLoading || isDisabledByConfig}
-            rows={1}
-          />
-
-          {/* Controls row - sensitivity, buttons */}
-          <div className="prompt-buttons">
-            {/* Mouse sensitivity slider */}
-            <div className="sensitivity-control">
-              <span className="sensitivity-label">MOUSE SENS</span>
-              <div className="sensitivity-slider-wrapper compact">
-                <div className="sensitivity-slider-container">
-                  <input
-                    type="range"
-                    className="setting-slider"
-                    min="0.1"
-                    max="3.0"
-                    step="0.1"
-                    value={mouseSensitivity}
-                    onChange={(e) => setMouseSensitivity(parseFloat(e.target.value))}
-                    onClick={handleClick}
-                    title="Mouse sensitivity"
-                  />
-                  <div className="sensitivity-track"></div>
-                  <div
-                    className="sensitivity-fill"
-                    style={{ width: `${((mouseSensitivity - 0.1) / (3.0 - 0.1)) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-              <span className="sensitivity-value">{mouseSensitivity.toFixed(1)}</span>
-            </div>
-
-            <div className="prompt-divider"></div>
-
-            {/* Reset world button */}
-            <div
-              className="prompt-control-group"
-              onClick={handleResetWorld}
-              title={`Reset world (${RESET_KEY_DISPLAY})`}
-            >
-              <span ref={resetButtonRef} className="prompt-control-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path
-                    d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <span className="prompt-control-label">RESET({RESET_KEY_DISPLAY})</span>
-            </div>
-
-            {/* Logout button */}
-            <div className="prompt-control-group" onClick={handleLogout} title="Logout">
-              <span className="prompt-control-btn danger">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-                  <polyline points="16,17 21,12 16,7" strokeLinecap="round" strokeLinejoin="round" />
-                  <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <span className="prompt-control-label">EXIT</span>
-            </div>
-
-            {/* Submit button */}
-            <div
-              className={`prompt-control-group ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
-              onClick={() => !(isLoading || !textPrompt.trim() || isDisabledByConfig) && applyPrompt()}
-              title={isDisabledByConfig ? disabledMessage : 'Apply prompt'}
-            >
-              <span
-                ref={promptButtonRef}
-                className={`prompt-submit-btn ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
-              >
-                {isLoading ? (
-                  <svg
-                    className="prompt-spinner"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
-                    <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="prompt-control-label">APPLY</span>
-            </div>
-          </div>
+        {/* Vertical tab bar on left */}
+        <div className="panel-tabs">
+          <button
+            className={`panel-tab ${activeTab === 'prompt' ? 'active' : ''}`}
+            onClick={() => setActiveTab('prompt')}
+            title="Prompt"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            className={`panel-tab ${activeTab === 'seeds' ? 'active' : ''}`}
+            onClick={() => setActiveTab('seeds')}
+            title="Seeds"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21,15 16,10 5,21" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
 
-        {/* Error display */}
-        {error && <div className="prompt-error-bar">{error}</div>}
+        {/* Tab content area */}
+        <div className="panel-tab-content">
+          {/* Prompt tab content */}
+          {activeTab === 'prompt' && (
+            <div className="prompt-container">
+              <textarea
+                ref={textareaRef}
+                className="prompt-input-compact"
+                placeholder={isDisabledByConfig ? disabledMessage : lastPrompt || 'Describe a scene...'}
+                value={isLoading ? status || '' : textPrompt}
+                onChange={(e) => setTextPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  handleKeyDown(e)
+                  handlePromptSubmit(e)
+                }}
+                disabled={isLoading || isDisabledByConfig}
+                rows={1}
+              />
+
+              {/* Controls row - sensitivity, buttons */}
+              <div className="prompt-buttons">
+                {/* Mouse sensitivity slider */}
+                <div className="sensitivity-control">
+                  <span className="sensitivity-label">MOUSE SENS</span>
+                  <div className="sensitivity-slider-wrapper compact">
+                    <div className="sensitivity-slider-container">
+                      <input
+                        type="range"
+                        className="setting-slider"
+                        min="0.1"
+                        max="3.0"
+                        step="0.1"
+                        value={mouseSensitivity}
+                        onChange={(e) => setMouseSensitivity(parseFloat(e.target.value))}
+                        onClick={handleClick}
+                        title="Mouse sensitivity"
+                      />
+                      <div className="sensitivity-track"></div>
+                      <div
+                        className="sensitivity-fill"
+                        style={{ width: `${((mouseSensitivity - 0.1) / (3.0 - 0.1)) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <span className="sensitivity-value">{mouseSensitivity.toFixed(1)}</span>
+                </div>
+
+                <div className="prompt-divider"></div>
+
+                {/* Reset world button */}
+                <div
+                  className="prompt-control-group"
+                  onClick={handleResetWorld}
+                  title={`Reset world (${RESET_KEY_DISPLAY})`}
+                >
+                  <span ref={resetButtonRef} className="prompt-control-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path
+                        d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span className="prompt-control-label">RESET({RESET_KEY_DISPLAY})</span>
+                </div>
+
+                {/* Logout button */}
+                <div className="prompt-control-group" onClick={handleLogout} title="Logout">
+                  <span className="prompt-control-btn danger">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="16,17 21,12 16,7" strokeLinecap="round" strokeLinejoin="round" />
+                      <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span className="prompt-control-label">EXIT</span>
+                </div>
+
+                {/* Submit button */}
+                <div
+                  className={`prompt-control-group ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
+                  onClick={() => !(isLoading || !textPrompt.trim() || isDisabledByConfig) && applyPrompt()}
+                  title={isDisabledByConfig ? disabledMessage : 'Apply prompt'}
+                >
+                  <span
+                    ref={promptButtonRef}
+                    className={`prompt-submit-btn ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'disabled' : ''}`}
+                  >
+                    {isLoading ? (
+                      <svg
+                        className="prompt-spinner"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
+                        <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="prompt-control-label">APPLY</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Seeds tab content */}
+          {activeTab === 'seeds' && (
+            <div className="seeds-container">
+              <div className="seeds-gallery">
+                {loadingSeeds ? (
+                  <div className="seeds-loading">Loading seeds...</div>
+                ) : seeds.length === 0 ? (
+                  <div className="seeds-empty">No seeds found</div>
+                ) : (
+                  seeds.map((filename) => (
+                    <div
+                      key={filename}
+                      className={`seed-item ${selectedSeed === filename ? 'selected' : ''} ${seedsDisabled ? 'disabled' : ''}`}
+                      onClick={() => !seedsDisabled && handleSeedClick(filename)}
+                      title={seedsDisabled ? 'Wait to select a seed...' : filename}
+                    >
+                      {seedThumbnails[filename] ? (
+                        <img src={`data:image/jpeg;base64,${seedThumbnails[filename]}`} alt={filename} />
+                      ) : (
+                        <div className="seed-placeholder">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21,15 16,10 5,21" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Error display */}
+          {error && <div className="prompt-error-bar">{error}</div>}
+        </div>
       </div>
     </div>
   )

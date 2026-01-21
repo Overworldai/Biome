@@ -172,6 +172,13 @@ export const useWebSocket = () => {
     }
   }, [])
 
+  const sendInitialSeed = useCallback((seedBase64) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'set_initial_seed', seed_base64: seedBase64 }))
+      log.info('Initial seed sent:', seedBase64.length, 'chars')
+    }
+  }, [])
+
   const reset = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'reset' }))
@@ -198,6 +205,7 @@ export const useWebSocket = () => {
     sendPause,
     sendPrompt,
     sendPromptWithSeed,
+    sendInitialSeed,
     reset,
     isConnected: connectionState === 'connected',
     isReady,

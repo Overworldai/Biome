@@ -15,7 +15,6 @@ const VideoContainer = () => {
   const {
     isStreaming,
     isPaused,
-    pausedAt,
     settingsOpen,
     isVideoReady,
     registerContainerRef,
@@ -83,7 +82,7 @@ const VideoContainer = () => {
         {/* Canvas for WebSocket base64 frames */}
         <canvas ref={handleCanvasRef} width={1280} height={720} className="streaming-frame" style={mediaStyle} />
 
-        <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} pausedAt={pausedAt} />
+        <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} />
         <ConnectionLostOverlay />
         {/* Show server logs during: WARM state with standalone mode, front-page installation, or engine error */}
         {showServerLogs && (

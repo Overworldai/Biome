@@ -1,27 +1,10 @@
-import { useState, useEffect } from 'react'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
+import { useStreaming } from '../context/StreamingContextShared'
 
-const UNLOCK_DELAY_MS = 1250 // Browsers require ~1s delay before pointer lock can be re-requested
+const PauseOverlay = ({ isActive }) => {
+  const { canUnpause, unlockDelayMs, pauseElapsedMs } = useStreaming()
 
-const PauseOverlay = ({ isActive, pausedAt }) => {
-  const [elapsedMs, setElapsedMs] = useState(0)
-
-  useEffect(() => {
-    if (!isActive || !pausedAt) {
-      setElapsedMs(0)
-      return
-    }
-
-    // Update elapsed time every 50ms for smooth countdown
-    const interval = setInterval(() => {
-      setElapsedMs(Date.now() - pausedAt)
-    }, 50)
-
-    return () => clearInterval(interval)
-  }, [isActive, pausedAt])
-
-  const canUnpause = elapsedMs >= UNLOCK_DELAY_MS
-  const remainingMs = Math.max(0, UNLOCK_DELAY_MS - elapsedMs)
+  const remainingMs = Math.max(0, unlockDelayMs - pauseElapsedMs)
   const remainingSeconds = (remainingMs / 1000).toFixed(1)
 
   return (

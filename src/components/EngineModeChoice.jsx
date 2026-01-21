@@ -91,15 +91,23 @@ const EngineModeChoice = ({ onChoiceMade }) => {
             <span className="choice-title">Run Server Yourself</span>
             <span className="choice-desc">For experimentation and hacking</span>
             {engineDirPath && (
-              <button
+              <span
                 className="choice-dir-link"
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation()
                   handleOpenEngineDir()
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation()
+                    handleOpenEngineDir()
+                  }
+                }}
               >
                 Open engine directory
-              </button>
+              </span>
             )}
           </div>
         </button>
