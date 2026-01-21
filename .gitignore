@@ -25,7 +25,6 @@ dist-ssr
 *.sw?
 .env/
 *.bak
-*.png
 
 # env
 .env
