@@ -14,9 +14,6 @@ Overworld's local desktop client for running Waypoint world models. Biome connec
 # Install dependencies
 npm install
 
-# sets up app icon resources folder
-npm run tauri icon src/assets/icon.png
-
 # Run in development mode
 npm run tauri dev
 

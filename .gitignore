@@ -26,8 +26,6 @@ dist-ssr
 .env/
 *.bak
 
-src-tauri/icons/*
-
 # env
 .env
 .vercel
