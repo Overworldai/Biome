@@ -51,32 +51,24 @@ export const useSeeds = () => {
     }
   }, [])
 
-  // Get a random seed as base64 encoded data
-  const getRandomSeedBase64 = useCallback(async () => {
+  // Get the default seed (default.png) as base64 encoded data
+  const getDefaultSeedBase64 = useCallback(async () => {
     try {
-      // Get current seed list
       let seedList = seeds
       if (seedList.length === 0) {
         seedList = await invoke('list_seeds')
         setSeeds(seedList)
       }
 
-      if (seedList.length === 0) {
-        log.warn('No seeds available')
-        return null
+      if (!seedList.includes('default.png')) {
+        throw new Error('Required seed file "default.png" not found in seeds folder')
       }
 
-      // Pick a random seed
-      const randomIndex = Math.floor(Math.random() * seedList.length)
-      const filename = seedList[randomIndex]
-      log.info('Selected random seed:', filename)
-
-      // Read the seed as base64
-      const base64Data = await invoke('read_seed_as_base64', { filename })
-      log.info('Read seed as base64:', filename, `(${base64Data.length} chars)`)
+      log.info('Loading default seed: default.png')
+      const base64Data = await invoke('read_seed_as_base64', { filename: 'default.png' })
       return base64Data
     } catch (err) {
-      log.error('Failed to get random seed:', err)
+      log.error('Failed to load default seed:', err)
       setError(err)
       throw err
     }
@@ -114,7 +106,7 @@ export const useSeeds = () => {
     error,
     initializeSeeds,
     refreshSeeds,
-    getRandomSeedBase64,
+    getDefaultSeedBase64,
     openSeedsDir,
     getSeedsDirPath
   }

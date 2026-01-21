@@ -66,12 +66,7 @@ export const StreamingProvider = ({ children }) => {
     isReady,
     isLoading
   } = useWebSocket()
-  const {
-    initializeSeeds,
-    getRandomSeedBase64,
-    openSeedsDir,
-    seedsDir
-  } = useSeeds()
+  const { initializeSeeds, getDefaultSeedBase64, openSeedsDir, seedsDir } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
   const [pausedAt, setPausedAt] = useState(null)
@@ -137,23 +132,23 @@ export const StreamingProvider = ({ children }) => {
   // Send initial seed when server is waiting for it
   useEffect(() => {
     if (statusCode === 'waiting_for_seed' && isConnected) {
-      log.info('Server waiting for seed, sending random seed...')
-      getRandomSeedBase64()
+      log.info('Server waiting for seed, sending default seed...')
+      getDefaultSeedBase64()
         .then((seedBase64) => {
-          if (seedBase64) {
-            sendInitialSeed(seedBase64)
-            log.info('Initial seed sent to server')
-          } else {
-            log.error('No seeds available to send')
-            setEngineError('No seed images available. Please add images to the seeds folder.')
-          }
+          sendInitialSeed(seedBase64)
+          log.info('Initial seed sent to server')
         })
         .catch((err) => {
-          log.error('Failed to get random seed:', err)
-          setEngineError('Failed to load seed image: ' + (err.message || err))
+          log.error('Failed to get default seed:', err)
+          const errorMessage = err.message || String(err)
+          if (errorMessage.includes('default.png')) {
+            setEngineError('Required file "default.png" not found in seeds folder. Please add a default.png image.')
+          } else {
+            setEngineError('Failed to load seed image: ' + errorMessage)
+          }
         })
     }
-  }, [statusCode, isConnected, getRandomSeedBase64, sendInitialSeed])
+  }, [statusCode, isConnected, getDefaultSeedBase64, sendInitialSeed])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
