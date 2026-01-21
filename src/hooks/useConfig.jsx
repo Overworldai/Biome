@@ -24,7 +24,8 @@ const defaultConfig = {
   features: {
     prompt_sanitizer: true,
     seed_generation: true,
-    engine_mode: ENGINE_MODES.UNCHOSEN
+    engine_mode: ENGINE_MODES.UNCHOSEN,
+    seed_gallery: false
   },
   ui: {
     bottom_panel_hidden: false

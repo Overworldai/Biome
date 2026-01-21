@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
@@ -95,6 +95,8 @@ pub struct FeaturesConfig {
     pub prompt_sanitizer: bool,
     pub seed_generation: bool,
     pub engine_mode: EngineMode,
+    #[serde(default)]
+    pub seed_gallery: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -129,6 +131,7 @@ impl Default for AppConfig {
                 prompt_sanitizer: true,
                 seed_generation: true,
                 engine_mode: EngineMode::Unchosen,
+                seed_gallery: false,
             },
             ui: UiConfig::default(),
         }
@@ -707,11 +710,9 @@ async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
         .iter()
         .flat_map(|cwd| {
             vec![
-                cwd.join("seeds"),                    // If cwd is project root
-                cwd.join("..").join("seeds"),         // If cwd is src-tauri
-                cwd.parent()
-                    .map(|p| p.join("seeds"))
-                    .unwrap_or_default(), // Parent of cwd
+                cwd.join("seeds"),                                         // If cwd is project root
+                cwd.join("..").join("seeds"),                              // If cwd is src-tauri
+                cwd.parent().map(|p| p.join("seeds")).unwrap_or_default(), // Parent of cwd
             ]
         })
         .filter(|p| p.exists() && p.is_dir())
@@ -839,8 +840,7 @@ async fn read_seed_thumbnail(
     }
 
     // Load and resize image
-    let img =
-        image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
+    let img = image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
 
     let max_dim = max_size.unwrap_or(80);
     let thumbnail = img.thumbnail(max_dim, max_dim);

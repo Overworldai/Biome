@@ -33,9 +33,50 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
 
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
+  const seedGalleryEnabled = config?.features?.seed_gallery
 
   // Seeds are disabled during the pointer lock cooldown period
   const seedsDisabled = isPaused && !canUnpause
+
+  // Build array of available tabs based on feature flags
+  const availableTabs = [
+    {
+      id: 'prompt',
+      title: 'Prompt',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path
+            d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )
+    },
+    ...(seedGalleryEnabled
+      ? [
+          {
+            id: 'seeds',
+            title: 'Seeds',
+            icon: (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21,15 16,10 5,21" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )
+          }
+        ]
+      : [])
+  ]
+
+  // Reset to first available tab if current tab becomes unavailable
+  useEffect(() => {
+    const tabIds = availableTabs.map((t) => t.id)
+    if (!tabIds.includes(activeTab)) {
+      setActiveTab(tabIds[0])
+    }
+  }, [availableTabs.length, activeTab])
 
   // Determine why the prompt box might be disabled
   const getDisabledState = () => {
@@ -235,29 +276,21 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       </div>
 
       <div className="panel-content">
-        {/* Vertical tab bar on left */}
-        <div className="panel-tabs">
-          <button
-            className={`panel-tab ${activeTab === 'prompt' ? 'active' : ''}`}
-            onClick={() => setActiveTab('prompt')}
-            title="Prompt"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button
-            className={`panel-tab ${activeTab === 'seeds' ? 'active' : ''}`}
-            onClick={() => setActiveTab('seeds')}
-            title="Seeds"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21,15 16,10 5,21" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+        {/* Vertical tab bar on left - only shown when more than one tab is available */}
+        {availableTabs.length > 1 && (
+          <div className="panel-tabs">
+            {availableTabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`panel-tab ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.title}
+              >
+                {tab.icon}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Tab content area */}
         <div className="panel-tab-content">
@@ -372,8 +405,8 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
             </div>
           )}
 
-          {/* Seeds tab content */}
-          {activeTab === 'seeds' && (
+          {/* Seeds tab content - only rendered when seed gallery is enabled */}
+          {seedGalleryEnabled && activeTab === 'seeds' && (
             <div className="seeds-container">
               <div className="seeds-gallery">
                 {loadingSeeds ? (
