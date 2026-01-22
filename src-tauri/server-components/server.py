@@ -97,7 +97,7 @@ BUTTON_CODES["MOUSE_MIDDLE"] = 0x04
 
 
 # Default prompt - describes the expected visual style
-DEFAULT_PROMPT = "First-person shooter gameplay footage from a true POV perspective, "
+DEFAULT_PROMPT = ("First-person shooter gameplay footage from a true POV perspective, "
 "the camera locked to the player's eyes as assault rifles, carbines, "
 "machine guns, laser-sighted firearms, bullet-fed weapons, magazines, "
 "barrels, muzzles, tracers, ammo, and launchers dominate the frame, "
@@ -105,7 +105,7 @@ DEFAULT_PROMPT = "First-person shooter gameplay footage from a true POV perspect
 "and ballistic impacts. Continuous real-time FPS motion with no cuts, "
 "weapon-centric framing, realistic gun physics, authentic firearm "
 "materials, high-caliber ammunition, laser optics, iron sights, and "
-"relentless gun-driven action, rendered in ultra-realistic 4K at 60fps."
+"relentless gun-driven action, rendered in ultra-realistic 4K at 60fps.")
 
 
 # ============================================================================
