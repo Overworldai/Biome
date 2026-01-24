@@ -1,12 +1,12 @@
 # Biome
 
-Overworld's local desktop client for running Waypoint world models. Biome connects to a local GPU server to stream interactive AI-generated environments.
+Overworld's local desktop client for running Waypoint world models. Biome installs and connects to a local GPU server to stream interactive AI-generated environments.
 
 ## Requirements
 
 - Node.js 18+
 - Rust (latest stable)
-- A running Waypoint GPU server
+- A sufficiently powerful NVIDIA GPU; anything from the last 5 years with >=16GB VRAM should be able to run the model, but a 5090 is currently required for playable framerates
 
 ## Installation
 
