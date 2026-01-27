@@ -14,7 +14,8 @@ use tar::Archive;
 
 const CONFIG_FILENAME: &str = "config.json";
 const WORLD_ENGINE_DIR: &str = "world_engine";
-const SEEDS_DIR: &str = "seeds";
+const DEFAULT_SEEDS_DIR: &str = "default_seeds";
+const CUSTOM_SEEDS_DIR: &str = "custom_seeds";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
@@ -59,6 +60,17 @@ fn set_app_handle(handle: tauri::AppHandle) {
 
 fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
+}
+
+/// Get the executable's directory (for portable data storage)
+fn get_exe_dir() -> Result<PathBuf, String> {
+    let exe_path =
+        std::env::current_exe().map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+    exe_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| "Failed to get executable directory".to_string())
 }
 
 /// Create a new Command with platform-specific flags to suppress console windows on Windows
@@ -242,29 +254,16 @@ async fn open_config(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to reveal config file: {}", e))
 }
 
-// Get the engine directory path (inside app data dir)
-fn get_engine_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    // Create data directory if it doesn't exist
-    if !data_dir.exists() {
-        fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
-    }
-
-    Ok(data_dir.join(WORLD_ENGINE_DIR))
+// Get the engine directory path (next to executable for portability)
+fn get_engine_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(WORLD_ENGINE_DIR))
 }
 
-// Get the .uv directory path for isolated uv installation
-fn get_uv_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    Ok(data_dir.join(".uv"))
+// Get the .uv directory path for isolated uv installation (next to executable for portability)
+fn get_uv_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(".uv"))
 }
 
 // Get the path to our local uv binary
@@ -675,132 +674,102 @@ async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
 // Seeds Management
 // ============================================================================
 
-// Get the seeds directory path (inside app data dir)
-fn get_seeds_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    Ok(data_dir.join(SEEDS_DIR))
+// Get the default seeds directory path (bundled seeds, next to executable)
+fn get_default_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(DEFAULT_SEEDS_DIR))
 }
 
-/// Initialize seeds by copying bundled seeds to app_data_dir/seeds/ on first run
-#[tauri::command]
-async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
-    let seeds_dir = get_seeds_dir(&app)?;
+// Get the custom seeds directory path (user seeds, next to executable)
+fn get_custom_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(CUSTOM_SEEDS_DIR))
+}
 
-    // Create seeds directory if it doesn't exist
-    if !seeds_dir.exists() {
-        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
+/// Find which directory contains a seed file (checks custom first, then default)
+fn find_seed_path(app: &tauri::AppHandle, filename: &str) -> Result<PathBuf, String> {
+    // Validate filename doesn't contain path traversal
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return Err(format!("Invalid seed filename: {}", filename));
     }
 
-    // Get the resource path for bundled seeds (production)
-    let resource_path = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+    let custom_dir = get_custom_seeds_dir(app)?;
+    let custom_path = custom_dir.join(filename);
+    if custom_path.exists() {
+        return Ok(custom_path);
+    }
 
-    let bundled_seeds_dir = resource_path.join("seeds");
+    let default_dir = get_default_seeds_dir(app)?;
+    let default_path = default_dir.join(filename);
+    if default_path.exists() {
+        return Ok(default_path);
+    }
 
-    // In development, try multiple possible locations for the seeds folder
-    let cwd = std::env::current_dir().ok();
-    let dev_candidates: Vec<PathBuf> = cwd
-        .iter()
-        .flat_map(|cwd| {
-            vec![
-                cwd.join("seeds"),                                         // If cwd is project root
-                cwd.join("..").join("seeds"),                              // If cwd is src-tauri
-                cwd.parent().map(|p| p.join("seeds")).unwrap_or_default(), // Parent of cwd
-            ]
-        })
-        .filter(|p| p.exists() && p.is_dir())
-        .collect();
+    Err(format!("Seed file not found: {}", filename))
+}
 
-    let source_dir = if bundled_seeds_dir.exists() {
-        Some(bundled_seeds_dir)
-    } else {
-        dev_candidates.into_iter().next()
-    };
+/// Initialize seeds directories (creates custom_seeds folder for user seeds)
+#[tauri::command]
+async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
+    let custom_seeds_dir = get_custom_seeds_dir(&app)?;
 
-    let mut copied_count = 0;
-
-    if let Some(source) = source_dir
-        && let Ok(entries) = fs::read_dir(&source)
-    {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(ext) = path.extension() {
-                let ext_lower = ext.to_string_lossy().to_lowercase();
-                if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
-                    && let Some(filename) = path.file_name()
-                {
-                    let dest_path = seeds_dir.join(filename);
-                    if !dest_path.exists() && fs::copy(&path, &dest_path).is_ok() {
-                        copied_count += 1;
-                    }
-                }
-            }
-        }
+    // Create custom seeds directory if it doesn't exist
+    if !custom_seeds_dir.exists() {
+        fs::create_dir_all(&custom_seeds_dir)
+            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
     }
 
     Ok(format!(
-        "Seeds initialized: {} new files copied to {}",
-        copied_count,
-        seeds_dir.display()
+        "Seeds initialized: custom_seeds directory at {}",
+        custom_seeds_dir.display()
     ))
 }
 
-/// List available seed filenames (png/jpg/jpeg)
+/// List available seed filenames (png/jpg/jpeg) from both default and custom directories
 #[tauri::command]
 async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let seeds_dir = get_seeds_dir(&app)?;
+    use std::collections::HashSet;
 
-    if !seeds_dir.exists() {
-        return Ok(Vec::new());
-    }
+    let mut seeds: HashSet<String> = HashSet::new();
 
-    let mut seeds = Vec::new();
-
-    let entries =
-        fs::read_dir(&seeds_dir).map_err(|e| format!("Failed to read seeds dir: {}", e))?;
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if let Some(ext) = path.extension() {
+    // Helper to collect seeds from a directory
+    let collect_seeds = |dir: &Path, seeds: &mut HashSet<String>| {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(ext) = path.extension() else {
+                continue;
+            };
             let ext_lower = ext.to_string_lossy().to_lowercase();
             if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
                 && let Some(filename) = path.file_name()
             {
-                seeds.push(filename.to_string_lossy().to_string());
+                seeds.insert(filename.to_string_lossy().to_string());
             }
         }
+    };
+
+    // Collect from default seeds
+    if let Ok(default_dir) = get_default_seeds_dir(&app) {
+        collect_seeds(&default_dir, &mut seeds);
     }
 
-    Ok(seeds)
+    // Collect from custom seeds
+    if let Ok(custom_dir) = get_custom_seeds_dir(&app) {
+        collect_seeds(&custom_dir, &mut seeds);
+    }
+
+    let mut seeds_vec: Vec<String> = seeds.into_iter().collect();
+    seeds_vec.sort();
+    Ok(seeds_vec)
 }
 
 /// Read a seed file and return base64 encoded data
 #[tauri::command]
 async fn read_seed_as_base64(app: tauri::AppHandle, filename: String) -> Result<String, String> {
-    let seeds_dir = get_seeds_dir(&app)?;
-    let seed_path = seeds_dir.join(&filename);
-
-    if !seed_path.exists() {
-        return Err(format!("Seed file not found: {}", filename));
-    }
-
-    // Validate that the file is within the seeds directory (prevent path traversal)
-    let canonical_seeds = seeds_dir
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize seeds dir: {}", e))?;
-    let canonical_seed = seed_path
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize seed path: {}", e))?;
-
-    if !canonical_seed.starts_with(&canonical_seeds) {
-        return Err("Invalid seed path".to_string());
-    }
+    let seed_path = find_seed_path(&app, &filename)?;
 
     let mut file =
         File::open(&seed_path).map_err(|e| format!("Failed to open seed file: {}", e))?;
@@ -819,24 +788,7 @@ async fn read_seed_thumbnail(
     filename: String,
     max_size: Option<u32>,
 ) -> Result<String, String> {
-    let seeds_dir = get_seeds_dir(&app)?;
-    let seed_path = seeds_dir.join(&filename);
-
-    if !seed_path.exists() {
-        return Err(format!("Seed file not found: {}", filename));
-    }
-
-    // Validate path
-    let canonical_seeds = seeds_dir
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize seeds dir: {}", e))?;
-    let canonical_seed = seed_path
-        .canonicalize()
-        .map_err(|e| format!("Failed to canonicalize seed path: {}", e))?;
-
-    if !canonical_seed.starts_with(&canonical_seeds) {
-        return Err("Invalid seed path".to_string());
-    }
+    let seed_path = find_seed_path(&app, &filename)?;
 
     // Load and resize image
     let img = image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
@@ -854,21 +806,22 @@ async fn read_seed_thumbnail(
     Ok(BASE64_STANDARD.encode(&buffer))
 }
 
-/// Get the seeds directory path
+/// Get the custom seeds directory path (where users add their seeds)
 #[tauri::command]
 fn get_seeds_dir_path(app: tauri::AppHandle) -> Result<String, String> {
-    let seeds_dir = get_seeds_dir(&app)?;
+    let seeds_dir = get_custom_seeds_dir(&app)?;
     Ok(seeds_dir.to_string_lossy().to_string())
 }
 
-/// Open the seeds directory in file explorer
+/// Open the custom seeds directory in file explorer
 #[tauri::command]
 async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
-    let seeds_dir = get_seeds_dir(&app)?;
+    let seeds_dir = get_custom_seeds_dir(&app)?;
 
     // Create directory if it doesn't exist
     if !seeds_dir.exists() {
-        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
+        fs::create_dir_all(&seeds_dir)
+            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
     }
 
     // Open File Explorer with seeds directory
