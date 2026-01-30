@@ -13,7 +13,7 @@
   [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/Overworldai/Biome/releases)
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-  <video src="assets/launch_grid.mp4" autoplay loop muted playsinline width="600"></video>
+  <img src="assets/launch_grid.gif" width="600">
 
   **[Download the latest release](https://github.com/Overworldai/Biome/releases/latest)**
 
