@@ -56,7 +56,12 @@ npm run tauri dev
 
 # Production build
 npm run tauri build
+
+# On Linux, if the AppImage build fails during stripping, set:
+NO_STRIP=true npm run tauri build
 ```
+
+> **Note (Linux):** The AppImage bundling step may fail with _"failed to bundle project: failed to run linuxdeploy"_. Setting `NO_STRIP=true` skips binary stripping and can resolve this. See [tauri-apps/tauri#13113](https://github.com/tauri-apps/tauri/issues/13113) for details.
 
 ## Releases
 
