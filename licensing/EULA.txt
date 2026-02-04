@@ -1,0 +1,227 @@
+﻿TERMS OF SERVICE
+Effective Date: 2/3/2026
+Last Updated: 2/3/2026
+These Terms of Service (“Terms”) govern access to and use of Biome, including all software binaries, interfaces, model files, configuration systems, plugins, extensions, updates, documentation, and related materials (collectively, the “Software”), provided by Overworld (Open World Labs Inc) (“Company,” “we,” “us,” or “our”).
+BY DOWNLOADING, INSTALLING, COMPILING, EXECUTING, OR USING THE SOFTWARE, YOU AFFIRMATIVELY AGREE TO THESE TERMS.
+IF YOU DO NOT AGREE, DO NOT USE THE SOFTWARE.
+1. Permitted Use Classes (STRICT)
+Use of the Software is limited to the following exclusive classes:
+1.1 End User (Private Use Only)
+* Individual, local, non-commercial or internal experimental use.
+* Execution solely on user-controlled hardware.
+* No third-party access.
+1.2 Developer (Private Development Use Only)
+* Local modification, inspection, or experimentation solely for personal or internal research.
+* No hosting, exposure, embedding, or redistribution.
+* No public or third-party access of any kind.
+NO OTHER USE IS PERMITTED.
+2. Absolute Hosting & Exposure Prohibition
+2.1 No Hosting — Ever
+You may NOT, under any circumstances:
+* Host the Software or any derivative as a service.
+* Offer access via SaaS, PaaS, IaaS, API, web UI, RPC, streaming, or remote execution.
+* Deploy the Software on servers, data centers, cloud platforms, or shared compute environments.
+* Expose the Software over the internet, private networks, VPNs, tunnels, or local networks.
+* Allow access by any third party, user, customer, or client.
+This prohibition applies regardless of:
+* Whether access is free or paid,
+* Whether access is temporary or permanent,
+* Whether access is authenticated or restricted,
+* Whether the Software is modified or unmodified.
+2.2 No “Local-But-Remote” Loopholes
+Prohibited hosting explicitly includes:
+* Cloud VMs (AWS, GCP, Azure, etc.)
+* Remote desktops
+* Containers accessible outside a single-user machine
+* Headless or background services
+* CI/CD, shared research clusters, or university compute
+* “Internal tools” used by more than one individual
+* LAN-accessible apps, dashboards, or endpoints
+If anyone other than you can access it, it is prohibited.
+3. No Redistribution or Derivative Hosting
+You may not:
+* Redistribute the Software or compiled binaries.
+* Publish forks intended for hosted or multi-user use.
+* Package the Software into products, services, or platforms.
+* Embed the Software into games, apps, or pipelines accessible by others.
+Private forks for personal use only are permitted.
+4. AI-Specific Risk Disclaimers
+You acknowledge and accept the following inherent risks:
+4.1 Hallucinations & Fabrication
+Outputs may be false, fabricated, misleading, or internally inconsistent.
+4.2 Non-Determinism & Drift
+Outputs may vary between runs. Behavior may change without notice.
+4.3 Emergent Behavior
+The Software may exhibit unintended or unsafe behaviors.
+4.4 Safety Mechanism Failure
+Safeguards may fail or be bypassed.
+The Software is not reliable, not authoritative, and not a source of truth.
+5. Prohibited Content and Use (Zero Tolerance)
+You may not use the Software to generate, process, or facilitate:
+* Intellectual property infringement,
+* Pornographic or sexually explicit content,
+* Any sexual content involving minors (real or simulated),
+* Criminal, violent, or terrorist activity,
+* Abuse, harassment, hate, or threats,
+* Non-consensual impersonation or deepfakes,
+* Surveillance or profiling in violation of law,
+* Training or fine-tuning on unlawfully obtained data.
+Violations may result in termination and legal escalation.
+6. Jurisdiction-Specific Restrictions
+6.1 United States
+You agree not to use the Software in violation of:
+* Federal or state criminal law,
+* Export Administration Regulations (EAR),
+* OFAC sanctions and restricted-party lists.
+The Software may not be used in embargoed or sanctioned jurisdictions.
+6.2 European Union (EU AI Act Alignment)
+The Software is not authorized for:
+* High-risk AI systems under Regulation (EU) 2024/1689,
+* Biometric identification,
+* Social scoring,
+* Law enforcement, migration, or public authority use.
+Any such use is strictly prohibited.
+6.3 United Kingdom
+Use must comply with:
+* UK GDPR,
+* Online Safety Act,
+* Applicable AI and consumer protection laws.
+6.4 Other Jurisdictions
+You are solely responsible for ensuring compliance with local laws.
+If the Software is unlawful to possess or use in your jurisdiction, you must not use it.
+7. Intellectual Property
+All rights in the Software remain with the Company and its licensors.
+You receive a revocable, non-transferable, non-sublicensable license limited strictly to permitted uses under these Terms.
+8. Enforcement
+The Company may, at its sole discretion:
+* Terminate your license immediately,
+* Disable functionality,
+* Enforce technical restrictions,
+* Cooperate with lawful authorities.
+No failure to enforce constitutes a waiver.
+9. No Warranty
+THE SOFTWARE IS PROVIDED “AS IS,” “WITH ALL FAULTS,” AND WITHOUT WARRANTY OF ANY KIND.
+10. Limitation of Liability
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COMPANY SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM USE OR MISUSE.
+TOTAL LIABILITY IS LIMITED TO FEES PAID, IF ANY.
+11. Indemnification
+You agree to indemnify and hold harmless the Company from all claims arising from:
+* Your use of the Software,
+* Your violation of these Terms,
+* Your violation of law.
+12. Governing Law
+These Terms are governed by the laws of [Jurisdiction], with exclusive venue therein.
+13. Entire Agreement
+These Terms constitute the entire agreement and supersede all prior agreements.
+14. Contact
+Legal inquiries:
+legal@over.world
+
+
+RESEARCH EXEMPTION INVALIDATION
+This section controls over any conflicting language elsewhere in the Terms.
+A. No Research, Academic, or Experimental Exception
+No research, academic, scientific, or experimental use—whether commercial or non-commercial—creates an exception to these Terms.
+For avoidance of doubt:
+* “Research use”
+* “Academic research”
+* “University projects”
+* “Institutional research”
+* “Grant-funded research”
+* “Internal evaluation”
+* “Security research”
+* “Safety research”
+* “Benchmarking”
+* “Exploratory experimentation”
+* “Non-commercial research”
+* “Fair use research”
+
+DO NOT grant permission to violate any restriction in these Terms.
+If a use is prohibited, it remains prohibited regardless of purpose, intent, affiliation, or funding source.
+B. No Institutional or Multi-Person Research Use
+Use of the Software is strictly limited to a single natural person.
+You may not use the Software:
+   * As part of a university, lab, or institutional research effort,
+   * On shared academic compute, clusters, or labs,
+   * As part of coursework, capstones, or theses,
+   * By multiple researchers, students, or collaborators,
+   * Under IRB, ethics board, or grant approval.
+
+“Internal research” involving more than one person is prohibited.
+C. No Publication, Disclosure, or Presentation of Results
+You may not:
+      * Publish outputs, benchmarks, evaluations, or findings,
+      * Present results in papers, preprints, talks, posters, or workshops,
+      * Submit results to journals, conferences, or archives (including arXiv),
+      * Share outputs in repositories, datasets, or supplementary materials,
+      * Disclose findings publicly or privately to third parties.
+
+This includes negative results, safety analyses, and methodological descriptions.
+Private personal notes are permitted.
+Anything shared outside your own possession is not.
+D. No Research “Tooling” Argument
+You may not claim that the Software is:
+         * Merely a “tool” used incidentally,
+         * “Not central” to the research,
+         * “Only for evaluation,”
+         * “Only used to generate examples,”
+         * “Used for comparison or baselining.”
+
+Any use of the Software within a research workflow triggers full applicability of these Terms.
+E. No Derivative Claims Based on Research Status
+You may not argue that restrictions are inapplicable because:
+            * Outputs are not redistributed,
+            * The Software is not monetized,
+            * The work is educational,
+            * The work is publicly beneficial,
+            * The research is safety-motivated,
+            * The work is open access.
+F. No Fair Use, Interoperability, or Reverse Engineering Defense
+To the maximum extent permitted by law:
+            * Fair use does not grant permission to violate these Terms.
+            * Interoperability exceptions do not permit hosting, exposure, or redistribution.
+            * Reverse engineering beyond private inspection is prohibited.
+            * Model extraction, behavioral cloning, or systematic probing is prohibited.
+G. Explicit Prohibition on Safety & Red-Team Research
+Unless expressly authorized in writing by the Company:
+You may not use the Software for:
+            * Red-teaming,
+            * Adversarial testing,
+            * Jailbreak discovery,
+            * Safety evaluation,
+            * Alignment or governance research,
+            * Comparative safety benchmarking.
+
+Unauthorized safety research is treated as misuse.
+H. No “Permission by Silence”
+Lack of enforcement, lack of response, or public availability of the Software:
+               * Does not imply consent,
+               * Does not grant a license,
+               * Does not create an implied research exception,
+               * Does not waive any restriction.
+
+Permission must be explicit, written, and signed by the Company.
+I. Burden of Proof
+You bear the sole burden of demonstrating that your use:
+                  * Falls within permitted private use,
+                  * Involves no third-party access,
+                  * Involves no institutional affiliation,
+                  * Involves no publication or disclosure,
+Involves no hosting or exposure.
+
+Any ambiguity is resolved against permissibility.
+J. Enforcement Presumption
+If the Company reasonably believes that use:
+                     * Is affiliated with research,
+                     * Is institutional in nature,
+                     * Is intended for publication,
+                     * Involves multiple people,
+                     * Is positioned as “evaluation” or “analysis”,
+
+The Company may immediately terminate the license without further investigation.
+K. Survival
+All restrictions in this section survive termination and apply retroactively to any prior use.
+
+
+Legal inquiries:
+legal@over.world
