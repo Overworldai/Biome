@@ -1,11 +1,17 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::time::SystemTime;
 use tauri::{Emitter, Manager, RunEvent};
+
+#[allow(unused_imports)]
+use log;
 
 #[cfg(not(target_os = "windows"))]
 use flate2::read::GzDecoder;
@@ -60,6 +66,29 @@ fn set_app_handle(handle: tauri::AppHandle) {
 
 fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
+}
+
+// ============================================================================
+// Safety Cache Structures
+// ============================================================================
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct SafetyCacheEntry {
+    path: String,
+    hash: String, // SHA256 hex
+    size: u64,
+    modified: SystemTime,
+    checked: SystemTime,
+    is_safe: bool,
+    scores: HashMap<String, f64>,
+    directory: String, // "default_seeds" or "custom_seeds"
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct SafetyCache {
+    version: u32,
+    last_updated: SystemTime,
+    files: HashMap<String, SafetyCacheEntry>,
 }
 
 /// Get the executable's directory (for portable data storage)
@@ -719,10 +748,11 @@ async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
             .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
     }
 
-    Ok(format!(
-        "Seeds initialized: custom_seeds directory at {}",
-        custom_seeds_dir.display()
-    ))
+    // Run safety scan
+    log::info!("Running seed safety checks...");
+    let scan_result = scan_seeds_for_safety(app).await?;
+
+    Ok(format!("Seeds initialized. {}", scan_result))
 }
 
 /// List available seed filenames (png/jpg/jpeg) from both default and custom directories
@@ -763,7 +793,21 @@ async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
 
     let mut seeds_vec: Vec<String> = seeds.into_iter().collect();
     seeds_vec.sort();
-    Ok(seeds_vec)
+
+    // Filter by safety cache - only return safe seeds
+    let cache = load_safety_cache(&app)?;
+    let safe_seeds: Vec<String> = seeds_vec
+        .into_iter()
+        .filter(|filename| {
+            cache
+                .files
+                .get(filename)
+                .map(|entry| entry.is_safe)
+                .unwrap_or(false) // Hide unchecked files
+        })
+        .collect();
+
+    Ok(safe_seeds)
 }
 
 /// Read a seed file and return base64 encoded data
@@ -827,6 +871,165 @@ async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
     // Open File Explorer with seeds directory
     tauri_plugin_opener::reveal_item_in_dir(seeds_dir)
         .map_err(|e| format!("Failed to open seeds directory: {}", e))
+}
+
+// ============================================================================
+// Safety Cache Functions
+// ============================================================================
+
+/// Get the path to the safety cache file (.safety_cache.bin)
+fn get_safety_cache_path(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(".safety_cache.bin"))
+}
+
+/// Compute SHA256 hash of a file
+fn compute_file_hash(path: &Path) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Load safety cache from binary file
+fn load_safety_cache(app: &tauri::AppHandle) -> Result<SafetyCache, String> {
+    let cache_path = get_safety_cache_path(app)?;
+    if !cache_path.exists() {
+        return Ok(SafetyCache {
+            version: 1,
+            last_updated: SystemTime::now(),
+            files: HashMap::new(),
+        });
+    }
+
+    let bytes = fs::read(&cache_path).map_err(|e| format!("Failed to read cache: {}", e))?;
+    bincode::deserialize(&bytes).map_err(|e| format!("Failed to deserialize cache: {}", e))
+}
+
+/// Save safety cache to binary file
+fn save_safety_cache(app: &tauri::AppHandle, cache: &SafetyCache) -> Result<(), String> {
+    let cache_path = get_safety_cache_path(app)?;
+    let bytes =
+        bincode::serialize(cache).map_err(|e| format!("Failed to serialize cache: {}", e))?;
+    fs::write(&cache_path, bytes).map_err(|e| format!("Failed to write cache: {}", e))
+}
+
+/// Check seed safety by calling the Python safety server
+async fn check_seed_safety_batch(paths: Vec<String>) -> Result<Vec<serde_json::Value>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post("http://127.0.0.1:7987/safety/check_batch")
+        .json(&serde_json::json!({ "paths": paths }))
+        .send()
+        .await
+        .map_err(|e| format!("Safety check request failed: {}", e))?;
+
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    result["results"]
+        .as_array()
+        .ok_or_else(|| "Invalid response format".to_string())
+        .map(|arr| arr.clone())
+}
+
+/// Scan all seeds for safety and update cache
+#[tauri::command]
+async fn scan_seeds_for_safety(app: tauri::AppHandle) -> Result<String, String> {
+    let mut cache = load_safety_cache(&app)?;
+    let mut to_check: Vec<(String, PathBuf, String)> = Vec::new();
+
+    // Scan both directories
+    for (dir_name, dir_path_result) in [
+        ("default_seeds", get_default_seeds_dir(&app)),
+        ("custom_seeds", get_custom_seeds_dir(&app)),
+    ] {
+        let dir_path = match dir_path_result {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+
+        let Ok(entries) = fs::read_dir(&dir_path) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(ext) = path.extension() else {
+                continue;
+            };
+            let ext_lower = ext.to_string_lossy().to_lowercase();
+
+            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" {
+                let filename = path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+                let hash = compute_file_hash(&path)?;
+
+                // Check if cached and hash matches
+                if let Some(cached) = cache.files.get(&filename) {
+                    if cached.hash == hash {
+                        continue; // Skip - already checked and unchanged
+                    }
+                }
+
+                // Need to check
+                to_check.push((filename, path, dir_name.to_string()));
+            }
+        }
+    }
+
+    if to_check.is_empty() {
+        return Ok("No new files to check".to_string());
+    }
+
+    // Check in batch
+    let paths: Vec<String> = to_check
+        .iter()
+        .map(|(_, path, _)| path.to_string_lossy().to_string())
+        .collect();
+    let results = check_seed_safety_batch(paths).await?;
+
+    // Update cache
+    for (i, (filename, path, dir_name)) in to_check.iter().enumerate() {
+        let result = &results[i];
+        let metadata = fs::metadata(path).unwrap();
+
+        cache.files.insert(
+            filename.clone(),
+            SafetyCacheEntry {
+                path: path.to_string_lossy().to_string(),
+                hash: compute_file_hash(path)?,
+                size: metadata.len(),
+                modified: metadata.modified().unwrap(),
+                checked: SystemTime::now(),
+                is_safe: result["is_safe"].as_bool().unwrap_or(false),
+                scores: result["scores"]
+                    .as_object()
+                    .map(|obj| {
+                        obj.iter()
+                            .map(|(k, v)| (k.clone(), v.as_f64().unwrap_or(0.0)))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                directory: dir_name.clone(),
+            },
+        );
+    }
+
+    cache.last_updated = SystemTime::now();
+    save_safety_cache(&app, &cache)?;
+
+    let unsafe_count = cache.files.values().filter(|e| !e.is_safe).count();
+    Ok(format!(
+        "Scanned {} files, {} flagged as unsafe",
+        cache.files.len(),
+        unsafe_count
+    ))
 }
 
 #[tauri::command]
@@ -1197,7 +1400,8 @@ pub fn run() {
             read_seed_as_base64,
             read_seed_thumbnail,
             get_seeds_dir_path,
-            open_seeds_dir
+            open_seeds_dir,
+            scan_seeds_for_safety
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

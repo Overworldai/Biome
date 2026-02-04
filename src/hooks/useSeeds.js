@@ -15,8 +15,20 @@ export const useSeeds = () => {
     setIsLoading(true)
     setError(null)
     try {
+      // Show loading message during safety scan
+      log.info('Initializing seeds and running safety checks...')
       const result = await invoke('initialize_seeds')
       log.info('Seeds initialized:', result)
+
+      // Parse result for unsafe count
+      if (result.includes('flagged as unsafe')) {
+        const match = result.match(/(\d+) flagged as unsafe/)
+        if (match && parseInt(match[1]) > 0) {
+          // Show notification
+          log.warn(`${match[1]} seed images hidden due to safety check`)
+        }
+      }
+
       // Refresh the list after initialization
       const seedList = await invoke('list_seeds')
       setSeeds(seedList)

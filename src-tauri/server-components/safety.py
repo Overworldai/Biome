@@ -1,0 +1,257 @@
+"""
+Safety module - NSFW image detection for seed validation.
+
+Uses Freepik/nsfw_image_detector model to check images for inappropriate content.
+"""
+
+import gc
+import logging
+from typing import List, Dict
+
+import torch
+import torch.nn.functional as F
+from PIL import Image
+from transformers import AutoModelForImageClassification
+from timm.data.transforms_factory import create_transform
+from torchvision.transforms import Compose
+from timm.data import resolve_data_config
+from timm.models import get_pretrained_cfg
+
+logger = logging.getLogger(__name__)
+
+
+class SafetyChecker:
+    """NSFW content detector for seed images."""
+
+    def __init__(self):
+        self.model = None
+        self.processor = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"SafetyChecker initialized (device: {self.device})")
+
+    def _load_model(self):
+        """Lazy load model on first check."""
+        if self.model is None:
+            logger.info("Loading NSFW detection model...")
+            load_start = torch.cuda.Event(enable_timing=True)
+            load_end = torch.cuda.Event(enable_timing=True)
+
+            load_start.record()
+
+            self.model = AutoModelForImageClassification.from_pretrained(
+                "Freepik/nsfw_image_detector", torch_dtype=torch.bfloat16
+            ).to(self.device)
+
+            cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
+            self.processor = create_transform(**resolve_data_config(cfg.__dict__))
+
+            load_end.record()
+            torch.cuda.synchronize()
+
+            load_time = load_start.elapsed_time(load_end) / 1000  # Convert to seconds
+            logger.info(f"NSFW detection model loaded in {load_time:.2f}s")
+
+    def unload_model(self):
+        """Unload model from memory to free resources."""
+        if self.model is not None:
+            logger.info("Unloading NSFW detection model...")
+
+            # Move model to CPU before deletion if it was on GPU
+            if self.device == "cuda":
+                self.model.cpu()
+
+            # Delete model and processor
+            del self.model
+            del self.processor
+            self.model = None
+            self.processor = None
+
+            # Clear CUDA cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # Force garbage collection
+            gc.collect()
+
+            logger.info("NSFW detection model unloaded")
+
+    def check_image(self, image_path: str) -> Dict[str, any]:
+        """
+        Check single image for NSFW content.
+
+        Args:
+            image_path: Path to image file
+
+        Returns:
+            {
+                'is_safe': bool,
+                'scores': {
+                    'neutral': float,
+                    'low': float,
+                    'medium': float,
+                    'high': float
+                }
+            }
+        """
+        self._load_model()
+
+        try:
+            img = Image.open(image_path)
+            scores = self.predict_batch_values([img])[0]
+            is_safe = scores["low"] < 0.5  # Strict threshold
+            result = {"is_safe": is_safe, "scores": scores}
+        except Exception as e:
+            logger.error(f"Failed to check image {image_path}: {e}")
+            # Default to unsafe on error (conservative approach)
+            result = {
+                "is_safe": False,
+                "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+            }
+        finally:
+            # Unload model after check to free memory
+            self.unload_model()
+
+        return result
+
+    def check_batch(self, image_paths: List[str]) -> List[Dict[str, any]]:
+        """
+        Check multiple images efficiently.
+
+        Args:
+            image_paths: List of paths to image files
+
+        Returns:
+            List of results matching check_image() format
+        """
+        self._load_model()
+
+        try:
+            images = []
+            valid_paths = []
+
+            # Load all images, skip invalid ones
+            for path in image_paths:
+                try:
+                    img = Image.open(path)
+                    images.append(img)
+                    valid_paths.append(path)
+                except Exception as e:
+                    logger.error(f"Failed to load image {path}: {e}")
+                    # Return unsafe result for failed images
+                    images.append(None)
+
+            scores_list = self.predict_batch_values(
+                [img for img in images if img is not None]
+            )
+
+            # Build results, matching order of input paths
+            results = []
+            score_idx = 0
+            for i, img in enumerate(images):
+                if img is None:
+                    # Failed to load - mark as unsafe
+                    results.append(
+                        {
+                            "is_safe": False,
+                            "scores": {
+                                "neutral": 0.0,
+                                "low": 1.0,
+                                "medium": 0.0,
+                                "high": 0.0,
+                            },
+                        }
+                    )
+                else:
+                    scores = scores_list[score_idx]
+                    results.append({"is_safe": scores["low"] < 0.5, "scores": scores})
+                    score_idx += 1
+
+            return results
+        except Exception as e:
+            logger.error(f"Failed to check batch: {e}")
+            # Return all unsafe on batch failure
+            return [
+                {
+                    "is_safe": False,
+                    "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+                }
+                for _ in image_paths
+            ]
+        finally:
+            # Unload model after batch check to free memory
+            self.unload_model()
+
+    def predict_batch_values(
+        self, img_batch: List[Image.Image]
+    ) -> List[Dict[str, float]]:
+        """
+        Process a batch of images and return prediction scores for each NSFW category.
+
+        Args:
+            img_batch: List of PIL images
+
+        Returns:
+            List of score dictionaries with cumulative probabilities:
+            [
+                {
+                    'neutral': float,  # Probability of being neutral (only this category)
+                    'low': float,      # Probability of being low or higher (cumulative)
+                    'medium': float,   # Probability of being medium or higher (cumulative)
+                    'high': float      # Probability of being high (cumulative)
+                }
+            ]
+        """
+        idx_to_label = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
+
+        # Prepare batch
+        inputs = torch.stack([self.processor(img) for img in img_batch]).to(
+            self.device
+        )
+        output = []
+
+        with torch.inference_mode():
+            logits = self.model(inputs).logits
+            batch_probs = F.log_softmax(logits, dim=-1)
+            batch_probs = torch.exp(batch_probs).cpu()
+
+            for i in range(len(batch_probs)):
+                element_probs = batch_probs[i]
+                output_img = {}
+                danger_cum_sum = 0
+
+                # Cumulative sum from high to low (reverse order)
+                for j in range(len(element_probs) - 1, -1, -1):
+                    danger_cum_sum += element_probs[j]
+                    if j == 0:
+                        danger_cum_sum = element_probs[j]  # Neutral is not cumulative
+                    output_img[idx_to_label[j]] = danger_cum_sum.item()
+
+                output.append(output_img)
+
+        return output
+
+    def prediction(
+        self,
+        img_batch: List[Image.Image],
+        class_to_predict: str,
+        threshold: float = 0.5,
+    ) -> List[bool]:
+        """
+        Predict if images meet or exceed a specific NSFW threshold.
+
+        Args:
+            img_batch: List of PIL images
+            class_to_predict: One of "low", "medium", "high"
+            threshold: Probability threshold (0.0 to 1.0)
+
+        Returns:
+            List of booleans indicating if each image meets the threshold
+        """
+        if class_to_predict not in ["low", "medium", "high"]:
+            raise ValueError("class_to_predict must be one of: low, medium, high")
+
+        if not 0 <= threshold <= 1:
+            raise ValueError("threshold must be between 0 and 1")
+
+        output = self.predict_batch_values(img_batch)
+        return [output[i][class_to_predict] >= threshold for i in range(len(output))]

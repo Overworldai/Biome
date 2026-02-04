@@ -26,6 +26,9 @@ dist-ssr
 .env/
 *.bak
 
+.venv/
+uv.lock
+
 # env
 .env
 .vercel
