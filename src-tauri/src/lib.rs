@@ -7,9 +7,6 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, RunEvent};
 
-#[allow(unused_imports)]
-use log;
-
 #[cfg(not(target_os = "windows"))]
 use flate2::read::GzDecoder;
 #[cfg(not(target_os = "windows"))]
@@ -798,8 +795,7 @@ async fn open_seeds_dir(_app: tauri::AppHandle) -> Result<(), String> {
 
     // Create directory if it doesn't exist
     if !seeds_dir.exists() {
-        fs::create_dir_all(&seeds_dir)
-            .map_err(|e| format!("Failed to create seeds dir: {}", e))?;
+        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
     }
 
     // Open File Explorer with seeds directory
