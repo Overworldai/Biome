@@ -47,6 +47,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Package seeds directory
+        run: |
+          cd seeds
+          zip -r ../seeds.zip *.png
+          cd ..
+          echo "Created seeds.zip with $(unzip -l seeds.zip | tail -1 | awk '{print $2}') bytes"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -57,3 +64,10 @@ jobs:
           releaseBody: 'See the assets below to download and install Biome.'
           releaseDraft: false
           prerelease: false
+
+      - name: Upload seeds.zip to release
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: seeds.zip
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -99,7 +99,10 @@ DEFAULT_SEEDS_DIR = SEEDS_BASE_DIR / "default"
 UPLOADS_DIR = SEEDS_BASE_DIR / "uploads"
 CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.json"
 
-DEFAULT_SEEDS_URL = "https://github.com/your-repo/biome-default-seeds/releases/latest/download/seeds.zip"
+# Local seeds directory (relative to project root for standalone usage)
+LOCAL_SEEDS_DIR = Path(__file__).parent.parent.parent / "seeds"
+
+DEFAULT_SEEDS_URL = "https://github.com/Wayfarer-Labs/Biome/releases/latest/download/seeds.zip"
 
 
 # ============================================================================
@@ -115,12 +118,32 @@ def ensure_seed_directories():
 
 
 async def download_default_seeds():
-    """Download and extract default seeds on first startup."""
+    """Download and extract default seeds on first startup, or use local seeds if available."""
     if list(DEFAULT_SEEDS_DIR.glob("*.png")):
-        logger.info("Default seeds already exist, skipping download")
+        logger.info("Default seeds already exist, skipping setup")
         return
 
-    logger.info("No default seeds found, downloading...")
+    # Check if local seeds directory exists (for standalone usage)
+    if LOCAL_SEEDS_DIR.exists() and list(LOCAL_SEEDS_DIR.glob("*.png")):
+        logger.info(f"Found local seeds directory at {LOCAL_SEEDS_DIR}")
+        try:
+            # Copy seeds from local directory to default directory
+            seed_files = list(LOCAL_SEEDS_DIR.glob("*.png"))
+            logger.info(f"Copying {len(seed_files)} seed files to {DEFAULT_SEEDS_DIR}")
+
+            for seed_file in seed_files:
+                dest = DEFAULT_SEEDS_DIR / seed_file.name
+                shutil.copy2(seed_file, dest)
+                logger.info(f"  Copied {seed_file.name}")
+
+            logger.info("Local seeds copied successfully")
+            return
+        except Exception as e:
+            logger.error(f"Failed to copy local seeds: {e}")
+            logger.info("Will attempt to download instead...")
+
+    # No local seeds found, attempt download
+    logger.info("No local seeds found, downloading from remote...")
     try:
         import httpx
 
@@ -144,7 +167,7 @@ async def download_default_seeds():
 
     except Exception as e:
         logger.error(f"Failed to download default seeds: {e}")
-        logger.info("Please manually place seed images in world_engine/seeds/default/")
+        logger.info(f"Please manually place seed images in {DEFAULT_SEEDS_DIR} or {LOCAL_SEEDS_DIR}")
 
 
 def load_seeds_cache() -> dict:
