@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 MODEL_URI = "Overworld/Waypoint-1-Small"
-QUANT = "w8a8"
+QUANT = None
 N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
