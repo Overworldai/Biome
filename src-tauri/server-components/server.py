@@ -89,6 +89,7 @@ except Exception as e:
 world_engine = None
 safety_checker = None
 safe_seeds_cache = {}  # Maps filename -> {hash, is_safe, path}
+rescan_lock = None  # Prevent concurrent rescans (initialized in lifespan)
 
 # ============================================================================
 # Seed Management Configuration
@@ -262,11 +263,14 @@ async def rescan_seeds() -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
-    global world_engine, safety_checker, safe_seeds_cache
+    global world_engine, safety_checker, safe_seeds_cache, rescan_lock
 
     logger.info("=" * 60)
     logger.info("BIOME SERVER STARTUP")
     logger.info("=" * 60)
+
+    # Initialize lock for rescan operations
+    rescan_lock = asyncio.Lock()
 
     # Initialize modules
     logger.info("Initializing WorldEngine...")
@@ -545,18 +549,30 @@ async def rescan_seeds_endpoint():
     """Trigger a rescan of all seed directories."""
     global safe_seeds_cache
 
-    logger.info("Manual rescan triggered")
-    cache = await rescan_seeds()
-    safe_seeds_cache = cache.get("files", {})
+    # Prevent concurrent rescans
+    if rescan_lock.locked():
+        logger.warning("Rescan already in progress, rejecting duplicate request")
+        return JSONResponse(
+            {
+                "status": "busy",
+                "message": "Rescan already in progress",
+            },
+            status_code=409,
+        )
 
-    safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe"))
-    return JSONResponse(
-        {
-            "status": "ok",
-            "total_seeds": len(safe_seeds_cache),
-            "safe_seeds": safe_count,
-        }
-    )
+    async with rescan_lock:
+        logger.info("Manual rescan triggered")
+        cache = await rescan_seeds()
+        safe_seeds_cache = cache.get("files", {})
+
+        safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe"))
+        return JSONResponse(
+            {
+                "status": "ok",
+                "total_seeds": len(safe_seeds_cache),
+                "safe_seeds": safe_count,
+            }
+        )
 
 
 @app.delete("/seeds/{filename}")

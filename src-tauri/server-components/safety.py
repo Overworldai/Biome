@@ -6,6 +6,7 @@ Uses Freepik/nsfw_image_detector model to check images for inappropriate content
 
 import gc
 import logging
+import threading
 from typing import List, Dict
 
 import torch
@@ -27,29 +28,33 @@ class SafetyChecker:
         self.model = None
         self.processor = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._lock = threading.Lock()  # Prevent concurrent model access
         logger.info(f"SafetyChecker initialized (device: {self.device})")
 
     def _load_model(self):
         """Lazy load model on first check."""
         if self.model is None:
             logger.info("Loading NSFW detection model...")
-            load_start = torch.cuda.Event(enable_timing=True)
-            load_end = torch.cuda.Event(enable_timing=True)
 
-            load_start.record()
+            if self.device == "cuda":
+                load_start = torch.cuda.Event(enable_timing=True)
+                load_end = torch.cuda.Event(enable_timing=True)
+                load_start.record()
 
             self.model = AutoModelForImageClassification.from_pretrained(
-                "Freepik/nsfw_image_detector", torch_dtype=torch.bfloat16
+                "Freepik/nsfw_image_detector", dtype=torch.bfloat16
             ).to(self.device)
 
             cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
             self.processor = create_transform(**resolve_data_config(cfg.__dict__))
 
-            load_end.record()
-            torch.cuda.synchronize()
-
-            load_time = load_start.elapsed_time(load_end) / 1000  # Convert to seconds
-            logger.info(f"NSFW detection model loaded in {load_time:.2f}s")
+            if self.device == "cuda":
+                load_end.record()
+                torch.cuda.synchronize()
+                load_time = load_start.elapsed_time(load_end) / 1000  # Convert to seconds
+                logger.info(f"NSFW detection model loaded in {load_time:.2f}s")
+            else:
+                logger.info("NSFW detection model loaded")
 
     def unload_model(self):
         """Unload model from memory to free resources."""
@@ -93,28 +98,29 @@ class SafetyChecker:
                 }
             }
         """
-        self._load_model()
+        with self._lock:
+            self._load_model()
 
-        try:
-            img = Image.open(image_path)
-            # Convert to RGB to handle RGBA/RGB mode differences
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            scores = self.predict_batch_values([img])[0]
-            is_safe = scores["low"] < 0.5  # Strict threshold
-            result = {"is_safe": is_safe, "scores": scores}
-        except Exception as e:
-            logger.error(f"Failed to check image {image_path}: {e}")
-            # Default to unsafe on error (conservative approach)
-            result = {
-                "is_safe": False,
-                "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
-            }
-        finally:
-            # Unload model after check to free memory
-            self.unload_model()
+            try:
+                img = Image.open(image_path)
+                # Convert to RGB to handle RGBA/RGB mode differences
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                scores = self.predict_batch_values([img])[0]
+                is_safe = scores["low"] < 0.5  # Strict threshold
+                result = {"is_safe": is_safe, "scores": scores}
+            except Exception as e:
+                logger.error(f"Failed to check image {image_path}: {e}")
+                # Default to unsafe on error (conservative approach)
+                result = {
+                    "is_safe": False,
+                    "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+                }
+            finally:
+                # Unload model after check to free memory
+                self.unload_model()
 
-        return result
+            return result
 
     def check_batch(
         self, image_paths: List[str], batch_size: int = 8
@@ -132,67 +138,68 @@ class SafetyChecker:
         if not image_paths:
             return []
 
-        self._load_model()
+        with self._lock:
+            self._load_model()
 
-        try:
-            # First pass: load all images and track which ones failed
-            images = []
-            for path in image_paths:
-                try:
-                    img = Image.open(path)
-                    # Convert to RGB to handle RGBA/RGB mode differences
-                    if img.mode != "RGB":
-                        img = img.convert("RGB")
-                    images.append(img)
-                except Exception as e:
-                    logger.error(f"Failed to load image {path}: {e}")
-                    images.append(None)
+            try:
+                # First pass: load all images and track which ones failed
+                images = []
+                for path in image_paths:
+                    try:
+                        img = Image.open(path)
+                        # Convert to RGB to handle RGBA/RGB mode differences
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        images.append(img)
+                    except Exception as e:
+                        logger.error(f"Failed to load image {path}: {e}")
+                        images.append(None)
 
-            # Process valid images in batches
-            valid_images = [img for img in images if img is not None]
-            all_scores = []
+                # Process valid images in batches
+                valid_images = [img for img in images if img is not None]
+                all_scores = []
 
-            for i in range(0, len(valid_images), batch_size):
-                batch = valid_images[i : i + batch_size]
-                batch_scores = self.predict_batch_values(batch)
-                all_scores.extend(batch_scores)
+                for i in range(0, len(valid_images), batch_size):
+                    batch = valid_images[i : i + batch_size]
+                    batch_scores = self.predict_batch_values(batch)
+                    all_scores.extend(batch_scores)
 
-            # Build results, matching order of input paths
-            results = []
-            score_idx = 0
-            for img in images:
-                if img is None:
-                    # Failed to load - mark as unsafe
-                    results.append(
-                        {
-                            "is_safe": False,
-                            "scores": {
-                                "neutral": 0.0,
-                                "low": 1.0,
-                                "medium": 0.0,
-                                "high": 0.0,
-                            },
-                        }
-                    )
-                else:
-                    scores = all_scores[score_idx]
-                    results.append({"is_safe": scores["low"] < 0.5, "scores": scores})
-                    score_idx += 1
+                # Build results, matching order of input paths
+                results = []
+                score_idx = 0
+                for img in images:
+                    if img is None:
+                        # Failed to load - mark as unsafe
+                        results.append(
+                            {
+                                "is_safe": False,
+                                "scores": {
+                                    "neutral": 0.0,
+                                    "low": 1.0,
+                                    "medium": 0.0,
+                                    "high": 0.0,
+                                },
+                            }
+                        )
+                    else:
+                        scores = all_scores[score_idx]
+                        results.append({"is_safe": scores["low"] < 0.5, "scores": scores})
+                        score_idx += 1
 
-            return results
-        except Exception as e:
-            logger.error(f"Failed to check batch: {e}")
-            # Return all unsafe on batch failure
-            return [
-                {
-                    "is_safe": False,
-                    "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
-                }
-                for _ in image_paths
-            ]
-        finally:
-            # Unload model after batch check to free memory
-            self.unload_model()
+                return results
+            except Exception as e:
+                logger.error(f"Failed to check batch: {e}")
+                # Return all unsafe on batch failure
+                return [
+                    {
+                        "is_safe": False,
+                        "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+                    }
+                    for _ in image_paths
+                ]
+            finally:
+                # Unload model after batch check to free memory
+                self.unload_model()
 
     def predict_batch_values(
         self, img_batch: List[Image.Image]
