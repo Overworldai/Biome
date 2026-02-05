@@ -165,17 +165,17 @@ export const useWebSocket = () => {
     }
   }, [])
 
-  const sendPromptWithSeed = useCallback((prompt, seedUrl) => {
+  const sendPromptWithSeed = useCallback((filename) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'prompt_with_seed', prompt, seed_url: seedUrl }))
-      log.info('Prompt with seed sent:', prompt, seedUrl)
+      wsRef.current.send(JSON.stringify({ type: 'prompt_with_seed', filename }))
+      log.info('Prompt with seed sent:', filename)
     }
   }, [])
 
-  const sendInitialSeed = useCallback((seedBase64) => {
+  const sendInitialSeed = useCallback((filename) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'set_initial_seed', seed_base64: seedBase64 }))
-      log.info('Initial seed sent:', seedBase64.length, 'chars')
+      wsRef.current.send(JSON.stringify({ type: 'set_initial_seed', filename }))
+      log.info('Initial seed sent:', filename)
     }
   }, [])
 

@@ -20,12 +20,14 @@ export const useSeeds = () => {
       const result = await invoke('initialize_seeds')
       log.info('Seeds initialized:', result)
 
-      // Parse result for unsafe count
-      if (result.includes('flagged as unsafe')) {
-        const match = result.match(/(\d+) flagged as unsafe/)
-        if (match && parseInt(match[1]) > 0) {
-          // Show notification
-          log.warn(`${match[1]} seed images hidden due to safety check`)
+      // Parse result for unsafe count (new format: "Seeds initialized: X total, Y safe")
+      const match = result.match(/(\d+) total, (\d+) safe/)
+      if (match) {
+        const total = parseInt(match[1])
+        const safe = parseInt(match[2])
+        const unsafe = total - safe
+        if (unsafe > 0) {
+          log.warn(`${unsafe} seed images hidden due to safety check`)
         }
       }
 

@@ -19,10 +19,16 @@ print(f"[BIOME] Starting server...", flush=True)
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
+import os
+import shutil
 import time
+import zipfile
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,10 +64,10 @@ try:
 
     print("[BIOME] FastAPI imported", flush=True)
 
-    print("[BIOME] Importing WorldEngine module...", flush=True)
-    from world_engine import WorldEngineManager, Session, BUTTON_CODES
+    print("[BIOME] Importing Engine Manager module...", flush=True)
+    from engine_manager import WorldEngineManager, Session, BUTTON_CODES
 
-    print("[BIOME] WorldEngine module imported", flush=True)
+    print("[BIOME] Engine Manager module imported", flush=True)
 
     print("[BIOME] Importing Safety module...", flush=True)
     from safety import SafetyChecker
@@ -81,6 +87,139 @@ except Exception as e:
 
 world_engine = None
 safety_checker = None
+safe_seeds_cache = {}  # Maps filename -> {hash, is_safe, path}
+
+# ============================================================================
+# Seed Management Configuration
+# ============================================================================
+
+# Server-side seed storage paths
+SEEDS_BASE_DIR = Path(__file__).parent.parent / "world_engine" / "seeds"
+DEFAULT_SEEDS_DIR = SEEDS_BASE_DIR / "default"
+UPLOADS_DIR = SEEDS_BASE_DIR / "uploads"
+CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.json"
+
+DEFAULT_SEEDS_URL = "https://github.com/your-repo/biome-default-seeds/releases/latest/download/seeds.zip"
+
+
+# ============================================================================
+# Seed Management Functions
+# ============================================================================
+
+
+def ensure_seed_directories():
+    """Create seed directory structure if it doesn't exist."""
+    DEFAULT_SEEDS_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Seed directories initialized: {SEEDS_BASE_DIR}")
+
+
+async def download_default_seeds():
+    """Download and extract default seeds on first startup."""
+    if list(DEFAULT_SEEDS_DIR.glob("*.png")):
+        logger.info("Default seeds already exist, skipping download")
+        return
+
+    logger.info("No default seeds found, downloading...")
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            logger.info(f"Downloading default seeds from {DEFAULT_SEEDS_URL}")
+            response = await client.get(DEFAULT_SEEDS_URL)
+            response.raise_for_status()
+
+            # Save zip temporarily
+            zip_path = SEEDS_BASE_DIR / "seeds.zip"
+            zip_path.write_bytes(response.content)
+            logger.info(f"Downloaded {len(response.content)} bytes")
+
+            # Extract to default directory
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(DEFAULT_SEEDS_DIR)
+            logger.info(f"Extracted default seeds to {DEFAULT_SEEDS_DIR}")
+
+            # Cleanup
+            zip_path.unlink()
+
+    except Exception as e:
+        logger.error(f"Failed to download default seeds: {e}")
+        logger.info("Please manually place seed images in world_engine/seeds/default/")
+
+
+def load_seeds_cache() -> dict:
+    """Load seeds cache from JSON file."""
+    if not CACHE_FILE.exists():
+        logger.info("No cache file found, will create new one")
+        return {"files": {}, "last_scan": None}
+
+    try:
+        with open(CACHE_FILE, "r") as f:
+            cache = json.load(f)
+        logger.info(f"Loaded cache with {len(cache.get('files', {}))} seeds")
+        return cache
+    except Exception as e:
+        logger.error(f"Failed to load cache: {e}")
+        return {"files": {}, "last_scan": None}
+
+
+def save_seeds_cache(cache: dict):
+    """Save seeds cache to JSON file."""
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+        logger.info(f"Saved cache with {len(cache.get('files', {}))} seeds")
+    except Exception as e:
+        logger.error(f"Failed to save cache: {e}")
+
+
+async def rescan_seeds() -> dict:
+    """Scan seed directories and run safety checks on all images."""
+    logger.info("Starting seed directory scan...")
+    cache = {"files": {}, "last_scan": time.time()}
+
+    # Scan both default and uploads directories
+    all_seeds = list(DEFAULT_SEEDS_DIR.glob("*.png")) + list(UPLOADS_DIR.glob("*.png"))
+    logger.info(f"Found {len(all_seeds)} seed images")
+
+    for seed_path in all_seeds:
+        filename = seed_path.name
+        logger.info(f"Processing {filename}...")
+
+        try:
+            # Compute hash
+            file_hash = await asyncio.to_thread(compute_file_hash, str(seed_path))
+
+            # Run safety check
+            safety_result = await asyncio.to_thread(
+                safety_checker.check_image, str(seed_path)
+            )
+
+            cache["files"][filename] = {
+                "hash": file_hash,
+                "is_safe": safety_result.get("is_safe", False),
+                "path": str(seed_path),
+                "scores": safety_result.get("scores", {}),
+                "checked_at": time.time(),
+            }
+
+            status = "✓ SAFE" if safety_result.get("is_safe") else "✗ UNSAFE"
+            logger.info(f"  {filename}: {status}")
+
+        except Exception as e:
+            logger.error(f"Failed to process {filename}: {e}")
+            cache["files"][filename] = {
+                "hash": "",
+                "is_safe": False,
+                "path": str(seed_path),
+                "error": str(e),
+                "checked_at": time.time(),
+            }
+
+    save_seeds_cache(cache)
+    logger.info(f"Scan complete: {len(cache['files'])} seeds processed")
+    return cache
+
 
 # ============================================================================
 # Application Lifecycle
@@ -90,7 +229,7 @@ safety_checker = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
-    global world_engine, safety_checker
+    global world_engine, safety_checker, safe_seeds_cache
 
     logger.info("=" * 60)
     logger.info("BIOME SERVER STARTUP")
@@ -106,8 +245,25 @@ async def lifespan(app: FastAPI):
     # Load WorldEngine on startup
     await world_engine.load_engine()
 
+    # Initialize seed management system
+    logger.info("Initializing server-side seed storage...")
+    ensure_seed_directories()
+    await download_default_seeds()
+
+    # Load or create seed cache
+    cache = load_seeds_cache()
+    if not cache.get("files"):
+        logger.info("Cache empty, scanning seed directories...")
+        cache = await rescan_seeds()
+    else:
+        logger.info(f"Using cached seed data ({len(cache.get('files', {}))} seeds)")
+
+    # Update global cache (map filename -> metadata)
+    safe_seeds_cache = cache.get("files", {})
+
     logger.info("=" * 60)
     logger.info("[SERVER] Ready - WorldEngine and Safety modules loaded")
+    logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
     logger.info("=" * 60)
     print("SERVER READY", flush=True)  # Signal for Rust to detect
 
@@ -118,6 +274,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Biome Server", lifespan=lifespan)
+
+
+# ============================================================================
+# Utilities
+# ============================================================================
+
+
+def compute_file_hash(file_path: str) -> str:
+    """Compute SHA256 hash of a file."""
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
 
 # ============================================================================
 # Health Endpoints
@@ -175,6 +346,221 @@ async def check_batch(request: CheckBatchRequest):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+class SetCacheRequest(BaseModel):
+    seeds: dict[str, dict]  # filename -> {hash, is_safe, path}
+
+
+@app.post("/safety/set_cache")
+async def set_cache(request: SetCacheRequest):
+    """Receive safety cache from Rust on startup."""
+    global safe_seeds_cache
+    safe_seeds_cache = request.seeds
+    logger.info(f"Safety cache updated: {len(safe_seeds_cache)} seeds loaded")
+    return JSONResponse({"status": "ok", "count": len(safe_seeds_cache)})
+
+
+# ============================================================================
+# Seed Management Endpoints
+# ============================================================================
+
+
+@app.get("/seeds/list")
+async def list_seeds():
+    """Return list of all available seeds with metadata (only safe ones)."""
+    safe_only = {
+        filename: {
+            "filename": filename,
+            "hash": data["hash"],
+            "is_safe": data["is_safe"],
+            "checked_at": data.get("checked_at", 0),
+        }
+        for filename, data in safe_seeds_cache.items()
+        if data.get("is_safe", False)
+    }
+    return JSONResponse({"seeds": safe_only, "count": len(safe_only)})
+
+
+@app.get("/seeds/image/{filename}")
+async def get_seed_image(filename: str):
+    """Serve full PNG seed image."""
+    from fastapi.responses import FileResponse
+
+    # Validate filename is in cache and safe
+    if filename not in safe_seeds_cache:
+        return JSONResponse({"error": "Seed not found"}, status_code=404)
+
+    seed_data = safe_seeds_cache[filename]
+    if not seed_data.get("is_safe", False):
+        return JSONResponse({"error": "Seed marked unsafe"}, status_code=403)
+
+    file_path = seed_data.get("path", "")
+    if not os.path.exists(file_path):
+        return JSONResponse({"error": "Seed file not found"}, status_code=404)
+
+    return FileResponse(file_path, media_type="image/png")
+
+
+@app.get("/seeds/thumbnail/{filename}")
+async def get_seed_thumbnail(filename: str):
+    """Serve 80x80 JPEG thumbnail of seed image."""
+    import io
+
+    # Validate filename is in cache and safe
+    if filename not in safe_seeds_cache:
+        return JSONResponse({"error": "Seed not found"}, status_code=404)
+
+    seed_data = safe_seeds_cache[filename]
+    if not seed_data.get("is_safe", False):
+        return JSONResponse({"error": "Seed marked unsafe"}, status_code=403)
+
+    file_path = seed_data.get("path", "")
+    if not os.path.exists(file_path):
+        return JSONResponse({"error": "Seed file not found"}, status_code=404)
+
+    try:
+        # Generate thumbnail
+        img = await asyncio.to_thread(Image.open, file_path)
+        img.thumbnail((80, 80))
+
+        # Convert to JPEG in memory
+        buffer = io.BytesIO()
+        await asyncio.to_thread(img.save, buffer, format="JPEG", quality=85)
+        buffer.seek(0)
+
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(buffer, media_type="image/jpeg")
+    except Exception as e:
+        logger.error(f"Failed to generate thumbnail for {filename}: {e}")
+        return JSONResponse({"error": "Thumbnail generation failed"}, status_code=500)
+
+
+class UploadSeedRequest(BaseModel):
+    filename: str
+    data: str  # base64 encoded PNG
+
+
+@app.post("/seeds/upload")
+async def upload_seed(request: UploadSeedRequest):
+    """Upload a custom seed image (will be safety checked)."""
+    global safe_seeds_cache
+
+    filename = request.filename
+    if not filename.endswith(".png"):
+        return JSONResponse({"error": "Only PNG files supported"}, status_code=400)
+
+    # Decode base64
+    try:
+        image_data = base64.b64decode(request.data)
+    except Exception as e:
+        return JSONResponse({"error": f"Invalid base64 data: {e}"}, status_code=400)
+
+    # Save to uploads directory
+    file_path = UPLOADS_DIR / filename
+    await asyncio.to_thread(file_path.write_bytes, image_data)
+    logger.info(f"Uploaded seed saved to {file_path}")
+
+    # Compute hash
+    file_hash = await asyncio.to_thread(compute_file_hash, str(file_path))
+
+    # Run safety check
+    try:
+        safety_result = await asyncio.to_thread(
+            safety_checker.check_image, str(file_path)
+        )
+        is_safe = safety_result.get("is_safe", False)
+
+        # Update cache
+        safe_seeds_cache[filename] = {
+            "hash": file_hash,
+            "is_safe": is_safe,
+            "path": str(file_path),
+            "scores": safety_result.get("scores", {}),
+            "checked_at": time.time(),
+        }
+
+        # Save to disk
+        cache = load_seeds_cache()
+        cache["files"] = safe_seeds_cache
+        save_seeds_cache(cache)
+
+        status_msg = "SAFE" if is_safe else "UNSAFE"
+        logger.info(f"Uploaded seed {filename}: {status_msg}")
+
+        return JSONResponse(
+            {
+                "status": "ok",
+                "filename": filename,
+                "hash": file_hash,
+                "is_safe": is_safe,
+                "scores": safety_result.get("scores", {}),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Safety check failed for uploaded seed: {e}")
+        # Delete the file if safety check failed
+        if file_path.exists():
+            file_path.unlink()
+        return JSONResponse(
+            {"error": f"Safety check failed: {e}"}, status_code=500
+        )
+
+
+@app.post("/seeds/rescan")
+async def rescan_seeds_endpoint():
+    """Trigger a rescan of all seed directories."""
+    global safe_seeds_cache
+
+    logger.info("Manual rescan triggered")
+    cache = await rescan_seeds()
+    safe_seeds_cache = cache.get("files", {})
+
+    safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe"))
+    return JSONResponse(
+        {
+            "status": "ok",
+            "total_seeds": len(safe_seeds_cache),
+            "safe_seeds": safe_count,
+        }
+    )
+
+
+@app.delete("/seeds/{filename}")
+async def delete_seed(filename: str):
+    """Delete a custom seed (only from uploads directory)."""
+    global safe_seeds_cache
+
+    if filename not in safe_seeds_cache:
+        return JSONResponse({"error": "Seed not found"}, status_code=404)
+
+    seed_data = safe_seeds_cache[filename]
+    file_path = Path(seed_data.get("path", ""))
+
+    # Only allow deleting from uploads directory
+    if not str(file_path).startswith(str(UPLOADS_DIR)):
+        return JSONResponse(
+            {"error": "Cannot delete default seeds"}, status_code=403
+        )
+
+    try:
+        if file_path.exists():
+            await asyncio.to_thread(file_path.unlink)
+        del safe_seeds_cache[filename]
+
+        # Update cache file
+        cache = load_seeds_cache()
+        cache["files"] = safe_seeds_cache
+        save_seeds_cache(cache)
+
+        logger.info(f"Deleted seed: {filename}")
+        return JSONResponse({"status": "ok", "deleted": filename})
+
+    except Exception as e:
+        logger.error(f"Failed to delete seed {filename}: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ============================================================================
 # WorldEngine WebSocket
 # ============================================================================
@@ -204,9 +590,9 @@ async def websocket_endpoint(websocket: WebSocket):
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
             {"type": "reset"}
-            {"type": "set_initial_seed", "seed_base64": str}
+            {"type": "set_initial_seed", "filename": str}
             {"type": "prompt", "prompt": str}
-            {"type": "prompt_with_seed", "prompt": str, "seed_url": str}
+            {"type": "prompt_with_seed", "filename": str}
             {"type": "pause"}
             {"type": "resume"}
 
@@ -240,22 +626,66 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg_type = msg.get("type")
 
                 if msg_type == "set_initial_seed":
-                    seed_base64 = msg.get("seed_base64")
-                    if seed_base64:
-                        logger.info(
-                            f"[{client_host}] Received initial seed ({len(seed_base64)} chars)"
+                    filename = msg.get("filename")
+
+                    if not filename:
+                        await send_json(
+                            {"type": "error", "message": "Missing filename"}
                         )
-                        loaded_frame = world_engine.load_seed_from_base64(seed_base64)
-                        if loaded_frame is not None:
-                            world_engine.seed_frame = loaded_frame
-                            logger.info(f"[{client_host}] Initial seed loaded successfully")
-                        else:
-                            await send_json(
-                                {"type": "error", "message": "Failed to decode seed image"}
-                            )
+                        continue
+
+                    # Verify seed is in safety cache and is safe
+                    if filename not in safe_seeds_cache:
+                        logger.warning(f"[{client_host}] Seed '{filename}' not in safety cache")
+                        await send_json(
+                            {"type": "error", "message": f"Seed '{filename}' not in safety cache"}
+                        )
+                        continue
+
+                    cached_entry = safe_seeds_cache[filename]
+
+                    if not cached_entry.get("is_safe", False):
+                        logger.warning(f"[{client_host}] Seed '{filename}' marked as unsafe")
+                        await send_json(
+                            {"type": "error", "message": f"Seed '{filename}' marked as unsafe"}
+                        )
+                        continue
+
+                    # Get cached hash and file path
+                    cached_hash = cached_entry.get("hash", "")
+                    file_path = cached_entry.get("path", "")
+
+                    # Verify file exists
+                    if not os.path.exists(file_path):
+                        logger.error(f"[{client_host}] Seed file not found: {file_path}")
+                        await send_json(
+                            {"type": "error", "message": f"Seed file not found: {filename}"}
+                        )
+                        continue
+
+                    # Verify file integrity (check if file on disk matches cached hash)
+                    actual_hash = await asyncio.to_thread(compute_file_hash, file_path)
+                    if actual_hash != cached_hash:
+                        logger.warning(
+                            f"[{client_host}] File integrity check failed for '{filename}' - file may have been modified"
+                        )
+                        await send_json(
+                            {"type": "error", "message": "File integrity verification failed - please rescan seeds"}
+                        )
+                        continue
+
+                    # All checks passed - load the seed
+                    logger.info(f"[{client_host}] Loading initial seed '{filename}'")
+                    loaded_frame = await asyncio.to_thread(
+                        world_engine.load_seed_from_file, file_path
+                    )
+
+                    if loaded_frame is not None:
+                        world_engine.seed_frame = loaded_frame
+                        logger.info(f"[{client_host}] Initial seed loaded successfully")
                     else:
                         await send_json(
-                            {"type": "error", "message": "No seed_base64 provided"}
+                            {"type": "error", "message": "Failed to load seed image"}
                         )
                 else:
                     logger.info(
@@ -360,7 +790,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     new_prompt = msg.get("prompt", "").strip()
                     logger.info(f"[RECV] Prompt received: '{new_prompt[:50]}...'")
                     try:
-                        from world_engine import DEFAULT_PROMPT
+                        from engine_manager import DEFAULT_PROMPT
 
                         world_engine.current_prompt = (
                             new_prompt if new_prompt else DEFAULT_PROMPT
@@ -370,58 +800,105 @@ async def websocket_endpoint(websocket: WebSocket):
                         logger.error(f"[GEN] Failed to set prompt: {e}")
 
                 case "prompt_with_seed":
-                    new_prompt = msg.get("prompt", "").strip()
-                    seed_url = msg.get("seed_url")
-                    logger.info(
-                        f"[RECV] Prompt with seed: '{new_prompt}', URL: {seed_url}"
-                    )
+                    # Load new seed mid-session (server verifies against cache)
+                    filename = msg.get("filename")
+                    logger.info(f"[RECV] prompt_with_seed: filename={filename}")
+
                     try:
-                        if seed_url:
-                            url_frame = world_engine.load_seed_from_url(seed_url)
-                            if url_frame is not None:
-                                world_engine.seed_frame = url_frame
-                                logger.info("[RECV] Seed frame loaded from URL")
-
-                        from world_engine import DEFAULT_PROMPT
-
-                        world_engine.current_prompt = (
-                            new_prompt if new_prompt else DEFAULT_PROMPT
-                        )
-                        logger.info(
-                            "[RECV] Seed frame prompt loaded from URL, resetting engine"
-                        )
-                        await reset_engine()
-                    except Exception as e:
-                        logger.error(f"[GEN] Failed to set prompt: {e}")
-
-                case "set_initial_seed":
-                    # Allow updating the seed mid-session
-                    seed_base64 = msg.get("seed_base64")
-                    logger.info(
-                        f"[RECV] set_initial_seed received ({len(seed_base64) if seed_base64 else 0} chars)"
-                    )
-                    try:
-                        if seed_base64:
-                            loaded_frame = world_engine.load_seed_from_base64(
-                                seed_base64
+                        if not filename:
+                            await send_json(
+                                {
+                                    "type": "error",
+                                    "message": "Missing filename",
+                                }
                             )
-                            if loaded_frame is not None:
-                                world_engine.seed_frame = loaded_frame
-                                logger.info("[RECV] Seed frame updated from base64")
-                                await reset_engine()
-                            else:
-                                await send_json(
-                                    {
-                                        "type": "error",
-                                        "message": "Failed to decode seed image",
-                                    }
-                                )
+                            continue
+
+                        # Check if seed is in safety cache
+                        if filename not in safe_seeds_cache:
+                            logger.warning(
+                                f"[RECV] Seed '{filename}' not in safety cache"
+                            )
+                            await send_json(
+                                {
+                                    "type": "error",
+                                    "message": f"Seed '{filename}' not in safety cache",
+                                }
+                            )
+                            continue
+
+                        cached_entry = safe_seeds_cache[filename]
+
+                        # Verify is_safe flag
+                        if not cached_entry.get("is_safe", False):
+                            logger.warning(
+                                f"[RECV] Seed '{filename}' marked as unsafe in cache"
+                            )
+                            await send_json(
+                                {
+                                    "type": "error",
+                                    "message": f"Seed '{filename}' marked as unsafe",
+                                }
+                            )
+                            continue
+
+                        # Get cached hash and file path
+                        cached_hash = cached_entry.get("hash", "")
+                        file_path = cached_entry.get("path", "")
+
+                        # Verify file exists
+                        if not os.path.exists(file_path):
+                            logger.error(f"[RECV] Seed file not found: {file_path}")
+                            await send_json(
+                                {
+                                    "type": "error",
+                                    "message": f"Seed file not found: {filename}",
+                                }
+                            )
+                            continue
+
+                        # Verify file integrity (check if file on disk matches cached hash)
+                        actual_hash = await asyncio.to_thread(
+                            compute_file_hash, file_path
+                        )
+                        if actual_hash != cached_hash:
+                            logger.warning(
+                                f"[RECV] File integrity check failed for '{filename}' - file may have been modified"
+                            )
+                            await send_json(
+                                {
+                                    "type": "error",
+                                    "message": "File integrity verification failed - please rescan seeds",
+                                }
+                            )
+                            continue
+
+                        # All checks passed - load the seed
+                        logger.info(f"[RECV] Loading seed '{filename}' from {file_path}")
+                        loaded_frame = await asyncio.to_thread(
+                            world_engine.load_seed_from_file, file_path
+                        )
+
+                        if loaded_frame is not None:
+                            world_engine.seed_frame = loaded_frame
+                            logger.info(f"[RECV] Seed '{filename}' loaded successfully")
+                            await reset_engine()
                         else:
                             await send_json(
-                                {"type": "error", "message": "No seed_base64 provided"}
+                                {
+                                    "type": "error",
+                                    "message": f"Failed to load seed image: {filename}",
+                                }
                             )
+
                     except Exception as e:
                         logger.error(f"[GEN] Failed to set seed: {e}")
+                        await send_json(
+                            {
+                                "type": "error",
+                                "message": f"Failed to set seed: {str(e)}",
+                            }
+                        )
 
                 case "control":
                     if paused:

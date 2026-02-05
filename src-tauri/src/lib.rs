@@ -1,13 +1,10 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
+use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use std::time::SystemTime;
 use tauri::{Emitter, Manager, RunEvent};
 
 #[allow(unused_imports)]
@@ -20,8 +17,6 @@ use tar::Archive;
 
 const CONFIG_FILENAME: &str = "config.json";
 const WORLD_ENGINE_DIR: &str = "world_engine";
-const DEFAULT_SEEDS_DIR: &str = "default_seeds";
-const CUSTOM_SEEDS_DIR: &str = "custom_seeds";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
@@ -68,28 +63,7 @@ fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
 }
 
-// ============================================================================
-// Safety Cache Structures
-// ============================================================================
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct SafetyCacheEntry {
-    path: String,
-    hash: String, // SHA256 hex
-    size: u64,
-    modified: SystemTime,
-    checked: SystemTime,
-    is_safe: bool,
-    scores: HashMap<String, f64>,
-    directory: String, // "default_seeds" or "custom_seeds"
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct SafetyCache {
-    version: u32,
-    last_updated: SystemTime,
-    files: HashMap<String, SafetyCacheEntry>,
-}
+// Safety cache structures removed - now handled server-side
 
 /// Get the executable's directory (for portable data storage)
 fn get_exe_dir() -> Result<PathBuf, String> {
@@ -700,172 +674,132 @@ async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 // ============================================================================
-// Seeds Management
+// Seeds Management (Server-Authoritative)
 // ============================================================================
 
-// Get the default seeds directory path (bundled seeds, next to executable)
-fn get_default_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let exe_dir = get_exe_dir()?;
-    Ok(exe_dir.join(DEFAULT_SEEDS_DIR))
-}
+const SERVER_BASE_URL: &str = "http://localhost:7987";
 
-// Get the custom seeds directory path (user seeds, next to executable)
-fn get_custom_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let exe_dir = get_exe_dir()?;
-    Ok(exe_dir.join(CUSTOM_SEEDS_DIR))
-}
-
-/// Find which directory contains a seed file (checks custom first, then default)
-fn find_seed_path(app: &tauri::AppHandle, filename: &str) -> Result<PathBuf, String> {
-    // Validate filename doesn't contain path traversal
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        return Err(format!("Invalid seed filename: {}", filename));
-    }
-
-    let custom_dir = get_custom_seeds_dir(app)?;
-    let custom_path = custom_dir.join(filename);
-    if custom_path.exists() {
-        return Ok(custom_path);
-    }
-
-    let default_dir = get_default_seeds_dir(app)?;
-    let default_path = default_dir.join(filename);
-    if default_path.exists() {
-        return Ok(default_path);
-    }
-
-    Err(format!("Seed file not found: {}", filename))
-}
-
-/// Initialize seeds directories (creates custom_seeds folder for user seeds)
+/// Initialize seeds (triggers server-side rescan)
 #[tauri::command]
-async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
-    let custom_seeds_dir = get_custom_seeds_dir(&app)?;
+async fn initialize_seeds(_app: tauri::AppHandle) -> Result<String, String> {
+    log::info!("Triggering server-side seed scan...");
 
-    // Create custom seeds directory if it doesn't exist
-    if !custom_seeds_dir.exists() {
-        fs::create_dir_all(&custom_seeds_dir)
-            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/seeds/rescan", SERVER_BASE_URL))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
     }
 
-    // Run safety scan
-    log::info!("Running seed safety checks...");
-    let scan_result = scan_seeds_for_safety(app).await?;
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    Ok(format!("Seeds initialized. {}", scan_result))
+    Ok(format!(
+        "Seeds initialized: {} total, {} safe",
+        result["total_seeds"].as_u64().unwrap_or(0),
+        result["safe_seeds"].as_u64().unwrap_or(0)
+    ))
 }
 
-/// List available seed filenames (png/jpg/jpeg) from both default and custom directories
+/// List available seeds from server
 #[tauri::command]
-async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    use std::collections::HashSet;
+async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/list", SERVER_BASE_URL))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    let mut seeds: HashSet<String> = HashSet::new();
-
-    // Helper to collect seeds from a directory
-    let collect_seeds = |dir: &Path, seeds: &mut HashSet<String>| {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(ext) = path.extension() else {
-                continue;
-            };
-            let ext_lower = ext.to_string_lossy().to_lowercase();
-            if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
-                && let Some(filename) = path.file_name()
-            {
-                seeds.insert(filename.to_string_lossy().to_string());
-            }
-        }
-    };
-
-    // Collect from default seeds
-    if let Ok(default_dir) = get_default_seeds_dir(&app) {
-        collect_seeds(&default_dir, &mut seeds);
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
     }
 
-    // Collect from custom seeds
-    if let Ok(custom_dir) = get_custom_seeds_dir(&app) {
-        collect_seeds(&custom_dir, &mut seeds);
-    }
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    let mut seeds_vec: Vec<String> = seeds.into_iter().collect();
-    seeds_vec.sort();
+    let seeds_obj = result["seeds"]
+        .as_object()
+        .ok_or_else(|| "Invalid response format".to_string())?;
 
-    // Filter by safety cache - only return safe seeds
-    let cache = load_safety_cache(&app)?;
-    let safe_seeds: Vec<String> = seeds_vec
-        .into_iter()
-        .filter(|filename| {
-            cache
-                .files
-                .get(filename)
-                .map(|entry| entry.is_safe)
-                .unwrap_or(false) // Hide unchecked files
-        })
-        .collect();
-
-    Ok(safe_seeds)
+    let mut filenames: Vec<String> = seeds_obj.keys().cloned().collect();
+    filenames.sort();
+    Ok(filenames)
 }
 
-/// Read a seed file and return base64 encoded data
+/// Read a seed image as base64 from server
 #[tauri::command]
-async fn read_seed_as_base64(app: tauri::AppHandle, filename: String) -> Result<String, String> {
-    let seed_path = find_seed_path(&app, &filename)?;
+async fn read_seed_as_base64(_app: tauri::AppHandle, filename: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/image/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    let mut file =
-        File::open(&seed_path).map_err(|e| format!("Failed to open seed file: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
+    }
 
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|e| format!("Failed to read seed file: {}", e))?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read image data: {}", e))?;
 
-    Ok(BASE64_STANDARD.encode(&buffer))
+    Ok(BASE64_STANDARD.encode(&bytes))
 }
 
-/// Read a seed file and return a small thumbnail as base64 encoded JPEG
+/// Read a seed thumbnail as base64 from server
 #[tauri::command]
 async fn read_seed_thumbnail(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     filename: String,
-    max_size: Option<u32>,
+    _max_size: Option<u32>,
 ) -> Result<String, String> {
-    let seed_path = find_seed_path(&app, &filename)?;
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/thumbnail/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    // Load and resize image
-    let img = image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
+    }
 
-    let max_dim = max_size.unwrap_or(80);
-    let thumbnail = img.thumbnail(max_dim, max_dim);
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read thumbnail data: {}", e))?;
 
-    // Encode as JPEG
-    let mut buffer = Vec::new();
-    let mut cursor = Cursor::new(&mut buffer);
-    thumbnail
-        .write_to(&mut cursor, image::ImageFormat::Jpeg)
-        .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
-
-    Ok(BASE64_STANDARD.encode(&buffer))
+    Ok(BASE64_STANDARD.encode(&bytes))
 }
 
-/// Get the custom seeds directory path (where users add their seeds)
+/// Get the seeds directory path (server-side)
 #[tauri::command]
-fn get_seeds_dir_path(app: tauri::AppHandle) -> Result<String, String> {
-    let seeds_dir = get_custom_seeds_dir(&app)?;
-    Ok(seeds_dir.to_string_lossy().to_string())
+fn get_seeds_dir_path(_app: tauri::AppHandle) -> Result<String, String> {
+    // Return server-side path for information purposes
+    Ok("world_engine/seeds/uploads".to_string())
 }
 
-/// Open the custom seeds directory in file explorer
+/// Open the seeds directory in file explorer (server-side)
 #[tauri::command]
-async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
-    let seeds_dir = get_custom_seeds_dir(&app)?;
+async fn open_seeds_dir(_app: tauri::AppHandle) -> Result<(), String> {
+    let exe_dir = get_exe_dir()?;
+    let seeds_dir = exe_dir.join("world_engine").join("seeds").join("uploads");
 
     // Create directory if it doesn't exist
     if !seeds_dir.exists() {
         fs::create_dir_all(&seeds_dir)
-            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
+            .map_err(|e| format!("Failed to create seeds dir: {}", e))?;
     }
 
     // Open File Explorer with seeds directory
@@ -873,164 +807,7 @@ async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to open seeds directory: {}", e))
 }
 
-// ============================================================================
-// Safety Cache Functions
-// ============================================================================
-
-/// Get the path to the safety cache file (.safety_cache.bin)
-fn get_safety_cache_path(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let exe_dir = get_exe_dir()?;
-    Ok(exe_dir.join(".safety_cache.bin"))
-}
-
-/// Compute SHA256 hash of a file
-fn compute_file_hash(path: &Path) -> Result<String, String> {
-    let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
-    let mut hasher = Sha256::new();
-    hasher.update(&bytes);
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-/// Load safety cache from binary file
-fn load_safety_cache(app: &tauri::AppHandle) -> Result<SafetyCache, String> {
-    let cache_path = get_safety_cache_path(app)?;
-    if !cache_path.exists() {
-        return Ok(SafetyCache {
-            version: 1,
-            last_updated: SystemTime::now(),
-            files: HashMap::new(),
-        });
-    }
-
-    let bytes = fs::read(&cache_path).map_err(|e| format!("Failed to read cache: {}", e))?;
-    bincode::deserialize(&bytes).map_err(|e| format!("Failed to deserialize cache: {}", e))
-}
-
-/// Save safety cache to binary file
-fn save_safety_cache(app: &tauri::AppHandle, cache: &SafetyCache) -> Result<(), String> {
-    let cache_path = get_safety_cache_path(app)?;
-    let bytes =
-        bincode::serialize(cache).map_err(|e| format!("Failed to serialize cache: {}", e))?;
-    fs::write(&cache_path, bytes).map_err(|e| format!("Failed to write cache: {}", e))
-}
-
-/// Check seed safety by calling the Python safety server
-async fn check_seed_safety_batch(paths: Vec<String>) -> Result<Vec<serde_json::Value>, String> {
-    let client = reqwest::Client::new();
-    let response = client
-        .post("http://127.0.0.1:7987/safety/check_batch")
-        .json(&serde_json::json!({ "paths": paths }))
-        .send()
-        .await
-        .map_err(|e| format!("Safety check request failed: {}", e))?;
-
-    let result: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    result["results"]
-        .as_array()
-        .ok_or_else(|| "Invalid response format".to_string())
-        .map(|arr| arr.clone())
-}
-
-/// Scan all seeds for safety and update cache
-#[tauri::command]
-async fn scan_seeds_for_safety(app: tauri::AppHandle) -> Result<String, String> {
-    let mut cache = load_safety_cache(&app)?;
-    let mut to_check: Vec<(String, PathBuf, String)> = Vec::new();
-
-    // Scan both directories
-    for (dir_name, dir_path_result) in [
-        ("default_seeds", get_default_seeds_dir(&app)),
-        ("custom_seeds", get_custom_seeds_dir(&app)),
-    ] {
-        let dir_path = match dir_path_result {
-            Ok(path) => path,
-            Err(_) => continue,
-        };
-
-        let Ok(entries) = fs::read_dir(&dir_path) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(ext) = path.extension() else {
-                continue;
-            };
-            let ext_lower = ext.to_string_lossy().to_lowercase();
-
-            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" {
-                let filename = path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
-                let hash = compute_file_hash(&path)?;
-
-                // Check if cached and hash matches
-                if let Some(cached) = cache.files.get(&filename) {
-                    if cached.hash == hash {
-                        continue; // Skip - already checked and unchanged
-                    }
-                }
-
-                // Need to check
-                to_check.push((filename, path, dir_name.to_string()));
-            }
-        }
-    }
-
-    if to_check.is_empty() {
-        return Ok("No new files to check".to_string());
-    }
-
-    // Check in batch
-    let paths: Vec<String> = to_check
-        .iter()
-        .map(|(_, path, _)| path.to_string_lossy().to_string())
-        .collect();
-    let results = check_seed_safety_batch(paths).await?;
-
-    // Update cache
-    for (i, (filename, path, dir_name)) in to_check.iter().enumerate() {
-        let result = &results[i];
-        let metadata = fs::metadata(path).unwrap();
-
-        cache.files.insert(
-            filename.clone(),
-            SafetyCacheEntry {
-                path: path.to_string_lossy().to_string(),
-                hash: compute_file_hash(path)?,
-                size: metadata.len(),
-                modified: metadata.modified().unwrap(),
-                checked: SystemTime::now(),
-                is_safe: result["is_safe"].as_bool().unwrap_or(false),
-                scores: result["scores"]
-                    .as_object()
-                    .map(|obj| {
-                        obj.iter()
-                            .map(|(k, v)| (k.clone(), v.as_f64().unwrap_or(0.0)))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                directory: dir_name.clone(),
-            },
-        );
-    }
-
-    cache.last_updated = SystemTime::now();
-    save_safety_cache(&app, &cache)?;
-
-    let unsafe_count = cache.files.values().filter(|e| !e.is_safe).count();
-    Ok(format!(
-        "Scanned {} files, {} flagged as unsafe",
-        cache.files.len(),
-        unsafe_count
-    ))
-}
+// Safety cache functions removed - now handled server-side
 
 #[tauri::command]
 async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String, String> {
@@ -1400,8 +1177,7 @@ pub fn run() {
             read_seed_as_base64,
             read_seed_thumbnail,
             get_seeds_dir_path,
-            open_seeds_dir,
-            scan_seeds_for_safety
+            open_seeds_dir
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

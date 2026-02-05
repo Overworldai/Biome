@@ -204,13 +204,12 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     loadBatch()
   }, [activeTab, seeds])
 
-  // Handle seed selection - reset server, load full-size image, recapture cursor
+  // Handle seed selection - reset server and send filename (server loads from its storage)
   const handleSeedClick = async (filename) => {
     setSelectedSeed(filename)
     try {
-      const base64 = await invoke('read_seed_as_base64', { filename })
       reset()
-      sendInitialSeed(base64)
+      sendInitialSeed(filename)
       requestPointerLock()
     } catch (err) {
       console.error('Failed to apply seed:', err)
