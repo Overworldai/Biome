@@ -23,6 +23,7 @@ import hashlib
 import json
 import logging
 import os
+import pickle
 import shutil
 import time
 import zipfile
@@ -97,7 +98,7 @@ safe_seeds_cache = {}  # Maps filename -> {hash, is_safe, path}
 SEEDS_BASE_DIR = Path(__file__).parent.parent / "world_engine" / "seeds"
 DEFAULT_SEEDS_DIR = SEEDS_BASE_DIR / "default"
 UPLOADS_DIR = SEEDS_BASE_DIR / "uploads"
-CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.json"
+CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.bin"
 
 # Local seeds directory (relative to project root for standalone usage)
 LOCAL_SEEDS_DIR = Path(__file__).parent.parent.parent / "seeds"
@@ -171,14 +172,14 @@ async def download_default_seeds():
 
 
 def load_seeds_cache() -> dict:
-    """Load seeds cache from JSON file."""
+    """Load seeds cache from binary file."""
     if not CACHE_FILE.exists():
         logger.info("No cache file found, will create new one")
         return {"files": {}, "last_scan": None}
 
     try:
-        with open(CACHE_FILE, "r") as f:
-            cache = json.load(f)
+        with open(CACHE_FILE, "rb") as f:
+            cache = pickle.load(f)
         logger.info(f"Loaded cache with {len(cache.get('files', {}))} seeds")
         return cache
     except Exception as e:
@@ -187,10 +188,10 @@ def load_seeds_cache() -> dict:
 
 
 def save_seeds_cache(cache: dict):
-    """Save seeds cache to JSON file."""
+    """Save seeds cache to binary file."""
     try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(cache, f, indent=2)
+        with open(CACHE_FILE, "wb") as f:
+            pickle.dump(cache, f)
         logger.info(f"Saved cache with {len(cache.get('files', {}))} seeds")
     except Exception as e:
         logger.error(f"Failed to save cache: {e}")
@@ -205,39 +206,48 @@ async def rescan_seeds() -> dict:
     all_seeds = list(DEFAULT_SEEDS_DIR.glob("*.png")) + list(UPLOADS_DIR.glob("*.png"))
     logger.info(f"Found {len(all_seeds)} seed images")
 
-    for seed_path in all_seeds:
+    if not all_seeds:
+        save_seeds_cache(cache)
+        logger.info("Scan complete: 0 seeds processed")
+        return cache
+
+    # Compute hashes for all files
+    logger.info("Computing file hashes...")
+    hash_tasks = [asyncio.to_thread(compute_file_hash, str(p)) for p in all_seeds]
+    file_hashes = await asyncio.gather(*hash_tasks, return_exceptions=True)
+
+    # Run batch safety check (model loads once, processes in batches, then unloads)
+    logger.info("Running batch safety check...")
+    image_paths = [str(p) for p in all_seeds]
+    safety_results = await asyncio.to_thread(safety_checker.check_batch, image_paths)
+
+    # Build cache from results
+    checked_at = time.time()
+    for i, seed_path in enumerate(all_seeds):
         filename = seed_path.name
-        logger.info(f"Processing {filename}...")
+        file_hash = file_hashes[i] if not isinstance(file_hashes[i], Exception) else ""
+        safety_result = safety_results[i]
 
-        try:
-            # Compute hash
-            file_hash = await asyncio.to_thread(compute_file_hash, str(seed_path))
-
-            # Run safety check
-            safety_result = await asyncio.to_thread(
-                safety_checker.check_image, str(seed_path)
-            )
-
+        if isinstance(file_hashes[i], Exception):
+            logger.error(f"Failed to hash {filename}: {file_hashes[i]}")
+            cache["files"][filename] = {
+                "hash": "",
+                "is_safe": False,
+                "path": str(seed_path),
+                "error": str(file_hashes[i]),
+                "checked_at": checked_at,
+            }
+        else:
             cache["files"][filename] = {
                 "hash": file_hash,
                 "is_safe": safety_result.get("is_safe", False),
                 "path": str(seed_path),
                 "scores": safety_result.get("scores", {}),
-                "checked_at": time.time(),
+                "checked_at": checked_at,
             }
 
-            status = "✓ SAFE" if safety_result.get("is_safe") else "✗ UNSAFE"
-            logger.info(f"  {filename}: {status}")
-
-        except Exception as e:
-            logger.error(f"Failed to process {filename}: {e}")
-            cache["files"][filename] = {
-                "hash": "",
-                "is_safe": False,
-                "path": str(seed_path),
-                "error": str(e),
-                "checked_at": time.time(),
-            }
+        status = "✓ SAFE" if safety_result.get("is_safe") else "✗ UNSAFE"
+        logger.info(f"  {filename}: {status}")
 
     save_seeds_cache(cache)
     logger.info(f"Scan complete: {len(cache['files'])} seeds processed")

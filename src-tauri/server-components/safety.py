@@ -113,41 +113,48 @@ class SafetyChecker:
 
         return result
 
-    def check_batch(self, image_paths: List[str]) -> List[Dict[str, any]]:
+    def check_batch(
+        self, image_paths: List[str], batch_size: int = 8
+    ) -> List[Dict[str, any]]:
         """
-        Check multiple images efficiently.
+        Check multiple images efficiently with proper batching.
 
         Args:
             image_paths: List of paths to image files
+            batch_size: Number of images to process at once (default 8 to avoid GPU OOM)
 
         Returns:
             List of results matching check_image() format
         """
+        if not image_paths:
+            return []
+
         self._load_model()
 
         try:
+            # First pass: load all images and track which ones failed
             images = []
-            valid_paths = []
-
-            # Load all images, skip invalid ones
             for path in image_paths:
                 try:
                     img = Image.open(path)
                     images.append(img)
-                    valid_paths.append(path)
                 except Exception as e:
                     logger.error(f"Failed to load image {path}: {e}")
-                    # Return unsafe result for failed images
                     images.append(None)
 
-            scores_list = self.predict_batch_values(
-                [img for img in images if img is not None]
-            )
+            # Process valid images in batches
+            valid_images = [img for img in images if img is not None]
+            all_scores = []
+
+            for i in range(0, len(valid_images), batch_size):
+                batch = valid_images[i : i + batch_size]
+                batch_scores = self.predict_batch_values(batch)
+                all_scores.extend(batch_scores)
 
             # Build results, matching order of input paths
             results = []
             score_idx = 0
-            for i, img in enumerate(images):
+            for img in images:
                 if img is None:
                     # Failed to load - mark as unsafe
                     results.append(
@@ -162,7 +169,7 @@ class SafetyChecker:
                         }
                     )
                 else:
-                    scores = scores_list[score_idx]
+                    scores = all_scores[score_idx]
                     results.append({"is_safe": scores["low"] < 0.5, "scores": scores})
                     score_idx += 1
 
