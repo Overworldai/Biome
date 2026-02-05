@@ -97,6 +97,9 @@ class SafetyChecker:
 
         try:
             img = Image.open(image_path)
+            # Convert to RGB to handle RGBA/RGB mode differences
+            if img.mode != "RGB":
+                img = img.convert("RGB")
             scores = self.predict_batch_values([img])[0]
             is_safe = scores["low"] < 0.5  # Strict threshold
             result = {"is_safe": is_safe, "scores": scores}
@@ -137,6 +140,9 @@ class SafetyChecker:
             for path in image_paths:
                 try:
                     img = Image.open(path)
+                    # Convert to RGB to handle RGBA/RGB mode differences
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
                     images.append(img)
                 except Exception as e:
                     logger.error(f"Failed to load image {path}: {e}")
