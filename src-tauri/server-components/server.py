@@ -101,10 +101,8 @@ DEFAULT_SEEDS_DIR = SEEDS_BASE_DIR / "default"
 UPLOADS_DIR = SEEDS_BASE_DIR / "uploads"
 CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.bin"
 
-# Local seeds directory (relative to project root for standalone usage)
+# Local seeds directory (for dev/standalone usage - relative to project root)
 LOCAL_SEEDS_DIR = Path(__file__).parent.parent.parent / "seeds"
-
-DEFAULT_SEEDS_URL = "https://github.com/Wayfarer-Labs/Biome/releases/latest/download/seeds.zip"
 
 
 # ============================================================================
@@ -119,19 +117,20 @@ def ensure_seed_directories():
     logger.info(f"Seed directories initialized: {SEEDS_BASE_DIR}")
 
 
-async def download_default_seeds():
-    """Download and extract default seeds on first startup, or use local seeds if available."""
+async def setup_default_seeds():
+    """Setup default seeds from local directory (for dev/standalone usage only)."""
+    # Check if seeds already exist (bundled by Tauri on first run, or from previous setup)
     if list(DEFAULT_SEEDS_DIR.glob("*.png")):
-        logger.info("Default seeds already exist, skipping setup")
+        seed_count = len(list(DEFAULT_SEEDS_DIR.glob("*.png")))
+        logger.info(f"Found {seed_count} seed(s) in {DEFAULT_SEEDS_DIR}")
         return
 
-    # Check if local seeds directory exists (for standalone usage)
+    # For dev/standalone usage: copy from local seeds directory
     if LOCAL_SEEDS_DIR.exists() and list(LOCAL_SEEDS_DIR.glob("*.png")):
-        logger.info(f"Found local seeds directory at {LOCAL_SEEDS_DIR}")
+        logger.info(f"Found local seeds directory at {LOCAL_SEEDS_DIR} (development mode)")
         try:
-            # Copy seeds from local directory to default directory
             seed_files = list(LOCAL_SEEDS_DIR.glob("*.png"))
-            logger.info(f"Copying {len(seed_files)} seed files to {DEFAULT_SEEDS_DIR}")
+            logger.info(f"Copying {len(seed_files)} local seed files to {DEFAULT_SEEDS_DIR}")
 
             for seed_file in seed_files:
                 dest = DEFAULT_SEEDS_DIR / seed_file.name
@@ -142,34 +141,13 @@ async def download_default_seeds():
             return
         except Exception as e:
             logger.error(f"Failed to copy local seeds: {e}")
-            logger.info("Will attempt to download instead...")
 
-    # No local seeds found, attempt download
-    logger.info("No local seeds found, downloading from remote...")
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            logger.info(f"Downloading default seeds from {DEFAULT_SEEDS_URL}")
-            response = await client.get(DEFAULT_SEEDS_URL)
-            response.raise_for_status()
-
-            # Save zip temporarily
-            zip_path = SEEDS_BASE_DIR / "seeds.zip"
-            zip_path.write_bytes(response.content)
-            logger.info(f"Downloaded {len(response.content)} bytes")
-
-            # Extract to default directory
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(DEFAULT_SEEDS_DIR)
-            logger.info(f"Extracted default seeds to {DEFAULT_SEEDS_DIR}")
-
-            # Cleanup
-            zip_path.unlink()
-
-    except Exception as e:
-        logger.error(f"Failed to download default seeds: {e}")
-        logger.info(f"Please manually place seed images in {DEFAULT_SEEDS_DIR} or {LOCAL_SEEDS_DIR}")
+    # No seeds found - error
+    logger.error("No seed images found!")
+    logger.error(f"Expected seeds in:")
+    logger.error(f"  - {DEFAULT_SEEDS_DIR} (bundled by Tauri installer)")
+    logger.error(f"  - {LOCAL_SEEDS_DIR} (for development mode)")
+    logger.error("Please ensure seeds are properly bundled or placed in the appropriate directory")
 
 
 def load_seeds_cache() -> dict:
@@ -285,7 +263,7 @@ async def lifespan(app: FastAPI):
     # Initialize seed management system
     logger.info("Initializing server-side seed storage...")
     ensure_seed_directories()
-    await download_default_seeds()
+    await setup_default_seeds()
 
     # Load or create seed cache
     cache = load_seeds_cache()

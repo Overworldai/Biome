@@ -1103,6 +1103,57 @@ fn is_port_in_use(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }
 
+/// Copy bundled default seeds to the server-components directory on first run
+/// Copy bundled default seeds directly to the final destination on first run
+fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Copy directly to final destination: world_engine/seeds/default
+    let dest_dir = app_data_dir.join("world_engine").join("seeds").join("default");
+
+    // If seeds already exist, skip setup
+    if dest_dir.exists() && dest_dir.read_dir().map(|mut d| d.next().is_some()).unwrap_or(false) {
+        println!("[SEEDS] Seeds already exist at {:?}, skipping bundle extraction", dest_dir);
+        return Ok(());
+    }
+
+    println!("[SEEDS] Setting up bundled seeds...");
+
+    // Create destination directory
+    fs::create_dir_all(&dest_dir)
+        .map_err(|e| format!("Failed to create seeds directory: {}", e))?;
+
+    // Resolve bundled resource
+    let resource_path = app
+        .path()
+        .resolve("default_seeds", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve bundled seeds: {}", e))?;
+
+    println!("[SEEDS] Copying from {:?} to {:?}", resource_path, dest_dir);
+
+    // Copy all PNG files from bundled seeds to destination
+    if let Ok(entries) = fs::read_dir(&resource_path) {
+        let mut count = 0;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("png") {
+                let file_name = path.file_name().ok_or("Invalid filename")?;
+                let dest_path = dest_dir.join(file_name);
+                fs::copy(&path, &dest_path)
+                    .map_err(|e| format!("Failed to copy {}: {}", file_name.to_string_lossy(), e))?;
+                count += 1;
+            }
+        }
+        println!("[SEEDS] Copied {} seed files to final destination", count);
+        Ok(())
+    } else {
+        Err("Failed to read bundled seeds directory".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -1110,7 +1161,14 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Store app handle for event emission from threads
-            set_app_handle(app.handle().clone());
+            let handle = app.handle().clone();
+            set_app_handle(handle.clone());
+
+            // Copy bundled seeds to server-components on first run
+            if let Err(e) = setup_bundled_seeds(&handle) {
+                eprintln!("[SEEDS] Warning: Failed to setup bundled seeds: {}", e);
+                eprintln!("[SEEDS] Seeds will need to be manually placed in the seeds directory");
+            }
 
             // Set up Ctrl+C handler to stop the server on termination
             ctrlc::set_handler(move || {
