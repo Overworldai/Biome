@@ -1,8 +1,9 @@
 # Model Weights License
-## Overworld Provided Models Compatible with Biome ##
+
+## Overworld Provided Models Compatible with Biome
 
 **Effective Date:** 2026-02-03  
-**Last Updated:** 2026-02-03  
+**Last Updated:** 2026-02-03
 
 This Model Weights License (“Model License”) governs access to and use of any **trained model weights, checkpoints, or parameters** (“Model Weights”) released by **Overworld (Open World Labs Inc)** (“Company”).
 
@@ -15,6 +16,7 @@ By downloading, accessing, or using the Model Weights, you agree to this Model L
 The Model Weights constitute a trained machine learning artifact capable of producing generative outputs.
 
 You acknowledge that:
+
 - Outputs are probabilistic and non-deterministic
 - The Model Weights may exhibit emergent or unsafe behavior
 - The Model Weights are not authoritative or reliable
@@ -32,12 +34,15 @@ This license does **not** grant ownership of the Model Weights.
 ## 3. Permitted Research & Safety Use
 
 You may:
+
 - Conduct academic or independent research
 - Benchmark and evaluate model behavior
 - Perform red-teaming, adversarial testing, and safety analysis but may only share those results with THE COMPANY (Overworld, Open World Labs Inc)
 
 ### Responsible Disclosure Requirement
+
 Findings that demonstrate:
+
 - Exploitable vulnerabilities
 - Safety bypasses
 - High-risk failure modes
@@ -63,6 +68,7 @@ You may not knowingly publish or distribute **illegal outputs**, regardless of j
 ## 5. Training, Fine-Tuning & Extraction
 
 Unless explicitly permitted:
+
 - Fine-tuning and continued training is allowed for internal use
 - Redistribution of fine-tuned weights requires attribution and license notice
 - Model extraction, cloning, or distillation intended to recreate substantially similar weights is prohibited
@@ -72,6 +78,7 @@ Unless explicitly permitted:
 ## 6. Regulatory & Export Compliance
 
 You agree to comply with:
+
 - Export Administration Regulations (EAR)
 - OFAC sanctions
 - Applicable AI-specific regulation in your jurisdiction
@@ -97,6 +104,7 @@ To the maximum extent permitted by law, the Company shall not be liable for dama
 This license terminates automatically if you violate these terms.
 
 Upon termination:
+
 - You must cease use of the Model Weights
 - Continued possession may be unlawful depending on jurisdiction
 

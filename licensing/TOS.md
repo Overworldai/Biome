@@ -1,8 +1,9 @@
 # Code Terms of Service & License
+
 ## Biome — Source Code
 
 **Effective Date:** 2026-02-03  
-**Last Updated:** 2026-02-03  
+**Last Updated:** 2026-02-03
 
 These Code Terms (“Code Terms”) govern use of the Biome **source code**, including all non-model artifacts: software code, interfaces, build systems, configuration files, scripts, and documentation (collectively, the “Code”).
 
