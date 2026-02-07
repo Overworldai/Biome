@@ -291,7 +291,8 @@ async def lifespan(app: FastAPI):
     cache = load_seeds_cache()
     if not cache.get("files"):
         logger.info("Cache empty, scanning seed directories...")
-        cache = await rescan_seeds()
+        async with rescan_lock:
+            cache = await rescan_seeds()
     else:
         logger.info(f"Using cached seed data ({len(cache.get('files', {}))} seeds)")
 
@@ -403,7 +404,12 @@ async def set_cache(request: SetCacheRequest):
 
 @app.get("/seeds/list")
 async def list_seeds():
-    """Return list of all available seeds with metadata (only safe ones)."""
+    """Return list of all available seeds with metadata (only safe ones).
+    If a scan is in progress, waits for it to finish before returning."""
+    # Wait for any in-progress scan to complete before reading cache
+    async with rescan_lock:
+        pass
+
     safe_only = {
         filename: {
             "filename": filename,
@@ -549,17 +555,7 @@ async def rescan_seeds_endpoint():
     """Trigger a rescan of all seed directories."""
     global safe_seeds_cache
 
-    # Prevent concurrent rescans
-    if rescan_lock.locked():
-        logger.warning("Rescan already in progress, rejecting duplicate request")
-        return JSONResponse(
-            {
-                "status": "busy",
-                "message": "Rescan already in progress",
-            },
-            status_code=409,
-        )
-
+    # If a scan is already in progress, wait for it to finish
     async with rescan_lock:
         logger.info("Manual rescan triggered")
         cache = await rescan_seeds()

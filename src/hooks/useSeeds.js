@@ -10,36 +10,20 @@ export const useSeeds = () => {
   const [error, setError] = useState(null)
   const [seedsDir, setSeedsDir] = useState(null)
 
-  // Initialize seeds directory (copy bundled seeds on first run)
+  // Initialize seeds list (server handles scanning on startup, this just fetches the list)
   const initializeSeeds = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      // Show loading message during safety scan
-      log.info('Initializing seeds and running safety checks...')
-      const result = await invoke('initialize_seeds')
-      log.info('Seeds initialized:', result)
-
-      // Parse result for unsafe count (new format: "Seeds initialized: X total, Y safe")
-      const match = result.match(/(\d+) total, (\d+) safe/)
-      if (match) {
-        const total = parseInt(match[1])
-        const safe = parseInt(match[2])
-        const unsafe = total - safe
-        if (unsafe > 0) {
-          log.warn(`${unsafe} seed images hidden due to safety check`)
-        }
-      }
-
-      // Refresh the list after initialization
+      log.info('Fetching seed list from server...')
       const seedList = await invoke('list_seeds')
       setSeeds(seedList)
-      // Get the seeds directory path
+      log.info('Seeds loaded:', seedList.length, 'seeds available')
       const path = await invoke('get_seeds_dir_path')
       setSeedsDir(path)
-      return result
+      return seedList
     } catch (err) {
-      log.error('Failed to initialize seeds:', err)
+      log.error('Failed to load seeds:', err)
       setError(err)
       throw err
     } finally {

@@ -181,14 +181,13 @@ class WorldEngineManager:
 
         # Seed frame will be provided by frontend via set_initial_seed message
         logger.info(
-            "[3/4] Seed frame: waiting for client to provide initial seed via base64"
+            "[3/4] Seed frame: waiting for client to provide initial seed"
         )
         self.seed_frame = None
 
         logger.info("[4/4] Engine initialization complete")
         logger.info("=" * 60)
         logger.info("SERVER READY - Waiting for WebSocket connections on /ws")
-        logger.info("         (Client must send set_initial_seed with base64 data)")
         logger.info("=" * 60)
 
     def frame_to_jpeg(self, frame: torch.Tensor, quality: int = JPEG_QUALITY) -> bytes:

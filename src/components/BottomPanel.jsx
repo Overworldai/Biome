@@ -155,61 +155,46 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   // Track which thumbnails are currently being loaded
   const loadingThumbnailsRef = useRef(new Set())
 
-  // Load seeds list
-  const loadSeeds = useCallback(async () => {
-    setLoadingSeeds(true)
-    try {
-      const seedList = await invoke('list_seeds')
-      setSeeds(seedList)
-    } catch (err) {
-      console.error('Failed to load seeds:', err)
-    } finally {
-      setLoadingSeeds(false)
-    }
-  }, [])
-
-  // Load seeds once when tab first opens
+  // Load seeds and thumbnails on mount
   useEffect(() => {
-    if (activeTab === 'seeds' && seeds.length === 0 && !loadingSeeds) {
-      loadSeeds()
-    }
-  }, [activeTab, seeds.length, loadingSeeds, loadSeeds])
+    let cancelled = false
 
-  // Load thumbnails for seeds (batched, with deduplication)
-  useEffect(() => {
-    if (activeTab !== 'seeds' || seeds.length === 0) return
+    const loadSeedsAndThumbnails = async () => {
+      setLoadingSeeds(true)
+      try {
+        const seedList = await invoke('list_seeds')
+        if (cancelled) return
+        setSeeds(seedList)
 
-    const loadBatch = async () => {
-      for (const filename of seeds) {
-        // Skip if already loaded or currently loading
-        if (loadingThumbnailsRef.current.has(filename)) continue
-
-        setSeedThumbnails((prev) => {
-          if (prev[filename]) return prev // Already have it
-
-          // Mark as loading and start the load
+        // Load all thumbnails in background
+        for (const filename of seedList) {
+          if (loadingThumbnailsRef.current.has(filename)) continue
           loadingThumbnailsRef.current.add(filename)
           invoke('read_seed_thumbnail', { filename, maxSize: 100 })
             .then((base64) => {
-              setSeedThumbnails((p) => ({ ...p, [filename]: base64 }))
+              if (!cancelled) setSeedThumbnails((p) => ({ ...p, [filename]: base64 }))
             })
             .catch((err) => console.error('Failed to load thumbnail:', filename, err))
             .finally(() => loadingThumbnailsRef.current.delete(filename))
-
-          return prev
-        })
+        }
+      } catch (err) {
+        console.error('Failed to load seeds:', err)
+      } finally {
+        if (!cancelled) setLoadingSeeds(false)
       }
     }
 
-    loadBatch()
-  }, [activeTab, seeds])
+    loadSeedsAndThumbnails()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  // Handle seed selection - reset server and send filename (server loads from its storage)
+  // Handle seed selection - send new seed to server (prompt_with_seed handles load + reset)
   const handleSeedClick = async (filename) => {
     setSelectedSeed(filename)
     try {
-      reset()
-      sendInitialSeed(filename)
+      sendPromptWithSeed(filename)
       requestPointerLock()
     } catch (err) {
       console.error('Failed to apply seed:', err)

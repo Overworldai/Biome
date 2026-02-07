@@ -142,7 +142,7 @@ impl Default for AppConfig {
                 prompt_sanitizer: true,
                 seed_generation: true,
                 engine_mode: EngineMode::Unchosen,
-                seed_gallery: false,
+                seed_gallery: true,
             },
             ui: UiConfig::default(),
         }
@@ -676,35 +676,7 @@ async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
 
 const SERVER_BASE_URL: &str = "http://localhost:7987";
 
-/// Initialize seeds (triggers server-side rescan)
-#[tauri::command]
-async fn initialize_seeds(_app: tauri::AppHandle) -> Result<String, String> {
-    log::info!("Triggering server-side seed scan...");
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{}/seeds/rescan", SERVER_BASE_URL))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to contact server: {}", e))?;
-
-    if !response.status().is_success() {
-        return Err(format!("Server returned error: {}", response.status()));
-    }
-
-    let result: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    Ok(format!(
-        "Seeds initialized: {} total, {} safe",
-        result["total_seeds"].as_u64().unwrap_or(0),
-        result["safe_seeds"].as_u64().unwrap_or(0)
-    ))
-}
-
-/// List available seeds from server
+/// List available seeds from server (waits for any in-progress scan to complete)
 #[tauri::command]
 async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let client = reqwest::Client::new();
@@ -1168,7 +1140,6 @@ pub fn run() {
             is_server_running,
             is_server_ready,
             is_port_in_use,
-            initialize_seeds,
             list_seeds,
             read_seed_as_base64,
             read_seed_thumbnail,
