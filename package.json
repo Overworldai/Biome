@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "prettier --check . && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
-    "lint-fix": "prettier --write . && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --fix --allow-dirty -- -D warnings"
+    "lint-fix": "prettier --write . && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --fix --allow-dirty -- -D warnings",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react": "^4.3.4",
+    "husky": "^9.1.7",
     "prettier": "^3"
   }
 }
