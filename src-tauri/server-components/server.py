@@ -563,6 +563,17 @@ async def get_seed_thumbnail(filename: str):
         img = await asyncio.to_thread(Image.open, file_path)
         img.thumbnail((80, 80))
 
+        # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Create white background and composite
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
         # Convert to JPEG in memory
         buffer = io.BytesIO()
         await asyncio.to_thread(img.save, buffer, format="JPEG", quality=85)
