@@ -178,7 +178,7 @@ def save_seeds_cache(cache: dict):
 
 async def rescan_seeds() -> dict:
     """Scan seed directories and run safety checks on all images."""
-    logger.info("Starting seed directory scan...")
+    logger.info("Starting full seed directory scan...")
     cache = {"files": {}, "last_scan": time.time()}
 
     # Scan both default and uploads directories
@@ -233,6 +233,131 @@ async def rescan_seeds() -> dict:
     return cache
 
 
+async def validate_and_update_cache() -> dict:
+    """
+    Validate cached seed data and update as needed.
+
+    Returns:
+        Updated cache dict with structure {"files": {...}, "last_scan": timestamp}
+
+    Behavior:
+        - Checks if all cached files still exist and hashes match
+        - If any hash mismatch detected → triggers full directory rescan
+        - If files are missing → removes them from cache
+        - If new unchecked files found → scans only those and adds to cache
+    """
+    logger.info("Validating seed cache...")
+    cache = load_seeds_cache()
+    cached_files = cache.get("files", {})
+
+    # If cache is empty, do full scan
+    if not cached_files:
+        logger.info("Cache is empty, performing full scan")
+        return await rescan_seeds()
+
+    # Scan directories for all current files
+    all_current_files = list(DEFAULT_SEEDS_DIR.glob("*.png")) + list(UPLOADS_DIR.glob("*.png"))
+    current_file_map = {p.name: str(p) for p in all_current_files}  # filename -> path
+    current_filenames = set(current_file_map.keys())
+
+    # Track validation results
+    missing_files = []
+    hash_mismatches = []
+
+    logger.info(f"Validating {len(cached_files)} cached entries against {len(current_filenames)} files on disk")
+
+    # Validate each cached entry
+    for filename, cached_data in list(cached_files.items()):
+        cached_path = cached_data.get("path", "")
+
+        # Check if file still exists
+        if not os.path.exists(cached_path):
+            logger.info(f"  {filename}: File no longer exists, removing from cache")
+            missing_files.append(filename)
+            continue
+
+        # Check if hash matches
+        cached_hash = cached_data.get("hash", "")
+        if not cached_hash:
+            # Entry had error during hashing, consider it a mismatch
+            logger.info(f"  {filename}: No hash in cache, needs rescan")
+            hash_mismatches.append(filename)
+            continue
+
+        actual_hash = await asyncio.to_thread(compute_file_hash, cached_path)
+
+        if actual_hash != cached_hash:
+            logger.warning(f"  {filename}: Hash mismatch (cached: {cached_hash[:8]}..., actual: {actual_hash[:8]}...)")
+            hash_mismatches.append(filename)
+
+    # Remove missing files from cache
+    for filename in missing_files:
+        del cached_files[filename]
+
+    # If any hash mismatches found, trigger full rescan
+    if hash_mismatches:
+        logger.warning(f"Hash mismatches detected for {len(hash_mismatches)} file(s), triggering full rescan")
+        return await rescan_seeds()
+
+    # Find new unchecked files
+    new_filenames = current_filenames - set(cached_files.keys())
+
+    if new_filenames:
+        logger.info(f"Found {len(new_filenames)} new unchecked file(s), scanning...")
+
+        # Collect paths for new files
+        files_to_scan = [Path(current_file_map[fn]) for fn in new_filenames]
+
+        # Compute hashes
+        logger.info("  Computing file hashes...")
+        hash_tasks = [asyncio.to_thread(compute_file_hash, str(p)) for p in files_to_scan]
+        file_hashes = await asyncio.gather(*hash_tasks, return_exceptions=True)
+
+        # Run batch safety check
+        logger.info("  Running batch safety check...")
+        image_paths = [str(p) for p in files_to_scan]
+        safety_results = await asyncio.to_thread(safety_checker.check_batch, image_paths)
+
+        # Add to cache
+        checked_at = time.time()
+        for i, seed_path in enumerate(files_to_scan):
+            filename = seed_path.name
+            file_hash = file_hashes[i] if not isinstance(file_hashes[i], Exception) else ""
+            safety_result = safety_results[i]
+
+            if isinstance(file_hashes[i], Exception):
+                logger.error(f"  Failed to hash {filename}: {file_hashes[i]}")
+                cached_files[filename] = {
+                    "hash": "",
+                    "is_safe": False,
+                    "path": str(seed_path),
+                    "error": str(file_hashes[i]),
+                    "checked_at": checked_at,
+                }
+            else:
+                cached_files[filename] = {
+                    "hash": file_hash,
+                    "is_safe": safety_result.get("is_safe", False),
+                    "path": str(seed_path),
+                    "scores": safety_result.get("scores", {}),
+                    "checked_at": checked_at,
+                }
+
+            status = "✓ SAFE" if safety_result.get("is_safe") else "✗ UNSAFE"
+            logger.info(f"    {filename}: {status}")
+
+    # Update cache if any changes were made
+    if missing_files or new_filenames:
+        cache["files"] = cached_files
+        cache["last_scan"] = time.time()
+        save_seeds_cache(cache)
+        logger.info(f"Cache updated: {len(missing_files)} removed, {len(new_filenames)} added, {len(cached_files)} total")
+    else:
+        logger.info("Cache validation complete: All entries valid, no changes needed")
+
+    return cache
+
+
 # ============================================================================
 # Application Lifecycle
 # ============================================================================
@@ -265,14 +390,9 @@ async def lifespan(app: FastAPI):
     ensure_seed_directories()
     await setup_default_seeds()
 
-    # Load or create seed cache
-    cache = load_seeds_cache()
-    if not cache.get("files"):
-        logger.info("Cache empty, scanning seed directories...")
-        async with rescan_lock:
-            cache = await rescan_seeds()
-    else:
-        logger.info(f"Using cached seed data ({len(cache.get('files', {}))} seeds)")
+    # Validate and update seed cache (checks for stale data, missing files, new files)
+    async with rescan_lock:
+        cache = await validate_and_update_cache()
 
     # Update global cache (map filename -> metadata)
     safe_seeds_cache = cache.get("files", {})
@@ -528,15 +648,31 @@ async def upload_seed(request: UploadSeedRequest):
         )
 
 
+class RescanRequest(BaseModel):
+    force_full_rescan: bool = False  # Optional: force full rescan instead of smart validation
+
+
 @app.post("/seeds/rescan")
-async def rescan_seeds_endpoint():
-    """Trigger a rescan of all seed directories."""
+async def rescan_seeds_endpoint(request: Optional[RescanRequest] = None):
+    """
+    Trigger a rescan of seed directories.
+
+    By default, performs smart validation (incremental updates).
+    Set force_full_rescan=true to force a complete rescan of all files.
+    """
     global safe_seeds_cache
+
+    force_full = request.force_full_rescan if request else False
 
     # If a scan is already in progress, wait for it to finish
     async with rescan_lock:
-        logger.info("Manual rescan triggered")
-        cache = await rescan_seeds()
+        if force_full:
+            logger.info("Manual full rescan triggered")
+            cache = await rescan_seeds()
+        else:
+            logger.info("Manual rescan triggered (smart validation)")
+            cache = await validate_and_update_cache()
+
         safe_seeds_cache = cache.get("files", {})
 
         safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe"))
@@ -545,6 +681,7 @@ async def rescan_seeds_endpoint():
                 "status": "ok",
                 "total_seeds": len(safe_seeds_cache),
                 "safe_seeds": safe_count,
+                "method": "full_rescan" if force_full else "smart_validation",
             }
         )
 
