@@ -30,6 +30,8 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const [seedThumbnails, setSeedThumbnails] = useState({})
   const [loadingSeeds, setLoadingSeeds] = useState(false)
   const [selectedSeed, setSelectedSeed] = useState(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef(null)
 
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
@@ -199,6 +201,76 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     } catch (err) {
       console.error('Failed to apply seed:', err)
     }
+  }
+
+  // Handle image upload
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+
+    setUploadingImage(true)
+    try {
+      // Convert to base64
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const base64Data = e.target.result.split(',')[1] // Remove data URL prefix
+
+          // Upload to server
+          const response = await fetch('http://localhost:7987/seeds/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              data: base64Data
+            })
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Upload failed')
+          }
+
+          // Refresh seeds list
+          const seedList = await invoke('list_seeds')
+          setSeeds(seedList)
+
+          // Load thumbnail for new seed
+          const base64Thumb = await invoke('read_seed_thumbnail', { filename: file.name, maxSize: 100 })
+          setSeedThumbnails((prev) => ({ ...prev, [file.name]: base64Thumb }))
+
+          setUploadingImage(false)
+        } catch (err) {
+          console.error('Upload error:', err)
+          setError(err.message || 'Failed to upload image')
+          setTimeout(() => setError(null), 3000)
+          setUploadingImage(false)
+        }
+      }
+
+      reader.onerror = () => {
+        setError('Failed to read file')
+        setTimeout(() => setError(null), 3000)
+        setUploadingImage(false)
+      }
+
+      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError('Failed to upload image')
+      setTimeout(() => setError(null), 3000)
+      setUploadingImage(false)
+    }
+
+    // Reset file input
+    event.target.value = ''
   }
 
   const applyPrompt = async () => {
@@ -392,7 +464,44 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
           {/* Seeds tab content - only rendered when seed gallery is enabled */}
           {seedGalleryEnabled && activeTab === 'seeds' && (
             <div className="seeds-container">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ display: 'none' }}
+              />
+
               <div className="seeds-gallery">
+                {/* Upload button - always first */}
+                <div
+                  className={`seed-item seed-upload ${uploadingImage ? 'uploading' : ''} ${seedsDisabled ? 'disabled' : ''}`}
+                  onClick={() => !seedsDisabled && !uploadingImage && fileInputRef.current?.click()}
+                  title={seedsDisabled ? 'Wait to upload...' : 'Upload image'}
+                >
+                  <div className="seed-placeholder">
+                    {uploadingImage ? (
+                      <svg
+                        className="upload-spinner"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
+                        <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+                        <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+
                 {loadingSeeds ? (
                   <div className="seeds-loading">Loading seeds...</div>
                 ) : seeds.length === 0 ? (

@@ -4,7 +4,6 @@ Safety module - NSFW image detection for seed validation.
 Uses Freepik/nsfw_image_detector model to check images for inappropriate content.
 """
 
-import gc
 import logging
 import threading
 from typing import List, Dict
@@ -27,62 +26,65 @@ class SafetyChecker:
     def __init__(self):
         self.model = None
         self.processor = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.current_device = None  # Track which device model is currently loaded on
         self._lock = threading.Lock()  # Prevent concurrent model access
-        logger.info(f"SafetyChecker initialized (device: {self.device})")
+        logger.info("SafetyChecker initialized")
 
-    def _load_model(self):
-        """Lazy load model on first check."""
-        if self.model is None:
-            logger.info("Loading NSFW detection model...")
+    def _load_model(self, device: str = "cpu"):
+        """Lazy load model on specified device."""
+        # Reload if model not loaded or device changed
+        if self.model is None or self.current_device != device:
+            if self.model is not None:
+                logger.info(f"Switching model from {self.current_device} to {device}")
+                self.unload_model()
 
-            if self.device == "cuda":
-                load_start = torch.cuda.Event(enable_timing=True)
-                load_end = torch.cuda.Event(enable_timing=True)
-                load_start.record()
+            logger.info(f"Loading NSFW detection model on {device}...")
 
+            # Use float32 for CPU (better compatibility), bfloat16 for GPU (better performance)
+            dtype = torch.float32 if device == "cpu" else torch.bfloat16
             self.model = AutoModelForImageClassification.from_pretrained(
-                "Freepik/nsfw_image_detector", dtype=torch.bfloat16
-            ).to(self.device)
+                "Freepik/nsfw_image_detector", torch_dtype=dtype
+            ).to(device)
 
             cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
             self.processor = create_transform(**resolve_data_config(cfg.__dict__))
 
-            if self.device == "cuda":
-                load_end.record()
-                torch.cuda.synchronize()
-                load_time = load_start.elapsed_time(load_end) / 1000  # Convert to seconds
-                logger.info(f"NSFW detection model loaded in {load_time:.2f}s")
-            else:
-                logger.info("NSFW detection model loaded")
+            self.current_device = device
+            logger.info(f"NSFW detection model loaded on {device}")
 
     def unload_model(self):
         """Unload model from memory to free resources."""
         if self.model is not None:
             logger.info("Unloading NSFW detection model...")
 
-            # Move model to CPU before deletion if it was on GPU
-            if self.device == "cuda":
+            # Move to CPU before deletion if on GPU
+            if self.current_device == "cuda":
                 self.model.cpu()
+
+            # Save device before clearing for cache cleanup decision
+            was_on_cuda = self.current_device == "cuda"
 
             # Delete model and processor
             del self.model
             del self.processor
             self.model = None
             self.processor = None
+            self.current_device = None
 
-            # Clear CUDA cache if available
-            if torch.cuda.is_available():
+            # Clear CUDA cache only if was on GPU
+            # Avoids clearing world engine's CUDA cache when safety checker ran on CPU
+            if was_on_cuda and torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            # Force garbage collection
-            gc.collect()
+            # Note: Removed gc.collect() as forced garbage collection can interfere
+            # with world engine's memory allocation, causing 8+ second delays in append_frame()
 
             logger.info("NSFW detection model unloaded")
 
     def check_image(self, image_path: str) -> Dict[str, any]:
         """
         Check single image for NSFW content.
+        Uses CPU to avoid GPU memory conflicts with world model.
 
         Args:
             image_path: Path to image file
@@ -99,14 +101,14 @@ class SafetyChecker:
             }
         """
         with self._lock:
-            self._load_model()
+            self._load_model(device="cpu")
 
             try:
                 img = Image.open(image_path)
                 # Convert to RGB to handle RGBA/RGB mode differences
                 if img.mode != "RGB":
                     img = img.convert("RGB")
-                scores = self.predict_batch_values([img])[0]
+                scores = self.predict_batch_values([img], device="cpu")[0]
                 is_safe = scores["low"] < 0.5  # Strict threshold
                 result = {"is_safe": is_safe, "scores": scores}
             except Exception as e:
@@ -127,6 +129,7 @@ class SafetyChecker:
     ) -> List[Dict[str, any]]:
         """
         Check multiple images efficiently with proper batching.
+        Uses GPU for efficient parallel processing.
 
         Args:
             image_paths: List of paths to image files
@@ -138,8 +141,10 @@ class SafetyChecker:
         if not image_paths:
             return []
 
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
         with self._lock:
-            self._load_model()
+            self._load_model(device=device)
 
             try:
                 # First pass: load all images and track which ones failed
@@ -161,7 +166,7 @@ class SafetyChecker:
 
                 for i in range(0, len(valid_images), batch_size):
                     batch = valid_images[i : i + batch_size]
-                    batch_scores = self.predict_batch_values(batch)
+                    batch_scores = self.predict_batch_values(batch, device=device)
                     all_scores.extend(batch_scores)
 
                 # Build results, matching order of input paths
@@ -202,13 +207,14 @@ class SafetyChecker:
                 self.unload_model()
 
     def predict_batch_values(
-        self, img_batch: List[Image.Image]
+        self, img_batch: List[Image.Image], device: str = "cpu"
     ) -> List[Dict[str, float]]:
         """
         Process a batch of images and return prediction scores for each NSFW category.
 
         Args:
             img_batch: List of PIL images
+            device: Device to run inference on ("cpu" or "cuda")
 
         Returns:
             List of score dictionaries with cumulative probabilities:
@@ -224,9 +230,7 @@ class SafetyChecker:
         idx_to_label = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
 
         # Prepare batch
-        inputs = torch.stack([self.processor(img) for img in img_batch]).to(
-            self.device
-        )
+        inputs = torch.stack([self.processor(img) for img in img_batch]).to(device)
         output = []
 
         with torch.inference_mode():
@@ -255,6 +259,7 @@ class SafetyChecker:
         img_batch: List[Image.Image],
         class_to_predict: str,
         threshold: float = 0.5,
+        device: str = "cpu",
     ) -> List[bool]:
         """
         Predict if images meet or exceed a specific NSFW threshold.
@@ -263,6 +268,7 @@ class SafetyChecker:
             img_batch: List of PIL images
             class_to_predict: One of "low", "medium", "high"
             threshold: Probability threshold (0.0 to 1.0)
+            device: Device to run inference on ("cpu" or "cuda")
 
         Returns:
             List of booleans indicating if each image meets the threshold
@@ -273,5 +279,5 @@ class SafetyChecker:
         if not 0 <= threshold <= 1:
             raise ValueError("threshold must be between 0 and 1")
 
-        output = self.predict_batch_values(img_batch)
+        output = self.predict_batch_values(img_batch, device=device)
         return [output[i][class_to_predict] >= threshold for i in range(len(output))]

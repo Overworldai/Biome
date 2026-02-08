@@ -1344,6 +1344,35 @@
   height: 50%;
 }
 
+/* Upload button specific styling */
+.seed-upload {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.seed-upload:hover {
+  background: rgba(120, 255, 245, 0.05);
+}
+
+.seed-upload.uploading {
+  opacity: 0.6;
+  cursor: wait;
+  pointer-events: none;
+}
+
+.upload-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .seeds-loading,
 .seeds-empty {
   width: 100%;

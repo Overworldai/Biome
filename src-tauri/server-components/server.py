@@ -382,6 +382,27 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Safety Checker...")
     safety_checker = SafetyChecker()
 
+    # Warmup safety checker to trigger first-time transformers initialization
+    # This prevents CUDA state pollution from affecting WorldEngine's first operations
+    # Without this it seems that the first upload of seed image will have a 
+    logger.info("Warming up Safety Checker (first-time model load)...")
+    warmup_start = time.perf_counter()
+
+    # Create a small dummy image for warmup
+    import tempfile
+    dummy_img = Image.new('RGB', (64, 64), color='gray')
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+        dummy_img.save(tmp.name)
+        dummy_path = tmp.name
+
+    # Run safety check to trigger model loading
+    await asyncio.to_thread(safety_checker.check_image, dummy_path)
+
+    # Cleanup dummy image
+    os.unlink(dummy_path)
+
+    logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
+
     # Load WorldEngine on startup
     await world_engine.load_engine()
 
@@ -410,6 +431,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Biome Server", lifespan=lifespan)
+
+# Add CORS middleware to allow frontend requests
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "tauri://localhost"],  # Vite dev server and Tauri
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ============================================================================
@@ -875,12 +907,16 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json({"type": "status", "code": Status.INIT})
 
         logger.info(f"[{client_host}] Calling engine.reset()...")
-        await asyncio.to_thread(world_engine.engine.reset)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(world_engine.cuda_executor, world_engine.engine.reset)
 
         await send_json({"type": "status", "code": Status.LOADING})
 
         logger.info(f"[{client_host}] Calling append_frame...")
-        await asyncio.to_thread(world_engine.engine.append_frame, world_engine.seed_frame)
+        await loop.run_in_executor(
+            world_engine.cuda_executor,
+            lambda: world_engine.engine.append_frame(world_engine.seed_frame)
+        )
 
         # Send initial frame so client has something to display
         jpeg = await asyncio.to_thread(

@@ -235,15 +235,27 @@ class WorldEngineManager:
     async def reset_state(self):
         """Reset engine state."""
         loop = asyncio.get_event_loop()
+
+        t0 = time.perf_counter()
+        logger.info("[RESET] Starting engine.reset()...")
         await loop.run_in_executor(self.cuda_executor, self.engine.reset)
+        logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
+
+        t0 = time.perf_counter()
+        logger.info("[RESET] Starting engine.append_frame()...")
         await loop.run_in_executor(
             self.cuda_executor,
             lambda: self.engine.append_frame(self.seed_frame)
         )
+        logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+
+        t0 = time.perf_counter()
+        logger.info("[RESET] Starting engine.set_prompt()...")
         await loop.run_in_executor(
             self.cuda_executor,
             lambda: self.engine.set_prompt(self.current_prompt)
         )
+        logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
 
     async def recover_from_cuda_error(self):
         """
