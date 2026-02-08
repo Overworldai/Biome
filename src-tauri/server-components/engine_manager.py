@@ -9,6 +9,7 @@ import base64
 import io
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import torch
@@ -89,11 +90,14 @@ class WorldEngineManager:
         self.CtrlInput = None
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
+        # Single-threaded executor for CUDA operations to maintain thread-local storage
+        # This is critical for CUDA graphs which must run in the same thread they were compiled in
+        self.cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
 
-    def load_seed_from_file(
+    def _load_seed_from_file_sync(
         self, file_path: str, target_size: tuple[int, int] = (360, 640)
     ) -> torch.Tensor:
-        """Load a seed frame from a file path."""
+        """Synchronous helper to load a seed frame from a file path."""
         try:
             img = Image.open(file_path).convert("RGB")
             import numpy as np
@@ -113,10 +117,20 @@ class WorldEngineManager:
             logger.error(f"Failed to load seed from file {file_path}: {e}")
             return None
 
-    def load_seed_from_base64(
+    async def load_seed_from_file(
+        self, file_path: str, target_size: tuple[int, int] = (360, 640)
+    ) -> torch.Tensor:
+        """Load a seed frame from a file path (async wrapper)."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.cuda_executor,
+            lambda: self._load_seed_from_file_sync(file_path, target_size)
+        )
+
+    def _load_seed_from_base64_sync(
         self, base64_data: str, target_size: tuple[int, int] = (360, 640)
     ) -> torch.Tensor:
-        """Load a seed frame from base64 encoded data."""
+        """Synchronous helper to load a seed frame from base64 encoded data."""
         try:
             img_data = base64.b64decode(base64_data)
             img = Image.open(io.BytesIO(img_data)).convert("RGB")
@@ -136,6 +150,16 @@ class WorldEngineManager:
         except Exception as e:
             logger.error(f"Failed to load seed from base64: {e}")
             return None
+
+    async def load_seed_from_base64(
+        self, base64_data: str, target_size: tuple[int, int] = (360, 640)
+    ) -> torch.Tensor:
+        """Load a seed frame from base64 encoded data (async wrapper)."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.cuda_executor,
+            lambda: self._load_seed_from_base64_sync(base64_data, target_size)
+        )
 
 
     async def load_engine(self):
@@ -201,14 +225,57 @@ class WorldEngineManager:
 
     async def generate_frame(self, ctrl_input) -> torch.Tensor:
         """Generate next frame using WorldEngine."""
-        frame = await asyncio.to_thread(self.engine.gen_frame, ctrl=ctrl_input)
+        loop = asyncio.get_event_loop()
+        frame = await loop.run_in_executor(
+            self.cuda_executor,
+            lambda: self.engine.gen_frame(ctrl=ctrl_input)
+        )
         return frame
 
     async def reset_state(self):
         """Reset engine state."""
-        await asyncio.to_thread(self.engine.reset)
-        await asyncio.to_thread(self.engine.append_frame, self.seed_frame)
-        await asyncio.to_thread(self.engine.set_prompt, self.current_prompt)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(self.cuda_executor, self.engine.reset)
+        await loop.run_in_executor(
+            self.cuda_executor,
+            lambda: self.engine.append_frame(self.seed_frame)
+        )
+        await loop.run_in_executor(
+            self.cuda_executor,
+            lambda: self.engine.set_prompt(self.current_prompt)
+        )
+
+    async def recover_from_cuda_error(self):
+        """
+        Recover from CUDA errors by clearing caches and resetting compilation.
+        This is needed when CUDA graphs become corrupted.
+        """
+        logger.warning("[CUDA RECOVERY] Attempting to recover from CUDA error...")
+
+        def clear_cuda():
+            # Synchronize to ensure all operations are complete
+            torch.cuda.synchronize()
+
+            # Clear CUDA caches
+            torch.cuda.empty_cache()
+
+            # Clear compiled functions cache (this clears corrupted CUDA graphs)
+            torch._dynamo.reset()
+
+            logger.info("[CUDA RECOVERY] CUDA caches cleared and dynamo reset")
+
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(self.cuda_executor, clear_cuda)
+
+            # Reset engine state after clearing CUDA caches
+            await self.reset_state()
+
+            logger.info("[CUDA RECOVERY] Recovery complete - engine ready")
+            return True
+        except Exception as e:
+            logger.error(f"[CUDA RECOVERY] Failed to recover: {e}", exc_info=True)
+            return False
 
     async def warmup(self):
         """Perform initial warmup to compile CUDA graphs."""
@@ -256,7 +323,8 @@ class WorldEngineManager:
         )
         logger.info("=" * 60)
 
-        warmup_time = await asyncio.to_thread(do_warmup)
+        loop = asyncio.get_event_loop()
+        warmup_time = await loop.run_in_executor(self.cuda_executor, do_warmup)
 
         logger.info("=" * 60)
         logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")

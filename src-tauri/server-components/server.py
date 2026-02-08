@@ -836,9 +836,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # All checks passed - load the seed
                     logger.info(f"[{client_host}] Loading initial seed '{filename}'")
-                    loaded_frame = await asyncio.to_thread(
-                        world_engine.load_seed_from_file, file_path
-                    )
+                    loaded_frame = await world_engine.load_seed_from_file(file_path)
 
                     if loaded_frame is not None:
                         world_engine.seed_frame = loaded_frame
@@ -1035,9 +1033,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # All checks passed - load the seed
                         logger.info(f"[RECV] Loading seed '{filename}' from {file_path}")
-                        loaded_frame = await asyncio.to_thread(
-                            world_engine.load_seed_from_file, file_path
-                        )
+                        loaded_frame = await world_engine.load_seed_from_file(file_path)
 
                         if loaded_frame is not None:
                             world_engine.seed_frame = loaded_frame
@@ -1082,28 +1078,57 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                     t0 = time.perf_counter()
-                    frame = await world_engine.generate_frame(ctrl)
-                    gen_time = (time.perf_counter() - t0) * 1000
+                    try:
+                        frame = await world_engine.generate_frame(ctrl)
+                        gen_time = (time.perf_counter() - t0) * 1000
 
-                    session.frame_count += 1
+                        session.frame_count += 1
 
-                    # Encode and send frame with timing info
-                    jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
-                    await send_json(
-                        {
-                            "type": "frame",
-                            "data": base64.b64encode(jpeg).decode("ascii"),
-                            "frame_id": session.frame_count,
-                            "client_ts": client_ts,
-                            "gen_ms": gen_time,
-                        }
-                    )
-
-                    # Logging
-                    if session.frame_count % 60 == 0:
-                        logger.info(
-                            f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
+                        # Encode and send frame with timing info
+                        jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
+                        await send_json(
+                            {
+                                "type": "frame",
+                                "data": base64.b64encode(jpeg).decode("ascii"),
+                                "frame_id": session.frame_count,
+                                "client_ts": client_ts,
+                                "gen_ms": gen_time,
+                            }
                         )
+
+                        # Logging
+                        if session.frame_count % 60 == 0:
+                            logger.info(
+                                f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
+                            )
+                    except Exception as cuda_err:
+                        # Check if it's a CUDA-related error (RuntimeError or torch.AcceleratorError)
+                        error_msg = str(cuda_err)
+                        is_cuda_error = any(keyword in error_msg.lower() for keyword in ['cuda', 'cublas', 'graph capture', 'offset increment'])
+
+                        if is_cuda_error:
+                            logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
+
+                            # Attempt recovery
+                            recovery_success = await world_engine.recover_from_cuda_error()
+
+                            if recovery_success:
+                                await send_json({
+                                    "type": "status",
+                                    "code": Status.RESET,
+                                    "message": "Recovered from CUDA error - engine reset"
+                                })
+                                logger.info(f"[{client_host}] Successfully recovered from CUDA error")
+                            else:
+                                await send_json({
+                                    "type": "error",
+                                    "message": "CUDA error - recovery failed. Please reconnect."
+                                })
+                                logger.error(f"[{client_host}] Failed to recover from CUDA error")
+                                break
+                        else:
+                            # Re-raise if not a CUDA error
+                            raise
 
     except Exception as e:
         logger.error(f"[{client_host}] Error: {e}", exc_info=True)
