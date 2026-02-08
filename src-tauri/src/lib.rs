@@ -1112,11 +1112,22 @@ fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
     // Copy directly to final destination: world_engine/seeds/default
-    let dest_dir = app_data_dir.join("world_engine").join("seeds").join("default");
+    let dest_dir = app_data_dir
+        .join("world_engine")
+        .join("seeds")
+        .join("default");
 
     // If seeds already exist, skip setup
-    if dest_dir.exists() && dest_dir.read_dir().map(|mut d| d.next().is_some()).unwrap_or(false) {
-        println!("[SEEDS] Seeds already exist at {:?}, skipping bundle extraction", dest_dir);
+    if dest_dir.exists()
+        && dest_dir
+            .read_dir()
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false)
+    {
+        println!(
+            "[SEEDS] Seeds already exist at {:?}, skipping bundle extraction",
+            dest_dir
+        );
         return Ok(());
     }
 
@@ -1142,8 +1153,9 @@ fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
             if path.extension().and_then(|s| s.to_str()) == Some("png") {
                 let file_name = path.file_name().ok_or("Invalid filename")?;
                 let dest_path = dest_dir.join(file_name);
-                fs::copy(&path, &dest_path)
-                    .map_err(|e| format!("Failed to copy {}: {}", file_name.to_string_lossy(), e))?;
+                fs::copy(&path, &dest_path).map_err(|e| {
+                    format!("Failed to copy {}: {}", file_name.to_string_lossy(), e)
+                })?;
                 count += 1;
             }
         }
