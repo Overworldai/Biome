@@ -268,6 +268,22 @@ fn get_uv_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(exe_dir.join(".uv"))
 }
 
+/// Get the base seeds directory path (next to executable for portability)
+fn get_seeds_base_dir() -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(WORLD_ENGINE_DIR).join("seeds"))
+}
+
+/// Get the default (bundled) seeds directory path
+fn get_seeds_default_dir() -> Result<PathBuf, String> {
+    Ok(get_seeds_base_dir()?.join("default"))
+}
+
+/// Get the uploads (user) seeds directory path
+fn get_seeds_uploads_dir() -> Result<PathBuf, String> {
+    Ok(get_seeds_base_dir()?.join("uploads"))
+}
+
 // Get the path to our local uv binary
 fn get_uv_binary_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let uv_dir = get_uv_dir(app)?;
@@ -776,18 +792,17 @@ async fn read_seed_thumbnail(
     Ok(BASE64_STANDARD.encode(&bytes))
 }
 
-/// Get the seeds directory path (server-side)
+/// Get the seeds uploads directory path
 #[tauri::command]
 fn get_seeds_dir_path(_app: tauri::AppHandle) -> Result<String, String> {
-    // Return server-side path for information purposes
-    Ok("world_engine/seeds/uploads".to_string())
+    let seeds_dir = get_seeds_uploads_dir()?;
+    Ok(seeds_dir.to_string_lossy().to_string())
 }
 
-/// Open the seeds directory in file explorer (server-side)
+/// Open the seeds uploads directory in file explorer
 #[tauri::command]
 async fn open_seeds_dir(_app: tauri::AppHandle) -> Result<(), String> {
-    let exe_dir = get_exe_dir()?;
-    let seeds_dir = exe_dir.join("world_engine").join("seeds").join("uploads");
+    let seeds_dir = get_seeds_uploads_dir()?;
 
     // Create directory if it doesn't exist
     if !seeds_dir.exists() {
@@ -1127,19 +1142,9 @@ fn is_port_in_use(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }
 
-/// Copy bundled default seeds to the server-components directory on first run
 /// Copy bundled default seeds directly to the final destination on first run
 fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    // Copy directly to final destination: world_engine/seeds/default
-    let dest_dir = app_data_dir
-        .join("world_engine")
-        .join("seeds")
-        .join("default");
+    let dest_dir = get_seeds_default_dir()?;
 
     // If seeds already exist, skip setup
     if dest_dir.exists()
