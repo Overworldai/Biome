@@ -21,6 +21,8 @@ const STANDALONE_PORT: u16 = 7987;
 // Bundled server components (embedded at compile time)
 const SERVER_PY: &str = include_str!("../server-components/server.py");
 const PYPROJECT_TOML: &str = include_str!("../server-components/pyproject.toml");
+const ENGINE_MANAGER_PY: &str = include_str!("../server-components/engine_manager.py");
+const SAFETY_PY: &str = include_str!("../server-components/safety.py");
 
 /// Engine mode: how the World Engine server should be managed
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -533,6 +535,14 @@ async fn setup_server_components(app: tauri::AppHandle) -> Result<String, String
     fs::write(engine_dir.join("pyproject.toml"), PYPROJECT_TOML)
         .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
 
+    // Write bundled engine_manager.py
+    fs::write(engine_dir.join("engine_manager.py"), ENGINE_MANAGER_PY)
+        .map_err(|e| format!("Failed to write engine_manager.py: {}", e))?;
+
+    // Write bundled safety.py
+    fs::write(engine_dir.join("safety.py"), SAFETY_PY)
+        .map_err(|e| format!("Failed to write safety.py: {}", e))?;
+
     Ok("Server components installed".to_string())
 }
 
@@ -621,6 +631,8 @@ fn unpack_server_files_inner(app: &tauri::AppHandle, force: bool) -> Result<Stri
 
     let server_py_path = engine_dir.join("server.py");
     let pyproject_path = engine_dir.join("pyproject.toml");
+    let engine_manager_path = engine_dir.join("engine_manager.py");
+    let safety_path = engine_dir.join("safety.py");
 
     let mut unpacked = Vec::new();
 
@@ -635,6 +647,18 @@ fn unpack_server_files_inner(app: &tauri::AppHandle, force: bool) -> Result<Stri
         fs::write(&pyproject_path, PYPROJECT_TOML)
             .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
         unpacked.push("pyproject.toml");
+    }
+
+    if force || !engine_manager_path.exists() {
+        fs::write(&engine_manager_path, ENGINE_MANAGER_PY)
+            .map_err(|e| format!("Failed to write engine_manager.py: {}", e))?;
+        unpacked.push("engine_manager.py");
+    }
+
+    if force || !safety_path.exists() {
+        fs::write(&safety_path, SAFETY_PY)
+            .map_err(|e| format!("Failed to write safety.py: {}", e))?;
+        unpacked.push("safety.py");
     }
 
     if unpacked.is_empty() {
