@@ -13,6 +13,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 const CONFIG_FILENAME: &str = "config.json";
+const SUPPORTED_IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const WORLD_ENGINE_DIR: &str = "world_engine";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
@@ -1179,7 +1180,12 @@ fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
         let mut count = 0;
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("png") {
+            let is_image = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|ext| SUPPORTED_IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+                .unwrap_or(false);
+            if is_image {
                 let file_name = path.file_name().ok_or("Invalid filename")?;
                 let dest_path = dest_dir.join(file_name);
                 fs::copy(&path, &dest_path).map_err(|e| {

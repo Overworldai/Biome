@@ -104,6 +104,23 @@ CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.bin"
 # Local seeds directory (for dev/standalone usage - relative to project root)
 LOCAL_SEEDS_DIR = Path(__file__).parent.parent.parent / "seeds"
 
+SUPPORTED_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
+
+MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
+
+def glob_seeds(directory: Path) -> list[Path]:
+    """Glob for all supported image formats in a directory."""
+    results = []
+    for ext in SUPPORTED_IMAGE_EXTENSIONS:
+        results.extend(directory.glob(f"*{ext}"))
+    return results
+
 
 # ============================================================================
 # Seed Management Functions
@@ -120,16 +137,17 @@ def ensure_seed_directories():
 async def setup_default_seeds():
     """Setup default seeds from local directory (for dev/standalone usage only)."""
     # Check if seeds already exist (bundled by Tauri on first run, or from previous setup)
-    if list(DEFAULT_SEEDS_DIR.glob("*.png")):
-        seed_count = len(list(DEFAULT_SEEDS_DIR.glob("*.png")))
-        logger.info(f"Found {seed_count} seed(s) in {DEFAULT_SEEDS_DIR}")
+    existing_seeds = glob_seeds(DEFAULT_SEEDS_DIR)
+    if existing_seeds:
+        logger.info(f"Found {len(existing_seeds)} seed(s) in {DEFAULT_SEEDS_DIR}")
         return
 
     # For dev/standalone usage: copy from local seeds directory
-    if LOCAL_SEEDS_DIR.exists() and list(LOCAL_SEEDS_DIR.glob("*.png")):
+    local_seeds = glob_seeds(LOCAL_SEEDS_DIR) if LOCAL_SEEDS_DIR.exists() else []
+    if local_seeds:
         logger.info(f"Found local seeds directory at {LOCAL_SEEDS_DIR} (development mode)")
         try:
-            seed_files = list(LOCAL_SEEDS_DIR.glob("*.png"))
+            seed_files = local_seeds
             logger.info(f"Copying {len(seed_files)} local seed files to {DEFAULT_SEEDS_DIR}")
 
             for seed_file in seed_files:
@@ -182,7 +200,7 @@ async def rescan_seeds() -> dict:
     cache = {"files": {}, "last_scan": time.time()}
 
     # Scan both default and uploads directories
-    all_seeds = list(DEFAULT_SEEDS_DIR.glob("*.png")) + list(UPLOADS_DIR.glob("*.png"))
+    all_seeds = glob_seeds(DEFAULT_SEEDS_DIR) + glob_seeds(UPLOADS_DIR)
     logger.info(f"Found {len(all_seeds)} seed images")
 
     if not all_seeds:
@@ -256,7 +274,7 @@ async def validate_and_update_cache() -> dict:
         return await rescan_seeds()
 
     # Scan directories for all current files
-    all_current_files = list(DEFAULT_SEEDS_DIR.glob("*.png")) + list(UPLOADS_DIR.glob("*.png"))
+    all_current_files = glob_seeds(DEFAULT_SEEDS_DIR) + glob_seeds(UPLOADS_DIR)
     current_file_map = {p.name: str(p) for p in all_current_files}  # filename -> path
     current_filenames = set(current_file_map.keys())
 
@@ -570,7 +588,9 @@ async def get_seed_image(filename: str):
     if not os.path.exists(file_path):
         return JSONResponse({"error": "Seed file not found"}, status_code=404)
 
-    return FileResponse(file_path, media_type="image/png")
+    ext = Path(file_path).suffix.lower()
+    media_type = MIME_TYPES.get(ext, "application/octet-stream")
+    return FileResponse(file_path, media_type=media_type)
 
 
 @app.get("/seeds/thumbnail/{filename}")
@@ -621,7 +641,7 @@ async def get_seed_thumbnail(filename: str):
 
 class UploadSeedRequest(BaseModel):
     filename: str
-    data: str  # base64 encoded PNG
+    data: str  # base64 encoded image
 
 
 @app.post("/seeds/upload")
@@ -630,8 +650,11 @@ async def upload_seed(request: UploadSeedRequest):
     global safe_seeds_cache
 
     filename = request.filename
-    if not filename.endswith(".png"):
-        return JSONResponse({"error": "Only PNG files supported"}, status_code=400)
+    if not any(filename.lower().endswith(ext) for ext in SUPPORTED_IMAGE_EXTENSIONS):
+        return JSONResponse(
+            {"error": f"Unsupported format. Accepted: {', '.join(SUPPORTED_IMAGE_EXTENSIONS)}"},
+            status_code=400,
+        )
 
     # Decode base64
     try:
