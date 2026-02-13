@@ -58,7 +58,7 @@ export const useSeeds = () => {
         setSeeds(seedList)
       }
 
-      if (!seedList.includes('default.png')) {
+      if (!seedList.some((s) => s.filename === 'default.png')) {
         throw new Error('Required seed file "default.png" not found in seeds folder')
       }
 

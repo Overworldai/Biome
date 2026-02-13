@@ -552,23 +552,23 @@ async def set_cache(request: SetCacheRequest):
 
 @app.get("/seeds/list")
 async def list_seeds():
-    """Return list of all available seeds with metadata (only safe ones).
+    """Return list of all seeds with metadata (including unsafe ones).
     If a scan is in progress, waits for it to finish before returning."""
     # Wait for any in-progress scan to complete before reading cache
     async with rescan_lock:
         pass
 
-    safe_only = {
+    all_seeds = {
         filename: {
             "filename": filename,
             "hash": data["hash"],
-            "is_safe": data["is_safe"],
+            "is_safe": data.get("is_safe", False),
+            "is_default": not str(data.get("path", "")).startswith(str(UPLOADS_DIR)),
             "checked_at": data.get("checked_at", 0),
         }
         for filename, data in safe_seeds_cache.items()
-        if data.get("is_safe", False)
     }
-    return JSONResponse({"seeds": safe_only, "count": len(safe_only)})
+    return JSONResponse({"seeds": all_seeds, "count": len(all_seeds)})
 
 
 @app.get("/seeds/image/{filename}")
@@ -598,14 +598,11 @@ async def get_seed_thumbnail(filename: str):
     """Serve 80x80 JPEG thumbnail of seed image."""
     import io
 
-    # Validate filename is in cache and safe
+    # Validate filename is in cache
     if filename not in safe_seeds_cache:
         return JSONResponse({"error": "Seed not found"}, status_code=404)
 
     seed_data = safe_seeds_cache[filename]
-    if not seed_data.get("is_safe", False):
-        return JSONResponse({"error": "Seed marked unsafe"}, status_code=403)
-
     file_path = seed_data.get("path", "")
     if not os.path.exists(file_path):
         return JSONResponse({"error": "Seed file not found"}, status_code=404)

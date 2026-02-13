@@ -25,6 +25,14 @@ const PYPROJECT_TOML: &str = include_str!("../server-components/pyproject.toml")
 const ENGINE_MANAGER_PY: &str = include_str!("../server-components/engine_manager.py");
 const SAFETY_PY: &str = include_str!("../server-components/safety.py");
 
+/// Seed metadata returned to the client
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SeedInfo {
+    filename: String,
+    is_safe: bool,
+    is_default: bool,
+}
+
 /// Engine mode: how the World Engine server should be managed
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -719,7 +727,7 @@ const SERVER_BASE_URL: &str = "http://localhost:7987";
 
 /// List available seeds from server (waits for any in-progress scan to complete)
 #[tauri::command]
-async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<String>, String> {
+async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<SeedInfo>, String> {
     let client = reqwest::Client::new();
     let response = client
         .get(format!("{}/seeds/list", SERVER_BASE_URL))
@@ -740,9 +748,39 @@ async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<String>, String> {
         .as_object()
         .ok_or_else(|| "Invalid response format".to_string())?;
 
-    let mut filenames: Vec<String> = seeds_obj.keys().cloned().collect();
-    filenames.sort();
-    Ok(filenames)
+    let mut seeds: Vec<SeedInfo> = seeds_obj
+        .iter()
+        .map(|(filename, data)| SeedInfo {
+            filename: filename.clone(),
+            is_safe: data["is_safe"].as_bool().unwrap_or(false),
+            is_default: data["is_default"].as_bool().unwrap_or(true),
+        })
+        .collect();
+    seeds.sort_by(|a, b| a.filename.cmp(&b.filename));
+    Ok(seeds)
+}
+
+#[tauri::command]
+async fn delete_seed(_app: tauri::AppHandle, filename: String) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(format!("{}/seeds/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
+
+    if !response.status().is_success() {
+        let error: serde_json::Value = response
+            .json()
+            .await
+            .unwrap_or_else(|_| serde_json::json!({"error": "Delete failed"}));
+        return Err(error["error"]
+            .as_str()
+            .unwrap_or("Delete failed")
+            .to_string());
+    }
+
+    Ok(())
 }
 
 /// Read a seed image as base64 from server
@@ -1246,6 +1284,7 @@ pub fn run() {
             is_server_ready,
             is_port_in_use,
             list_seeds,
+            delete_seed,
             read_seed_as_base64,
             read_seed_thumbnail,
             get_seeds_dir_path,
