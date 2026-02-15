@@ -637,6 +637,23 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
                             : seed.filename
                       }
                     >
+                      {!seed.is_default && (
+                        <button
+                          type="button"
+                          className="seed-delete-btn"
+                          title={`Delete ${seed.filename}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteSeed(seed)
+                          }}
+                          disabled={seedsDisabled}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="7" y1="7" x2="17" y2="17" />
+                            <line x1="17" y1="7" x2="7" y2="17" />
+                          </svg>
+                        </button>
+                      )}
                       {seedThumbnails[seed.filename] ? (
                         <img src={`data:image/jpeg;base64,${seedThumbnails[seed.filename]}`} alt={seed.filename} />
                       ) : (
