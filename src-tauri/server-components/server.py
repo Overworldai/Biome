@@ -689,7 +689,7 @@ async def upload_seed(request: UploadSeedRequest):
         save_seeds_cache(cache)
 
         status_msg = "SAFE" if is_safe else "UNSAFE"
-        logger.info(f"Uploaded seed {filename}: {status_msg}")
+        logger.info(f"Uploaded seed {filename}: {status_msg}\nScores: {safety_result.get('scores', {})}")
 
         return JSONResponse(
             {

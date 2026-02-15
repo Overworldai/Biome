@@ -18,7 +18,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     isPaused,
     canUnpause
   } = useStreaming()
-  const { config, hasOpenAiKey, hasFalKey } = useConfig()
+  const { config, hasOpenAiKey, hasFalKey, getUrl } = useConfig()
 
   const [activeTab, setActiveTab] = useState('prompt')
   const [textPrompt, setTextPrompt] = useState('')
@@ -37,6 +37,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
   const seedGalleryEnabled = config?.features?.seed_gallery
+  const uploadBaseUrl = getUrl()
 
   // Seeds are disabled during the pointer lock cooldown period
   const seedsDisabled = isPaused && !canUnpause
@@ -227,84 +228,134 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     }
   }
 
-  // Handle image upload
+  const readBlobAsBase64 = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result
+        if (typeof result !== 'string' || !result.includes(',')) {
+          reject(new Error('Failed to read image data'))
+          return
+        }
+        resolve(result.split(',')[1])
+      }
+      reader.onerror = () => reject(new Error('Failed to read image data'))
+      reader.readAsDataURL(blob)
+    })
+
+  const uploadSeedData = async (filename, base64Data) => {
+    setUploadingImage(true)
+    try {
+      const response = await fetch(`${uploadBaseUrl}/seeds/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename,
+          data: base64Data
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }))
+        throw new Error(error.error || 'Upload failed')
+      }
+
+      const result = await response.json()
+
+      // Refresh seeds list (includes unsafe seeds now)
+      const seedList = await invoke('list_seeds')
+      setSeeds(seedList)
+
+      // Load thumbnail for the uploaded seed
+      invoke('read_seed_thumbnail', { filename, maxSize: 100 })
+        .then((base64) => setSeedThumbnails((prev) => ({ ...prev, [filename]: base64 })))
+        .catch((err) => console.error('Failed to load thumbnail:', filename, err))
+
+      // Check if server flagged this seed as unsafe
+      if (!result.is_safe) {
+        setRejectedSeed({ filename })
+        return
+      }
+
+      // Auto-apply valid uploaded seed immediately
+      setSelectedSeed(filename)
+      sendPromptWithSeed(filename)
+      requestPointerLock()
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError(err.message || 'Failed to upload image')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  // Handle file picker upload
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file')
+      setTimeout(() => setError(null), 3000)
+      event.target.value = ''
+      return
+    }
+
+    try {
+      const base64Data = await readBlobAsBase64(file)
+      await uploadSeedData(file.name, base64Data)
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError(err.message || 'Failed to upload image')
+      setTimeout(() => setError(null), 3000)
+    }
+
+    event.target.value = ''
+  }
+
+  // Handle clipboard upload via top triangle click only
+  const handleClipboardUpload = async () => {
+    if (seedsDisabled || uploadingImage) return
+
+    if (!navigator.clipboard?.read) {
+      setError('Clipboard image upload is not supported in this environment')
       setTimeout(() => setError(null), 3000)
       return
     }
 
-    setUploadingImage(true)
     try {
-      // Convert to base64
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        try {
-          const base64Data = e.target.result.split(',')[1] // Remove data URL prefix
+      const clipboardItems = await navigator.clipboard.read()
+      let imageBlob = null
+      let imageType = ''
 
-          // Upload to server
-          const response = await fetch('http://localhost:7987/seeds/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              data: base64Data
-            })
-          })
-
-          if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.error || 'Upload failed')
-          }
-
-          const result = await response.json()
-
-          // Refresh seeds list (includes unsafe seeds now)
-          const seedList = await invoke('list_seeds')
-          setSeeds(seedList)
-
-          // Load thumbnail for the uploaded seed
-          invoke('read_seed_thumbnail', { filename: file.name, maxSize: 100 })
-            .then((base64) => setSeedThumbnails((prev) => ({ ...prev, [file.name]: base64 })))
-            .catch((err) => console.error('Failed to load thumbnail:', file.name, err))
-
-          // Check if server flagged this seed as unsafe
-          if (!result.is_safe) {
-            setRejectedSeed({ filename: file.name })
-            setUploadingImage(false)
-            return
-          }
-
-          setUploadingImage(false)
-        } catch (err) {
-          console.error('Upload error:', err)
-          setError(err.message || 'Failed to upload image')
-          setTimeout(() => setError(null), 3000)
-          setUploadingImage(false)
+      for (const item of clipboardItems) {
+        const matchingType = item.types.find((type) => type.startsWith('image/'))
+        if (matchingType) {
+          imageBlob = await item.getType(matchingType)
+          imageType = matchingType
+          break
         }
       }
 
-      reader.onerror = () => {
-        setError('Failed to read file')
-        setTimeout(() => setError(null), 3000)
-        setUploadingImage(false)
+      if (!imageBlob) {
+        throw new Error('No image found in clipboard')
       }
 
-      reader.readAsDataURL(file)
+      const extensionMap = {
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/webp': 'webp'
+      }
+      const extension = extensionMap[imageType] || 'png'
+      const filename = `clipboard-${Date.now()}.${extension}`
+      const base64Data = await readBlobAsBase64(imageBlob)
+      await uploadSeedData(filename, base64Data)
     } catch (err) {
-      console.error('Upload error:', err)
-      setError('Failed to upload image')
+      console.error('Clipboard upload error:', err)
+      setError(err.message || 'Failed to read image from clipboard')
       setTimeout(() => setError(null), 3000)
-      setUploadingImage(false)
     }
-
-    // Reset file input
-    event.target.value = ''
   }
 
   const applyPrompt = async () => {
@@ -511,11 +562,10 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
                 {/* Upload button - always first */}
                 <div
                   className={`seed-item seed-upload ${uploadingImage ? 'uploading' : ''} ${seedsDisabled ? 'disabled' : ''}`}
-                  onClick={() => !seedsDisabled && !uploadingImage && fileInputRef.current?.click()}
-                  title={seedsDisabled ? 'Wait to upload...' : 'Upload image'}
+                  title={seedsDisabled ? 'Wait to upload...' : ''}
                 >
-                  <div className="seed-placeholder">
-                    {uploadingImage ? (
+                  {uploadingImage ? (
+                    <div className="seed-placeholder">
                       <svg
                         className="upload-spinner"
                         viewBox="0 0 24 24"
@@ -526,18 +576,40 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
                         <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
                         <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
                       </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path
-                          d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="seed-upload-split">
+                      <button
+                        type="button"
+                        className="seed-upload-action seed-upload-top"
+                        title="Upload image from clipboard"
+                        onClick={handleClipboardUpload}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="9" y="3" width="6" height="4" rx="1" />
+                          <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+                          <rect x="12" y="10" width="8" height="10" rx="1" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="seed-upload-action seed-upload-bottom"
+                        title="Upload from folder"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
+                          <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <div className="seed-upload-divider" />
+                    </div>
+                  )}
                 </div>
 
                 {loadingSeeds ? (
