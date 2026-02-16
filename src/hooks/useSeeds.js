@@ -10,22 +10,20 @@ export const useSeeds = () => {
   const [error, setError] = useState(null)
   const [seedsDir, setSeedsDir] = useState(null)
 
-  // Initialize seeds directory (copy bundled seeds on first run)
+  // Initialize seeds list (server handles scanning on startup, this just fetches the list)
   const initializeSeeds = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const result = await invoke('initialize_seeds')
-      log.info('Seeds initialized:', result)
-      // Refresh the list after initialization
+      log.info('Fetching seed list from server...')
       const seedList = await invoke('list_seeds')
       setSeeds(seedList)
-      // Get the seeds directory path
+      log.info('Seeds loaded:', seedList.length, 'seeds available')
       const path = await invoke('get_seeds_dir_path')
       setSeedsDir(path)
-      return result
+      return seedList
     } catch (err) {
-      log.error('Failed to initialize seeds:', err)
+      log.error('Failed to load seeds:', err)
       setError(err)
       throw err
     } finally {
@@ -60,7 +58,7 @@ export const useSeeds = () => {
         setSeeds(seedList)
       }
 
-      if (!seedList.includes('default.png')) {
+      if (!seedList.some((s) => s.filename === 'default.png')) {
         throw new Error('Required seed file "default.png" not found in seeds folder')
       }
 

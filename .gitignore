@@ -26,6 +26,12 @@ dist-ssr
 .env/
 *.bak
 
+.venv/
+uv.lock
+__pycache__
+# seed directory created by standalone instance of server.py
+src-tauri/world_engine
+
 # env
 .env
 .vercel

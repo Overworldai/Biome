@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
+use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -13,9 +13,8 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 const CONFIG_FILENAME: &str = "config.json";
+const SUPPORTED_IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const WORLD_ENGINE_DIR: &str = "world_engine";
-const DEFAULT_SEEDS_DIR: &str = "default_seeds";
-const CUSTOM_SEEDS_DIR: &str = "custom_seeds";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
@@ -23,6 +22,16 @@ const STANDALONE_PORT: u16 = 7987;
 // Bundled server components (embedded at compile time)
 const SERVER_PY: &str = include_str!("../server-components/server.py");
 const PYPROJECT_TOML: &str = include_str!("../server-components/pyproject.toml");
+const ENGINE_MANAGER_PY: &str = include_str!("../server-components/engine_manager.py");
+const SAFETY_PY: &str = include_str!("../server-components/safety.py");
+
+/// Seed metadata returned to the client
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SeedInfo {
+    filename: String,
+    is_safe: bool,
+    is_default: bool,
+}
 
 /// Engine mode: how the World Engine server should be managed
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -61,6 +70,8 @@ fn set_app_handle(handle: tauri::AppHandle) {
 fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
 }
+
+// Safety cache structures removed - now handled server-side
 
 /// Get the executable's directory (for portable data storage)
 fn get_exe_dir() -> Result<PathBuf, String> {
@@ -142,7 +153,7 @@ impl Default for AppConfig {
                 prompt_sanitizer: true,
                 seed_generation: true,
                 engine_mode: EngineMode::Unchosen,
-                seed_gallery: false,
+                seed_gallery: true,
             },
             ui: UiConfig::default(),
         }
@@ -264,6 +275,22 @@ fn get_engine_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
 fn get_uv_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let exe_dir = get_exe_dir()?;
     Ok(exe_dir.join(".uv"))
+}
+
+/// Get the base seeds directory path (next to executable for portability)
+fn get_seeds_base_dir() -> Result<PathBuf, String> {
+    let exe_dir = get_exe_dir()?;
+    Ok(exe_dir.join(WORLD_ENGINE_DIR).join("seeds"))
+}
+
+/// Get the default (bundled) seeds directory path
+fn get_seeds_default_dir() -> Result<PathBuf, String> {
+    Ok(get_seeds_base_dir()?.join("default"))
+}
+
+/// Get the uploads (user) seeds directory path
+fn get_seeds_uploads_dir() -> Result<PathBuf, String> {
+    Ok(get_seeds_base_dir()?.join("uploads"))
 }
 
 // Get the path to our local uv binary
@@ -533,6 +560,14 @@ async fn setup_server_components(app: tauri::AppHandle) -> Result<String, String
     fs::write(engine_dir.join("pyproject.toml"), PYPROJECT_TOML)
         .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
 
+    // Write bundled engine_manager.py
+    fs::write(engine_dir.join("engine_manager.py"), ENGINE_MANAGER_PY)
+        .map_err(|e| format!("Failed to write engine_manager.py: {}", e))?;
+
+    // Write bundled safety.py
+    fs::write(engine_dir.join("safety.py"), SAFETY_PY)
+        .map_err(|e| format!("Failed to write safety.py: {}", e))?;
+
     Ok("Server components installed".to_string())
 }
 
@@ -621,6 +656,8 @@ fn unpack_server_files_inner(app: &tauri::AppHandle, force: bool) -> Result<Stri
 
     let server_py_path = engine_dir.join("server.py");
     let pyproject_path = engine_dir.join("pyproject.toml");
+    let engine_manager_path = engine_dir.join("engine_manager.py");
+    let safety_path = engine_dir.join("safety.py");
 
     let mut unpacked = Vec::new();
 
@@ -635,6 +672,18 @@ fn unpack_server_files_inner(app: &tauri::AppHandle, force: bool) -> Result<Stri
         fs::write(&pyproject_path, PYPROJECT_TOML)
             .map_err(|e| format!("Failed to write pyproject.toml: {}", e))?;
         unpacked.push("pyproject.toml");
+    }
+
+    if force || !engine_manager_path.exists() {
+        fs::write(&engine_manager_path, ENGINE_MANAGER_PY)
+            .map_err(|e| format!("Failed to write engine_manager.py: {}", e))?;
+        unpacked.push("engine_manager.py");
+    }
+
+    if force || !safety_path.exists() {
+        fs::write(&safety_path, SAFETY_PY)
+            .map_err(|e| format!("Failed to write safety.py: {}", e))?;
+        unpacked.push("safety.py");
     }
 
     if unpacked.is_empty() {
@@ -671,163 +720,140 @@ async fn open_engine_dir(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 // ============================================================================
-// Seeds Management
+// Seeds Management (Server-Authoritative)
 // ============================================================================
 
-// Get the default seeds directory path (bundled seeds, next to executable)
-fn get_default_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let exe_dir = get_exe_dir()?;
-    Ok(exe_dir.join(DEFAULT_SEEDS_DIR))
-}
+const SERVER_BASE_URL: &str = "http://localhost:7987";
 
-// Get the custom seeds directory path (user seeds, next to executable)
-fn get_custom_seeds_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let exe_dir = get_exe_dir()?;
-    Ok(exe_dir.join(CUSTOM_SEEDS_DIR))
-}
-
-/// Find which directory contains a seed file (checks custom first, then default)
-fn find_seed_path(app: &tauri::AppHandle, filename: &str) -> Result<PathBuf, String> {
-    // Validate filename doesn't contain path traversal
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        return Err(format!("Invalid seed filename: {}", filename));
-    }
-
-    let custom_dir = get_custom_seeds_dir(app)?;
-    let custom_path = custom_dir.join(filename);
-    if custom_path.exists() {
-        return Ok(custom_path);
-    }
-
-    let default_dir = get_default_seeds_dir(app)?;
-    let default_path = default_dir.join(filename);
-    if default_path.exists() {
-        return Ok(default_path);
-    }
-
-    Err(format!("Seed file not found: {}", filename))
-}
-
-/// Initialize seeds directories (creates custom_seeds folder for user seeds)
+/// List available seeds from server (waits for any in-progress scan to complete)
 #[tauri::command]
-async fn initialize_seeds(app: tauri::AppHandle) -> Result<String, String> {
-    let custom_seeds_dir = get_custom_seeds_dir(&app)?;
+async fn list_seeds(_app: tauri::AppHandle) -> Result<Vec<SeedInfo>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/list", SERVER_BASE_URL))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    // Create custom seeds directory if it doesn't exist
-    if !custom_seeds_dir.exists() {
-        fs::create_dir_all(&custom_seeds_dir)
-            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
     }
 
-    Ok(format!(
-        "Seeds initialized: custom_seeds directory at {}",
-        custom_seeds_dir.display()
-    ))
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let seeds_obj = result["seeds"]
+        .as_object()
+        .ok_or_else(|| "Invalid response format".to_string())?;
+
+    let mut seeds: Vec<SeedInfo> = seeds_obj
+        .iter()
+        .map(|(filename, data)| SeedInfo {
+            filename: filename.clone(),
+            is_safe: data["is_safe"].as_bool().unwrap_or(false),
+            is_default: data["is_default"].as_bool().unwrap_or(true),
+        })
+        .collect();
+    seeds.sort_by(|a, b| a.filename.cmp(&b.filename));
+    Ok(seeds)
 }
 
-/// List available seed filenames (png/jpg/jpeg) from both default and custom directories
 #[tauri::command]
-async fn list_seeds(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    use std::collections::HashSet;
+async fn delete_seed(_app: tauri::AppHandle, filename: String) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(format!("{}/seeds/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    let mut seeds: HashSet<String> = HashSet::new();
-
-    // Helper to collect seeds from a directory
-    let collect_seeds = |dir: &Path, seeds: &mut HashSet<String>| {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(ext) = path.extension() else {
-                continue;
-            };
-            let ext_lower = ext.to_string_lossy().to_lowercase();
-            if (ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg")
-                && let Some(filename) = path.file_name()
-            {
-                seeds.insert(filename.to_string_lossy().to_string());
-            }
-        }
-    };
-
-    // Collect from default seeds
-    if let Ok(default_dir) = get_default_seeds_dir(&app) {
-        collect_seeds(&default_dir, &mut seeds);
+    if !response.status().is_success() {
+        let error: serde_json::Value = response
+            .json()
+            .await
+            .unwrap_or_else(|_| serde_json::json!({"error": "Delete failed"}));
+        return Err(error["error"]
+            .as_str()
+            .unwrap_or("Delete failed")
+            .to_string());
     }
 
-    // Collect from custom seeds
-    if let Ok(custom_dir) = get_custom_seeds_dir(&app) {
-        collect_seeds(&custom_dir, &mut seeds);
-    }
-
-    let mut seeds_vec: Vec<String> = seeds.into_iter().collect();
-    seeds_vec.sort();
-    Ok(seeds_vec)
+    Ok(())
 }
 
-/// Read a seed file and return base64 encoded data
+/// Read a seed image as base64 from server
 #[tauri::command]
-async fn read_seed_as_base64(app: tauri::AppHandle, filename: String) -> Result<String, String> {
-    let seed_path = find_seed_path(&app, &filename)?;
+async fn read_seed_as_base64(_app: tauri::AppHandle, filename: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/image/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    let mut file =
-        File::open(&seed_path).map_err(|e| format!("Failed to open seed file: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
+    }
 
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|e| format!("Failed to read seed file: {}", e))?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read image data: {}", e))?;
 
-    Ok(BASE64_STANDARD.encode(&buffer))
+    Ok(BASE64_STANDARD.encode(&bytes))
 }
 
-/// Read a seed file and return a small thumbnail as base64 encoded JPEG
+/// Read a seed thumbnail as base64 from server
 #[tauri::command]
 async fn read_seed_thumbnail(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     filename: String,
-    max_size: Option<u32>,
+    _max_size: Option<u32>,
 ) -> Result<String, String> {
-    let seed_path = find_seed_path(&app, &filename)?;
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/seeds/thumbnail/{}", SERVER_BASE_URL, filename))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact server: {}", e))?;
 
-    // Load and resize image
-    let img = image::open(&seed_path).map_err(|e| format!("Failed to open image: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("Server returned error: {}", response.status()));
+    }
 
-    let max_dim = max_size.unwrap_or(80);
-    let thumbnail = img.thumbnail(max_dim, max_dim);
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read thumbnail data: {}", e))?;
 
-    // Encode as JPEG
-    let mut buffer = Vec::new();
-    let mut cursor = Cursor::new(&mut buffer);
-    thumbnail
-        .write_to(&mut cursor, image::ImageFormat::Jpeg)
-        .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
-
-    Ok(BASE64_STANDARD.encode(&buffer))
+    Ok(BASE64_STANDARD.encode(&bytes))
 }
 
-/// Get the custom seeds directory path (where users add their seeds)
+/// Get the seeds uploads directory path
 #[tauri::command]
-fn get_seeds_dir_path(app: tauri::AppHandle) -> Result<String, String> {
-    let seeds_dir = get_custom_seeds_dir(&app)?;
+fn get_seeds_dir_path(_app: tauri::AppHandle) -> Result<String, String> {
+    let seeds_dir = get_seeds_uploads_dir()?;
     Ok(seeds_dir.to_string_lossy().to_string())
 }
 
-/// Open the custom seeds directory in file explorer
+/// Open the seeds uploads directory in file explorer
 #[tauri::command]
-async fn open_seeds_dir(app: tauri::AppHandle) -> Result<(), String> {
-    let seeds_dir = get_custom_seeds_dir(&app)?;
+async fn open_seeds_dir(_app: tauri::AppHandle) -> Result<(), String> {
+    let seeds_dir = get_seeds_uploads_dir()?;
 
     // Create directory if it doesn't exist
     if !seeds_dir.exists() {
-        fs::create_dir_all(&seeds_dir)
-            .map_err(|e| format!("Failed to create custom seeds dir: {}", e))?;
+        fs::create_dir_all(&seeds_dir).map_err(|e| format!("Failed to create seeds dir: {}", e))?;
     }
 
     // Open File Explorer with seeds directory
     tauri_plugin_opener::reveal_item_in_dir(seeds_dir)
         .map_err(|e| format!("Failed to open seeds directory: {}", e))
 }
+
+// Safety cache functions removed - now handled server-side
 
 #[tauri::command]
 async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String, String> {
@@ -1155,6 +1181,64 @@ fn is_port_in_use(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }
 
+/// Copy bundled default seeds directly to the final destination on first run
+fn setup_bundled_seeds(app: &tauri::AppHandle) -> Result<(), String> {
+    let dest_dir = get_seeds_default_dir()?;
+
+    // If seeds already exist, skip setup
+    if dest_dir.exists()
+        && dest_dir
+            .read_dir()
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false)
+    {
+        println!(
+            "[SEEDS] Seeds already exist at {:?}, skipping bundle extraction",
+            dest_dir
+        );
+        return Ok(());
+    }
+
+    println!("[SEEDS] Setting up bundled seeds...");
+
+    // Create destination directory
+    fs::create_dir_all(&dest_dir)
+        .map_err(|e| format!("Failed to create seeds directory: {}", e))?;
+
+    // Resolve bundled resource
+    let resource_path = app
+        .path()
+        .resolve("default_seeds", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve bundled seeds: {}", e))?;
+
+    println!("[SEEDS] Copying from {:?} to {:?}", resource_path, dest_dir);
+
+    // Copy all PNG files from bundled seeds to destination
+    if let Ok(entries) = fs::read_dir(&resource_path) {
+        let mut count = 0;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_image = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|ext| SUPPORTED_IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+                .unwrap_or(false);
+            if is_image {
+                let file_name = path.file_name().ok_or("Invalid filename")?;
+                let dest_path = dest_dir.join(file_name);
+                fs::copy(&path, &dest_path).map_err(|e| {
+                    format!("Failed to copy {}: {}", file_name.to_string_lossy(), e)
+                })?;
+                count += 1;
+            }
+        }
+        println!("[SEEDS] Copied {} seed files to final destination", count);
+        Ok(())
+    } else {
+        Err("Failed to read bundled seeds directory".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -1162,7 +1246,14 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Store app handle for event emission from threads
-            set_app_handle(app.handle().clone());
+            let handle = app.handle().clone();
+            set_app_handle(handle.clone());
+
+            // Copy bundled seeds to server-components on first run
+            if let Err(e) = setup_bundled_seeds(&handle) {
+                eprintln!("[SEEDS] Warning: Failed to setup bundled seeds: {}", e);
+                eprintln!("[SEEDS] Seeds will need to be manually placed in the seeds directory");
+            }
 
             // Set up Ctrl+C handler to stop the server on termination
             ctrlc::set_handler(move || {
@@ -1192,8 +1283,8 @@ pub fn run() {
             is_server_running,
             is_server_ready,
             is_port_in_use,
-            initialize_seeds,
             list_seeds,
+            delete_seed,
             read_seed_as_base64,
             read_seed_thumbnail,
             get_seeds_dir_path,

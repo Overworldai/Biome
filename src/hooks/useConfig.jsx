@@ -25,7 +25,7 @@ const defaultConfig = {
     prompt_sanitizer: true,
     seed_generation: true,
     engine_mode: ENGINE_MODES.UNCHOSEN,
-    seed_gallery: false
+    seed_gallery: true
   },
   ui: {
     bottom_panel_hidden: false
@@ -123,11 +123,18 @@ export const ConfigProvider = ({ children }) => {
     }
   }, [])
 
-  const getWsUrl = useCallback(() => {
+  // Engine mode helpers
+  const engineMode = config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN
+
+  const getUrl = useCallback(() => {
+    if (engineMode === ENGINE_MODES.STANDALONE) {
+      return `http://localhost:${STANDALONE_PORT}`
+    }
+
     const { host, port, use_ssl } = config.gpu_server
-    const protocol = use_ssl ? 'wss' : 'ws'
-    return `${protocol}://${host}:${port}/ws`
-  }, [config.gpu_server])
+    const protocol = use_ssl ? 'https' : 'http'
+    return `${protocol}://${host}:${port}`
+  }, [engineMode, config.gpu_server])
 
   // Save GPU server URL from user input (parses "host:port" format)
   const saveGpuServerUrl = useCallback(
@@ -160,9 +167,6 @@ export const ConfigProvider = ({ children }) => {
     }
   }, [])
 
-  // Engine mode helpers
-  const engineMode = config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN
-
   const value = {
     config,
     isLoaded,
@@ -172,7 +176,7 @@ export const ConfigProvider = ({ children }) => {
     saveConfig,
     saveGpuServerUrl,
     openConfig,
-    getWsUrl,
+    getUrl,
     hasOpenAiKey: !!config.api_keys.openai,
     hasFalKey: !!config.api_keys.fal,
     hasHuggingFaceKey: !!config.api_keys.huggingface,

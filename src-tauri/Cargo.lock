@@ -11,6 +11,7 @@ dependencies = [
  "flate2",
  "image",
  "kill_tree",
+ "log",
  "reqwest",
  "serde",
  "serde_json",

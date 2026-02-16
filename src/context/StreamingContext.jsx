@@ -132,23 +132,12 @@ export const StreamingProvider = ({ children }) => {
   // Send initial seed when server is waiting for it
   useEffect(() => {
     if (statusCode === 'waiting_for_seed' && isConnected) {
-      log.info('Server waiting for seed, sending default seed...')
-      getDefaultSeedBase64()
-        .then((seedBase64) => {
-          sendInitialSeed(seedBase64)
-          log.info('Initial seed sent to server')
-        })
-        .catch((err) => {
-          log.error('Failed to get default seed:', err)
-          const errorMessage = err.message || String(err)
-          if (errorMessage.includes('default.png')) {
-            setEngineError('Required file "default.png" not found in seeds folder. Please add a default.png image.')
-          } else {
-            setEngineError('Failed to load seed image: ' + errorMessage)
-          }
-        })
+      log.info('Server waiting for seed, sending default seed filename...')
+      // Just send the filename - server has the file
+      sendInitialSeed('default.png')
+      log.info('Initial seed filename sent to server')
     }
-  }, [statusCode, isConnected, getDefaultSeedBase64, sendInitialSeed])
+  }, [statusCode, isConnected, sendInitialSeed])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {

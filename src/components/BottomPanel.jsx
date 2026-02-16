@@ -18,7 +18,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     isPaused,
     canUnpause
   } = useStreaming()
-  const { config, hasOpenAiKey, hasFalKey } = useConfig()
+  const { config, hasOpenAiKey, hasFalKey, getUrl } = useConfig()
 
   const [activeTab, setActiveTab] = useState('prompt')
   const [textPrompt, setTextPrompt] = useState('')
@@ -30,10 +30,14 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const [seedThumbnails, setSeedThumbnails] = useState({})
   const [loadingSeeds, setLoadingSeeds] = useState(false)
   const [selectedSeed, setSelectedSeed] = useState(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [rejectedSeed, setRejectedSeed] = useState(null) // { filename } when upload is NSFW
+  const fileInputRef = useRef(null)
 
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
   const seedGalleryEnabled = config?.features?.seed_gallery
+  const uploadBaseUrl = getUrl()
 
   // Seeds are disabled during the pointer lock cooldown period
   const seedsDisabled = isPaused && !canUnpause
@@ -155,65 +159,202 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   // Track which thumbnails are currently being loaded
   const loadingThumbnailsRef = useRef(new Set())
 
-  // Load seeds list
-  const loadSeeds = useCallback(async () => {
-    setLoadingSeeds(true)
-    try {
-      const seedList = await invoke('list_seeds')
-      setSeeds(seedList)
-    } catch (err) {
-      console.error('Failed to load seeds:', err)
-    } finally {
-      setLoadingSeeds(false)
-    }
-  }, [])
-
-  // Load seeds once when tab first opens
+  // Load seeds and thumbnails on mount
   useEffect(() => {
-    if (activeTab === 'seeds' && seeds.length === 0 && !loadingSeeds) {
-      loadSeeds()
-    }
-  }, [activeTab, seeds.length, loadingSeeds, loadSeeds])
+    let cancelled = false
 
-  // Load thumbnails for seeds (batched, with deduplication)
-  useEffect(() => {
-    if (activeTab !== 'seeds' || seeds.length === 0) return
+    const loadSeedsAndThumbnails = async () => {
+      setLoadingSeeds(true)
+      try {
+        const seedList = await invoke('list_seeds')
+        if (cancelled) return
+        setSeeds(seedList)
 
-    const loadBatch = async () => {
-      for (const filename of seeds) {
-        // Skip if already loaded or currently loading
-        if (loadingThumbnailsRef.current.has(filename)) continue
-
-        setSeedThumbnails((prev) => {
-          if (prev[filename]) return prev // Already have it
-
-          // Mark as loading and start the load
-          loadingThumbnailsRef.current.add(filename)
-          invoke('read_seed_thumbnail', { filename, maxSize: 100 })
+        // Load all thumbnails in background (unsafe ones rendered greyscaled via CSS)
+        for (const seed of seedList) {
+          if (loadingThumbnailsRef.current.has(seed.filename)) continue
+          loadingThumbnailsRef.current.add(seed.filename)
+          invoke('read_seed_thumbnail', { filename: seed.filename, maxSize: 100 })
             .then((base64) => {
-              setSeedThumbnails((p) => ({ ...p, [filename]: base64 }))
+              if (!cancelled) setSeedThumbnails((p) => ({ ...p, [seed.filename]: base64 }))
             })
-            .catch((err) => console.error('Failed to load thumbnail:', filename, err))
-            .finally(() => loadingThumbnailsRef.current.delete(filename))
-
-          return prev
-        })
+            .catch((err) => console.error('Failed to load thumbnail:', seed.filename, err))
+            .finally(() => loadingThumbnailsRef.current.delete(seed.filename))
+        }
+      } catch (err) {
+        console.error('Failed to load seeds:', err)
+      } finally {
+        if (!cancelled) setLoadingSeeds(false)
       }
     }
 
-    loadBatch()
-  }, [activeTab, seeds])
+    loadSeedsAndThumbnails()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  // Handle seed selection - reset server, load full-size image, recapture cursor
-  const handleSeedClick = async (filename) => {
-    setSelectedSeed(filename)
+  // Handle safe seed selection - send to server
+  const handleSeedClick = async (seed) => {
+    if (!seed.is_safe) return
+    setSelectedSeed(seed.filename)
     try {
-      const base64 = await invoke('read_seed_as_base64', { filename })
-      reset()
-      sendInitialSeed(base64)
+      sendPromptWithSeed(seed.filename)
       requestPointerLock()
     } catch (err) {
       console.error('Failed to apply seed:', err)
+    }
+  }
+
+  // Handle unsafe seed click - delete it (only user-uploaded seeds are deletable)
+  const handleDeleteSeed = async (seed) => {
+    if (seed.is_default) {
+      setError('Default seeds cannot be removed')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+    try {
+      await invoke('delete_seed', { filename: seed.filename })
+      setSeeds((prev) => prev.filter((s) => s.filename !== seed.filename))
+      setSeedThumbnails((prev) => {
+        const next = { ...prev }
+        delete next[seed.filename]
+        return next
+      })
+    } catch (err) {
+      console.error('Failed to delete seed:', err)
+      setError(err.toString())
+      setTimeout(() => setError(null), 3000)
+    }
+  }
+
+  const readBlobAsBase64 = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result
+        if (typeof result !== 'string' || !result.includes(',')) {
+          reject(new Error('Failed to read image data'))
+          return
+        }
+        resolve(result.split(',')[1])
+      }
+      reader.onerror = () => reject(new Error('Failed to read image data'))
+      reader.readAsDataURL(blob)
+    })
+
+  const uploadSeedData = async (filename, base64Data) => {
+    setUploadingImage(true)
+    try {
+      const response = await fetch(`${uploadBaseUrl}/seeds/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename,
+          data: base64Data
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }))
+        throw new Error(error.error || 'Upload failed')
+      }
+
+      const result = await response.json()
+
+      // Refresh seeds list (includes unsafe seeds now)
+      const seedList = await invoke('list_seeds')
+      setSeeds(seedList)
+
+      // Load thumbnail for the uploaded seed
+      invoke('read_seed_thumbnail', { filename, maxSize: 100 })
+        .then((base64) => setSeedThumbnails((prev) => ({ ...prev, [filename]: base64 })))
+        .catch((err) => console.error('Failed to load thumbnail:', filename, err))
+
+      // Check if server flagged this seed as unsafe
+      if (!result.is_safe) {
+        setRejectedSeed({ filename })
+        return
+      }
+
+      // Auto-apply valid uploaded seed immediately
+      setSelectedSeed(filename)
+      sendPromptWithSeed(filename)
+      requestPointerLock()
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError(err.message || 'Failed to upload image')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  // Handle file picker upload
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file')
+      setTimeout(() => setError(null), 3000)
+      event.target.value = ''
+      return
+    }
+
+    try {
+      const base64Data = await readBlobAsBase64(file)
+      await uploadSeedData(file.name, base64Data)
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError(err.message || 'Failed to upload image')
+      setTimeout(() => setError(null), 3000)
+    }
+
+    event.target.value = ''
+  }
+
+  // Handle clipboard upload via top triangle click only
+  const handleClipboardUpload = async () => {
+    if (seedsDisabled || uploadingImage) return
+
+    if (!navigator.clipboard?.read) {
+      setError('Clipboard image upload is not supported in this environment')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      let imageBlob = null
+      let imageType = ''
+
+      for (const item of clipboardItems) {
+        const matchingType = item.types.find((type) => type.startsWith('image/'))
+        if (matchingType) {
+          imageBlob = await item.getType(matchingType)
+          imageType = matchingType
+          break
+        }
+      }
+
+      if (!imageBlob) {
+        throw new Error('No image found in clipboard')
+      }
+
+      const extensionMap = {
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/webp': 'webp'
+      }
+      const extension = extensionMap[imageType] || 'png'
+      const filename = `clipboard-${Date.now()}.${extension}`
+      const base64Data = await readBlobAsBase64(imageBlob)
+      await uploadSeedData(filename, base64Data)
+    } catch (err) {
+      console.error('Clipboard upload error:', err)
+      setError(err.message || 'Failed to read image from clipboard')
+      setTimeout(() => setError(null), 3000)
     }
   }
 
@@ -408,27 +549,136 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
           {/* Seeds tab content - only rendered when seed gallery is enabled */}
           {seedGalleryEnabled && activeTab === 'seeds' && (
             <div className="seeds-container">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ display: 'none' }}
+              />
+
               <div className="seeds-gallery">
+                {/* Upload button - always first */}
+                <div
+                  className={`seed-item seed-upload ${uploadingImage ? 'uploading' : ''} ${seedsDisabled ? 'disabled' : ''}`}
+                  title={seedsDisabled ? 'Wait to upload...' : ''}
+                >
+                  {uploadingImage ? (
+                    <div className="seed-placeholder">
+                      <svg
+                        className="upload-spinner"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
+                        <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="seed-upload-split">
+                      <button
+                        type="button"
+                        className="seed-upload-action seed-upload-top"
+                        title="Upload image from clipboard"
+                        onClick={handleClipboardUpload}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="9" y="3" width="6" height="4" rx="1" />
+                          <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+                          <rect x="12" y="10" width="8" height="10" rx="1" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="seed-upload-action seed-upload-bottom"
+                        title="Upload from folder"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
+                          <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <div className="seed-upload-divider" />
+                    </div>
+                  )}
+                </div>
+
                 {loadingSeeds ? (
                   <div className="seeds-loading">Loading seeds...</div>
                 ) : seeds.length === 0 ? (
                   <div className="seeds-empty">No seeds found</div>
                 ) : (
-                  seeds.map((filename) => (
+                  seeds.map((seed) => (
                     <div
-                      key={filename}
-                      className={`seed-item ${selectedSeed === filename ? 'selected' : ''} ${seedsDisabled ? 'disabled' : ''}`}
-                      onClick={() => !seedsDisabled && handleSeedClick(filename)}
-                      title={seedsDisabled ? 'Wait to select a seed...' : filename}
+                      key={seed.filename}
+                      className={`seed-item ${selectedSeed === seed.filename ? 'selected' : ''} ${seedsDisabled ? 'disabled' : ''} ${!seed.is_safe ? 'unsafe' : ''}`}
+                      onClick={() => {
+                        if (seedsDisabled) return
+                        if (!seed.is_safe) {
+                          handleDeleteSeed(seed)
+                        } else {
+                          handleSeedClick(seed)
+                        }
+                      }}
+                      title={
+                        seedsDisabled
+                          ? 'Wait to select a seed...'
+                          : !seed.is_safe
+                            ? `${seed.filename} — flagged as inappropriate (click to remove)`
+                            : seed.filename
+                      }
                     >
-                      {seedThumbnails[filename] ? (
-                        <img src={`data:image/jpeg;base64,${seedThumbnails[filename]}`} alt={filename} />
+                      {!seed.is_default && (
+                        <button
+                          type="button"
+                          className="seed-delete-btn"
+                          title={`Delete ${seed.filename}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteSeed(seed)
+                          }}
+                          disabled={seedsDisabled}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="7" y1="7" x2="17" y2="17" />
+                            <line x1="17" y1="7" x2="7" y2="17" />
+                          </svg>
+                        </button>
+                      )}
+                      {seedThumbnails[seed.filename] ? (
+                        <img src={`data:image/jpeg;base64,${seedThumbnails[seed.filename]}`} alt={seed.filename} />
                       ) : (
                         <div className="seed-placeholder">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                             <circle cx="8.5" cy="8.5" r="1.5" />
                             <polyline points="21,15 16,10 5,21" />
+                          </svg>
+                        </div>
+                      )}
+                      {!seed.is_safe && (
+                        <div className="seed-unsafe-badge">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
                           </svg>
                         </div>
                       )}
@@ -441,6 +691,34 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
 
           {/* Error display */}
           {error && <div className="prompt-error-bar">{error}</div>}
+        </div>
+      </div>
+
+      {/* Seed rejection modal */}
+      <div className={`seed-rejected-overlay ${rejectedSeed ? 'active' : ''}`}>
+        <div className="seed-rejected-content">
+          <div className="seed-rejected-title-row">
+            <svg
+              className="seed-rejected-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+            </svg>
+            <span className="seed-rejected-title">SEED REJECTED</span>
+          </div>
+          <span className="seed-rejected-message">
+            <strong>{rejectedSeed?.filename}</strong> was flagged as inappropriate. Click the greyed-out seed to remove
+            it.
+          </span>
+          <button className="seed-rejected-button" onClick={() => setRejectedSeed(null)}>
+            DISMISS
+          </button>
         </div>
       </div>
     </div>
