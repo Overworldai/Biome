@@ -78,8 +78,8 @@ const ServerLogDisplay = ({
       )}
       {errorMessage && (
         <div className="server-log-error-banner">
-          <span className="server-log-error-text">{errorMessage}</span>
-          <span className="server-log-error-hint">Open Settings to reinstall the engine.</span>
+          <div className="server-log-error-text">{errorMessage}</div>
+          <div className="server-log-error-hint">Open Settings to reinstall the engine.</div>
         </div>
       )}
       <div className="server-log-content" ref={containerRef}>
