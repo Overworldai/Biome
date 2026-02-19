@@ -872,6 +872,11 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         }
     }
 
+    // Force-overwrite bundled server components so they always match this binary
+    // This only occurs in bundled server mode, so users that want to hack on the server
+    // can switch to running it themselves and opt out of this behaviour
+    unpack_server_files_inner(&app, true)?;
+
     // Verify dependencies are synced
     if !engine_dir.join(".venv").exists() {
         return Err("Engine dependencies not synced. Please run setup first.".to_string());
