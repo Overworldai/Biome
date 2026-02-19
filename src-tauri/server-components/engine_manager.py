@@ -188,17 +188,22 @@ class WorldEngineManager:
         # scheduler_sigmas: diffusion denoising schedule (MUST end with 0.0)
         # ae_uri: VAE model for encoding/decoding frames
         model_start = time.perf_counter()
-        self.engine = WorldEngine(
-            MODEL_URI,
-            device=DEVICE,
-            model_config_overrides={
-                "n_frames": N_FRAMES,
-                "ae_uri": "OpenWorldLabs/owl_vae_f16_c16_distill_v0_nogan",
-                "scheduler_sigmas": [1.0, 0.8, 0.2, 0.0],
-            },
-            quant=QUANT,
-            dtype=torch.bfloat16,
-        )
+
+        def _create_engine():
+            return WorldEngine(
+                MODEL_URI,
+                device=DEVICE,
+                model_config_overrides={
+                    "n_frames": N_FRAMES,
+                    "ae_uri": "OpenWorldLabs/owl_vae_f16_c16_distill_v0_nogan",
+                    "scheduler_sigmas": [1.0, 0.8, 0.2, 0.0],
+                },
+                quant=QUANT,
+                dtype=torch.bfloat16,
+            )
+
+        loop = asyncio.get_event_loop()
+        self.engine = await loop.run_in_executor(self.cuda_executor, _create_engine)
         logger.info(
             f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s"
         )
