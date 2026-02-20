@@ -26,10 +26,12 @@ import os
 import pickle
 import shutil
 import time
-import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+# Reduce CUDA allocator fragmentation during repeated model loads/switches.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -421,8 +423,8 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
 
-    # Load WorldEngine on startup
-    await world_engine.load_engine()
+    # WorldEngine is loaded lazily on first client connection.
+    # This allows remote clients to select model per session.
 
     # Initialize seed management system
     logger.info("Initializing server-side seed storage...")
@@ -437,7 +439,7 @@ async def lifespan(app: FastAPI):
     safe_seeds_cache = cache.get("files", {})
 
     logger.info("=" * 60)
-    logger.info("[SERVER] Ready - WorldEngine and Safety modules loaded")
+    logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
     logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
     logger.info("=" * 60)
     print("SERVER READY", flush=True)  # Signal for Rust to detect
@@ -812,6 +814,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
+            {"type": "set_model", "model": str}
             {"type": "reset"}
             {"type": "set_initial_seed", "filename": str}
             {"type": "prompt", "prompt": str}
@@ -836,19 +839,41 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json({"type": "status", "code": Status.RESET})
         logger.info(f"[{client_host}] Engine Reset")
 
+    async def handle_model_request(model_uri: str | None, live_switch: bool) -> None:
+        """Load/switch model and transition back to waiting-for-seed state."""
+        model_uri = (model_uri or "").strip()
+        if not model_uri:
+            await send_json({"type": "error", "message": "Missing model id"})
+            return
+
+        if live_switch:
+            logger.info(f"[{client_host}] Live model switch requested: {model_uri}")
+        else:
+            logger.info(f"[{client_host}] Requested model: {model_uri}")
+
+        await send_json({"type": "status", "code": Status.LOADING})
+        await world_engine.load_engine(model_uri)
+        world_engine.seed_frame = None
+        session.frame_count = 0
+        await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
+        logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
+
     try:
         # Wait for initial seed from client
         await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
         logger.info(f"[{client_host}] Waiting for initial seed from client...")
 
-        # Wait for set_initial_seed message
+        # Wait for model selection + initial seed message
         while world_engine.seed_frame is None:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
                 msg = json.loads(raw)
                 msg_type = msg.get("type")
 
-                if msg_type == "set_initial_seed":
+                if msg_type == "set_model":
+                    await handle_model_request(msg.get("model"), live_switch=False)
+
+                elif msg_type == "set_initial_seed":
                     filename = msg.get("filename")
 
                     if not filename:
@@ -919,6 +944,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 return
 
+        # If no model was selected by client, load default/current model now.
+        if world_engine.engine is None:
+            await send_json({"type": "status", "code": Status.LOADING})
+            await world_engine.load_engine()
+
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
             await send_json({"type": "status", "code": Status.WARMUP})
@@ -927,7 +957,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json({"type": "status", "code": Status.INIT})
 
         logger.info(f"[{client_host}] Calling engine.reset()...")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(world_engine.cuda_executor, world_engine.engine.reset)
 
         await send_json({"type": "status", "code": Status.LOADING})
@@ -960,7 +990,6 @@ async def websocket_endpoint(websocket: WebSocket):
         async def get_latest_control():
             """Drain the message queue and return only the most recent control input."""
             latest_control_msg = None
-            skipped_count = 0
 
             while True:
                 try:
@@ -975,8 +1004,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         return msg  # Return special messages immediately
 
                     # For control messages, keep only the latest
-                    if latest_control_msg is not None:
-                        skipped_count += 1
                     latest_control_msg = msg
 
                 except asyncio.TimeoutError:
@@ -998,6 +1025,10 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = msg.get("type", "control")
 
             match msg_type:
+                case "set_model":
+                    await handle_model_request(msg.get("model"), live_switch=True)
+                    continue
+
                 case "reset":
                     logger.info(f"[{client_host}] Reset requested")
                     await reset_engine()
@@ -1197,12 +1228,19 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Re-raise if not a CUDA error
                             raise
 
+    except WebSocketDisconnect:
+        logger.info(f"[{client_host}] WebSocket disconnected")
     except Exception as e:
-        logger.error(f"[{client_host}] Error: {e}", exc_info=True)
-        try:
-            await send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
+        # Uvicorn may surface client close as ClientDisconnected instead of WebSocketDisconnect.
+        # Treat both as normal disconnects to avoid noisy tracebacks during intentional reconnects.
+        if e.__class__.__name__ == "ClientDisconnected":
+            logger.info(f"[{client_host}] Client disconnected")
+        else:
+            logger.error(f"[{client_host}] Error: {e}", exc_info=True)
+            try:
+                await send_json({"type": "error", "message": str(e)})
+            except Exception:
+                pass
     finally:
         logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")
 

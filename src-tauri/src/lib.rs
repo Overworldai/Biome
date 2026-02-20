@@ -18,6 +18,9 @@ const WORLD_ENGINE_DIR: &str = "world_engine";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
+const DEFAULT_WORLD_ENGINE_MODEL: &str = "Overworld/Waypoint-1-Small";
+const WAYPOINT_COLLECTION_API_URL: &str =
+    "https://huggingface.co/api/collections/Overworld/waypoint-1";
 
 // Bundled server components (embedded at compile time)
 const SERVER_PY: &str = include_str!("../server-components/server.py");
@@ -97,6 +100,14 @@ fn new_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     cmd
 }
 
+fn default_world_engine_model() -> String {
+    DEFAULT_WORLD_ENGINE_MODEL.to_string()
+}
+
+fn default_seed_gallery() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuServerConfig {
     pub host: String,
@@ -117,8 +128,10 @@ pub struct FeaturesConfig {
     pub prompt_sanitizer: bool,
     pub seed_generation: bool,
     pub engine_mode: EngineMode,
-    #[serde(default)]
+    #[serde(default = "default_seed_gallery")]
     pub seed_gallery: bool,
+    #[serde(default = "default_world_engine_model")]
+    pub world_engine_model: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -154,10 +167,28 @@ impl Default for AppConfig {
                 seed_generation: true,
                 engine_mode: EngineMode::Unchosen,
                 seed_gallery: true,
+                world_engine_model: DEFAULT_WORLD_ENGINE_MODEL.to_string(),
             },
             ui: UiConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct HuggingFaceCollectionItem {
+    id: String,
+    #[serde(default)]
+    private: bool,
+    #[serde(default, rename = "repoType")]
+    repo_type: Option<String>,
+    #[serde(default)]
+    r#type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HuggingFaceCollectionResponse {
+    #[serde(default)]
+    items: Vec<HuggingFaceCollectionItem>,
 }
 
 fn get_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -263,6 +294,45 @@ async fn open_config(app: tauri::AppHandle) -> Result<(), String> {
     // Open File Explorer with config file selected
     tauri_plugin_opener::reveal_item_in_dir(config_path)
         .map_err(|e| format!("Failed to reveal config file: {}", e))
+}
+
+#[tauri::command]
+async fn list_waypoint_models() -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(WAYPOINT_COLLECTION_API_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch Hugging Face collection: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to fetch Hugging Face collection: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let payload: HuggingFaceCollectionResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Hugging Face collection response: {}", e))?;
+
+    let mut models: Vec<String> = payload
+        .items
+        .into_iter()
+        .filter(|item| !item.private)
+        .filter(|item| {
+            matches!(item.repo_type.as_deref(), Some("model"))
+                || matches!(item.r#type.as_deref(), Some("model"))
+        })
+        .map(|item| item.id)
+        .collect();
+
+    if models.is_empty() {
+        models.push(DEFAULT_WORLD_ENGINE_MODEL.to_string());
+    }
+
+    Ok(models)
 }
 
 // Get the engine directory path (next to executable for portability)
@@ -1275,6 +1345,7 @@ pub fn run() {
             write_config,
             get_config_path_str,
             open_config,
+            list_waypoint_models,
             check_engine_status,
             install_uv,
             setup_server_components,

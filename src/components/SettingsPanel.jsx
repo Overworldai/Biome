@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContextShared'
-import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
+import { useConfig, STANDALONE_PORT, ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../hooks/useConfig'
 
 // Tauri invoke helper
 const invoke = async (cmd, args = {}) => {
@@ -29,6 +29,10 @@ const SettingsPanel = () => {
   const [promptSanitizer, setPromptSanitizer] = useState(true)
   const [seedGeneration, setSeedGeneration] = useState(false)
   const [engineMode, setEngineMode] = useState(ENGINE_MODES.UNCHOSEN)
+  const [worldEngineModel, setWorldEngineModel] = useState(DEFAULT_WORLD_ENGINE_MODEL)
+  const [availableModels, setAvailableModels] = useState([DEFAULT_WORLD_ENGINE_MODEL])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
   const [engineDirPath, setEngineDirPath] = useState(null)
@@ -46,6 +50,9 @@ const SettingsPanel = () => {
       setPromptSanitizer(config.features?.prompt_sanitizer ?? true)
       setSeedGeneration(config.features?.seed_generation ?? false)
       setEngineMode(config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN)
+      const selectedModel = config.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+      setWorldEngineModel(selectedModel)
+      setAvailableModels((prev) => (prev.includes(selectedModel) ? prev : [selectedModel, ...prev]))
     }
   }, [config])
 
@@ -60,6 +67,38 @@ const SettingsPanel = () => {
       checkStatus()
     }
   }, [isSettingsOpen, engineMode, checkStatus])
+
+  // Load available Waypoint models from Hugging Face when settings panel opens
+  useEffect(() => {
+    if (!isSettingsOpen) return
+
+    let isCancelled = false
+    const currentModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+
+    const loadModels = async () => {
+      setModelsLoading(true)
+      setModelsError(null)
+      try {
+        const models = await invoke('list_waypoint_models')
+        if (isCancelled) return
+
+        const mergedModels = [...new Set([currentModel, ...(Array.isArray(models) ? models : [])])]
+        setAvailableModels(mergedModels.length ? mergedModels : [DEFAULT_WORLD_ENGINE_MODEL])
+      } catch (err) {
+        if (isCancelled) return
+        console.warn('Failed to fetch Waypoint models:', err)
+        setModelsError('Could not load models from Hugging Face')
+        setAvailableModels((prev) => [...new Set([currentModel, ...prev, DEFAULT_WORLD_ENGINE_MODEL])])
+      } finally {
+        if (!isCancelled) setModelsLoading(false)
+      }
+    }
+
+    loadModels()
+    return () => {
+      isCancelled = true
+    }
+  }, [isSettingsOpen, config?.features?.world_engine_model])
 
   const handleSetupEngine = async () => {
     try {
@@ -91,20 +130,25 @@ const SettingsPanel = () => {
     const { host, port } = parseGpuServer(gpuServer)
 
     const newConfig = {
+      ...(config || {}),
       gpu_server: {
+        ...(config?.gpu_server || {}),
         host,
         port,
         use_ssl: useSsl
       },
       api_keys: {
+        ...(config?.api_keys || {}),
         openai: openaiKey,
         fal: falKey,
         huggingface: huggingfaceKey
       },
       features: {
+        ...(config?.features || {}),
         prompt_sanitizer: promptSanitizer,
         seed_generation: seedGeneration,
-        engine_mode: engineMode
+        engine_mode: engineMode,
+        world_engine_model: worldEngineModel || DEFAULT_WORLD_ENGINE_MODEL
       }
     }
 
@@ -202,6 +246,27 @@ const SettingsPanel = () => {
               </div>
               <span className="setting-hint">
                 {isStandaloneMode ? 'Biome manages World Engine automatically' : 'You run the server yourself'}
+              </span>
+            </div>
+
+            <div className="setting-group">
+              <label className="setting-label">World Model</label>
+              <select
+                className="setting-select"
+                value={worldEngineModel}
+                onChange={(e) => setWorldEngineModel(e.target.value)}
+                disabled={modelsLoading}
+              >
+                {availableModels.map((modelId) => (
+                  <option key={modelId} value={modelId}>
+                    {modelId}
+                  </option>
+                ))}
+              </select>
+              <span className="setting-hint">
+                {modelsLoading
+                  ? 'Loading models from Hugging Face...'
+                  : modelsError || 'Models from hf.co/collections/Overworld/waypoint-1'}
               </span>
             </div>
 
