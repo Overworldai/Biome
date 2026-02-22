@@ -8,6 +8,32 @@ const invoke = async (cmd, args = {}) => {
   return window.__TAURI_INTERNALS__.invoke(cmd, args)
 }
 
+const normalizeModelInput = (input) => {
+  const raw = (input || '').trim()
+  if (!raw) return ''
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const url = new URL(raw)
+      const path = (url.pathname || '').replace(/^\/+|\/+$/g, '')
+      if (!path) return ''
+      const parts = path.split('/')
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        return `${parts[0]}/${parts[1]}`
+      }
+      return ''
+    } catch {
+      return ''
+    }
+  }
+
+  return raw
+}
+
+const toUniqueModelIds = (modelIds) => {
+  return [...new Set((modelIds || []).map((id) => normalizeModelInput(id)).filter((id) => id && id.includes('/')))]
+}
+
 const SettingsPanel = () => {
   const { isSettingsOpen, toggleSettings } = usePortal()
   const { config, saveConfig, configPath, openConfig } = useConfig()
@@ -30,8 +56,11 @@ const SettingsPanel = () => {
   const [seedGeneration, setSeedGeneration] = useState(false)
   const [engineMode, setEngineMode] = useState(ENGINE_MODES.UNCHOSEN)
   const [worldEngineModel, setWorldEngineModel] = useState(DEFAULT_WORLD_ENGINE_MODEL)
-  const [availableModels, setAvailableModels] = useState([DEFAULT_WORLD_ENGINE_MODEL])
-  const [localModels, setLocalModels] = useState([])
+  const [modelOptions, setModelOptions] = useState([
+    { id: DEFAULT_WORLD_ENGINE_MODEL, isLocal: false, isCustom: false }
+  ])
+  const [customModelInput, setCustomModelInput] = useState('')
+  const [customModelError, setCustomModelError] = useState(null)
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -51,9 +80,22 @@ const SettingsPanel = () => {
       setPromptSanitizer(config.features?.prompt_sanitizer ?? true)
       setSeedGeneration(config.features?.seed_generation ?? false)
       setEngineMode(config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN)
-      const selectedModel = config.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+      const selectedModel =
+        normalizeModelInput(config.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL) ||
+        DEFAULT_WORLD_ENGINE_MODEL
+      const savedCustomModels = toUniqueModelIds(
+        Array.isArray(config.features?.custom_world_models) ? config.features.custom_world_models : []
+      )
       setWorldEngineModel(selectedModel)
-      setAvailableModels((prev) => (prev.includes(selectedModel) ? prev : [selectedModel, ...prev]))
+      setModelOptions((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]))
+        const ids = toUniqueModelIds([selectedModel, ...savedCustomModels, ...prev.map((m) => m.id)])
+        return ids.map((id) => ({
+          id,
+          isLocal: map.get(id)?.isLocal ?? false,
+          isCustom: savedCustomModels.includes(id) || map.get(id)?.isCustom || false
+        }))
+      })
     }
   }, [config])
 
@@ -74,27 +116,52 @@ const SettingsPanel = () => {
     if (!isSettingsOpen) return
 
     let isCancelled = false
-    const currentModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+    const currentModel =
+      normalizeModelInput(config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL) ||
+      DEFAULT_WORLD_ENGINE_MODEL
+    const savedCustomModels = toUniqueModelIds(
+      Array.isArray(config?.features?.custom_world_models) ? config.features.custom_world_models : []
+    )
 
     const loadModels = async () => {
       setModelsLoading(true)
       setModelsError(null)
       try {
-        const [models, local] = await Promise.all([
-          invoke('list_waypoint_models'),
-          invoke('list_local_waypoint_models').catch(() => [])
-        ])
+        const models = await invoke('list_waypoint_models')
         if (isCancelled) return
 
-        const mergedModels = [...new Set([currentModel, ...(Array.isArray(models) ? models : [])])]
-        setAvailableModels(mergedModels.length ? mergedModels : [DEFAULT_WORLD_ENGINE_MODEL])
-        setLocalModels(Array.isArray(local) ? local : [])
+        const ids = toUniqueModelIds([currentModel, ...savedCustomModels, ...(Array.isArray(models) ? models : [])])
+        const ensuredIds = ids.length ? ids : [DEFAULT_WORLD_ENGINE_MODEL]
+        const availability = await invoke('list_model_availability', { modelIds: ensuredIds })
+        if (isCancelled) return
+        const availabilityMap = new Map(
+          (Array.isArray(availability) ? availability : []).map((entry) => [entry.id, !!entry.is_local])
+        )
+
+        setModelOptions(
+          ensuredIds.map((id) => ({
+            id,
+            isLocal: availabilityMap.get(id) ?? false,
+            isCustom: savedCustomModels.includes(id)
+          }))
+        )
       } catch (err) {
         if (isCancelled) return
         console.warn('Failed to fetch Waypoint models:', err)
         setModelsError('Could not load models from Hugging Face')
-        setAvailableModels((prev) => [...new Set([currentModel, ...prev, DEFAULT_WORLD_ENGINE_MODEL])])
-        setLocalModels([])
+        const fallbackIds = toUniqueModelIds([
+          currentModel,
+          ...savedCustomModels,
+          ...modelOptions.map((m) => m.id),
+          DEFAULT_WORLD_ENGINE_MODEL
+        ])
+        setModelOptions(
+          fallbackIds.map((id) => ({
+            id,
+            isLocal: modelOptions.find((m) => m.id === id)?.isLocal ?? false,
+            isCustom: savedCustomModels.includes(id) || modelOptions.find((m) => m.id === id)?.isCustom || false
+          }))
+        )
       } finally {
         if (!isCancelled) setModelsLoading(false)
       }
@@ -104,7 +171,7 @@ const SettingsPanel = () => {
     return () => {
       isCancelled = true
     }
-  }, [isSettingsOpen, config?.features?.world_engine_model])
+  }, [isSettingsOpen, config?.features?.world_engine_model, config?.features?.custom_world_models])
 
   const handleSetupEngine = async () => {
     try {
@@ -129,11 +196,41 @@ const SettingsPanel = () => {
     }
   }
 
+  const handleAddCustomModel = async () => {
+    const normalized = normalizeModelInput(customModelInput)
+    if (!normalized || !normalized.includes('/')) {
+      setCustomModelError('Enter a valid Hugging Face model URL or org/model id')
+      return
+    }
+
+    setCustomModelError(null)
+    let isLocal = false
+    try {
+      const availability = await invoke('list_model_availability', { modelIds: [normalized] })
+      isLocal = Array.isArray(availability) && availability[0]?.is_local === true
+    } catch {
+      isLocal = false
+    }
+
+    setModelOptions((prev) => {
+      const existing = prev.find((m) => m.id === normalized)
+      if (existing) {
+        return prev.map((m) =>
+          m.id === normalized ? { ...m, isCustom: true, isLocal: existing.isLocal || isLocal } : m
+        )
+      }
+      return [{ id: normalized, isLocal, isCustom: true }, ...prev]
+    })
+    setWorldEngineModel(normalized)
+    setCustomModelInput('')
+  }
+
   const handleSave = async () => {
     setIsSaving(true)
     setSaveStatus(null)
 
     const { host, port } = parseGpuServer(gpuServer)
+    const normalizedCustomWorldModels = toUniqueModelIds(modelOptions.filter((m) => m.isCustom).map((m) => m.id))
 
     const newConfig = {
       ...(config || {}),
@@ -154,7 +251,8 @@ const SettingsPanel = () => {
         prompt_sanitizer: promptSanitizer,
         seed_generation: seedGeneration,
         engine_mode: engineMode,
-        world_engine_model: worldEngineModel || DEFAULT_WORLD_ENGINE_MODEL
+        world_engine_model: normalizeModelInput(worldEngineModel) || DEFAULT_WORLD_ENGINE_MODEL,
+        custom_world_models: normalizedCustomWorldModels
       }
     }
 
@@ -263,18 +361,40 @@ const SettingsPanel = () => {
                 onChange={(e) => setWorldEngineModel(e.target.value)}
                 disabled={modelsLoading}
               >
-                {availableModels.map((modelId) => (
-                  <option key={modelId} value={modelId}>
-                    {modelId} {localModels.includes(modelId) ? '• Local' : '• Download'}
+                {modelOptions.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.id} {model.isLocal ? '- Local' : '- Download'}
                   </option>
                 ))}
               </select>
+              <div className="model-custom-row">
+                <input
+                  type="text"
+                  className="setting-input"
+                  value={customModelInput}
+                  onChange={(e) => {
+                    setCustomModelInput(e.target.value)
+                    if (customModelError) setCustomModelError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddCustomModel()
+                    }
+                  }}
+                  placeholder="https://huggingface.co/org/model or org/model"
+                />
+                <button type="button" className="engine-action-button secondary" onClick={handleAddCustomModel}>
+                  Add
+                </button>
+              </div>
               <span className="setting-hint">
                 {modelsLoading
                   ? 'Loading models from Hugging Face...'
                   : modelsError ||
-                    `${localModels.length} local / ${availableModels.length} total • hf.co/collections/Overworld/waypoint-1`}
+                    `${modelOptions.filter((m) => m.isLocal).length} local / ${modelOptions.length} total - hf.co/collections/Overworld/waypoint-1`}
               </span>
+              {customModelError && <span className="setting-hint">{customModelError}</span>}
             </div>
 
             {/* Standalone Engine Status */}

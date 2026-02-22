@@ -1,5 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::{Path, PathBuf};
@@ -108,6 +109,10 @@ fn default_seed_gallery() -> bool {
     true
 }
 
+fn default_custom_world_models() -> Vec<String> {
+    Vec::new()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuServerConfig {
     pub host: String,
@@ -132,6 +137,8 @@ pub struct FeaturesConfig {
     pub seed_gallery: bool,
     #[serde(default = "default_world_engine_model")]
     pub world_engine_model: String,
+    #[serde(default = "default_custom_world_models")]
+    pub custom_world_models: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -168,6 +175,7 @@ impl Default for AppConfig {
                 engine_mode: EngineMode::Unchosen,
                 seed_gallery: true,
                 world_engine_model: DEFAULT_WORLD_ENGINE_MODEL.to_string(),
+                custom_world_models: Vec::new(),
             },
             ui: UiConfig::default(),
         }
@@ -364,6 +372,14 @@ fn is_model_cached_in_hf_hub(repo_id: &str, hub_dir: &Path) -> bool {
         .is_some()
 }
 
+fn local_model_ids_from_cache(model_ids: &[String], hub_dir: &Path) -> Vec<String> {
+    model_ids
+        .iter()
+        .filter(|model_id| is_model_cached_in_hf_hub(model_id, hub_dir))
+        .cloned()
+        .collect()
+}
+
 #[tauri::command]
 async fn list_local_waypoint_models(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let models = list_waypoint_models().await?;
@@ -373,14 +389,53 @@ async fn list_local_waypoint_models(app: tauri::AppHandle) -> Result<Vec<String>
         return Ok(Vec::new());
     }
 
-    let mut local = Vec::new();
-    for model in models {
-        if is_model_cached_in_hf_hub(&model, &hub_dir) {
-            local.push(model);
-        }
+    Ok(local_model_ids_from_cache(&models, &hub_dir))
+}
+
+#[derive(Debug, Serialize)]
+struct ModelAvailability {
+    id: String,
+    is_local: bool,
+}
+
+#[tauri::command]
+async fn list_model_availability(
+    app: tauri::AppHandle,
+    model_ids: Vec<String>,
+) -> Result<Vec<ModelAvailability>, String> {
+    let hub_dir = get_standalone_hf_hub_cache_dir(&app)?;
+
+    let mut seen = HashSet::new();
+    let deduped: Vec<String> = model_ids
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .collect();
+
+    if deduped.is_empty() {
+        return Ok(Vec::new());
     }
 
-    Ok(local)
+    if !hub_dir.exists() {
+        return Ok(deduped
+            .into_iter()
+            .map(|id| ModelAvailability {
+                id,
+                is_local: false,
+            })
+            .collect());
+    }
+
+    let local_set: HashSet<String> = local_model_ids_from_cache(&deduped, &hub_dir)
+        .into_iter()
+        .collect();
+    Ok(deduped
+        .into_iter()
+        .map(|id| ModelAvailability {
+            is_local: local_set.contains(&id),
+            id,
+        })
+        .collect())
 }
 
 // Get the engine directory path (next to executable for portability)
@@ -1404,6 +1459,7 @@ pub fn run() {
             open_config,
             list_waypoint_models,
             list_local_waypoint_models,
+            list_model_availability,
             check_engine_status,
             install_uv,
             setup_server_components,
