@@ -31,6 +31,7 @@ const SettingsPanel = () => {
   const [engineMode, setEngineMode] = useState(ENGINE_MODES.UNCHOSEN)
   const [worldEngineModel, setWorldEngineModel] = useState(DEFAULT_WORLD_ENGINE_MODEL)
   const [availableModels, setAvailableModels] = useState([DEFAULT_WORLD_ENGINE_MODEL])
+  const [localModels, setLocalModels] = useState([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -79,16 +80,21 @@ const SettingsPanel = () => {
       setModelsLoading(true)
       setModelsError(null)
       try {
-        const models = await invoke('list_waypoint_models')
+        const [models, local] = await Promise.all([
+          invoke('list_waypoint_models'),
+          invoke('list_local_waypoint_models').catch(() => [])
+        ])
         if (isCancelled) return
 
         const mergedModels = [...new Set([currentModel, ...(Array.isArray(models) ? models : [])])]
         setAvailableModels(mergedModels.length ? mergedModels : [DEFAULT_WORLD_ENGINE_MODEL])
+        setLocalModels(Array.isArray(local) ? local : [])
       } catch (err) {
         if (isCancelled) return
         console.warn('Failed to fetch Waypoint models:', err)
         setModelsError('Could not load models from Hugging Face')
         setAvailableModels((prev) => [...new Set([currentModel, ...prev, DEFAULT_WORLD_ENGINE_MODEL])])
+        setLocalModels([])
       } finally {
         if (!isCancelled) setModelsLoading(false)
       }
@@ -259,14 +265,15 @@ const SettingsPanel = () => {
               >
                 {availableModels.map((modelId) => (
                   <option key={modelId} value={modelId}>
-                    {modelId}
+                    {modelId} {localModels.includes(modelId) ? '• Local' : '• Download'}
                   </option>
                 ))}
               </select>
               <span className="setting-hint">
                 {modelsLoading
                   ? 'Loading models from Hugging Face...'
-                  : modelsError || 'Models from hf.co/collections/Overworld/waypoint-1'}
+                  : modelsError ||
+                    `${localModels.length} local / ${availableModels.length} total • hf.co/collections/Overworld/waypoint-1`}
               </span>
             </div>
 

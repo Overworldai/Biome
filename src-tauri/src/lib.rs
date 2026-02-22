@@ -335,6 +335,54 @@ async fn list_waypoint_models() -> Result<Vec<String>, String> {
     Ok(models)
 }
 
+fn get_standalone_hf_home_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(get_engine_dir(app)?.join(".cache").join("huggingface"))
+}
+
+fn get_standalone_hf_hub_cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(get_standalone_hf_home_dir(app)?.join("hub"))
+}
+
+fn is_model_cached_in_hf_hub(repo_id: &str, hub_dir: &Path) -> bool {
+    // Hugging Face hub cache model path format:
+    // models--{org}--{repo}
+    let model_dir_name = format!("models--{}", repo_id.replace('/', "--"));
+    let model_dir = hub_dir.join(model_dir_name);
+
+    if !model_dir.exists() {
+        return false;
+    }
+
+    let snapshots_dir = model_dir.join("snapshots");
+    if !snapshots_dir.exists() || !snapshots_dir.is_dir() {
+        return false;
+    }
+
+    fs::read_dir(&snapshots_dir)
+        .ok()
+        .and_then(|mut it| it.next())
+        .is_some()
+}
+
+#[tauri::command]
+async fn list_local_waypoint_models(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let models = list_waypoint_models().await?;
+    let hub_dir = get_standalone_hf_hub_cache_dir(&app)?;
+
+    if !hub_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut local = Vec::new();
+    for model in models {
+        if is_model_cached_in_hf_hub(&model, &hub_dir) {
+            local.push(model);
+        }
+    }
+
+    Ok(local)
+}
+
 // Get the engine directory path (next to executable for portability)
 fn get_engine_dir(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let exe_dir = get_exe_dir()?;
@@ -930,6 +978,8 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     let engine_dir = get_engine_dir(&app)?;
     let uv_dir = get_uv_dir(&app)?;
     let uv_binary = get_uv_binary_path(&app)?;
+    let hf_home_dir = get_standalone_hf_home_dir(&app)?;
+    let hf_hub_cache_dir = get_standalone_hf_hub_cache_dir(&app)?;
 
     // Check if server is already running
     {
@@ -961,6 +1011,10 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         let mut state = get_server_state().lock().unwrap();
         state.ready = false;
     }
+
+    // Ensure deterministic local Hugging Face cache path for standalone mode.
+    fs::create_dir_all(&hf_hub_cache_dir)
+        .map_err(|e| format!("Failed to create Hugging Face cache dir: {}", e))?;
 
     println!("[ENGINE] Starting server on port {}...", port);
     println!("[ENGINE] Engine dir: {:?}", engine_dir);
@@ -1013,6 +1067,9 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
         .env("UV_TOOL_DIR", uv_dir.join("tool"))
         .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
+        .env("HF_HOME", &hf_home_dir)
+        .env("HF_HUB_CACHE", &hf_hub_cache_dir)
+        .env("HUGGINGFACE_HUB_CACHE", &hf_hub_cache_dir)
         .env("PYTHONUNBUFFERED", "1") // Ensure Python output is unbuffered
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1346,6 +1403,7 @@ pub fn run() {
             get_config_path_str,
             open_config,
             list_waypoint_models,
+            list_local_waypoint_models,
             check_engine_status,
             install_uv,
             setup_server_components,
