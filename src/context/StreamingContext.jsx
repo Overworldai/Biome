@@ -21,7 +21,7 @@ export const StreamingProvider = ({ children }) => {
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
-  const { config, reloadConfig, saveConfig, isStandaloneMode } = useConfig()
+  const { config, reloadConfig, saveConfig, isStandaloneMode, engineMode } = useConfig()
   const {
     status: engineStatus,
     startServer,
@@ -73,6 +73,7 @@ export const StreamingProvider = ({ children }) => {
 
   const wasConnectingOrConnectedRef = useRef(false)
   const hadErrorRef = useRef(false)
+  const prevEngineModeRef = useRef(engineMode)
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
   const inputLoopRef = useRef(null)
@@ -115,6 +116,29 @@ export const StreamingProvider = ({ children }) => {
       checkEngineStatus()
     }
   }, [isStandaloneMode, checkEngineStatus])
+
+  // Handle engine mode switching without app restart
+  useEffect(() => {
+    const prevMode = prevEngineModeRef.current
+    prevEngineModeRef.current = engineMode
+
+    // Skip if mode hasn't actually changed, or if we're in COLD state (nothing to tear down)
+    if (prevMode === engineMode || !prevMode || state === states.COLD) return
+
+    log.info(`Engine mode changed: ${prevMode} -> ${engineMode}, performing teardown-and-reconnect`)
+
+    // Disconnect existing WebSocket
+    disconnect()
+
+    // If the OLD mode was standalone and the server is running, stop it
+    if (prevMode === ENGINE_MODES.STANDALONE && isServerRunning) {
+      stopServer().catch((err) => log.error('Failed to stop server during mode switch:', err))
+    }
+
+    // Clear any existing error and transition to WARM to re-trigger connection
+    setEngineError(null)
+    transitionTo(states.WARM)
+  }, [engineMode, state, states.COLD, states.WARM, disconnect, isServerRunning, stopServer, transitionTo])
 
   // Initialize seeds on mount
   useEffect(() => {
