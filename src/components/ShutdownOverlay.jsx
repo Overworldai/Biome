@@ -1,11 +1,19 @@
+import { useEffect, useRef } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 const ShutdownOverlay = () => {
-  const { isShuttingDown } = usePortal()
+  const { isShuttingDown, registerShutdownRef } = usePortal()
+  const shutdownBgRef = useRef(null)
+
+  useEffect(() => {
+    if (registerShutdownRef) {
+      registerShutdownRef(shutdownBgRef.current)
+    }
+  }, [registerShutdownRef])
 
   return (
     <div className={`shutdown-overlay ${isShuttingDown ? 'active' : ''}`}>
-      <div className="shutdown-background"></div>
+      <div ref={shutdownBgRef} className="shutdown-background"></div>
     </div>
   )
 }
