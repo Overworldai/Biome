@@ -49,12 +49,14 @@ export const useWebSocket = () => {
     wsRef.current = ws
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return
       isConnectingRef.current = false
       setConnectionState('connected')
       log.info('Connected to', wsUrl)
     }
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return
       try {
         const msg = JSON.parse(event.data)
 
@@ -105,6 +107,7 @@ export const useWebSocket = () => {
     }
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return
       log.error('Connection error')
       isConnectingRef.current = false
       setError('WebSocket error')
@@ -112,12 +115,16 @@ export const useWebSocket = () => {
     }
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return
       log.info('Disconnected')
       isConnectingRef.current = false
       wsRef.current = null
       setConnectionState('disconnected')
       setIsReady(false)
       setStatusCode(null)
+      setFrame(null)
+      setFrameId(0)
+      setGenTime(null)
     }
   }, [])
 
@@ -179,6 +186,15 @@ export const useWebSocket = () => {
     }
   }, [])
 
+  const sendModel = useCallback((model, seed = null) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && model) {
+      const payload = { type: 'set_model', model }
+      if (seed) payload.seed = seed
+      wsRef.current.send(JSON.stringify(payload))
+      log.info('Model sent:', model, seed ? `(with seed: ${seed})` : '')
+    }
+  }, [])
+
   const reset = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'reset' }))
@@ -206,6 +222,7 @@ export const useWebSocket = () => {
     sendPrompt,
     sendPromptWithSeed,
     sendInitialSeed,
+    sendModel,
     reset,
     isConnected: connectionState === 'connected',
     isReady,

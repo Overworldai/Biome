@@ -158,8 +158,9 @@ export const PortalProvider = ({ children }) => {
         })
       } else {
         setState(newState)
-        // Only disconnect when going back to COLD state
-        if (newState === STATES.COLD) {
+        // Entering WARM should clear the previous connected/expanded visual
+        // state so reconnects start from a clean loading phase.
+        if (newState === STATES.COLD || newState === STATES.WARM) {
           setIsConnected(false)
           setIsExpanded(false)
         }
