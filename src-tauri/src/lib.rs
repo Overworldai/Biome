@@ -1,5 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::path::{Path, PathBuf};
@@ -18,6 +19,9 @@ const WORLD_ENGINE_DIR: &str = "world_engine";
 const UV_VERSION: &str = "0.9.26";
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 const STANDALONE_PORT: u16 = 7987;
+const DEFAULT_WORLD_ENGINE_MODEL: &str = "Overworld/Waypoint-1-Small";
+const WAYPOINT_COLLECTION_API_URL: &str =
+    "https://huggingface.co/api/collections/Overworld/waypoint-1";
 
 // Bundled server components (embedded at compile time)
 const SERVER_PY: &str = include_str!("../server-components/server.py");
@@ -97,6 +101,18 @@ fn new_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     cmd
 }
 
+fn default_world_engine_model() -> String {
+    DEFAULT_WORLD_ENGINE_MODEL.to_string()
+}
+
+fn default_seed_gallery() -> bool {
+    true
+}
+
+fn default_custom_world_models() -> Vec<String> {
+    Vec::new()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuServerConfig {
     pub host: String,
@@ -117,8 +133,12 @@ pub struct FeaturesConfig {
     pub prompt_sanitizer: bool,
     pub seed_generation: bool,
     pub engine_mode: EngineMode,
-    #[serde(default)]
+    #[serde(default = "default_seed_gallery")]
     pub seed_gallery: bool,
+    #[serde(default = "default_world_engine_model")]
+    pub world_engine_model: String,
+    #[serde(default = "default_custom_world_models")]
+    pub custom_world_models: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -154,10 +174,29 @@ impl Default for AppConfig {
                 seed_generation: true,
                 engine_mode: EngineMode::Unchosen,
                 seed_gallery: true,
+                world_engine_model: DEFAULT_WORLD_ENGINE_MODEL.to_string(),
+                custom_world_models: Vec::new(),
             },
             ui: UiConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct HuggingFaceCollectionItem {
+    id: String,
+    #[serde(default)]
+    private: bool,
+    #[serde(default, rename = "repoType")]
+    repo_type: Option<String>,
+    #[serde(default)]
+    r#type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HuggingFaceCollectionResponse {
+    #[serde(default)]
+    items: Vec<HuggingFaceCollectionItem>,
 }
 
 fn get_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -263,6 +302,140 @@ async fn open_config(app: tauri::AppHandle) -> Result<(), String> {
     // Open File Explorer with config file selected
     tauri_plugin_opener::reveal_item_in_dir(config_path)
         .map_err(|e| format!("Failed to reveal config file: {}", e))
+}
+
+#[tauri::command]
+async fn list_waypoint_models() -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(WAYPOINT_COLLECTION_API_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch Hugging Face collection: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to fetch Hugging Face collection: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let payload: HuggingFaceCollectionResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Hugging Face collection response: {}", e))?;
+
+    let mut models: Vec<String> = payload
+        .items
+        .into_iter()
+        .filter(|item| !item.private)
+        .filter(|item| {
+            matches!(item.repo_type.as_deref(), Some("model"))
+                || matches!(item.r#type.as_deref(), Some("model"))
+        })
+        .map(|item| item.id)
+        .collect();
+
+    if models.is_empty() {
+        models.push(DEFAULT_WORLD_ENGINE_MODEL.to_string());
+    }
+
+    Ok(models)
+}
+
+fn get_standalone_hf_home_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(get_engine_dir(app)?.join(".cache").join("huggingface"))
+}
+
+fn get_standalone_hf_hub_cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(get_standalone_hf_home_dir(app)?.join("hub"))
+}
+
+fn is_model_cached_in_hf_hub(repo_id: &str, hub_dir: &Path) -> bool {
+    // Hugging Face hub cache model path format:
+    // models--{org}--{repo}
+    let model_dir_name = format!("models--{}", repo_id.replace('/', "--"));
+    let model_dir = hub_dir.join(model_dir_name);
+
+    if !model_dir.exists() {
+        return false;
+    }
+
+    let snapshots_dir = model_dir.join("snapshots");
+    if !snapshots_dir.exists() || !snapshots_dir.is_dir() {
+        return false;
+    }
+
+    fs::read_dir(&snapshots_dir)
+        .ok()
+        .and_then(|mut it| it.next())
+        .is_some()
+}
+
+fn local_model_ids_from_cache(model_ids: &[String], hub_dir: &Path) -> Vec<String> {
+    model_ids
+        .iter()
+        .filter(|model_id| is_model_cached_in_hf_hub(model_id, hub_dir))
+        .cloned()
+        .collect()
+}
+
+#[tauri::command]
+async fn list_local_waypoint_models(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let models = list_waypoint_models().await?;
+    let hub_dir = get_standalone_hf_hub_cache_dir(&app)?;
+
+    if !hub_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    Ok(local_model_ids_from_cache(&models, &hub_dir))
+}
+
+#[derive(Debug, Serialize)]
+struct ModelAvailability {
+    id: String,
+    is_local: bool,
+}
+
+#[tauri::command]
+async fn list_model_availability(
+    app: tauri::AppHandle,
+    model_ids: Vec<String>,
+) -> Result<Vec<ModelAvailability>, String> {
+    let hub_dir = get_standalone_hf_hub_cache_dir(&app)?;
+
+    let mut seen = HashSet::new();
+    let deduped: Vec<String> = model_ids
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .collect();
+
+    if deduped.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if !hub_dir.exists() {
+        return Ok(deduped
+            .into_iter()
+            .map(|id| ModelAvailability {
+                id,
+                is_local: false,
+            })
+            .collect());
+    }
+
+    let local_set: HashSet<String> = local_model_ids_from_cache(&deduped, &hub_dir)
+        .into_iter()
+        .collect();
+    Ok(deduped
+        .into_iter()
+        .map(|id| ModelAvailability {
+            is_local: local_set.contains(&id),
+            id,
+        })
+        .collect())
 }
 
 // Get the engine directory path (next to executable for portability)
@@ -860,6 +1033,8 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
     let engine_dir = get_engine_dir(&app)?;
     let uv_dir = get_uv_dir(&app)?;
     let uv_binary = get_uv_binary_path(&app)?;
+    let hf_home_dir = get_standalone_hf_home_dir(&app)?;
+    let hf_hub_cache_dir = get_standalone_hf_hub_cache_dir(&app)?;
 
     // Check if server is already running
     {
@@ -891,6 +1066,10 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         let mut state = get_server_state().lock().unwrap();
         state.ready = false;
     }
+
+    // Ensure deterministic local Hugging Face cache path for standalone mode.
+    fs::create_dir_all(&hf_hub_cache_dir)
+        .map_err(|e| format!("Failed to create Hugging Face cache dir: {}", e))?;
 
     println!("[ENGINE] Starting server on port {}...", port);
     println!("[ENGINE] Engine dir: {:?}", engine_dir);
@@ -943,6 +1122,9 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
         .env("UV_TOOL_DIR", uv_dir.join("tool"))
         .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
+        .env("HF_HOME", &hf_home_dir)
+        .env("HF_HUB_CACHE", &hf_hub_cache_dir)
+        .env("HUGGINGFACE_HUB_CACHE", &hf_hub_cache_dir)
         .env("PYTHONUNBUFFERED", "1") // Ensure Python output is unbuffered
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1275,6 +1457,9 @@ pub fn run() {
             write_config,
             get_config_path_str,
             open_config,
+            list_waypoint_models,
+            list_local_waypoint_models,
+            list_model_availability,
             check_engine_status,
             install_uv,
             setup_server_components,

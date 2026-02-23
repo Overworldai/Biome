@@ -2820,6 +2820,49 @@ button.hud-social-link {
   color: rgba(120, 255, 245, 0.3);
 }
 
+.settings-panel .setting-select {
+  width: 100%;
+  padding: 0.8cqh 1cqw;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.4cqw;
+  color: rgba(230, 255, 255, 0.9);
+  background: rgba(120, 255, 245, 0.04);
+  border: 1px solid rgba(120, 255, 245, 0.2);
+  border-radius: 0.5cqw;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.settings-panel .setting-select:hover {
+  border-color: rgba(120, 255, 245, 0.35);
+  background: rgba(120, 255, 245, 0.06);
+}
+
+.settings-panel .setting-select:focus {
+  border-color: rgba(120, 255, 245, 0.6);
+  background: rgba(120, 255, 245, 0.1);
+  box-shadow: 0 0 0 2px rgba(120, 255, 245, 0.1);
+}
+
+.settings-panel .setting-select option {
+  background: #0a0e12;
+  color: rgba(230, 255, 255, 0.95);
+}
+
+.settings-panel .model-custom-row {
+  display: flex;
+  gap: 0.6cqw;
+  margin-top: 0.7cqh;
+}
+
+.settings-panel .model-custom-row .setting-input {
+  flex: 1;
+}
+
+.settings-panel .model-custom-row .engine-action-button {
+  flex-shrink: 0;
+}
+
 .settings-panel .setting-hint {
   display: block;
   margin-top: 0.5cqh;

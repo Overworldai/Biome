@@ -4,7 +4,7 @@ import { StreamingContext, useStreaming } from './StreamingContextShared'
 import { usePortal } from './PortalContext'
 import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
-import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
+import { useConfig, STANDALONE_PORT, ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../hooks/useConfig'
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { createLogger } from '../utils/logger'
@@ -21,17 +21,7 @@ export const StreamingProvider = ({ children }) => {
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
-  const {
-    config,
-    isLoaded: configLoaded,
-    reloadConfig,
-    saveConfig,
-    hasOpenAiKey,
-    hasFalKey,
-    engineMode,
-    isStandaloneMode,
-    isServerMode
-  } = useConfig()
+  const { config, reloadConfig, saveConfig, isStandaloneMode } = useConfig()
   const {
     status: engineStatus,
     startServer,
@@ -61,12 +51,13 @@ export const StreamingProvider = ({ children }) => {
     sendPrompt,
     sendPromptWithSeed,
     sendInitialSeed,
+    sendModel,
     reset,
     isConnected,
     isReady,
     isLoading
   } = useWebSocket()
-  const { initializeSeeds, getDefaultSeedBase64, openSeedsDir, seedsDir } = useSeeds()
+  const { initializeSeeds, openSeedsDir, seedsDir } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
   const [pausedAt, setPausedAt] = useState(null)
@@ -86,6 +77,9 @@ export const StreamingProvider = ({ children }) => {
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
   const inputLoopRef = useRef(null)
+  const lastAppliedModelRef = useRef(null)
+  const intentionalReconnectRef = useRef(false)
+  const warmBootstrapSentRef = useRef(false)
 
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
@@ -153,15 +147,62 @@ export const StreamingProvider = ({ children }) => {
     })
   }, [initializeSeeds])
 
-  // Send initial seed when server is waiting for it
+  // Bootstrap each new WARM websocket session deterministically:
+  // send model + seed together so server applies model first and can load seed
+  // immediately when model load completes.
   useEffect(() => {
-    if (statusCode === 'waiting_for_seed' && isConnected) {
-      log.info('Server waiting for seed, sending default seed filename...')
-      // Just send the filename - server has the file
-      sendInitialSeed('default.png')
-      log.info('Initial seed filename sent to server')
+    if (state !== states.WARM) return
+    if (!isConnected) return
+    if (warmBootstrapSentRef.current) return
+
+    const selectedModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+    log.info('WARM connected - bootstrapping session with model+seed:', selectedModel)
+    sendModel(selectedModel, 'default.png')
+    lastAppliedModelRef.current = selectedModel
+    warmBootstrapSentRef.current = true
+  }, [state, states.WARM, isConnected, config?.features?.world_engine_model, sendModel])
+
+  useEffect(() => {
+    if (!isConnected) {
+      warmBootstrapSentRef.current = false
     }
-  }, [statusCode, isConnected, sendInitialSeed])
+  }, [isConnected])
+
+  // Live model switch while connected
+  useEffect(() => {
+    if (state !== states.STREAMING) return
+    if (!isConnected) return
+    const selectedModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
+    if (selectedModel === lastAppliedModelRef.current) return
+    if (intentionalReconnectRef.current) return
+
+    log.info('Model changed in settings while streaming - reconnecting to start a fresh session:', selectedModel)
+    intentionalReconnectRef.current = true
+    warmBootstrapSentRef.current = false
+    setConnectionLost(false)
+    setSettingsOpen(false)
+    setIsPaused(false)
+    setPausedAt(null)
+    disconnect()
+  }, [
+    state,
+    states.STREAMING,
+    isConnected,
+    config?.features?.world_engine_model,
+    disconnect,
+    transitionTo,
+    states.WARM
+  ])
+
+  // Complete intentional model-switch reconnect only after socket is fully closed.
+  useEffect(() => {
+    if (state !== states.STREAMING) return
+    if (!intentionalReconnectRef.current) return
+    if (connectionState !== 'disconnected') return
+
+    log.info('Model switch disconnect complete - transitioning to WARM')
+    transitionTo(states.WARM)
+  }, [state, states.STREAMING, states.WARM, connectionState, transitionTo])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
@@ -337,18 +378,30 @@ export const StreamingProvider = ({ children }) => {
 
   // State transitions
   useEffect(() => {
-    if (state === states.WARM && hasReceivedFrame && canvasReady) {
+    if (
+      state === states.WARM &&
+      connectionState === 'connected' &&
+      statusCode === 'ready' &&
+      hasReceivedFrame &&
+      canvasReady
+    ) {
       log.info('First frame received - transitioning to HOT')
       transitionTo(states.HOT)
     }
-  }, [state, states.WARM, states.HOT, hasReceivedFrame, canvasReady, transitionTo])
+  }, [state, states.WARM, states.HOT, connectionState, statusCode, hasReceivedFrame, canvasReady, transitionTo])
 
   useEffect(() => {
-    if (state === states.HOT && portalConnected && isReady) {
+    if (
+      state === states.HOT &&
+      connectionState === 'connected' &&
+      statusCode === 'ready' &&
+      portalConnected &&
+      isReady
+    ) {
       log.info('Fully ready - transitioning to STREAMING')
       transitionTo(states.STREAMING)
     }
-  }, [state, states.HOT, states.STREAMING, portalConnected, isReady, transitionTo])
+  }, [state, states.HOT, states.STREAMING, connectionState, statusCode, portalConnected, isReady, transitionTo])
 
   useEffect(() => {
     if (state === states.STREAMING && isReady && containerRef.current) {
@@ -361,6 +414,9 @@ export const StreamingProvider = ({ children }) => {
   useEffect(() => {
     if (state !== states.WARM && state !== states.HOT && state !== states.STREAMING) {
       disconnect()
+      warmBootstrapSentRef.current = false
+      lastAppliedModelRef.current = null
+      intentionalReconnectRef.current = false
       exitPointerLock()
       setSettingsOpen(false)
       setIsPaused(false)
@@ -376,6 +432,11 @@ export const StreamingProvider = ({ children }) => {
 
     if (state === states.WARM && wasConnectingOrConnectedRef.current) {
       if (connectionState === 'error' || connectionState === 'disconnected') {
+        if (intentionalReconnectRef.current) {
+          log.info('Intentional reconnect in WARM state - suppressing engine error')
+          wasConnectingOrConnectedRef.current = false
+          return
+        }
         const isError = connectionState === 'error'
         log.error(isError ? 'Connection error during WARM state' : 'Connection lost during WARM state')
         setEngineError(
@@ -413,6 +474,10 @@ export const StreamingProvider = ({ children }) => {
       isInConnectionState &&
       (connectionState === 'disconnected' || connectionState === 'error')
     ) {
+      if (intentionalReconnectRef.current) {
+        log.info('Intentional reconnect in progress - suppressing connection lost overlay')
+        return
+      }
       log.info('Connection lost detected')
       setConnectionLost(true)
     }
@@ -420,8 +485,13 @@ export const StreamingProvider = ({ children }) => {
     if (state === states.COLD) {
       wasConnectingOrConnectedRef.current = false
       setConnectionLost(false)
+      intentionalReconnectRef.current = false
     }
-  }, [connectionState, state, states.HOT, states.STREAMING, states.COLD])
+
+    if (state === states.WARM && connectionState === 'connected') {
+      intentionalReconnectRef.current = false
+    }
+  }, [connectionState, state, states.HOT, states.STREAMING, states.COLD, states.WARM])
 
   // Render frames to canvas
   useEffect(() => {

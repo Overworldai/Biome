@@ -26,10 +26,12 @@ import os
 import pickle
 import shutil
 import time
-import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+# Reduce CUDA allocator fragmentation during repeated model loads/switches.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,6 +101,7 @@ rescan_lock = None  # Prevent concurrent rescans (initialized in lifespan)
 SEEDS_BASE_DIR = Path(__file__).parent.parent / "world_engine" / "seeds"
 DEFAULT_SEEDS_DIR = SEEDS_BASE_DIR / "default"
 UPLOADS_DIR = SEEDS_BASE_DIR / "uploads"
+DEFAULT_INITIAL_SEED = "default.png"
 CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.bin"
 
 # Local seeds directory (for dev/standalone usage - relative to project root)
@@ -421,8 +424,8 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
 
-    # Load WorldEngine on startup
-    await world_engine.load_engine()
+    # WorldEngine is loaded lazily on first client connection.
+    # This allows remote clients to select model per session.
 
     # Initialize seed management system
     logger.info("Initializing server-side seed storage...")
@@ -437,7 +440,7 @@ async def lifespan(app: FastAPI):
     safe_seeds_cache = cache.get("files", {})
 
     logger.info("=" * 60)
-    logger.info("[SERVER] Ready - WorldEngine and Safety modules loaded")
+    logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
     logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
     logger.info("=" * 60)
     print("SERVER READY", flush=True)  # Signal for Rust to detect
@@ -812,6 +815,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
+            {"type": "set_model", "model": str}
             {"type": "reset"}
             {"type": "set_initial_seed", "filename": str}
             {"type": "prompt", "prompt": str}
@@ -826,6 +830,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
     session = Session()
+    # Each websocket session must perform an explicit model/seed handshake.
+    # Do not reuse seed state from a previous disconnected client.
+    world_engine.seed_frame = None
 
     async def send_json(data: dict):
         await websocket.send_text(json.dumps(data))
@@ -836,78 +843,120 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json({"type": "status", "code": Status.RESET})
         logger.info(f"[{client_host}] Engine Reset")
 
+    async def load_initial_seed(filename: str | None) -> bool:
+        """Validate and load seed into world_engine.seed_frame."""
+        if not filename:
+            await send_json({"type": "error", "message": "Missing filename"})
+            return False
+
+        if filename not in safe_seeds_cache:
+            logger.warning(f"[{client_host}] Seed '{filename}' not in safety cache")
+            await send_json(
+                {"type": "error", "message": f"Seed '{filename}' not in safety cache"}
+            )
+            return False
+
+        cached_entry = safe_seeds_cache[filename]
+        if not cached_entry.get("is_safe", False):
+            logger.warning(f"[{client_host}] Seed '{filename}' marked as unsafe")
+            await send_json(
+                {"type": "error", "message": f"Seed '{filename}' marked as unsafe"}
+            )
+            return False
+
+        cached_hash = cached_entry.get("hash", "")
+        file_path = cached_entry.get("path", "")
+        if not os.path.exists(file_path):
+            logger.error(f"[{client_host}] Seed file not found: {file_path}")
+            await send_json(
+                {"type": "error", "message": f"Seed file not found: {filename}"}
+            )
+            return False
+
+        actual_hash = await asyncio.to_thread(compute_file_hash, file_path)
+        if actual_hash != cached_hash:
+            logger.warning(
+                f"[{client_host}] File integrity check failed for '{filename}' - file may have been modified"
+            )
+            await send_json(
+                {
+                    "type": "error",
+                    "message": "File integrity verification failed - please rescan seeds",
+                }
+            )
+            return False
+
+        logger.info(f"[{client_host}] Loading initial seed '{filename}'")
+        loaded_frame = await world_engine.load_seed_from_file(file_path)
+        if loaded_frame is None:
+            await send_json({"type": "error", "message": "Failed to load seed image"})
+            return False
+
+        world_engine.seed_frame = loaded_frame
+        logger.info(f"[{client_host}] Initial seed loaded successfully")
+        return True
+
+    async def handle_model_request(
+        model_uri: str | None, live_switch: bool, seed_filename: str | None = None
+    ) -> None:
+        """Load/switch model and transition back to waiting-for-seed state."""
+        model_uri = (model_uri or "").strip()
+        if not model_uri:
+            await send_json({"type": "error", "message": "Missing model id"})
+            return
+
+        if live_switch:
+            logger.info(f"[{client_host}] Live model switch requested: {model_uri}")
+        else:
+            logger.info(f"[{client_host}] Requested model: {model_uri}")
+        logger.info(f"[{client_host}] set_model seed payload: {seed_filename!r}")
+
+        # Model switches can take tens of seconds. Keep emitting loading status so
+        # clients don't treat the connection as stalled mid-switch.
+        await send_json({"type": "status", "code": Status.LOADING})
+        load_task = asyncio.create_task(world_engine.load_engine(model_uri))
+        while True:
+            try:
+                await asyncio.wait_for(asyncio.shield(load_task), timeout=5.0)
+                break
+            except asyncio.TimeoutError:
+                await send_json({"type": "status", "code": Status.LOADING})
+
+        world_engine.seed_frame = None
+        session.frame_count = 0
+        seed_loaded = False
+        effective_seed = seed_filename or DEFAULT_INITIAL_SEED
+        seed_loaded = await load_initial_seed(effective_seed)
+        if not seed_loaded and seed_filename:
+            # If an explicit seed fails, still leave room for a manual retry from client.
+            logger.info(
+                f"[{client_host}] Failed to load explicit seed '{seed_filename}', waiting for client seed"
+            )
+        if not seed_loaded:
+            await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
+        logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
+
     try:
         # Wait for initial seed from client
         await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
         logger.info(f"[{client_host}] Waiting for initial seed from client...")
 
-        # Wait for set_initial_seed message
+        # Wait for model selection + initial seed message
         while world_engine.seed_frame is None:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
                 msg = json.loads(raw)
                 msg_type = msg.get("type")
 
-                if msg_type == "set_initial_seed":
-                    filename = msg.get("filename")
+                if msg_type == "set_model":
+                    await handle_model_request(
+                        msg.get("model"),
+                        live_switch=False,
+                        seed_filename=msg.get("seed"),
+                    )
 
-                    if not filename:
-                        await send_json(
-                            {"type": "error", "message": "Missing filename"}
-                        )
-                        continue
-
-                    # Verify seed is in safety cache and is safe
-                    if filename not in safe_seeds_cache:
-                        logger.warning(f"[{client_host}] Seed '{filename}' not in safety cache")
-                        await send_json(
-                            {"type": "error", "message": f"Seed '{filename}' not in safety cache"}
-                        )
-                        continue
-
-                    cached_entry = safe_seeds_cache[filename]
-
-                    if not cached_entry.get("is_safe", False):
-                        logger.warning(f"[{client_host}] Seed '{filename}' marked as unsafe")
-                        await send_json(
-                            {"type": "error", "message": f"Seed '{filename}' marked as unsafe"}
-                        )
-                        continue
-
-                    # Get cached hash and file path
-                    cached_hash = cached_entry.get("hash", "")
-                    file_path = cached_entry.get("path", "")
-
-                    # Verify file exists
-                    if not os.path.exists(file_path):
-                        logger.error(f"[{client_host}] Seed file not found: {file_path}")
-                        await send_json(
-                            {"type": "error", "message": f"Seed file not found: {filename}"}
-                        )
-                        continue
-
-                    # Verify file integrity (check if file on disk matches cached hash)
-                    actual_hash = await asyncio.to_thread(compute_file_hash, file_path)
-                    if actual_hash != cached_hash:
-                        logger.warning(
-                            f"[{client_host}] File integrity check failed for '{filename}' - file may have been modified"
-                        )
-                        await send_json(
-                            {"type": "error", "message": "File integrity verification failed - please rescan seeds"}
-                        )
-                        continue
-
-                    # All checks passed - load the seed
-                    logger.info(f"[{client_host}] Loading initial seed '{filename}'")
-                    loaded_frame = await world_engine.load_seed_from_file(file_path)
-
-                    if loaded_frame is not None:
-                        world_engine.seed_frame = loaded_frame
-                        logger.info(f"[{client_host}] Initial seed loaded successfully")
-                    else:
-                        await send_json(
-                            {"type": "error", "message": "Failed to load seed image"}
-                        )
+                elif msg_type == "set_initial_seed":
+                    await load_initial_seed(msg.get("filename"))
                 else:
                     logger.info(
                         f"[{client_host}] Ignoring message type '{msg_type}' while waiting for seed"
@@ -919,6 +968,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 return
 
+        # If no model was selected by client, load default/current model now.
+        if world_engine.engine is None:
+            await send_json({"type": "status", "code": Status.LOADING})
+            await world_engine.load_engine()
+
+        if world_engine.seed_frame is None:
+            logger.info(
+                f"[{client_host}] Seed frame missing before initialization; client likely disconnected/reconnected during model switch"
+            )
+            return
+
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
             await send_json({"type": "status", "code": Status.WARMUP})
@@ -927,7 +987,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json({"type": "status", "code": Status.INIT})
 
         logger.info(f"[{client_host}] Calling engine.reset()...")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(world_engine.cuda_executor, world_engine.engine.reset)
 
         await send_json({"type": "status", "code": Status.LOADING})
@@ -960,7 +1020,6 @@ async def websocket_endpoint(websocket: WebSocket):
         async def get_latest_control():
             """Drain the message queue and return only the most recent control input."""
             latest_control_msg = None
-            skipped_count = 0
 
             while True:
                 try:
@@ -975,8 +1034,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         return msg  # Return special messages immediately
 
                     # For control messages, keep only the latest
-                    if latest_control_msg is not None:
-                        skipped_count += 1
                     latest_control_msg = msg
 
                 except asyncio.TimeoutError:
@@ -998,6 +1055,10 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = msg.get("type", "control")
 
             match msg_type:
+                case "set_model":
+                    await handle_model_request(msg.get("model"), live_switch=True)
+                    continue
+
                 case "reset":
                     logger.info(f"[{client_host}] Reset requested")
                     await reset_engine()
@@ -1197,12 +1258,19 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Re-raise if not a CUDA error
                             raise
 
+    except WebSocketDisconnect:
+        logger.info(f"[{client_host}] WebSocket disconnected")
     except Exception as e:
-        logger.error(f"[{client_host}] Error: {e}", exc_info=True)
-        try:
-            await send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
+        # Uvicorn may surface client close as ClientDisconnected instead of WebSocketDisconnect.
+        # Treat both as normal disconnects to avoid noisy tracebacks during intentional reconnects.
+        if e.__class__.__name__ == "ClientDisconnected":
+            logger.info(f"[{client_host}] Client disconnected")
+        else:
+            logger.error(f"[{client_host}] Error: {e}", exc_info=True)
+            try:
+                await send_json({"type": "error", "message": str(e)})
+            except Exception:
+                pass
     finally:
         logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")
 
