@@ -21,7 +21,7 @@ export const StreamingProvider = ({ children }) => {
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
-  const { config, reloadConfig, saveConfig, isStandaloneMode } = useConfig()
+  const { config, reloadConfig, saveConfig, isStandaloneMode, engineMode } = useConfig()
   const {
     status: engineStatus,
     startServer,
