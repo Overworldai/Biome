@@ -122,6 +122,9 @@ export const useWebSocket = () => {
       setConnectionState('disconnected')
       setIsReady(false)
       setStatusCode(null)
+      setFrame(null)
+      setFrameId(0)
+      setGenTime(null)
     }
   }, [])
 
@@ -183,10 +186,12 @@ export const useWebSocket = () => {
     }
   }, [])
 
-  const sendModel = useCallback((model) => {
+  const sendModel = useCallback((model, seed = null) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && model) {
-      wsRef.current.send(JSON.stringify({ type: 'set_model', model }))
-      log.info('Model sent:', model)
+      const payload = { type: 'set_model', model }
+      if (seed) payload.seed = seed
+      wsRef.current.send(JSON.stringify(payload))
+      log.info('Model sent:', model, seed ? `(with seed: ${seed})` : '')
     }
   }, [])
 
