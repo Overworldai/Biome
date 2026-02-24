@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
 
 // Determine log line color class based on content
-const getLogClass = (line) => {
+const getLogClass = (line: string): string => {
   if (line.includes('[ERROR]') || line.includes('FATAL') || line.includes('Error:')) {
     return 'log-error'
   }
@@ -24,18 +24,24 @@ const ServerLogDisplay = ({
   errorMessage = null,
   showProgress = false,
   progressMessage = null
+}: {
+  showDismiss?: boolean
+  onDismiss?: () => void
+  errorMessage?: string | null
+  showProgress?: boolean
+  progressMessage?: string | null
 }) => {
-  const [logs, setLogs] = useState([])
-  const containerRef = useRef(null)
+  const [logs, setLogs] = useState<string[]>([])
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    let unlisten
+    let unlisten: (() => void) | undefined
     let mounted = true
 
     const setupListener = async () => {
       unlisten = await listen('server-log', (event) => {
         if (!mounted) return
-        const line = event.payload
+        const line = String(event.payload ?? '')
         setLogs((prev) => {
           // Keep last 100 lines to prevent memory issues
           const newLogs = [...prev, line]

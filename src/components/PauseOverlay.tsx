@@ -1,7 +1,7 @@
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
 import { useStreaming } from '../context/StreamingContext'
 
-const PauseOverlay = ({ isActive }) => {
+const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { canUnpause, unlockDelayMs, pauseElapsedMs } = useStreaming()
 
   const remainingMs = Math.max(0, unlockDelayMs - pauseElapsedMs)

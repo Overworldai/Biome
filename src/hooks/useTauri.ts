@@ -131,7 +131,8 @@ export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs
     }
 
     const setupListener = async () => {
-      unlisten = await appWindow.current?.onResized(onResized)
+      if (!appWindow.current) return
+      unlisten = await appWindow.current.onResized(onResized)
     }
 
     setupListener()

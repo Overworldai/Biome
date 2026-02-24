@@ -31,8 +31,8 @@ const VideoContainer = () => {
   const showServerLogs =
     (state === states.WARM && isStandaloneMode) || (state === states.COLD && engineSetupInProgress) || engineError
 
-  const containerRef = useRef(null)
-  const canvasRef = useRef(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     if (containerRef.current) {
@@ -42,7 +42,7 @@ const VideoContainer = () => {
 
   // Callback ref for canvas - registers immediately when element mounts
   const handleCanvasRef = useCallback(
-    (element) => {
+    (element: HTMLCanvasElement | null) => {
       canvasRef.current = element
       registerCanvasRef(element)
     },

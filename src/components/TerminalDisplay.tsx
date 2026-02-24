@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
-import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
+import { useConfig, STANDALONE_PORT } from '../hooks/useConfig'
 import EngineModeChoice from './EngineModeChoice'
+import type { EngineMode } from '../types/app'
 
 // Display text for portal states
-const stateMessages = {
+const stateMessages: Record<string, string> = {
   cold: 'ENTER URL:',
   cold_standalone: 'PRESS ENTER',
   warm: 'CONNECTING...',
@@ -14,13 +15,13 @@ const stateMessages = {
 }
 
 // Error messages for user feedback
-const errorMessages = {
+const errorMessages: Record<string, string> = {
   invalid_url: 'INVALID URL',
   connection_failed: 'CONNECTION FAILED - CHECK NETWORK'
 }
 
 // Map server status codes to display text
-const statusCodeMessages = {
+const statusCodeMessages: Record<string, string> = {
   warmup: 'WARMING UP...',
   init: 'INITIALIZING ENGINE...',
   loading: 'LOADING WORLD...',
@@ -30,9 +31,8 @@ const statusCodeMessages = {
 
 const TerminalDisplay = () => {
   const { state, states, transitionTo, onStateChange } = usePortal()
-  const { statusCode, setEndpointUrl, engineError, clearEngineError, cancelConnection, handleModeChoice } =
-    useStreaming()
-  const { config, saveGpuServerUrl, engineMode, isEngineUnchosen, isStandaloneMode, isServerMode } = useConfig()
+  const { statusCode, setEndpointUrl, engineError, cancelConnection, handleModeChoice } = useStreaming()
+  const { config, saveGpuServerUrl, isEngineUnchosen, isStandaloneMode, isServerMode } = useConfig()
 
   // For backwards compatibility: treat unchosen as standalone for URL purposes
   const useStandaloneEngine = isStandaloneMode || isEngineUnchosen
@@ -43,15 +43,15 @@ const TerminalDisplay = () => {
   const [isTyping, setIsTyping] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [inputValue, setInputValue] = useState(defaultUrl)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [showPlaceholder, setShowPlaceholder] = useState(false)
 
-  const timeoutRef = useRef(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentMessageRef = useRef('')
   const displayTextRef = useRef('')
-  const containerRef = useRef(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const hasBeenVisible = useRef(false)
-  const pendingMessageRef = useRef(null)
+  const pendingMessageRef = useRef<string | null>(null)
   const lastStateRef = useRef(state)
 
   // Keep ref in sync with state for deleteMessage to use
@@ -72,7 +72,7 @@ const TerminalDisplay = () => {
   }, [])
 
   const typeMessage = useCallback(
-    (message, speed = 30) => {
+    (message: string, speed = 30) => {
       clearAnimationTimeout()
       setIsTyping(true)
       setDisplayText('')
@@ -104,7 +104,7 @@ const TerminalDisplay = () => {
   )
 
   const deleteMessage = useCallback(
-    (onComplete, speed = 20) => {
+    (onComplete: () => void, speed = 20) => {
       clearAnimationTimeout()
       setIsDeleting(true)
       setShowPlaceholder(false)
@@ -129,7 +129,7 @@ const TerminalDisplay = () => {
 
   // Transition message with delete-then-type animation
   const transitionMessage = useCallback(
-    (newMessage) => {
+    (newMessage: string) => {
       if (currentMessageRef.current === newMessage) return
 
       if (currentMessageRef.current) {
@@ -148,7 +148,7 @@ const TerminalDisplay = () => {
     const el = containerRef.current
     if (!el) return
 
-    const handleAnimationEnd = (e) => {
+    const handleAnimationEnd = (e: AnimationEvent) => {
       if (e.animationName === 'contentFadeIn' && !hasBeenVisible.current) {
         hasBeenVisible.current = true
         if (pendingMessageRef.current) {
@@ -234,13 +234,13 @@ const TerminalDisplay = () => {
     })
   }, [onStateChange, states.COLD])
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
     if (error) setError(null)
   }
 
   // Validate URL format
-  const isValidUrl = (url) => {
+  const isValidUrl = (url: string) => {
     const trimmed = url.trim()
     return /^(ws:\/\/|wss:\/\/)?[\w.-]+(:\d+)?(\/\S*)?$/.test(trimmed)
   }
@@ -265,13 +265,13 @@ const TerminalDisplay = () => {
     transitionTo(states.WARM)
   }, [state, states.COLD, states.WARM, useStandaloneEngine, inputValue, saveGpuServerUrl, setEndpointUrl, transitionTo])
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') handleConnect()
   }
 
   // Global Enter key handler
   useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       // In standalone mode, just need showPlaceholder; otherwise also need inputValue
       const canConnect = useStandaloneEngine ? showPlaceholder : showPlaceholder && inputValue.trim()
       if (e.key === 'Enter' && state === states.COLD && canConnect) {
@@ -286,7 +286,7 @@ const TerminalDisplay = () => {
 
   // Handle mode choice from dialog
   const onModeChosen = useCallback(
-    (chosenMode) => {
+    (chosenMode: EngineMode) => {
       if (handleModeChoice) {
         handleModeChoice(chosenMode)
       }

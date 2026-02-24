@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
@@ -16,6 +16,7 @@ import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { createLogger } from '../utils/logger'
 import type { StreamingContextValue } from './streamingContextTypes'
+import type { EngineMode } from '../types/app'
 
 const log = createLogger('Streaming')
 
@@ -32,7 +33,7 @@ export const useStreaming = () => {
   return context
 }
 
-export const StreamingProvider = ({ children }) => {
+export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const {
     state,
     states,
@@ -41,8 +42,8 @@ export const StreamingProvider = ({ children }) => {
     isConnected: portalConnected,
     isExpanded: portalExpanded
   } = usePortal()
-  const containerRef = useRef(null)
-  const canvasRef = useRef(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const { config, reloadConfig, saveConfig, isStandaloneMode, engineMode } = useConfig()
   const {
@@ -83,15 +84,15 @@ export const StreamingProvider = ({ children }) => {
   const { initializeSeeds, openSeedsDir, seedsDir } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
-  const [pausedAt, setPausedAt] = useState(null)
+  const [pausedAt, setPausedAt] = useState<number | null>(null)
   const [pauseElapsedMs, setPauseElapsedMs] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
-  const [engineError, setEngineError] = useState(null)
-  const [endpointUrl, setEndpointUrl] = useState(null)
+  const [engineError, setEngineError] = useState<string | null>(null)
+  const [endpointUrl, setEndpointUrl] = useState<string | null>(null)
   const [canvasReady, setCanvasReady] = useState(false)
   const [warmConnectionJobSeq, setWarmConnectionJobSeq] = useState(0)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
@@ -99,8 +100,8 @@ export const StreamingProvider = ({ children }) => {
   const prevEngineModeRef = useRef(engineMode)
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
-  const inputLoopRef = useRef(null)
-  const lastAppliedModelRef = useRef(null)
+  const inputLoopRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastAppliedModelRef = useRef<string | null>(null)
   const warmBootstrapSentRef = useRef(false)
 
   const hasReceivedFrame = frame !== null
@@ -126,7 +127,7 @@ export const StreamingProvider = ({ children }) => {
   // Bottom panel visibility (persisted in config)
   const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
   const setBottomPanelHidden = useCallback(
-    async (hidden) => {
+    async (hidden: boolean) => {
       await saveConfig({ ...config, ui: { ...config.ui, bottom_panel_hidden: hidden } })
     },
     [config, saveConfig]
@@ -272,10 +273,10 @@ export const StreamingProvider = ({ children }) => {
     if (warmConnectionJobSeq === 0) return
 
     let cancelled = false
-    let unlisten = null
+    let unlisten: (() => void) | null = null
 
-    const handleServerError = (err) => {
-      const errorMsg = err?.message || String(err)
+    const handleServerError = (err: unknown) => {
+      const errorMsg = err instanceof Error ? err.message : String(err)
       log.error('Server error:', errorMsg)
       setEngineError(errorMsg)
       // Don't transition to cold immediately - wait for user to dismiss the error
@@ -292,7 +293,7 @@ export const StreamingProvider = ({ children }) => {
       checkEngineStatus,
       startServer,
       connect,
-      setUnlisten: (fn) => {
+      setUnlisten: (fn: () => void) => {
         unlisten = fn
       },
       listenForServerReady: (onReady) => listen('server-ready', onReady),
@@ -398,10 +399,10 @@ export const StreamingProvider = ({ children }) => {
   }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
 
   // Ref registration callbacks
-  const registerContainerRef = useCallback((element) => {
+  const registerContainerRef = useCallback((element: HTMLDivElement | null) => {
     containerRef.current = element
   }, [])
-  const registerCanvasRef = useCallback((element) => {
+  const registerCanvasRef = useCallback((element: HTMLCanvasElement | null) => {
     canvasRef.current = element
     setCanvasReady(!!element)
   }, [])
@@ -456,7 +457,7 @@ export const StreamingProvider = ({ children }) => {
 
   // Handle mode choice from the choice dialog (when user selects Standalone or Server)
   const handleModeChoice = useCallback(
-    async (chosenMode) => {
+    async (chosenMode: EngineMode) => {
       log.info('Mode choice made:', chosenMode)
       if (chosenMode === ENGINE_MODES.STANDALONE) {
         // Start installation immediately
@@ -470,7 +471,7 @@ export const StreamingProvider = ({ children }) => {
           transitionTo(states.WARM)
         } catch (err) {
           log.error('Engine setup failed:', err)
-          setEngineError(err.message || String(err))
+          setEngineError(err instanceof Error ? err.message : String(err))
         }
       }
       // For server mode, nothing special needed - config was already saved
@@ -478,7 +479,7 @@ export const StreamingProvider = ({ children }) => {
     [setupEngine, reloadConfig, transitionTo, states.WARM]
   )
 
-  const value = {
+  const value: StreamingContextValue = {
     // Connection state
     connectionState,
     connectionLost,

@@ -1,5 +1,6 @@
 import { DEFAULT_WORLD_ENGINE_MODEL } from '../hooks/useConfig'
 import type { StreamingLifecycleEffects, StreamingLifecycleState } from './streamingLifecycleMachine'
+import type { PortalState } from './portalStateMachine'
 
 export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
   'suppressedIntentionalWarmError',
@@ -21,10 +22,10 @@ export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
 ]
 
 type PortalStatesLike = {
-  COLD: string
-  WARM: string
-  HOT: string
-  STREAMING: string
+  COLD: PortalState
+  WARM: PortalState
+  HOT: PortalState
+  STREAMING: PortalState
 }
 
 type CreateHandlersArgs = {
@@ -39,7 +40,7 @@ type CreateHandlersArgs = {
   setIsPaused: (value: boolean) => void
   setPausedAt: (value: number | null) => void
   disconnect: () => void
-  transitionTo: (state: string) => void
+  transitionTo: (state: PortalState) => void | Promise<boolean>
   states: PortalStatesLike
   lastAppliedModelRef: { current: string | null }
   exitPointerLock: () => void
