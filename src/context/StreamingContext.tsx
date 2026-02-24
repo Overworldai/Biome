@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useReducer } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer } from 'react'
 import { listen } from '@tauri-apps/api/event'
-import { StreamingContext, useStreaming } from './StreamingContextShared'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -16,13 +15,22 @@ import { useConfig, STANDALONE_PORT, ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } 
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { createLogger } from '../utils/logger'
+import type { StreamingContextValue } from './streamingContextTypes'
 
 const log = createLogger('Streaming')
 
 // Browsers require ~1s delay before pointer lock can be re-requested
 const UNLOCK_DELAY_MS = 1250
 
-export { useStreaming }
+export const StreamingContext = createContext<StreamingContextValue | null>(null)
+
+export const useStreaming = () => {
+  const context = useContext(StreamingContext)
+  if (!context) {
+    throw new Error('useStreaming must be used within a StreamingProvider')
+  }
+  return context
+}
 
 export const StreamingProvider = ({ children }) => {
   const {
@@ -492,6 +500,10 @@ export const StreamingProvider = ({ children }) => {
     genTime,
     frameId,
     fps,
+    stats: {
+      gentime: genTime ?? 0,
+      rtt: 0
+    },
     showStats,
     setShowStats,
 

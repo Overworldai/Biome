@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
+import type { SeedRecord } from '../types/app'
 
 const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const {
@@ -166,7 +167,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     const loadSeedsAndThumbnails = async () => {
       setLoadingSeeds(true)
       try {
-        const seedList = await invoke('list_seeds')
+        const seedList = await invoke<SeedRecord[]>('list_seeds')
         if (cancelled) return
         setSeeds(seedList)
 
@@ -263,7 +264,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       const result = await response.json()
 
       // Refresh seeds list (includes unsafe seeds now)
-      const seedList = await invoke('list_seeds')
+      const seedList = await invoke<SeedRecord[]>('list_seeds')
       setSeeds(seedList)
 
       // Load thumbnail for the uploaded seed

@@ -1,4 +1,4 @@
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 
 const ConnectionLostOverlay = () => {
   const { connectionLost, dismissConnectionLost } = useStreaming()

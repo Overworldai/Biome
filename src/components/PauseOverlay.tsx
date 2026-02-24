@@ -1,5 +1,5 @@
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 
 const PauseOverlay = ({ isActive }) => {
   const { canUnpause, unlockDelayMs, pauseElapsedMs } = useStreaming()

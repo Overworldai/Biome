@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react'
+import type { AppConfig, EngineMode } from '../types/app'
 
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 export const STANDALONE_PORT = 7987
@@ -9,9 +10,30 @@ export const ENGINE_MODES = {
   UNCHOSEN: 'unchosen',
   STANDALONE: 'standalone',
   SERVER: 'server'
+} as const
+
+type EngineModes = (typeof ENGINE_MODES)[keyof typeof ENGINE_MODES]
+
+type ConfigContextValue = {
+  config: AppConfig
+  isLoaded: boolean
+  error: string | null
+  configPath: string | null
+  reloadConfig: () => Promise<boolean>
+  saveConfig: (newConfig: AppConfig) => Promise<boolean>
+  saveGpuServerUrl: (url: string) => Promise<boolean>
+  openConfig: () => Promise<boolean>
+  getUrl: () => string
+  hasOpenAiKey: boolean
+  hasFalKey: boolean
+  hasHuggingFaceKey: boolean
+  engineMode: EngineMode
+  isEngineUnchosen: boolean
+  isStandaloneMode: boolean
+  isServerMode: boolean
 }
 
-const defaultConfig = {
+const defaultConfig: AppConfig = {
   gpu_server: {
     host: 'localhost',
     port: STANDALONE_PORT,
@@ -36,59 +58,62 @@ const defaultConfig = {
 }
 
 // Tauri invoke helper
-const invoke = async (cmd, args = {}) => {
-  return window.__TAURI_INTERNALS__.invoke(cmd, args)
+const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
+  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
 }
 
 // Migrate legacy config fields to new format
-const migrateConfig = (loaded) => {
-  // Migrate legacy use_standalone_engine boolean to engine_mode enum
+const migrateConfig = (loaded: AppConfig & { features?: Record<string, unknown> }): AppConfig => {
   if (loaded.features && typeof loaded.features.use_standalone_engine === 'boolean') {
     loaded.features.engine_mode = loaded.features.use_standalone_engine ? ENGINE_MODES.STANDALONE : ENGINE_MODES.SERVER
     delete loaded.features.use_standalone_engine
     console.log('[Config] Migrated use_standalone_engine to engine_mode:', loaded.features.engine_mode)
   }
-  return loaded
+  return loaded as AppConfig
 }
 
 // Deep merge loaded config with defaults (ensures new fields get default values)
-const mergeWithDefaults = (loaded, defaults) => {
-  const result = { ...defaults }
+const mergeWithDefaults = <T extends Record<string, unknown>>(loaded: Partial<T>, defaults: T): T => {
+  const result: Record<string, unknown> = { ...defaults }
   for (const key of Object.keys(loaded)) {
-    if (loaded[key] && typeof loaded[key] === 'object' && !Array.isArray(loaded[key]) && defaults[key]) {
-      result[key] = mergeWithDefaults(loaded[key], defaults[key])
-    } else {
-      result[key] = loaded[key]
+    const loadedValue = loaded[key as keyof T]
+    const defaultValue = defaults[key as keyof T]
+    if (
+      loadedValue &&
+      typeof loadedValue === 'object' &&
+      !Array.isArray(loadedValue) &&
+      defaultValue &&
+      typeof defaultValue === 'object' &&
+      !Array.isArray(defaultValue)
+    ) {
+      result[key] = mergeWithDefaults(loadedValue as Record<string, unknown>, defaultValue as Record<string, unknown>)
+    } else if (loadedValue !== undefined) {
+      result[key] = loadedValue
     }
   }
-  return result
+  return result as T
 }
 
-// Create the config context
-const ConfigContext = createContext(null)
+const ConfigContext = createContext<ConfigContextValue | null>(null)
 
-// Config Provider component - must wrap the app
-export const ConfigProvider = ({ children }) => {
-  const [config, setConfig] = useState(defaultConfig)
+export const ConfigProvider = ({ children }: { children: ReactNode }) => {
+  const [config, setConfig] = useState<AppConfig>(defaultConfig)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [error, setError] = useState(null)
-  const [configPath, setConfigPath] = useState(null)
+  const [error, setError] = useState<string | null>(null)
+  const [configPath, setConfigPath] = useState<string | null>(null)
 
-  // Load config on mount
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const fileConfig = await invoke('read_config')
-        // Migrate legacy fields and merge with defaults
+        const fileConfig = await invoke<AppConfig & { features?: Record<string, unknown> }>('read_config')
         const migratedConfig = migrateConfig(fileConfig)
         setConfig(mergeWithDefaults(migratedConfig, defaultConfig))
 
-        // Get config path for display
-        const path = await invoke('get_config_path_str')
+        const path = await invoke<string>('get_config_path_str')
         setConfigPath(path)
       } catch (err) {
         console.warn('Could not load config, using defaults:', err)
-        setError(err.message || String(err))
+        setError(err instanceof Error ? err.message : String(err))
         setConfig(defaultConfig)
       }
       setIsLoaded(true)
@@ -97,23 +122,20 @@ export const ConfigProvider = ({ children }) => {
     loadConfig()
   }, [])
 
-  // Reload config from file
   const reloadConfig = useCallback(async () => {
     try {
-      const fileConfig = await invoke('read_config')
-      // Merge with defaults to ensure new fields get default values
+      const fileConfig = await invoke<Partial<AppConfig>>('read_config')
       setConfig(mergeWithDefaults(fileConfig, defaultConfig))
       setError(null)
       return true
     } catch (err) {
       console.error('Failed to reload config:', err)
-      setError(err.message || String(err))
+      setError(err instanceof Error ? err.message : String(err))
       return false
     }
   }, [])
 
-  // Save config to file and update state
-  const saveConfig = useCallback(async (newConfig) => {
+  const saveConfig = useCallback(async (newConfig: AppConfig) => {
     try {
       await invoke('write_config', { config: newConfig })
       setConfig(newConfig)
@@ -121,13 +143,12 @@ export const ConfigProvider = ({ children }) => {
       return true
     } catch (err) {
       console.error('Failed to save config:', err)
-      setError(err.message || String(err))
+      setError(err instanceof Error ? err.message : String(err))
       return false
     }
   }, [])
 
-  // Engine mode helpers
-  const engineMode = config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN
+  const engineMode = (config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN) as EngineModes
 
   const getUrl = useCallback(() => {
     if (engineMode === ENGINE_MODES.STANDALONE) {
@@ -139,9 +160,8 @@ export const ConfigProvider = ({ children }) => {
     return `${protocol}://${host}:${port}`
   }, [engineMode, config.gpu_server])
 
-  // Save GPU server URL from user input (parses "host:port" format)
   const saveGpuServerUrl = useCallback(
-    async (url) => {
+    async (url: string) => {
       const match = url.match(/^(?:wss?:\/\/)?([^:/]+)(?::(\d+))?/)
       if (!match) return false
 
@@ -158,19 +178,18 @@ export const ConfigProvider = ({ children }) => {
     [config, saveConfig]
   )
 
-  // Open config file in default application
   const openConfig = useCallback(async () => {
     try {
       await invoke('open_config')
       return true
     } catch (err) {
       console.error('Failed to open config:', err)
-      setError(err.message || String(err))
+      setError(err instanceof Error ? err.message : String(err))
       return false
     }
   }, [])
 
-  const value = {
+  const value: ConfigContextValue = {
     config,
     isLoaded,
     error,
@@ -183,7 +202,6 @@ export const ConfigProvider = ({ children }) => {
     hasOpenAiKey: !!config.api_keys.openai,
     hasFalKey: !!config.api_keys.fal,
     hasHuggingFaceKey: !!config.api_keys.huggingface,
-    // Engine mode helpers
     engineMode,
     isEngineUnchosen: engineMode === ENGINE_MODES.UNCHOSEN,
     isStandaloneMode: engineMode === ENGINE_MODES.STANDALONE,
@@ -193,7 +211,6 @@ export const ConfigProvider = ({ children }) => {
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>
 }
 
-// Hook to use config - must be used within ConfigProvider
 export const useConfig = () => {
   const context = useContext(ConfigContext)
   if (!context) {

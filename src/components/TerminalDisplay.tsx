@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePortal } from '../context/PortalContext'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 import { useConfig, STANDALONE_PORT, ENGINE_MODES } from '../hooks/useConfig'
 import EngineModeChoice from './EngineModeChoice'
 

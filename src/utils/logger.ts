@@ -1,87 +1,73 @@
-/**
- * Dev logger for Biome
- *
- * Usage:
- *   import { createLogger } from '../utils/logger'
- *   const log = createLogger('WebRTC')
- *   log.info('Connected')
- *   log.debug('Candidate:', candidate)
- *   log.warn('Retrying...')
- *   log.error('Failed:', error)
- */
+const isDev = import.meta.env?.DEV ?? true
 
-const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV !== 'production'
+const LOG_LEVELS = { off: 0, error: 1, warn: 2, info: 3, debug: 4 } as const
 
-// Log levels: 0=off, 1=error, 2=warn, 3=info, 4=debug
-const LOG_LEVELS = { off: 0, error: 1, warn: 2, info: 3, debug: 4 }
+type LogLevelName = keyof typeof LOG_LEVELS
 
-// Default level (can be overridden via localStorage)
-let globalLevel = isDev ? LOG_LEVELS.debug : LOG_LEVELS.warn
+type Logger = {
+  debug: (...args: unknown[]) => void
+  info: (...args: unknown[]) => void
+  warn: (...args: unknown[]) => void
+  error: (...args: unknown[]) => void
+  time: (label: string) => () => void
+  group: (label: string, fn: () => void) => void
+}
 
-// Check localStorage for override
+let globalLevel: number = isDev ? LOG_LEVELS.debug : LOG_LEVELS.warn
+
 if (typeof window !== 'undefined') {
-  const stored = localStorage.getItem('biome_log_level')
+  const stored = localStorage.getItem('biome_log_level') as LogLevelName | null
   if (stored && LOG_LEVELS[stored] !== undefined) {
     globalLevel = LOG_LEVELS[stored]
   }
 }
 
-// Colors for different modules (cycles through)
-const COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#06b6d4' // cyan
-]
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
 
 let colorIndex = 0
-const moduleColors = new Map()
+const moduleColors = new Map<string, string>()
 
-function getModuleColor(module) {
+function getModuleColor(module: string): string {
   if (!moduleColors.has(module)) {
     moduleColors.set(module, COLORS[colorIndex % COLORS.length])
     colorIndex++
   }
-  return moduleColors.get(module)
+  return moduleColors.get(module) ?? COLORS[0]
 }
 
-function formatTime() {
+function formatTime(): string {
   const now = new Date()
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`
 }
 
-export function createLogger(module) {
+export function createLogger(module: string): Logger {
   const color = getModuleColor(module)
   const prefix = `%c[${module}]`
   const prefixStyle = `color: ${color}; font-weight: bold`
   const timeStyle = 'color: #6b7280; font-weight: normal'
 
   return {
-    debug: (...args) => {
+    debug: (...args: unknown[]) => {
       if (globalLevel >= LOG_LEVELS.debug) {
         console.debug(`%c${formatTime()} ${prefix}`, timeStyle, prefixStyle, ...args)
       }
     },
-    info: (...args) => {
+    info: (...args: unknown[]) => {
       if (globalLevel >= LOG_LEVELS.info) {
         console.info(`%c${formatTime()} ${prefix}`, timeStyle, prefixStyle, ...args)
       }
     },
-    warn: (...args) => {
+    warn: (...args: unknown[]) => {
       if (globalLevel >= LOG_LEVELS.warn) {
         console.warn(`%c${formatTime()} ${prefix}`, timeStyle, prefixStyle, ...args)
       }
     },
-    error: (...args) => {
+    error: (...args: unknown[]) => {
       if (globalLevel >= LOG_LEVELS.error) {
         console.error(`%c${formatTime()} ${prefix}`, timeStyle, prefixStyle, ...args)
       }
     },
-    // Log with timing - returns a function to call when done
-    time: (label) => {
+    time: (label: string) => {
       const start = performance.now()
       return () => {
         const elapsed = (performance.now() - start).toFixed(2)
@@ -90,8 +76,7 @@ export function createLogger(module) {
         }
       }
     },
-    // Group logs together
-    group: (label, fn) => {
+    group: (label: string, fn: () => void) => {
       if (globalLevel >= LOG_LEVELS.debug) {
         console.groupCollapsed(`%c${formatTime()} ${prefix}`, timeStyle, prefixStyle, label)
         fn()
@@ -101,8 +86,7 @@ export function createLogger(module) {
   }
 }
 
-// Global functions to control logging at runtime
-export function setLogLevel(level) {
+export function setLogLevel(level: LogLevelName): void {
   if (LOG_LEVELS[level] !== undefined) {
     globalLevel = LOG_LEVELS[level]
     if (typeof window !== 'undefined') {
@@ -114,13 +98,12 @@ export function setLogLevel(level) {
   }
 }
 
-export function getLogLevel() {
+export function getLogLevel(): string {
   return Object.entries(LOG_LEVELS).find(([, v]) => v === globalLevel)?.[0] ?? 'unknown'
 }
 
-// Expose to window for runtime debugging
 if (typeof window !== 'undefined') {
-  window.__biomeLog = { setLogLevel, getLogLevel, LOG_LEVELS }
+  window.__biomeLog = { setLogLevel: setLogLevel as (level: string) => void, getLogLevel, LOG_LEVELS }
 }
 
 export default createLogger

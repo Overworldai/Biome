@@ -1,6 +1,15 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type ReactNode,
+  type MutableRefObject
+} from 'react'
 import { createLogger } from '../utils/logger'
-import { PORTAL_STATES, canTransitionPortalState } from './portalStateMachine'
+import { PORTAL_STATES, canTransitionPortalState, type PortalState } from './portalStateMachine'
 
 const log = createLogger('Portal')
 const VISUAL_PHASES = {
@@ -11,9 +20,38 @@ const VISUAL_PHASES = {
   HOT_EXPANDED: 'hot_expanded',
   STREAMING: 'streaming',
   SHUTTING_DOWN: 'shutting_down'
+} as const
+
+type VisualPhase = (typeof VISUAL_PHASES)[keyof typeof VISUAL_PHASES]
+
+type PortalContextValue = {
+  state: PortalState
+  states: typeof PORTAL_STATES
+  isAnimating: boolean
+  isShrinking: boolean
+  isExpanded: boolean
+  isConnected: boolean
+  showFlash: boolean
+  isShuttingDown: boolean
+  isSettingsOpen: boolean
+  toggleSettings: () => void
+  transitionTo: (newState: PortalState) => Promise<boolean>
+  shutdown: () => Promise<void>
+  onStateChange: (callback: (newState: PortalState, previousState: PortalState) => void) => () => void
+  registerMaskRef: (element: HTMLDivElement | null) => void
+  registerShutdownRef: (element: HTMLDivElement | null) => void
+  is: (state: PortalState) => boolean
 }
 
-const PortalContext = createContext(null)
+type ShrinkExpandOptions = {
+  shrinkDuration?: string
+  expandDuration?: string
+  onShrinkComplete?: () => void
+  targetSize?: string
+  feather?: string
+}
+
+const PortalContext = createContext<PortalContextValue | null>(null)
 
 export const usePortal = () => {
   const context = useContext(PortalContext)
@@ -23,34 +61,33 @@ export const usePortal = () => {
   return context
 }
 
-export const PortalProvider = ({ children }) => {
-  const [state, setState] = useState(PORTAL_STATES.COLD)
-  const [visualPhase, setVisualPhase] = useState(VISUAL_PHASES.COLD_IDLE)
+export const PortalProvider = ({ children }: { children: ReactNode }) => {
+  const [state, setState] = useState<PortalState>(PORTAL_STATES.COLD)
+  const [visualPhase, setVisualPhase] = useState<VisualPhase>(VISUAL_PHASES.COLD_IDLE)
   const [isShuttingDown, setIsShuttingDown] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const listenersRef = useRef([])
-  const maskElementRef = useRef(null)
-  const shutdownElementRef = useRef(null)
+  const listenersRef = useRef<Array<(newState: PortalState, previousState: PortalState) => void>>([])
+  const maskElementRef = useRef<HTMLDivElement | null>(null)
+  const shutdownElementRef = useRef<HTMLDivElement | null>(null)
   const transitionRunRef = useRef(0)
-  const timersRef = useRef(new Set())
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
 
-  const parseDuration = (dur) => parseFloat(dur) * (dur.includes('ms') ? 1 : 1000)
+  const parseDuration = (dur: string) => parseFloat(dur) * (dur.includes('ms') ? 1 : 1000)
 
-  const registerMaskRef = useCallback((element) => {
+  const registerMaskRef = useCallback((element: HTMLDivElement | null) => {
     maskElementRef.current = element
   }, [])
-  const registerShutdownRef = useCallback((element) => {
+  const registerShutdownRef = useCallback((element: HTMLDivElement | null) => {
     shutdownElementRef.current = element
   }, [])
 
-  const setMaskProperty = useCallback((property, value) => {
+  const setMaskProperty = useCallback((property: string, value: string) => {
     if (maskElementRef.current) {
       maskElementRef.current.style.setProperty(property, value)
     }
   }, [])
 
   const resetMaskToPortalIdle = useCallback(() => {
-    // Deterministic ring geometry for cold/warm states.
     setMaskProperty('--mask-size', '28cqh')
     setMaskProperty('--mask-aspect', '0.8')
     setMaskProperty('--mask-feather', '2.8cqh')
@@ -69,7 +106,7 @@ export const PortalProvider = ({ children }) => {
     visualPhase === VISUAL_PHASES.STREAMING
   const showFlash = visualPhase === VISUAL_PHASES.HOT_EXPANDING
 
-  const notifyListeners = useCallback((newState, previousState) => {
+  const notifyListeners = useCallback((newState: PortalState, previousState: PortalState) => {
     log.info(`State: ${previousState} → ${newState}`)
     listenersRef.current.forEach((fn) => fn(newState, previousState))
   }, [])
@@ -78,7 +115,7 @@ export const PortalProvider = ({ children }) => {
     setIsSettingsOpen((prev) => !prev)
   }, [])
 
-  const onStateChange = useCallback((callback) => {
+  const onStateChange = useCallback((callback: (newState: PortalState, previousState: PortalState) => void) => {
     listenersRef.current.push(callback)
     return () => {
       listenersRef.current = listenersRef.current.filter((fn) => fn !== callback)
@@ -90,23 +127,8 @@ export const PortalProvider = ({ children }) => {
     timersRef.current.clear()
   }, [])
 
-  const scheduleTimeout = useCallback((fn, delayMs) => {
-    const timerId = setTimeout(() => {
-      timersRef.current.delete(timerId)
-      fn()
-    }, delayMs)
-    timersRef.current.add(timerId)
-    return timerId
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      clearAllTimers()
-    }
-  }, [clearAllTimers])
-
-  const waitForMaskSizeTransition = useCallback((runId, fallbackMs) => {
-    return new Promise((resolve) => {
+  const waitForMaskSizeTransition = useCallback((runId: number, fallbackMs: number) => {
+    return new Promise<void>((resolve) => {
       const element = maskElementRef.current
       if (!element) {
         setTimeout(resolve, fallbackMs)
@@ -122,7 +144,7 @@ export const PortalProvider = ({ children }) => {
         resolve()
       }
 
-      const onTransitionEnd = (event) => {
+      const onTransitionEnd = (event: TransitionEvent) => {
         if (transitionRunRef.current !== runId) return finish()
         if (event.target !== element) return
         if (event.propertyName && event.propertyName !== '--mask-size') return
@@ -134,8 +156,8 @@ export const PortalProvider = ({ children }) => {
     })
   }, [])
 
-  const waitForShutdownAnimation = useCallback((runId, fallbackMs = 1200) => {
-    return new Promise((resolve) => {
+  const waitForShutdownAnimation = useCallback((runId: number, fallbackMs = 1200) => {
+    return new Promise<void>((resolve) => {
       const element = shutdownElementRef.current
       if (!element) {
         setTimeout(resolve, fallbackMs)
@@ -151,7 +173,7 @@ export const PortalProvider = ({ children }) => {
         resolve()
       }
 
-      const onAnimationEnd = (event) => {
+      const onAnimationEnd = (event: AnimationEvent) => {
         if (transitionRunRef.current !== runId) return finish()
         if (event.target !== element) return
         if (event.animationName && event.animationName !== 'tvBlackout') return
@@ -164,15 +186,13 @@ export const PortalProvider = ({ children }) => {
   }, [])
 
   const shrinkThenExpand = useCallback(
-    async (options = {}) => {
+    async (options: ShrinkExpandOptions = {}) => {
       const runId = transitionRunRef.current
       const shrinkDuration = options.shrinkDuration || '1.5s'
       const expandDuration = options.expandDuration || '0.4s'
       const onShrinkComplete = options.onShrinkComplete || (() => {})
-
-      // Target size uses CSS hypot() for diagonal calculation - fallback to 150cqh (always covers corners)
       const targetSize = options.targetSize || 'hypot(100cqw, 100cqh)'
-      const feather = options.feather || '8cqh' // 8% feather using container units
+      const feather = options.feather || '8cqh'
 
       setVisualPhase(VISUAL_PHASES.HOT_SHRINKING)
       setMaskProperty('--mask-duration', shrinkDuration)
@@ -219,16 +239,13 @@ export const PortalProvider = ({ children }) => {
 
     setIsShuttingDown(false)
     setVisualPhase(VISUAL_PHASES.COLD_IDLE)
-
-    // Reset the mask to cold state defaults (oval shape)
     resetMaskToPortalIdle()
-
     setState(PORTAL_STATES.COLD)
     notifyListeners(PORTAL_STATES.COLD, previousState)
   }, [state, notifyListeners, clearAllTimers, resetMaskToPortalIdle, waitForShutdownAnimation])
 
   const transitionTo = useCallback(
-    async (newState) => {
+    async (newState: PortalState) => {
       const previousState = state
       if (!canTransitionPortalState(previousState, newState)) {
         log.warn(`Invalid transition blocked: ${previousState} -> ${newState}`)
@@ -240,20 +257,16 @@ export const PortalProvider = ({ children }) => {
       const runId = transitionRunRef.current
 
       if (newState === PORTAL_STATES.HOT) {
-        // Set state to HOT immediately so terminal shows "CONNECTED" during shrink
         setState(newState)
         notifyListeners(newState, previousState)
 
         await shrinkThenExpand({
           onShrinkComplete: () => {
             if (transitionRunRef.current !== runId) return
-            // Flash is derived from HOT_EXPANDING phase.
           }
         })
       } else {
         setState(newState)
-        // Entering WARM should clear the previous connected/expanded visual
-        // state so reconnects start from a clean loading phase.
         if (newState === PORTAL_STATES.COLD || newState === PORTAL_STATES.WARM) {
           resetMaskToPortalIdle()
           setVisualPhase(newState === PORTAL_STATES.WARM ? VISUAL_PHASES.WARM_IDLE : VISUAL_PHASES.COLD_IDLE)
@@ -267,7 +280,13 @@ export const PortalProvider = ({ children }) => {
     [state, notifyListeners, shrinkThenExpand, clearAllTimers, resetMaskToPortalIdle]
   )
 
-  const value = {
+  useEffect(() => {
+    return () => {
+      clearAllTimers()
+    }
+  }, [clearAllTimers])
+
+  const value: PortalContextValue = {
     state,
     states: PORTAL_STATES,
     isAnimating,
@@ -283,7 +302,7 @@ export const PortalProvider = ({ children }) => {
     onStateChange,
     registerMaskRef,
     registerShutdownRef,
-    is: (s) => state === s
+    is: (s: PortalState) => state === s
   }
 
   return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>

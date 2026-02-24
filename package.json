@@ -20,8 +20,11 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "husky": "^9.1.7",
-    "prettier": "^3"
+    "prettier": "^3",
+    "typescript": "^5.9.3"
   }
 }
