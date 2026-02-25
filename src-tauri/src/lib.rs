@@ -101,6 +101,17 @@ fn new_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     cmd
 }
 
+/// Apply common uv environment variables to a Command.
+fn apply_uv_env<'a>(cmd: &'a mut Command, uv_dir: &Path) -> &'a mut Command {
+    cmd.env("UV_CACHE_DIR", uv_dir.join("cache"))
+        .env("UV_NO_CONFIG", "1")
+        .env("UV_PYTHON_INSTALL_DIR", uv_dir.join("python_install"))
+        .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
+        .env("UV_TOOL_DIR", uv_dir.join("tool"))
+        .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
+        .env("UV_HTTP_TIMEOUT", (30 * 60).to_string())
+}
+
 fn default_world_engine_model() -> String {
     DEFAULT_WORLD_ENGINE_MODEL.to_string()
 }
@@ -559,21 +570,19 @@ async fn check_engine_status(app: tauri::AppHandle) -> Result<EngineStatus, Stri
 
         if python_path.exists() {
             // Try to run the Python interpreter to verify it works
-            new_command(&uv_binary)
-                .current_dir(&engine_dir)
-                .arg("run")
-                .arg("python")
-                .arg("--version")
-                .env("UV_CACHE_DIR", uv_dir.join("cache"))
-                .env("UV_FROZEN", "1")
-                .env("UV_NO_CONFIG", "1")
-                .env("UV_PYTHON_INSTALL_DIR", uv_dir.join("python_install"))
-                .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
-                .env("UV_TOOL_DIR", uv_dir.join("tool"))
-                .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
+            {
+                let mut cmd = new_command(&uv_binary);
+                cmd.current_dir(&engine_dir)
+                    .arg("run")
+                    .arg("python")
+                    .arg("--version")
+                    .env("UV_FROZEN", "1");
+                apply_uv_env(&mut cmd, &uv_dir);
+                cmd
+            }
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
         } else {
             false
         }
@@ -810,19 +819,16 @@ async fn sync_engine_dependencies(app: tauri::AppHandle) -> Result<String, Strin
 
     // Run uv sync with the specified environment variables
     // Note: Not using UV_FROZEN since we install world_engine from git without a lockfile
-    let output = new_command(&uv_binary)
-        .current_dir(&engine_dir)
+    let mut cmd = new_command(&uv_binary);
+    cmd.current_dir(&engine_dir)
         .arg("sync")
         .arg("--index-strategy")
         .arg("unsafe-best-match")
         .env("UV_LINK_MODE", "copy")
         .env("UV_NO_EDITABLE", "1")
-        .env("UV_MANAGED_PYTHON", "1")
-        .env("UV_CACHE_DIR", uv_dir.join("cache"))
-        .env("UV_PYTHON_INSTALL_DIR", uv_dir.join("python_install"))
-        .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
-        .env("UV_TOOL_DIR", uv_dir.join("tool"))
-        .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
+        .env("UV_MANAGED_PYTHON", "1");
+    apply_uv_env(&mut cmd, &uv_dir);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run uv sync: {}", e))?;
 
@@ -1180,17 +1186,14 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
 
     // Run uv sync to ensure dependencies are up to date
     println!("[ENGINE] Syncing dependencies...");
-    let sync_output = new_command(&uv_binary)
+    let mut sync_cmd = new_command(&uv_binary);
+    sync_cmd
         .current_dir(&engine_dir)
         .arg("sync")
         .arg("--index-strategy")
-        .arg("unsafe-best-match")
-        .env("UV_CACHE_DIR", uv_dir.join("cache"))
-        .env("UV_NO_CONFIG", "1")
-        .env("UV_PYTHON_INSTALL_DIR", uv_dir.join("python_install"))
-        .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
-        .env("UV_TOOL_DIR", uv_dir.join("tool"))
-        .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
+        .arg("unsafe-best-match");
+    apply_uv_env(&mut sync_cmd, &uv_dir);
+    let sync_output = sync_cmd
         .output()
         .map_err(|e| format!("Failed to run uv sync: {}", e))?;
 
@@ -1219,18 +1222,13 @@ async fn start_engine_server(app: tauri::AppHandle, port: u16) -> Result<String,
         .arg("server.py")
         .arg("--port")
         .arg(port.to_string())
-        .env("UV_CACHE_DIR", uv_dir.join("cache"))
-        .env("UV_NO_CONFIG", "1")
-        .env("UV_PYTHON_INSTALL_DIR", uv_dir.join("python_install"))
-        .env("UV_PYTHON_BIN_DIR", uv_dir.join("python_bin"))
-        .env("UV_TOOL_DIR", uv_dir.join("tool"))
-        .env("UV_TOOL_BIN_DIR", uv_dir.join("tool_bin"))
         .env("HF_HOME", &hf_home_dir)
         .env("HF_HUB_CACHE", &hf_hub_cache_dir)
         .env("HUGGINGFACE_HUB_CACHE", &hf_hub_cache_dir)
         .env("PYTHONUNBUFFERED", "1") // Ensure Python output is unbuffered
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    apply_uv_env(&mut cmd, &uv_dir);
 
     // Pass through HuggingFace token - first check config, then fall back to environment
     let config = read_config(app.clone()).unwrap_or_default();
