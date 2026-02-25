@@ -1,3 +1,5 @@
+import type { AppConfig } from '../types/app'
+
 const SYSTEM_PROMPT = `You are a STRICT scene sanitizer that captures ESSENCE without IP.
 
 YOUR JOB:
@@ -16,7 +18,7 @@ OUTPUT:
 - Cinematic scene description: lighting, materials, camera angle, atmosphere
 - Return ONLY the sanitized prompt. No preamble, no explanation.`
 
-async function sanitizePromptDirect(rawPrompt, openaiKey) {
+async function sanitizePromptDirect(rawPrompt: string, openaiKey: string): Promise<string> {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -39,11 +41,13 @@ async function sanitizePromptDirect(rawPrompt, openaiKey) {
     throw new Error('OpenAI API error: ' + text)
   }
 
-  const data = await response.json()
-  return data.choices[0]?.message?.content?.trim() || rawPrompt
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+  }
+  return data.choices?.[0]?.message?.content?.trim() || rawPrompt
 }
 
-async function generateSeedImageDirect(prompt, falKey) {
+async function generateSeedImageDirect(prompt: string, falKey: string): Promise<string | null> {
   const response = await fetch('https://fal.run/rundiffusion-fal/juggernaut-flux/lightning', {
     method: 'POST',
     headers: {
@@ -51,7 +55,7 @@ async function generateSeedImageDirect(prompt, falKey) {
       Authorization: `Key ${falKey}`
     },
     body: JSON.stringify({
-      prompt: prompt,
+      prompt,
       image_size: { width: 640, height: 360 },
       num_inference_steps: 4,
       enable_safety_checker: true,
@@ -64,22 +68,20 @@ async function generateSeedImageDirect(prompt, falKey) {
     throw new Error('fal.ai API error: ' + text)
   }
 
-  const data = await response.json()
+  const data = (await response.json()) as {
+    images?: Array<{ url?: string }>
+  }
   return data.images?.[0]?.url || null
 }
 
-/**
- * Process prompt with optional sanitization and seed image generation
- * @param {string} rawPrompt - User's raw prompt
- * @param {boolean} generateSeed - Whether to generate seed image
- * @param {object} config - Config object with API keys
- * @returns {Promise<{ sanitized_prompt: string, seed_image_url: string|null }>}
- */
-export async function applyPrompt(rawPrompt, generateSeed, config) {
-  // If we have an OpenAI key, sanitize the prompt
+export async function applyPrompt(
+  rawPrompt: string,
+  generateSeed: boolean,
+  config: Pick<AppConfig, 'api_keys'>
+): Promise<{ sanitized_prompt: string; seed_image_url: string | null }> {
   if (config.api_keys?.openai) {
     const sanitizedPrompt = await sanitizePromptDirect(rawPrompt, config.api_keys.openai)
-    let seedImageUrl = null
+    let seedImageUrl: string | null = null
 
     if (generateSeed && config.api_keys?.fal) {
       seedImageUrl = await generateSeedImageDirect(sanitizedPrompt, config.api_keys.fal)
@@ -88,6 +90,5 @@ export async function applyPrompt(rawPrompt, generateSeed, config) {
     return { sanitized_prompt: sanitizedPrompt, seed_image_url: seedImageUrl }
   }
 
-  // No API keys - pass through raw prompt
   return { sanitized_prompt: rawPrompt, seed_image_url: null }
 }

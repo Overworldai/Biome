@@ -28,7 +28,7 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: transparent; /* Set dynamically in main.jsx based on build target */
+  background: transparent; /* Set dynamically in main.tsx based on build target */
   overflow: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type KeyboardEvent, type MouseEvent } from 'react'
 import { useConfig, ENGINE_MODES } from '../hooks/useConfig'
+import type { EngineMode } from '../types/app'
 
 // Tauri invoke helper
-const invoke = async (cmd, args = {}) => {
-  return window.__TAURI_INTERNALS__.invoke(cmd, args)
+const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
+  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
 }
 
 /**
@@ -12,14 +13,14 @@ const invoke = async (cmd, args = {}) => {
  * - Automatic Setup (Standalone): Biome manages the World Engine
  * - Run Server Yourself (Server): User runs their own server
  */
-const EngineModeChoice = ({ onChoiceMade }) => {
+const EngineModeChoice = ({ onChoiceMade }: { onChoiceMade: (mode: EngineMode) => void }) => {
   const { config, saveConfig } = useConfig()
   const [isLoading, setIsLoading] = useState(false)
-  const [engineDirPath, setEngineDirPath] = useState(null)
+  const [engineDirPath, setEngineDirPath] = useState<string | null>(null)
 
   // Get engine directory path on mount
   useEffect(() => {
-    invoke('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
+    invoke<string>('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
   }, [])
 
   const handleStandaloneChoice = async () => {
@@ -50,7 +51,7 @@ const EngineModeChoice = ({ onChoiceMade }) => {
 
   const handleOpenEngineDir = async () => {
     try {
-      await invoke('open_engine_dir')
+      await invoke<void>('open_engine_dir')
     } catch (err) {
       console.warn('Failed to open engine directory:', err)
     }
@@ -95,11 +96,11 @@ const EngineModeChoice = ({ onChoiceMade }) => {
                 className="choice-dir-link"
                 role="button"
                 tabIndex={0}
-                onClick={(e) => {
+                onClick={(e: MouseEvent<HTMLSpanElement>) => {
                   e.stopPropagation()
                   handleOpenEngineDir()
                 }}
-                onKeyDown={(e) => {
+                onKeyDown={(e: KeyboardEvent<HTMLSpanElement>) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.stopPropagation()
                     handleOpenEngineDir()

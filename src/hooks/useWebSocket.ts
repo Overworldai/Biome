@@ -3,28 +3,48 @@ import { createLogger } from '../utils/logger'
 
 const log = createLogger('WebSocket')
 
-export const useWebSocket = () => {
-  const [connectionState, setConnectionState] = useState('disconnected')
-  const [frame, setFrame] = useState(null)
-  const [frameId, setFrameId] = useState(0)
-  const [error, setError] = useState(null)
-  const [genTime, setGenTime] = useState(null)
-  const [isReady, setIsReady] = useState(false)
-  const [statusCode, setStatusCode] = useState(null)
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
-  const wsRef = useRef(null)
+type WebSocketHook = {
+  connectionState: ConnectionState
+  statusCode: string | null
+  error: string | null
+  frame: string | null
+  frameId: number
+  genTime: number | null
+  connect: (endpointUrl: string) => void
+  disconnect: () => void
+  sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
+  sendPause: (paused: boolean) => void
+  sendPrompt: (prompt: string) => void
+  sendPromptWithSeed: (promptOrFilename: string, seedUrl?: string) => void
+  sendInitialSeed: (filename: string) => void
+  sendModel: (model: string, seed?: string | null) => void
+  reset: () => void
+  isConnected: boolean
+  isReady: boolean
+  isLoading: boolean
+}
+
+export const useWebSocket = (): WebSocketHook => {
+  const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
+  const [frame, setFrame] = useState<string | null>(null)
+  const [frameId, setFrameId] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [genTime, setGenTime] = useState<number | null>(null)
+  const [isReady, setIsReady] = useState(false)
+  const [statusCode, setStatusCode] = useState<string | null>(null)
+
+  const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
   const isReadyRef = useRef(false)
 
-  // Connect directly to a local WebSocket server
-  // endpointUrl can be: "localhost:8080", "ws://localhost:8080", "ws://localhost:8080/ws"
-  const connect = useCallback((endpointUrl) => {
+  const connect = useCallback((endpointUrl: string) => {
     if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
       return
     }
 
     if (!endpointUrl) {
-      log.error('No endpoint URL provided')
       setError('No endpoint URL provided')
       return
     }
@@ -34,17 +54,13 @@ export const useWebSocket = () => {
     setError(null)
     setStatusCode(null)
 
-    // Build WebSocket URL from endpoint
-    let wsUrl
+    let wsUrl: string
     if (endpointUrl.startsWith('ws://') || endpointUrl.startsWith('wss://')) {
-      // Already a full WebSocket URL
       wsUrl = endpointUrl.includes('/ws') ? endpointUrl : `${endpointUrl}/ws`
     } else {
-      // Just host:port, add ws:// prefix and /ws path
       wsUrl = `ws://${endpointUrl}/ws`
     }
 
-    log.info('Connecting to', wsUrl)
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
@@ -52,52 +68,45 @@ export const useWebSocket = () => {
       if (wsRef.current !== ws) return
       isConnectingRef.current = false
       setConnectionState('connected')
-      log.info('Connected to', wsUrl)
     }
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (event: MessageEvent<string>) => {
       if (wsRef.current !== ws) return
       try {
-        const msg = JSON.parse(event.data)
+        const msg = JSON.parse(event.data) as Record<string, unknown>
 
         switch (msg.type) {
-          case 'status':
-            // Server sends: {"type": "status", "code": "init|loading|ready|reset|warmup"}
-            const code = msg.code || msg.status || msg.message
-            log.info('Status:', code)
+          case 'status': {
+            const code = (msg.code || msg.status || msg.message || null) as string | null
             setStatusCode(code)
-            // Only mark as ready when server explicitly says "ready"
             if (code === 'ready') {
               setIsReady(true)
               isReadyRef.current = true
-              log.info('Server ready - enabling input')
             }
             break
-
-          case 'frame':
-            setFrame(msg.data)
-            setFrameId(msg.frame_id)
-            if (msg.gen_ms) {
+          }
+          case 'frame': {
+            setFrame((msg.data as string) ?? null)
+            setFrameId((msg.frame_id as number) ?? 0)
+            if (typeof msg.gen_ms === 'number') {
               setGenTime(Math.round(msg.gen_ms))
             }
             break
-
-          case 'stats':
-            // Handle stats messages
-            if (msg.gentime !== undefined) {
+          }
+          case 'stats': {
+            if (typeof msg.gentime === 'number') {
               setGenTime(Math.round(msg.gentime))
             }
-            if (msg.frame !== undefined) {
+            if (typeof msg.frame === 'number') {
               setFrameId(msg.frame)
             }
             break
-
-          case 'error':
-            log.error('Server error:', msg.message)
-            setError(msg.message)
+          }
+          case 'error': {
+            setError((msg.message as string) ?? 'Server error')
             setConnectionState('error')
             break
-
+          }
           default:
             log.debug('Message:', msg.type, msg)
         }
@@ -108,7 +117,6 @@ export const useWebSocket = () => {
 
     ws.onerror = () => {
       if (wsRef.current !== ws) return
-      log.error('Connection error')
       isConnectingRef.current = false
       setError('WebSocket error')
       setConnectionState('error')
@@ -116,7 +124,6 @@ export const useWebSocket = () => {
 
     ws.onclose = () => {
       if (wsRef.current !== ws) return
-      log.info('Disconnected')
       isConnectingRef.current = false
       wsRef.current = null
       setConnectionState('disconnected')
@@ -143,62 +150,60 @@ export const useWebSocket = () => {
     setStatusCode(null)
   }, [])
 
-  const sendControl = useCallback((buttons = [], mouseDx = 0, mouseDy = 0) => {
+  const sendControl = useCallback((buttons: string[] = [], mouseDx = 0, mouseDy = 0) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: 'control',
-          buttons,
-          mouse_dx: mouseDx,
-          mouse_dy: mouseDy
-        })
-      )
+      wsRef.current.send(JSON.stringify({ type: 'control', buttons, mouse_dx: mouseDx, mouse_dy: mouseDy }))
       return true
     }
     return false
   }, [])
 
-  const sendPause = useCallback((paused) => {
+  const sendPause = useCallback((paused: boolean) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: paused ? 'pause' : 'resume' }))
-      log.info(paused ? 'Paused' : 'Resumed')
     }
   }, [])
 
-  const sendPrompt = useCallback((prompt) => {
+  const sendPrompt = useCallback((prompt: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'prompt', prompt }))
-      log.info('Prompt sent:', prompt)
     }
   }, [])
 
-  const sendPromptWithSeed = useCallback((filename) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'prompt_with_seed', filename }))
-      log.info('Prompt with seed sent:', filename)
+  const sendPromptWithSeed = useCallback((promptOrFilename: string, seedUrl?: string) => {
+    if (!(wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) return
+
+    if (seedUrl) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'prompt_with_seed',
+          prompt: promptOrFilename,
+          seed_image_url: seedUrl
+        })
+      )
+      return
     }
+
+    wsRef.current.send(JSON.stringify({ type: 'prompt_with_seed', filename: promptOrFilename }))
   }, [])
 
-  const sendInitialSeed = useCallback((filename) => {
+  const sendInitialSeed = useCallback((filename: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'set_initial_seed', filename }))
-      log.info('Initial seed sent:', filename)
     }
   }, [])
 
-  const sendModel = useCallback((model, seed = null) => {
+  const sendModel = useCallback((model: string, seed: string | null = null) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && model) {
-      const payload = { type: 'set_model', model }
+      const payload: { type: 'set_model'; model: string; seed?: string } = { type: 'set_model', model }
       if (seed) payload.seed = seed
       wsRef.current.send(JSON.stringify(payload))
-      log.info('Model sent:', model, seed ? `(with seed: ${seed})` : '')
     }
   }, [])
 
   const reset = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'reset' }))
-      log.info('Reset sent')
     }
   }, [])
 

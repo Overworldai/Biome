@@ -1,11 +1,30 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  useState,
+  useRef,
+  useEffect,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode
+} from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
+import type { SeedRecord } from '../types/app'
 
-const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
+type BottomPanelProps = {
+  isOpen: boolean
+  isHidden: boolean
+  onToggleHidden: () => void
+}
+
+type BottomPanelTabId = 'prompt' | 'seeds'
+type BottomPanelTab = { id: BottomPanelTabId; title: string; icon: ReactNode }
+type RejectedSeed = { filename: string }
+
+const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => {
   const {
     sendPrompt,
     sendPromptWithSeed,
@@ -20,19 +39,19 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   } = useStreaming()
   const { config, hasOpenAiKey, hasFalKey, getUrl } = useConfig()
 
-  const [activeTab, setActiveTab] = useState('prompt')
+  const [activeTab, setActiveTab] = useState<BottomPanelTabId>('prompt')
   const [textPrompt, setTextPrompt] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
   const generateSeed = true // Always generate seed images
 
   // Seeds gallery state
-  const [seeds, setSeeds] = useState([])
-  const [seedThumbnails, setSeedThumbnails] = useState({})
+  const [seeds, setSeeds] = useState<SeedRecord[]>([])
+  const [seedThumbnails, setSeedThumbnails] = useState<Record<string, string>>({})
   const [loadingSeeds, setLoadingSeeds] = useState(false)
-  const [selectedSeed, setSelectedSeed] = useState(null)
+  const [selectedSeed, setSelectedSeed] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [rejectedSeed, setRejectedSeed] = useState(null) // { filename } when upload is NSFW
-  const fileInputRef = useRef(null)
+  const [rejectedSeed, setRejectedSeed] = useState<RejectedSeed | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const seedGenerationEnabled = config?.features?.seed_generation
   const promptSanitizerEnabled = config?.features?.prompt_sanitizer
@@ -43,9 +62,9 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   const seedsDisabled = isPaused && !canUnpause
 
   // Build array of available tabs based on feature flags
-  const availableTabs = [
+  const availableTabs: BottomPanelTab[] = [
     {
-      id: 'prompt',
+      id: 'prompt' as const,
       title: 'Prompt',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -60,7 +79,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     ...(seedGalleryEnabled
       ? [
           {
-            id: 'seeds',
+            id: 'seeds' as const,
             title: 'Seeds',
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -76,8 +95,8 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
 
   // Reset to first available tab if current tab becomes unavailable
   useEffect(() => {
-    const tabIds = availableTabs.map((t) => t.id)
-    if (!tabIds.includes(activeTab)) {
+    const tabIds = availableTabs.map((t) => t.id) as BottomPanelTabId[]
+    if (!tabIds.includes(activeTab) && tabIds.length > 0) {
       setActiveTab(tabIds[0])
     }
   }, [availableTabs.length, activeTab])
@@ -102,19 +121,19 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
 
   const { disabled: isDisabledByConfig, message: disabledMessage } = getDisabledState()
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [status, setStatus] = useState(null)
-  const promptButtonRef = useRef(null)
-  const resetButtonRef = useRef(null)
-  const textareaRef = useRef(null)
+  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const promptButtonRef = useRef<HTMLSpanElement | null>(null)
+  const resetButtonRef = useRef<HTMLSpanElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const handleClick = (e) => e.stopPropagation()
+  const handleClick = (e: MouseEvent<HTMLElement>) => e.stopPropagation()
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     e.stopPropagation()
   }
 
-  const triggerSuccessFlash = (buttonRef) => {
+  const triggerSuccessFlash = (buttonRef: { current: HTMLElement | null }) => {
     if (buttonRef.current) {
       buttonRef.current.classList.remove('success-flash')
       void buttonRef.current.offsetWidth
@@ -133,7 +152,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     logout()
   }
 
-  const handlePromptSubmit = async (e) => {
+  const handlePromptSubmit = async (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Submit on Enter (without Shift for newline)
     if (e.key === 'Enter' && !e.shiftKey && textPrompt.trim() && !isLoading) {
       e.preventDefault()
@@ -157,7 +176,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   }, [textPrompt, status, isLoading])
 
   // Track which thumbnails are currently being loaded
-  const loadingThumbnailsRef = useRef(new Set())
+  const loadingThumbnailsRef = useRef<Set<string>>(new Set())
 
   // Load seeds and thumbnails on mount
   useEffect(() => {
@@ -166,7 +185,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
     const loadSeedsAndThumbnails = async () => {
       setLoadingSeeds(true)
       try {
-        const seedList = await invoke('list_seeds')
+        const seedList = await invoke<SeedRecord[]>('list_seeds')
         if (cancelled) return
         setSeeds(seedList)
 
@@ -174,7 +193,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
         for (const seed of seedList) {
           if (loadingThumbnailsRef.current.has(seed.filename)) continue
           loadingThumbnailsRef.current.add(seed.filename)
-          invoke('read_seed_thumbnail', { filename: seed.filename, maxSize: 100 })
+          invoke<string>('read_seed_thumbnail', { filename: seed.filename, maxSize: 100 })
             .then((base64) => {
               if (!cancelled) setSeedThumbnails((p) => ({ ...p, [seed.filename]: base64 }))
             })
@@ -195,7 +214,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   }, [])
 
   // Handle safe seed selection - send to server
-  const handleSeedClick = async (seed) => {
+  const handleSeedClick = async (seed: SeedRecord) => {
     if (!seed.is_safe) return
     setSelectedSeed(seed.filename)
     try {
@@ -207,7 +226,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   }
 
   // Handle unsafe seed click - delete it (only user-uploaded seeds are deletable)
-  const handleDeleteSeed = async (seed) => {
+  const handleDeleteSeed = async (seed: SeedRecord) => {
     if (seed.is_default) {
       setError('Default seeds cannot be removed')
       setTimeout(() => setError(null), 3000)
@@ -223,15 +242,15 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       })
     } catch (err) {
       console.error('Failed to delete seed:', err)
-      setError(err.toString())
+      setError(err instanceof Error ? err.message : String(err))
       setTimeout(() => setError(null), 3000)
     }
   }
 
-  const readBlobAsBase64 = (blob) =>
+  const readBlobAsBase64 = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => {
+      reader.onload = (e: ProgressEvent<FileReader>) => {
         const result = e.target?.result
         if (typeof result !== 'string' || !result.includes(',')) {
           reject(new Error('Failed to read image data'))
@@ -243,7 +262,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       reader.readAsDataURL(blob)
     })
 
-  const uploadSeedData = async (filename, base64Data) => {
+  const uploadSeedData = async (filename: string, base64Data: string) => {
     setUploadingImage(true)
     try {
       const response = await fetch(`${uploadBaseUrl}/seeds/upload`, {
@@ -260,14 +279,14 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
         throw new Error(error.error || 'Upload failed')
       }
 
-      const result = await response.json()
+      const result = (await response.json()) as { is_safe?: boolean }
 
       // Refresh seeds list (includes unsafe seeds now)
-      const seedList = await invoke('list_seeds')
+      const seedList = await invoke<SeedRecord[]>('list_seeds')
       setSeeds(seedList)
 
       // Load thumbnail for the uploaded seed
-      invoke('read_seed_thumbnail', { filename, maxSize: 100 })
+      invoke<string>('read_seed_thumbnail', { filename, maxSize: 100 })
         .then((base64) => setSeedThumbnails((prev) => ({ ...prev, [filename]: base64 })))
         .catch((err) => console.error('Failed to load thumbnail:', filename, err))
 
@@ -283,7 +302,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       requestPointerLock()
     } catch (err) {
       console.error('Upload error:', err)
-      setError(err.message || 'Failed to upload image')
+      setError(err instanceof Error ? err.message : 'Failed to upload image')
       setTimeout(() => setError(null), 3000)
     } finally {
       setUploadingImage(false)
@@ -291,7 +310,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
   }
 
   // Handle file picker upload
-  const handleImageUpload = async (event) => {
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -307,7 +326,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       await uploadSeedData(file.name, base64Data)
     } catch (err) {
       console.error('Upload error:', err)
-      setError(err.message || 'Failed to upload image')
+      setError(err instanceof Error ? err.message : 'Failed to upload image')
       setTimeout(() => setError(null), 3000)
     }
 
@@ -342,7 +361,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
         throw new Error('No image found in clipboard')
       }
 
-      const extensionMap = {
+      const extensionMap: Record<string, string> = {
         'image/png': 'png',
         'image/jpeg': 'jpg',
         'image/webp': 'webp'
@@ -353,7 +372,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       await uploadSeedData(filename, base64Data)
     } catch (err) {
       console.error('Clipboard upload error:', err)
-      setError(err.message || 'Failed to read image from clipboard')
+      setError(err instanceof Error ? err.message : 'Failed to read image from clipboard')
       setTimeout(() => setError(null), 3000)
     }
   }
@@ -388,7 +407,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }) => {
       setIsLoading(false)
     } catch (err) {
       console.error('Prompt error:', err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
       setStatus(null)
       setIsLoading(false)
     }

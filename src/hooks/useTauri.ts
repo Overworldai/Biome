@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 
-// Get the current window
-export const getCurrentWindow = () => {
+type TauriWindowApi = ReturnType<typeof window.__TAURI__.window.getCurrentWindow>
+
+export const getCurrentWindow = (): TauriWindowApi => {
   return window.__TAURI__.window.getCurrentWindow()
 }
 
-// Hook to get Tauri window controls
 export const useTauriWindow = () => {
-  const [appWindow, setAppWindow] = useState(null)
+  const [appWindow, setAppWindow] = useState<TauriWindowApi | null>(null)
 
   useEffect(() => {
     setAppWindow(getCurrentWindow())
@@ -25,7 +25,7 @@ export const useTauriWindow = () => {
   }
   const close = () => appWindow?.close()
 
-  const setSize = async (width, height) => {
+  const setSize = async (width: number, height: number) => {
     if (appWindow) {
       await appWindow.setSize(new window.__TAURI__.dpi.LogicalSize(width, height))
     }
@@ -52,19 +52,17 @@ export const useTauriWindow = () => {
   }
 }
 
-// Hook to resize window to fit content after resize stops
-// Content maintains 800:500 (1.6) aspect ratio - snaps window to fit
 export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs = 250) => {
-  const appWindow = useRef(null)
+  const appWindow = useRef<TauriWindowApi | null>(null)
   const isAdjusting = useRef(false)
-  const debounceTimer = useRef(null)
-  const lastSetSize = useRef(null)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSetSize = useRef<{ width: number; height: number } | null>(null)
 
   useEffect(() => {
     appWindow.current = getCurrentWindow()
     if (!appWindow.current) return
 
-    let unlisten = null
+    let unlisten: (() => void) | null = null
 
     const fitToContent = async () => {
       if (isAdjusting.current || !appWindow.current) return
@@ -76,41 +74,32 @@ export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs
       const x = position.x / window.devicePixelRatio
       const y = position.y / window.devicePixelRatio
 
-      // Calculate content size based on aspect ratio
       const windowRatio = width / height
-      let contentWidth, contentHeight
+      let contentWidth: number
+      let contentHeight: number
 
       if (windowRatio > contentAspectRatio) {
-        // Window is wider than content - content is height-constrained
         contentHeight = height
         contentWidth = height * contentAspectRatio
       } else {
-        // Window is taller than content - content is width-constrained
         contentWidth = width
         contentHeight = width / contentAspectRatio
       }
 
-      // If window already fits content (within 1px tolerance), no adjustment needed
       if (Math.abs(width - contentWidth) < 1 && Math.abs(height - contentHeight) < 1) {
         return
       }
 
-      // New window size = content size
       const newWidth = Math.round(contentWidth)
       const newHeight = Math.round(contentHeight)
-
-      // Center the new window on the old window's center
       const centerX = x + width / 2
       const centerY = y + height / 2
       const newX = Math.round(centerX - newWidth / 2)
       const newY = Math.round(centerY - newHeight / 2)
 
-      // Remember the size we're setting so we can ignore events from it
       lastSetSize.current = { width: newWidth, height: newHeight }
-
       isAdjusting.current = true
       try {
-        // Issue both calls in parallel to reduce judder
         await Promise.all([
           appWindow.current.setPosition(new window.__TAURI__.dpi.LogicalPosition(newX, newY)),
           appWindow.current.setSize(new window.__TAURI__.dpi.LogicalSize(newWidth, newHeight))
@@ -129,7 +118,6 @@ export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs
     }
 
     const onResized = async () => {
-      // Ignore resize events that match our last set size (triggered by our own adjustment)
       if (lastSetSize.current && appWindow.current) {
         const size = await appWindow.current.innerSize()
         const width = Math.round(size.width / window.devicePixelRatio)
@@ -139,18 +127,18 @@ export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs
           return
         }
       }
-
       debouncedFit()
     }
 
     const setupListener = async () => {
+      if (!appWindow.current) return
       unlisten = await appWindow.current.onResized(onResized)
     }
 
     setupListener()
 
     return () => {
-      if (unlisten) unlisten()
+      unlisten?.()
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
     }
   }, [contentAspectRatio, debounceMs])

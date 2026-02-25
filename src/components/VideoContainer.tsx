@@ -1,6 +1,6 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, type CSSProperties } from 'react'
 import { usePortal } from '../context/PortalContext'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 import useConfig from '../hooks/useConfig'
 import PortalBackgrounds from './PortalBackgrounds'
 import VideoMask from './VideoMask'
@@ -31,8 +31,8 @@ const VideoContainer = () => {
   const showServerLogs =
     (state === states.WARM && isStandaloneMode) || (state === states.COLD && engineSetupInProgress) || engineError
 
-  const containerRef = useRef(null)
-  const canvasRef = useRef(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     if (containerRef.current) {
@@ -42,7 +42,7 @@ const VideoContainer = () => {
 
   // Callback ref for canvas - registers immediately when element mounts
   const handleCanvasRef = useCallback(
-    (element) => {
+    (element: HTMLCanvasElement | null) => {
       canvasRef.current = element
       registerCanvasRef(element)
     },
@@ -64,7 +64,7 @@ const VideoContainer = () => {
   // The actual visibility is controlled by CSS opacity based on expanded state
   const showMedia = isVideoReady && portalConnected
 
-  const mediaStyle = {
+  const mediaStyle: CSSProperties = {
     display: showMedia ? 'block' : 'none',
     width: '100%',
     height: '100%',

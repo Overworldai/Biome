@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type MouseEvent } from 'react'
 import { usePortal } from '../context/PortalContext'
-import { useStreaming } from '../context/StreamingContextShared'
+import { useStreaming } from '../context/StreamingContext'
 import { useConfig, STANDALONE_PORT, ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../hooks/useConfig'
+import type { AppConfig, EngineMode, SetupStatus } from '../types/app'
 
 // Tauri invoke helper
-const invoke = async (cmd, args = {}) => {
-  return window.__TAURI_INTERNALS__.invoke(cmd, args)
+const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
+  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
 }
 
-const normalizeModelInput = (input) => {
+type ModelOption = { id: string; isLocal: boolean; isCustom: boolean }
+
+const normalizeModelInput = (input: string | null | undefined): string => {
   const raw = (input || '').trim()
   if (!raw) return ''
 
@@ -30,7 +33,7 @@ const normalizeModelInput = (input) => {
   return raw
 }
 
-const toUniqueModelIds = (modelIds) => {
+const toUniqueModelIds = (modelIds: Array<string | null | undefined>): string[] => {
   return [...new Set((modelIds || []).map((id) => normalizeModelInput(id)).filter((id) => id && id.includes('/')))]
 }
 
@@ -54,18 +57,18 @@ const SettingsPanel = () => {
   const [huggingfaceKey, setHuggingfaceKey] = useState('')
   const [promptSanitizer, setPromptSanitizer] = useState(true)
   const [seedGeneration, setSeedGeneration] = useState(false)
-  const [engineMode, setEngineMode] = useState(ENGINE_MODES.UNCHOSEN)
+  const [engineMode, setEngineMode] = useState<EngineMode>(ENGINE_MODES.UNCHOSEN)
   const [worldEngineModel, setWorldEngineModel] = useState(DEFAULT_WORLD_ENGINE_MODEL)
-  const [modelOptions, setModelOptions] = useState([
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([
     { id: DEFAULT_WORLD_ENGINE_MODEL, isLocal: false, isCustom: false }
   ])
   const [customModelInput, setCustomModelInput] = useState('')
-  const [customModelError, setCustomModelError] = useState(null)
+  const [customModelError, setCustomModelError] = useState<string | null>(null)
   const [modelsLoading, setModelsLoading] = useState(false)
-  const [modelsError, setModelsError] = useState(null)
+  const [modelsError, setModelsError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState(null)
-  const [engineDirPath, setEngineDirPath] = useState(null)
+  const [saveStatus, setSaveStatus] = useState<SetupStatus>(null)
+  const [engineDirPath, setEngineDirPath] = useState<string | null>(null)
 
   // Sync local state with config
   useEffect(() => {
@@ -101,7 +104,7 @@ const SettingsPanel = () => {
 
   // Fetch engine directory path on mount
   useEffect(() => {
-    invoke('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
+    invoke<string>('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
   }, [])
 
   // Check engine status when settings panel opens (for standalone mode)
@@ -127,12 +130,14 @@ const SettingsPanel = () => {
       setModelsLoading(true)
       setModelsError(null)
       try {
-        const models = await invoke('list_waypoint_models')
+        const models = await invoke<string[]>('list_waypoint_models')
         if (isCancelled) return
 
         const ids = toUniqueModelIds([currentModel, ...savedCustomModels, ...(Array.isArray(models) ? models : [])])
         const ensuredIds = ids.length ? ids : [DEFAULT_WORLD_ENGINE_MODEL]
-        const availability = await invoke('list_model_availability', { modelIds: ensuredIds })
+        const availability = await invoke<Array<{ id: string; is_local: boolean }>>('list_model_availability', {
+          modelIds: ensuredIds
+        })
         if (isCancelled) return
         const availabilityMap = new Map(
           (Array.isArray(availability) ? availability : []).map((entry) => [entry.id, !!entry.is_local])
@@ -187,7 +192,7 @@ const SettingsPanel = () => {
   const isEngineCorrupt = hasAnyEngineComponent && !isEngineReady
 
   // Parse host:port string
-  const parseGpuServer = (serverStr) => {
+  const parseGpuServer = (serverStr: string): { host: string; port: number } => {
     const match = serverStr.match(/^([^:]+)(?::(\d+))?$/)
     if (!match) return { host: 'localhost', port: 8080 }
     return {
@@ -206,7 +211,9 @@ const SettingsPanel = () => {
     setCustomModelError(null)
     let isLocal = false
     try {
-      const availability = await invoke('list_model_availability', { modelIds: [normalized] })
+      const availability = await invoke<Array<{ id: string; is_local: boolean }>>('list_model_availability', {
+        modelIds: [normalized]
+      })
       isLocal = Array.isArray(availability) && availability[0]?.is_local === true
     } catch {
       isLocal = false
@@ -232,28 +239,30 @@ const SettingsPanel = () => {
     const { host, port } = parseGpuServer(gpuServer)
     const normalizedCustomWorldModels = toUniqueModelIds(modelOptions.filter((m) => m.isCustom).map((m) => m.id))
 
-    const newConfig = {
-      ...(config || {}),
+    const newConfig: AppConfig = {
+      ...(config as AppConfig),
       gpu_server: {
-        ...(config?.gpu_server || {}),
+        ...config.gpu_server,
         host,
         port,
         use_ssl: useSsl
       },
       api_keys: {
-        ...(config?.api_keys || {}),
+        ...config.api_keys,
         openai: openaiKey,
         fal: falKey,
         huggingface: huggingfaceKey
       },
       features: {
-        ...(config?.features || {}),
+        ...config.features,
         prompt_sanitizer: promptSanitizer,
         seed_generation: seedGeneration,
         engine_mode: engineMode,
         world_engine_model: normalizeModelInput(worldEngineModel) || DEFAULT_WORLD_ENGINE_MODEL,
-        custom_world_models: normalizedCustomWorldModels
-      }
+        custom_world_models: normalizedCustomWorldModels,
+        seed_gallery: config.features.seed_gallery
+      },
+      ui: config.ui
     }
 
     const success = await saveConfig(newConfig)
@@ -285,7 +294,7 @@ const SettingsPanel = () => {
     toggleSettings()
   }
 
-  const handleBackdropClick = (e) => {
+  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       toggleSettings()
     }
