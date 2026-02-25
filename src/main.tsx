@@ -5,7 +5,6 @@ import App from './App'
 // Import CSS
 import './css/styles.css'
 import './css/holo-frame.css'
-import './css/video-mask.css'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {

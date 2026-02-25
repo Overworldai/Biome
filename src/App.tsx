@@ -4,17 +4,34 @@ import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
 import { useFitWindowToContent } from './hooks/useTauri'
 import { useAppStartup } from './hooks/useAppStartup'
-import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
-import HudOverlay from './components/HudOverlay'
 import BottomPanel from './components/BottomPanel'
 import SettingsPanel from './components/SettingsPanel'
-import WindowAnchors from './components/WindowAnchors'
+import BackgroundSlideshow from './components/BackgroundSlideshow'
+import PortalPreview from './components/PortalPreview'
+import useBackgroundCycle from './hooks/useBackgroundCycle'
+import useSceneGlowColor from './hooks/useSceneGlowColor'
 
 const HoloFrame = () => {
   const [isReady, setIsReady] = useState(false)
-  const { isConnected } = usePortal()
+  const { isConnected, isSettingsOpen } = usePortal()
   const { bottomPanelHidden, setBottomPanelHidden } = useStreaming()
+  const {
+    images,
+    currentIndex,
+    nextIndex,
+    isTransitioning,
+    isPortalShrinking,
+    transitionKey,
+    portalVisible,
+    isPortalEntering,
+    completePortalShrink,
+    completeTransition
+  } = useBackgroundCycle()
+
+  const nextScenePreview = images[nextIndex] ?? null
+  const backgroundBlurPx = isSettingsOpen ? 8 : 2
+  const portalGlowRgb = useSceneGlowColor(images, currentIndex)
 
   // Force animation replay on mount by briefly removing the animated class
   useEffect(() => {
@@ -30,15 +47,29 @@ const HoloFrame = () => {
       className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}
     >
       <div className="holo-frame-inner">
-        <Titlebar />
+        <BackgroundSlideshow
+          images={images}
+          currentIndex={currentIndex}
+          nextIndex={nextIndex}
+          blurPx={backgroundBlurPx}
+          isTransitioning={isTransitioning}
+          transitionKey={transitionKey}
+          onTransitionComplete={completeTransition}
+        />
+        <PortalPreview
+          image={nextScenePreview}
+          visible={!isConnected && portalVisible}
+          isShrinking={isPortalShrinking}
+          isEntering={isPortalEntering}
+          glowRgb={portalGlowRgb}
+          onShrinkComplete={completePortalShrink}
+        />
 
         <main className="content-area">
           <VideoContainer />
           <div className="logo-container" id="logo-container"></div>
           <SettingsPanel />
         </main>
-
-        <HudOverlay />
 
         {/* Bottom panel - always visible when streaming connected */}
         {isConnected && (
@@ -64,7 +95,6 @@ const App = () => {
     <ConfigProvider>
       <PortalProvider>
         <StreamingProvider>
-          <WindowAnchors />
           <HoloFrame />
         </StreamingProvider>
       </PortalProvider>

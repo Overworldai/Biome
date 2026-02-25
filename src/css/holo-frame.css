@@ -29,6 +29,288 @@
   z-index: 0;
 }
 
+.app-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -10;
+  background: #020617;
+}
+
+.app-background-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  filter: blur(var(--app-background-blur, 6px));
+  transition: filter 0.8s ease;
+  transform: translate(var(--bg-parallax-x, 0px), var(--bg-parallax-y, 0px)) scale(1.05);
+}
+
+.app-background-slide.active {
+  opacity: 1;
+}
+
+.app-background-transition-slide {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--app-background-blur, 6px));
+  transform: translate(var(--bg-parallax-x, 0px), var(--bg-parallax-y, 0px)) scale(1.05);
+  clip-path: ellipse(6.6% 9.5% at 50% 53%);
+  -webkit-clip-path: ellipse(6.6% 9.5% at 50% 53%);
+  animation: portalBgReveal 960ms cubic-bezier(0.16, 0.86, 0.18, 1) forwards;
+  will-change: clip-path, transform;
+}
+
+.app-background-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 1;
+  background:
+    radial-gradient(circle at center, rgba(2, 6, 23, 0.05) 0%, rgba(2, 6, 23, 0.65) 100%),
+    linear-gradient(to bottom, rgba(2, 6, 23, 0.2) 0%, rgba(2, 6, 23, 0.55) 100%);
+}
+
+.portal-preview {
+  --portal-center-x: 50cqw;
+  --portal-center-y: 53cqh;
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  width: 22cqw;
+  height: 27cqw;
+  max-width: 200px;
+  max-height: 250px;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate(calc(-50% + var(--portal-offset-x, 0px)), calc(-50% + var(--portal-offset-y, 0px)));
+  transition: transform 0.2s ease-out;
+}
+
+.portal-preview-shell {
+  position: absolute;
+  inset: 0;
+  border-radius: 46% / 50%;
+  padding: 9%;
+  isolation: isolate;
+  backdrop-filter: blur(2px) saturate(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.05);
+  animation: portalPreviewFloat 5.5s ease-in-out infinite;
+}
+
+.portal-preview.entering .portal-preview-shell {
+  animation: portalSpawnIn 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.portal-preview.shrinking .portal-preview-shell {
+  animation: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.portal-preview.shrinking .portal-preview-core {
+  animation: portalCorePreShrink 420ms cubic-bezier(0.12, 0.72, 0.24, 1) forwards;
+}
+
+.portal-preview.shrinking .portal-preview-core::after {
+  animation: none;
+}
+
+.portal-preview.shrinking .portal-preview-image {
+  animation: portalImageCompensate 420ms cubic-bezier(0.12, 0.72, 0.24, 1) forwards;
+}
+
+.portal-preview.entering .portal-preview-shell::after {
+  animation: portalGlowIn 700ms ease-out forwards;
+}
+
+.portal-preview-core {
+  --portal-tilt: -8deg;
+  width: 100%;
+  height: 100%;
+  border-radius: 43% 54% 46% 57% / 48% 55% 45% 52%;
+  clip-path: inset(0% round 43% 54% 46% 57% / 48% 55% 45% 52%);
+  -webkit-clip-path: inset(0% round 43% 54% 46% 57% / 48% 55% 45% 52%);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  transform: rotate(var(--portal-tilt));
+}
+
+.portal-preview-image {
+  position: absolute;
+  width: 100cqw;
+  height: 100cqh;
+  left: calc(50% - var(--portal-center-x));
+  top: calc(50% - var(--portal-center-y));
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform: rotate(calc(var(--portal-tilt) * -1));
+  transform-origin: center center;
+}
+
+.portal-preview-core::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.22) 0%, transparent 38%),
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.05) 35%, rgba(0, 0, 0, 0.28) 100%);
+  pointer-events: none;
+}
+
+.portal-preview.entering .portal-preview-core::before {
+  animation: portalOverlayIn 700ms ease-out forwards;
+}
+
+.portal-preview-core::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-style: solid;
+  border-color: rgba(242, 251, 255, 0.92);
+  border-width: 3.5px 8.5px 4.5px 10px;
+  z-index: 2;
+  filter: drop-shadow(0 0 10px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.72))
+    drop-shadow(0 0 20px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.48));
+  pointer-events: none;
+}
+
+.portal-preview.entering .portal-preview-core::after {
+  animation: portalRingIn 700ms ease-out forwards;
+}
+
+.portal-preview-shell::after {
+  content: '';
+  position: absolute;
+  inset: -36%;
+  border-radius: 46% / 50%;
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.78) 14%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.48) 28%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.24) 42%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.08) 54%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0) 66%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0) 100%
+    ),
+    radial-gradient(
+      ellipse at center,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.3) 0%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.14) 36%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0.05) 52%,
+      rgba(var(--portal-glow-rgb, 140, 206, 244), 0) 68%
+    );
+  filter: blur(22px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+@keyframes portalPreviewFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes portalSpawnIn {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.24);
+    filter: blur(2px);
+  }
+  58% {
+    opacity: 0.96;
+    transform: translateY(0) scale(1.03);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes portalCorePreShrink {
+  0% {
+    transform: rotate(var(--portal-tilt)) scale(1);
+  }
+  100% {
+    transform: rotate(var(--portal-tilt)) scale(0.6);
+  }
+}
+
+@keyframes portalImageCompensate {
+  0% {
+    transform: rotate(calc(var(--portal-tilt) * -1)) scale(1);
+  }
+  100% {
+    transform: rotate(calc(var(--portal-tilt) * -1)) scale(1.667);
+  }
+}
+
+@keyframes portalGlowIn {
+  0% {
+    opacity: 0.08;
+    filter: blur(28px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(22px);
+  }
+}
+
+@keyframes portalOverlayIn {
+  0% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes portalRingIn {
+  0% {
+    opacity: 0.25;
+    filter: drop-shadow(0 0 4px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.25))
+      drop-shadow(0 0 8px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.2));
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.72))
+      drop-shadow(0 0 20px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.48));
+  }
+}
+
+@keyframes portalBgReveal {
+  0% {
+    opacity: 1;
+    clip-path: ellipse(6.6% 9.5% at 50% 53%);
+  }
+  100% {
+    opacity: 1;
+    clip-path: ellipse(170% 190% at 50% 53%);
+  }
+}
+
 /* Shrink frame when keyboard panel is open (both web and Tauri) */
 .holo-frame .holo-frame-inner {
   transition: transform 0.3s ease;
@@ -59,13 +341,11 @@
    Only triggers when .animate class is present
    ============================================ */
 .content-area,
-.titlebar,
 .panel-toggle {
   opacity: 0;
 }
 
 .holo-frame.animate .content-area,
-.holo-frame.animate .titlebar,
 .holo-frame.animate .panel-toggle {
   animation: contentFadeIn 0.5s ease-out 1.2s forwards;
 }
@@ -110,22 +390,6 @@
   align-items: center;
   justify-content: center;
   container-type: size;
-}
-
-/* Inner container that maintains 16:9 aspect ratio within bounds */
-.video-container-inner {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  width: min(100%, calc(100cqh * 16 / 9));
-  height: min(100%, calc(100cqw * 9 / 16));
-  max-width: 100%;
-  max-height: 100%;
-  overflow: hidden;
-  background: #020617;
-  /* 16px in 640x360 coordinate space = 2.5% of width = 4.44% of height */
-  /* Use width-based percentage to match SVG scaling (16/640 = 2.5%) */
-  border-radius: 2.5%;
-  isolation: isolate; /* Create stacking context to maintain border-radius clipping */
 }
 
 .video-container video {
@@ -186,17 +450,6 @@
   /* Don't set z-index here - let children position themselves */
 }
 
-/* HUD Background - maintains 800:500 aspect ratio, sits BEHIND video */
-.hud-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1; /* Behind video container (z-index 0) */
-  pointer-events: none; /* Allow clicks to pass through to elements below */
-}
-
 /* HUD Video Frame Container - positioned at video anchor area, sits ON TOP of video */
 .hud-video-frame-container {
   position: absolute;
@@ -226,10 +479,9 @@
 
 /* ============================================
    HUD SVG STYLES
-   Shared styles for both background and video frame
+   Shared styles for the video frame
    ============================================ */
 
-.hud-background .hud,
 .hud-video-frame .hud {
   stroke: rgba(120, 255, 245, 0.88);
   stroke-width: 1.7;
@@ -238,79 +490,59 @@
   stroke-linejoin: round;
 }
 
-.hud-background .hud-dim,
 .hud-video-frame .hud-dim {
   stroke: rgba(120, 255, 245, 0.35);
   stroke-width: 1.2;
   fill: none;
 }
 
-.hud-background .hud-ghost,
 .hud-video-frame .hud-ghost {
   stroke: rgba(120, 255, 245, 0.14);
   stroke-width: 1;
   fill: none;
 }
 
-.hud-background .hud-bg {
-  fill: rgba(10, 14, 18, 0.95);
-  stroke: none;
-}
-
-.hud-background .dot,
 .hud-video-frame .dot {
   fill: rgba(120, 255, 245, 0.72);
 }
 
-.hud-background .dot-dim,
 .hud-video-frame .dot-dim {
   fill: rgba(120, 255, 245, 0.38);
 }
 
 /* HUD draw-in animations */
-.hud-background .draw-path,
 .hud-video-frame .draw-path {
   stroke-dasharray: 3000;
   stroke-dashoffset: 3000;
   animation: hudDrawIn 1.8s ease-out forwards;
 }
 
-.hud-background .draw-path-delay-1,
 .hud-video-frame .draw-path-delay-1 {
   stroke-dasharray: 2000;
   stroke-dashoffset: 2000;
   animation: hudDrawIn 1.4s ease-out 0.3s forwards;
 }
 
-.hud-background .draw-path-delay-2,
 .hud-video-frame .draw-path-delay-2 {
   stroke-dasharray: 1500;
   stroke-dashoffset: 1500;
   animation: hudDrawIn 1.2s ease-out 0.5s forwards;
 }
 
-.hud-background .draw-path-delay-3,
 .hud-video-frame .draw-path-delay-3 {
   stroke-dasharray: 1000;
   stroke-dashoffset: 1000;
   animation: hudDrawIn 1s ease-out 0.7s forwards;
 }
 
-.hud-background .fade-in,
 .hud-video-frame .fade-in {
   opacity: 0;
   animation: hudFadeIn 0.6s ease-out 1s forwards;
 }
 
-.hud-background .fade-in-delay,
 .hud-video-frame .fade-in-delay {
   opacity: 0;
   animation: hudFadeIn 0.5s ease-out 1.3s forwards;
-}
-
-.hud-background .bg-fade {
-  opacity: 0;
-  animation: hudFadeIn 0.8s ease-out 0.2s forwards;
 }
 
 @keyframes hudDrawIn {
@@ -422,84 +654,6 @@
 
 .stats-display .stat {
   text-transform: uppercase;
-}
-
-/* ============================================
-   CUSTOM TITLEBAR
-   Positioned in the SVG's top system band area
-   ============================================ */
-
-.titlebar {
-  position: absolute;
-  top: 0.5%;
-  left: 3.7%;
-  right: 5.75%; /* Adjusted to align with new HUD frame right edge */
-  height: 10%;
-  z-index: 110; /* Above HUD overlay (100) */
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 0 1.25cqw 0; /* 10px / 800px = 1.25% */
-}
-
-.titlebar-drag {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
-}
-
-.titlebar-title {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 1.5cqw;
-  letter-spacing: 0.18em;
-  color: rgba(120, 255, 245, 0.85);
-  text-transform: uppercase;
-  pointer-events: none;
-  margin-top: 1.7cqh;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.titlebar-controls {
-  display: flex;
-  gap: 1cqw; /* 8px / 800px = 1% */
-  position: relative;
-  z-index: 1;
-}
-
-.titlebar-btn {
-  width: 2.5cqw; /* 20px / 800px = 2.5% */
-  height: 4cqh; /* 20px / 500px = 4% */
-  border: 1px solid rgba(120, 255, 245, 0.3);
-  background: rgba(120, 255, 245, 0.05);
-  border-radius: 0.25cqw; /* 2px / 800px = 0.25% */
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(120, 255, 245, 0.7);
-  transition: all 0.15s ease;
-  padding: 0;
-}
-
-.titlebar-btn:hover {
-  background: rgba(120, 255, 245, 0.15);
-  border-color: rgba(120, 255, 245, 0.5);
-  color: rgba(120, 255, 245, 1);
-}
-
-.titlebar-btn svg {
-  width: 1.5cqw; /* 12px / 800px = 1.5% */
-  height: 2.4cqh; /* 12px / 500px = 2.4% */
-}
-
-.titlebar-close:hover {
-  background: rgba(255, 80, 80, 0.3);
-  border-color: rgba(255, 80, 80, 0.6);
-  color: rgba(255, 120, 120, 1);
 }
 
 /* ============================================
@@ -2123,61 +2277,6 @@
 .social-link svg {
   width: 1.8cqw;
   height: 1.8cqw;
-}
-
-/* HUD Social links - vertical column on right side of video */
-.hud-socials {
-  position: absolute;
-  right: 3%;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5cqh;
-  pointer-events: auto;
-  z-index: 100;
-  opacity: 0;
-  animation: hudFadeIn 0.5s ease-out 1.5s forwards;
-}
-
-.hud-social-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 4cqw;
-  height: 4cqw;
-  color: rgba(120, 255, 245, 0.5);
-  border: 1px solid rgba(120, 255, 245, 0.25);
-  background: rgba(10, 14, 18, 0.6);
-  transition: all 0.15s ease;
-  position: relative;
-  /* Angled corners using clip-path for HUD aesthetic */
-  clip-path: polygon(15% 0%, 85% 0%, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0% 85%, 0% 15%);
-}
-
-.hud-social-link:hover {
-  color: rgba(120, 255, 245, 1);
-  border-color: rgba(120, 255, 245, 0.6);
-  background: rgba(120, 255, 245, 0.1);
-  filter: drop-shadow(0 0 6px rgba(120, 255, 245, 0.4));
-}
-
-.hud-social-link svg {
-  width: 2cqw;
-  height: 2cqw;
-}
-
-/* Config button - reset button styles and ensure consistent sizing */
-button.hud-social-link {
-  cursor: pointer;
-  font: inherit;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  padding: 0;
-  min-width: 4cqw;
-  min-height: 4cqw;
 }
 
 /* Panel toggle button */

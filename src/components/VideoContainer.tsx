@@ -1,38 +1,20 @@
 import { useRef, useEffect, useCallback, type CSSProperties } from 'react'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
-import useConfig from '../hooks/useConfig'
-import PortalBackgrounds from './PortalBackgrounds'
-import VideoMask from './VideoMask'
-import TerminalDisplay from './TerminalDisplay'
-import PauseOverlay from './PauseOverlay'
-import ShutdownOverlay from './ShutdownOverlay'
-import ConnectionLostOverlay from './ConnectionLostOverlay'
-import ServerLogDisplay from './ServerLogDisplay'
 
 const VideoContainer = () => {
-  const { isConnected: portalConnected, isExpanded, isShuttingDown, state, states } = usePortal()
+  const { isConnected: portalConnected, isExpanded } = usePortal()
   const {
     isStreaming,
     isPaused,
-    settingsOpen,
     isVideoReady,
     registerContainerRef,
     registerCanvasRef,
     handleContainerClick,
-    isPointerLocked,
-    engineError,
-    clearEngineError,
-    engineSetupInProgress,
-    setupProgress
+    isPointerLocked
   } = useStreaming()
-  const { isStandaloneMode } = useConfig()
-
-  const showServerLogs =
-    (state === states.WARM && isStandaloneMode) || (state === states.COLD && engineSetupInProgress) || engineError
 
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     if (containerRef.current) {
@@ -43,7 +25,6 @@ const VideoContainer = () => {
   // Callback ref for canvas - registers immediately when element mounts
   const handleCanvasRef = useCallback(
     (element: HTMLCanvasElement | null) => {
-      canvasRef.current = element
       registerCanvasRef(element)
     },
     [registerCanvasRef]
@@ -77,28 +58,8 @@ const VideoContainer = () => {
 
   return (
     <div ref={containerRef} className={containerClasses} onClick={handleContainerClick}>
-      <div className="video-container-inner">
-        {!showMedia && <PortalBackgrounds />}
-
-        {/* Canvas for WebSocket base64 frames */}
-        <canvas ref={handleCanvasRef} width={1280} height={720} className="streaming-frame" style={mediaStyle} />
-
-        <PauseOverlay isActive={settingsOpen && isStreaming && !isShuttingDown} />
-        <ConnectionLostOverlay />
-        {/* Show server logs during: WARM state with standalone mode, front-page installation, or engine error */}
-        {showServerLogs && (
-          <ServerLogDisplay
-            showDismiss={!!engineError}
-            onDismiss={clearEngineError}
-            errorMessage={engineError}
-            showProgress={engineSetupInProgress}
-            progressMessage={setupProgress}
-          />
-        )}
-        <TerminalDisplay />
-        <VideoMask />
-        <ShutdownOverlay />
-      </div>
+      {/* Canvas for WebSocket base64 frames */}
+      <canvas ref={handleCanvasRef} width={1280} height={720} className="streaming-frame" style={mediaStyle} />
     </div>
   )
 }

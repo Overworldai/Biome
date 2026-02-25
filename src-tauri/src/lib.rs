@@ -466,6 +466,42 @@ fn get_seeds_uploads_dir() -> Result<PathBuf, String> {
     Ok(get_seeds_base_dir()?.join("uploads"))
 }
 
+/// Resolve the backgrounds directory used by the UI slideshow.
+///
+/// Search order:
+/// 1) Repository-local `seeds/backgrounds` (dev workflow)
+/// 2) Portable executable-local `seeds/backgrounds`
+/// 3) Bundled resources `default_seeds/backgrounds`
+fn get_backgrounds_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("seeds").join("backgrounds"));
+        candidates.push(cwd.join("..").join("seeds").join("backgrounds"));
+        candidates.push(cwd.join("..").join("..").join("seeds").join("backgrounds"));
+    }
+
+    if let Ok(exe_dir) = get_exe_dir() {
+        candidates.push(exe_dir.join("seeds").join("backgrounds"));
+        candidates.push(exe_dir.join("..").join("seeds").join("backgrounds"));
+    }
+
+    if let Ok(resource_dir) = app.path().resolve(
+        "default_seeds/backgrounds",
+        tauri::path::BaseDirectory::Resource,
+    ) {
+        candidates.push(resource_dir);
+    }
+
+    for candidate in candidates {
+        if candidate.exists() && candidate.is_dir() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Backgrounds directory not found. Expected seeds/backgrounds.".to_string())
+}
+
 // Get the path to our local uv binary
 fn get_uv_binary_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let uv_dir = get_uv_dir(app)?;
@@ -1026,6 +1062,73 @@ async fn open_seeds_dir(_app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to open seeds directory: {}", e))
 }
 
+/// List slideshow background image filenames from `seeds/backgrounds`.
+#[tauri::command]
+fn list_background_images(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = get_backgrounds_dir(&app)?;
+
+    let mut images = Vec::new();
+    let entries =
+        fs::read_dir(&dir).map_err(|e| format!("Failed to read backgrounds dir: {}", e))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let is_image = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|ext| SUPPORTED_IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+            .unwrap_or(false);
+
+        if is_image && let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            images.push(name.to_string());
+        }
+    }
+
+    images.sort();
+    Ok(images)
+}
+
+/// Read a slideshow background image as base64 from `seeds/backgrounds`.
+#[tauri::command]
+fn read_background_image_as_base64(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<String, String> {
+    if filename.trim().is_empty() {
+        return Err("Filename cannot be empty".to_string());
+    }
+
+    // Basic traversal hard-stop: only allow plain filenames.
+    let file_name = Path::new(&filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Invalid filename".to_string())?;
+    if file_name != filename {
+        return Err("Invalid filename".to_string());
+    }
+
+    let dir = get_backgrounds_dir(&app)?;
+    let path = dir.join(file_name);
+    if !path.exists() || !path.is_file() {
+        return Err("Background image not found".to_string());
+    }
+
+    let is_image = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| SUPPORTED_IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+        .unwrap_or(false);
+    if !is_image {
+        return Err("Unsupported image format".to_string());
+    }
+
+    let bytes = fs::read(path).map_err(|e| format!("Failed to read background image: {}", e))?;
+    Ok(BASE64_STANDARD.encode(&bytes))
+}
+
 // Safety cache functions removed - now handled server-side
 
 #[tauri::command]
@@ -1478,7 +1581,9 @@ pub fn run() {
             read_seed_as_base64,
             read_seed_thumbnail,
             get_seeds_dir_path,
-            open_seeds_dir
+            open_seeds_dir,
+            list_background_images,
+            read_background_image_as_base64
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
