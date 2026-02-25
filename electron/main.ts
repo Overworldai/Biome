@@ -1,8 +1,58 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { registerAllIpc } from './ipc/index.js'
 import { stopServerSync } from './lib/serverState.js'
 import { setupBundledSeeds } from './lib/seeds.js'
+// Handle Squirrel.Windows events (install/update/uninstall)
+if (process.platform === 'win32') {
+  const squirrelArg = process.argv[1]
+
+  if (squirrelArg === '--squirrel-uninstall') {
+    // Clean up runtime data directories, preserving user uploads
+    const exeDir = path.dirname(process.execPath)
+    const worldEngineDir = path.join(exeDir, 'world_engine')
+    const uploadsDir = path.join(worldEngineDir, 'seeds', 'uploads')
+    const uvDir = path.join(exeDir, '.uv')
+
+    try {
+      // Check if user has uploaded seeds
+      let hasUploads = false
+      try {
+        const entries = fs.readdirSync(uploadsDir)
+        hasUploads = entries.length > 0
+      } catch {
+        // uploads dir doesn't exist, nothing to preserve
+      }
+
+      if (hasUploads) {
+        // Preserve uploads: move to temp, nuke world_engine, restore
+        const tempUploads = path.join(exeDir, '_biome_keep_uploads')
+        fs.rmSync(tempUploads, { recursive: true, force: true })
+        fs.renameSync(uploadsDir, tempUploads)
+        fs.rmSync(worldEngineDir, { recursive: true, force: true })
+        fs.mkdirSync(path.join(worldEngineDir, 'seeds'), { recursive: true })
+        fs.renameSync(tempUploads, uploadsDir)
+      } else {
+        fs.rmSync(worldEngineDir, { recursive: true, force: true })
+      }
+
+      fs.rmSync(uvDir, { recursive: true, force: true })
+    } catch (err) {
+      console.error('[UNINSTALL] Cleanup error:', err)
+    }
+
+    process.exit(0)
+  }
+
+  if (
+    squirrelArg === '--squirrel-install' ||
+    squirrelArg === '--squirrel-updated' ||
+    squirrelArg === '--squirrel-obsolete'
+  ) {
+    process.exit(0)
+  }
+}
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined
 declare const MAIN_WINDOW_VITE_NAME: string
