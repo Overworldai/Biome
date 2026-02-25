@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 
-const CYCLE_INTERVAL_MS = 1000
+const CYCLE_INTERVAL_MS = 5000
 const PORTAL_ENTER_DURATION_MS = 700
 const PORTAL_PRE_SHRINK_FAILSAFE_MS = 700
 const POST_TRANSITION_DWELL_MS = 180
@@ -28,7 +28,7 @@ type BackgroundCycleState = {
   completeTransition: () => void
 }
 
-export const useBackgroundCycle = (): BackgroundCycleState => {
+export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleState => {
   const [images, setImages] = useState<string[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -97,7 +97,15 @@ export const useBackgroundCycle = (): BackgroundCycleState => {
   }, [isPortalEntering])
 
   useEffect(() => {
-    if (images.length < 2 || isTransitioning || isPortalShrinking || isPortalEntering || !portalVisible) return
+    if (
+      images.length < 2 ||
+      isTransitioning ||
+      isPortalShrinking ||
+      isPortalEntering ||
+      !portalVisible ||
+      pauseTransitions
+    )
+      return
 
     const timer = window.setInterval(() => {
       setTransitionKey((k) => k + 1)
@@ -105,7 +113,7 @@ export const useBackgroundCycle = (): BackgroundCycleState => {
     }, CYCLE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [images, isTransitioning, isPortalShrinking, isPortalEntering, portalVisible])
+  }, [images, isTransitioning, isPortalShrinking, isPortalEntering, portalVisible, pauseTransitions])
 
   useEffect(() => {
     if (!isPortalShrinking) return

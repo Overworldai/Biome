@@ -81,18 +81,398 @@
 
 .portal-preview {
   --portal-center-x: 50cqw;
-  --portal-center-y: 53cqh;
+  --portal-center-y: 50cqh;
   position: absolute;
   left: 50%;
-  top: 53%;
+  top: 50%;
   width: 22cqw;
   height: 27cqw;
   max-width: 200px;
   max-height: 250px;
-  z-index: 3;
+  z-index: 8;
+  --portal-hover-scale: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(calc(-50% + var(--portal-offset-x, 0px)), calc(-50% + var(--portal-offset-y, 0px)))
+    scale(var(--portal-hover-scale));
+  transition:
+    left 0.48s cubic-bezier(0.2, 0.74, 0.26, 1),
+    top 0.48s cubic-bezier(0.2, 0.74, 0.26, 1),
+    transform 0.18s ease-out,
+    filter 0.32s ease;
+}
+
+.portal-preview:focus-visible {
+  outline: 2px solid rgba(var(--portal-glow-rgb, 140, 206, 244), 0.7);
+  outline-offset: 4px;
+}
+
+.menu-chrome {
+  --menu-right-edge: 3.8%;
+  position: absolute;
+  inset: 0;
+  z-index: 9;
   pointer-events: none;
-  transform: translate(calc(-50% + var(--portal-offset-x, 0px)), calc(-50% + var(--portal-offset-y, 0px)));
-  transition: transform 0.2s ease-out;
+}
+
+.menu-cta-row {
+  position: absolute;
+  top: 4.8%;
+  right: calc(var(--menu-right-edge) - 0.75cqw);
+  display: flex;
+  gap: 0.7cqw;
+  pointer-events: auto;
+}
+
+.menu-cta-btn {
+  width: 2.6cqw;
+  height: 2.6cqw;
+  min-width: 22px;
+  min-height: 22px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  color: rgba(238, 248, 255, 0.88);
+  background: rgba(7, 13, 24, 0.24);
+  border: 1px solid rgba(236, 247, 255, 0.34);
+  border-radius: 0.45cqw;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease;
+}
+
+.menu-cta-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.62);
+  background: rgba(8, 18, 34, 0.4);
+}
+
+.menu-cta-btn svg {
+  width: 62%;
+  height: 62%;
+}
+
+.menu-title {
+  position: absolute;
+  left: 4.3%;
+  bottom: 4.1%;
+  z-index: 1;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(30px, 4.2cqw, 52px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(248, 248, 245, 0.92);
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 0.38),
+    0 0 4px rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+}
+
+.menu-settings-btn {
+  position: absolute;
+  right: var(--menu-right-edge);
+  bottom: 4.1%;
+  z-index: 1;
+  min-width: 132px;
+  margin: 0;
+  padding: 0.9cqh 1.5cqw;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  color: rgba(245, 249, 255, 0.95);
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(19px, 2.2cqw, 30px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  background: rgba(8, 12, 20, 0.28);
+  border: 1px solid rgba(245, 251, 255, 0.8);
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+  pointer-events: auto;
+}
+
+.menu-settings-btn:hover {
+  background: rgba(245, 251, 255, 0.9);
+  color: rgba(15, 20, 32, 0.95);
+  transform: translateY(-1px);
+}
+
+.holo-frame-inner.menu-settings-open .portal-preview {
+  left: 20%;
+  filter: blur(4px) saturate(0.86);
+  pointer-events: none;
+}
+
+.holo-frame-inner.menu-settings-open .app-background-slide,
+.holo-frame-inner.menu-settings-open .app-background-transition-slide {
+  filter: blur(calc(var(--app-background-blur, 6px) + 6px));
+}
+
+.menu-settings-view {
+  pointer-events: auto;
+}
+
+.menu-settings-view::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 53%, rgba(4, 8, 14, 0.34) 0%, rgba(4, 8, 14, 0.26) 36%, rgba(4, 8, 14, 0.14) 72%),
+    linear-gradient(to bottom, rgba(4, 8, 14, 0.2) 0%, rgba(4, 8, 14, 0.28) 100%);
+}
+
+.menu-settings-panel {
+  position: absolute;
+  top: 8%;
+  left: 39%;
+  right: 4%;
+  width: auto;
+  max-width: 760px;
+  max-height: 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 2.3cqh;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.4cqw;
+  scrollbar-width: none;
+  scrollbar-color: rgba(245, 251, 255, 0.45) rgba(8, 12, 20, 0.2);
+}
+
+.menu-settings-panel::-webkit-scrollbar {
+  width: 0;
+  min-width: 6px;
+}
+
+.menu-settings-panel::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.menu-settings-panel::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.menu-settings-panel::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}
+
+.menu-settings-group h2 {
+  margin: 0;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(34px, 4.2cqw, 52px);
+  line-height: 0.95;
+  color: rgba(247, 250, 255, 0.96);
+  text-align: right;
+  text-shadow:
+    0 0 12px rgba(0, 0, 0, 0.32),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.menu-settings-group p {
+  margin: 0.35cqh 0 0.8cqh;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(16px, 1.35cqw, 22px);
+  color: rgba(238, 244, 252, 0.66);
+  text-align: right;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.menu-segmented {
+  display: flex;
+  border: 1px solid rgba(245, 251, 255, 0.75);
+}
+
+.menu-segmented button {
+  flex: 1;
+  padding: 0.55cqh 0.8cqw;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(18px, 1.7cqw, 28px);
+  color: rgba(245, 249, 255, 0.92);
+  background: rgba(8, 12, 20, 0.28);
+  border: none;
+  border-right: 1px solid rgba(245, 251, 255, 0.5);
+  cursor: pointer;
+}
+
+.menu-segmented button:last-child {
+  border-right: none;
+}
+
+.menu-segmented button.active {
+  background: rgba(245, 251, 255, 0.9);
+  color: rgba(15, 20, 32, 0.95);
+}
+
+.menu-select-wrap {
+  border: 1px solid rgba(245, 251, 255, 0.75);
+  background: rgba(8, 12, 20, 0.28);
+}
+
+.menu-select-wrap select {
+  width: 100%;
+  padding: 0.55cqh 0.8cqw;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(18px, 1.5cqw, 24px);
+  color: rgba(245, 249, 255, 0.92);
+  background: transparent;
+  border: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.menu-select-wrap select option {
+  color: rgba(245, 249, 255, 0.95);
+  background: rgba(12, 18, 30, 0.98);
+}
+
+.menu-range-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4cqh;
+}
+
+.menu-range-slider {
+  width: 100%;
+  height: 0.8cqh;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: rgba(245, 251, 255, 0.42);
+  outline: none;
+  cursor: pointer;
+}
+
+.menu-range-slider::-webkit-slider-runnable-track {
+  height: 0.8cqh;
+  border-radius: 999px;
+  background: rgba(245, 251, 255, 0.42);
+}
+
+.menu-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1cqw;
+  height: 1.8cqh;
+  margin-top: -0.5cqh;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.menu-range-slider::-moz-range-track {
+  height: 0.8cqh;
+  border-radius: 999px;
+  background: rgba(245, 251, 255, 0.42);
+}
+
+.menu-range-slider::-moz-range-thumb {
+  width: 1cqw;
+  height: 1.8cqh;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.menu-range-wrap span {
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(16px, 1.35cqw, 22px);
+  color: rgba(240, 245, 252, 0.85);
+}
+
+.menu-fix-btn {
+  margin-top: 0.6cqh;
+  margin-left: auto;
+  padding: 0;
+  display: block;
+  width: fit-content;
+  border: none;
+  background: transparent;
+  color: rgba(246, 249, 255, 0.95);
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(20px, 1.8cqw, 28px);
+  cursor: pointer;
+  text-align: right;
+}
+
+.menu-fix-btn:hover {
+  background: rgba(245, 251, 255, 0.95);
+  color: rgba(10, 14, 24, 0.96);
+}
+
+.menu-fix-modal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 16, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.menu-fix-modal {
+  width: min(420px, 76cqw);
+  padding: 1.8cqh 1.6cqw;
+  background: rgba(8, 12, 20, 0.92);
+  border: 1px solid rgba(245, 251, 255, 0.66);
+  color: rgba(246, 249, 255, 0.95);
+}
+
+.menu-fix-modal h3 {
+  margin: 0 0 0.6cqh;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(26px, 2.2cqw, 34px);
+  font-weight: 500;
+}
+
+.menu-fix-modal p {
+  margin: 0;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(16px, 1.35cqw, 21px);
+  color: rgba(233, 242, 255, 0.82);
+}
+
+.menu-fix-modal-actions {
+  margin-top: 1.4cqh;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8cqw;
+}
+
+.menu-fix-modal-actions button {
+  padding: 0.5cqh 1cqw;
+  border: 1px solid rgba(245, 251, 255, 0.7);
+  background: rgba(8, 12, 20, 0.18);
+  color: rgba(245, 251, 255, 0.95);
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(17px, 1.4cqw, 22px);
+  cursor: pointer;
+}
+
+.menu-fix-modal-actions button.confirm {
+  background: rgba(245, 251, 255, 0.9);
+  color: rgba(15, 20, 32, 0.95);
+}
+
+.menu-install-log-view {
+  pointer-events: auto;
 }
 
 .portal-preview-shell {
@@ -104,6 +484,10 @@
   backdrop-filter: blur(2px) saturate(1.05);
   -webkit-backdrop-filter: blur(2px) saturate(1.05);
   animation: portalPreviewFloat 5.5s ease-in-out infinite;
+}
+
+.portal-preview:hover {
+  --portal-hover-scale: 1.05;
 }
 
 .portal-preview.entering .portal-preview-shell {
@@ -187,6 +571,13 @@
   filter: drop-shadow(0 0 10px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.72))
     drop-shadow(0 0 20px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.48));
   pointer-events: none;
+  transition: filter 0.22s ease;
+}
+
+.portal-preview:hover .portal-preview-core::after {
+  filter: drop-shadow(0 0 18px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.96))
+    drop-shadow(0 0 34px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.76))
+    drop-shadow(0 0 54px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.4));
 }
 
 .portal-preview.entering .portal-preview-core::after {
@@ -219,6 +610,14 @@
   filter: blur(22px);
   z-index: 0;
   pointer-events: none;
+  transition:
+    opacity 0.22s ease,
+    filter 0.22s ease;
+}
+
+.portal-preview:hover .portal-preview-shell::after {
+  opacity: 1;
+  filter: blur(29px) saturate(1.2) brightness(1.16);
 }
 
 @keyframes portalPreviewFloat {
