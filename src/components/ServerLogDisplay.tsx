@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { listen } from '../bridge'
 
 // Determine log line color class based on content
 const getLogClass = (line: string): string => {
@@ -35,31 +35,24 @@ const ServerLogDisplay = ({
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined
     let mounted = true
 
-    const setupListener = async () => {
-      unlisten = await listen('server-log', (event) => {
-        if (!mounted) return
-        const line = String(event.payload ?? '')
-        setLogs((prev) => {
-          // Keep last 100 lines to prevent memory issues
-          const newLogs = [...prev, line]
-          if (newLogs.length > 100) {
-            return newLogs.slice(-100)
-          }
-          return newLogs
-        })
+    const unlisten = listen('server-log', (line) => {
+      if (!mounted) return
+      const logLine = String(line ?? '')
+      setLogs((prev) => {
+        // Keep last 100 lines to prevent memory issues
+        const newLogs = [...prev, logLine]
+        if (newLogs.length > 100) {
+          return newLogs.slice(-100)
+        }
+        return newLogs
       })
-    }
-
-    setupListener()
+    })
 
     return () => {
       mounted = false
-      if (unlisten) {
-        unlisten()
-      }
+      unlisten()
     }
   }, [])
 

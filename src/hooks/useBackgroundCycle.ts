@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../bridge'
 
 const CYCLE_INTERVAL_MS = 5000
 const PORTAL_ENTER_DURATION_MS = 700
@@ -57,12 +57,12 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
 
     const load = async () => {
       try {
-        const filenames = await invoke<string[]>('list_background_images')
+        const filenames = await invoke('list-background-images')
         if (filenames.length === 0 || cancelled) return
 
         const loaded = await Promise.all(
           filenames.map(async (filename) => {
-            const base64 = await invoke<string>('read_background_image_as_base64', { filename })
+            const base64 = await invoke('read-background-image-as-base64', filename)
             const mime = getMimeType(filename)
             return `data:${mime};base64,${base64}`
           })

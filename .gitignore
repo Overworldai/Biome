@@ -29,8 +29,10 @@ dist-ssr
 .venv/
 uv.lock
 __pycache__
-# seed directory created by standalone instance of server.py
-src-tauri/world_engine
+
+# Electron build artifacts
+.vite/
+out/
 
 # env
 .env

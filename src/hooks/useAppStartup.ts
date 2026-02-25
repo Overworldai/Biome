@@ -1,8 +1,5 @@
 import { useEffect, useRef } from 'react'
-
-const invoke = async <T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
-  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
-}
+import { invoke } from '../bridge'
 
 export const useAppStartup = () => {
   const hasRun = useRef(false)
@@ -13,7 +10,7 @@ export const useAppStartup = () => {
 
     const runStartupTasks = async () => {
       try {
-        const result = await invoke<string>('unpack_server_files', { force: false })
+        const result = await invoke('unpack-server-files', false)
         console.log('[Startup] Server files:', result)
       } catch (err) {
         console.warn('[Startup] Failed to unpack server files:', err)

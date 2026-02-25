@@ -2,29 +2,37 @@
   "name": "biome",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "main": ".vite/build/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "lint": "prettier --check . && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
-    "lint-fix": "prettier --write . && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --fix --allow-dirty -- -D warnings",
+    "dev": "electron-forge start",
+    "build": "electron-forge make",
+    "package": "electron-forge package",
+    "lint": "prettier --check .",
+    "lint-fix": "prettier --write .",
     "prepare": "husky"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.9.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^6.0.5"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@electron-forge/cli": "^7",
+    "@electron-forge/maker-deb": "^7",
+    "@electron-forge/maker-dmg": "^7",
+    "@electron-forge/maker-squirrel": "^7",
+    "@electron-forge/plugin-vite": "^7",
+    "@types/adm-zip": "^0.5",
+    "@types/node": "^22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "adm-zip": "^0.5",
+    "electron": "~35.0.0",
     "husky": "^9.1.7",
     "prettier": "^3",
-    "typescript": "^5.9.3"
+    "tar": "^7",
+    "tree-kill": "^1.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.5"
   }
 }

@@ -1,17 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2022",
     "module": "ESNext",
-    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM"],
     "moduleResolution": "Bundler",
     "allowJs": false,
-    "jsx": "react-jsx",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "types": ["node"]
   },
-  "include": ["src", "vite.config.ts", "vite.renderer.config.ts"]
+  "include": ["electron/preload.ts", "src/types"]
 }

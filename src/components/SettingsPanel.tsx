@@ -4,10 +4,7 @@ import { useStreaming } from '../context/StreamingContext'
 import { useConfig, STANDALONE_PORT, ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../hooks/useConfig'
 import type { AppConfig, EngineMode, SetupStatus } from '../types/app'
 
-// Tauri invoke helper
-const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
-  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
-}
+import { invoke } from '../bridge'
 
 type ModelOption = { id: string; isLocal: boolean; isCustom: boolean }
 
@@ -104,7 +101,7 @@ const SettingsPanel = () => {
 
   // Fetch engine directory path on mount
   useEffect(() => {
-    invoke<string>('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
+    invoke('get-engine-dir-path').then(setEngineDirPath).catch(console.warn)
   }, [])
 
   // Check engine status when settings panel opens (for standalone mode)
@@ -130,14 +127,12 @@ const SettingsPanel = () => {
       setModelsLoading(true)
       setModelsError(null)
       try {
-        const models = await invoke<string[]>('list_waypoint_models')
+        const models = await invoke('list-waypoint-models')
         if (isCancelled) return
 
         const ids = toUniqueModelIds([currentModel, ...savedCustomModels, ...(Array.isArray(models) ? models : [])])
         const ensuredIds = ids.length ? ids : [DEFAULT_WORLD_ENGINE_MODEL]
-        const availability = await invoke<Array<{ id: string; is_local: boolean }>>('list_model_availability', {
-          modelIds: ensuredIds
-        })
+        const availability = await invoke('list-model-availability', ensuredIds)
         if (isCancelled) return
         const availabilityMap = new Map(
           (Array.isArray(availability) ? availability : []).map((entry) => [entry.id, !!entry.is_local])
@@ -211,9 +206,7 @@ const SettingsPanel = () => {
     setCustomModelError(null)
     let isLocal = false
     try {
-      const availability = await invoke<Array<{ id: string; is_local: boolean }>>('list_model_availability', {
-        modelIds: [normalized]
-      })
+      const availability = await invoke('list-model-availability', [normalized])
       isLocal = Array.isArray(availability) && availability[0]?.is_local === true
     } catch {
       isLocal = false
@@ -280,7 +273,7 @@ const SettingsPanel = () => {
 
   const handleOpenEngineDir = async () => {
     try {
-      await invoke('open_engine_dir')
+      await invoke('open-engine-dir')
     } catch (err) {
       console.warn('Failed to open engine directory:', err)
     }

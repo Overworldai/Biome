@@ -2,10 +2,7 @@ import { useState, useEffect, type KeyboardEvent, type MouseEvent } from 'react'
 import { useConfig, ENGINE_MODES } from '../hooks/useConfig'
 import type { EngineMode } from '../types/app'
 
-// Tauri invoke helper
-const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
-  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
-}
+import { invoke } from '../bridge'
 
 /**
  * Choice dialog shown to first-time users to select how they want to run the World Engine.
@@ -20,7 +17,7 @@ const EngineModeChoice = ({ onChoiceMade }: { onChoiceMade: (mode: EngineMode) =
 
   // Get engine directory path on mount
   useEffect(() => {
-    invoke<string>('get_engine_dir_path').then(setEngineDirPath).catch(console.warn)
+    invoke('get-engine-dir-path').then(setEngineDirPath).catch(console.warn)
   }, [])
 
   const handleStandaloneChoice = async () => {
@@ -51,7 +48,7 @@ const EngineModeChoice = ({ onChoiceMade }: { onChoiceMade: (mode: EngineMode) =
 
   const handleOpenEngineDir = async () => {
     try {
-      await invoke<void>('open_engine_dir')
+      await invoke('open-engine-dir')
     } catch (err) {
       console.warn('Failed to open engine directory:', err)
     }

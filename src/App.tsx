@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from './bridge'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
-import { useFitWindowToContent } from './hooks/useTauri'
+import { useFitWindowToContent } from './hooks/useWindow'
 import { useAppStartup } from './hooks/useAppStartup'
 import { useConfig, ENGINE_MODES } from './hooks/useConfig'
 import VideoContainer from './components/VideoContainer'
@@ -79,7 +79,7 @@ const HoloFrame = () => {
   }, [engineMode])
 
   useEffect(() => {
-    invoke<string>('get_engine_dir_path')
+    invoke('get-engine-dir-path')
       .then(setEngineDirPath)
       .catch(() => setEngineDirPath(null))
   }, [])
@@ -99,16 +99,14 @@ const HoloFrame = () => {
       setMenuModelsLoading(true)
       setMenuModelsError(null)
       try {
-        const remoteModels = await invoke<string[]>('list_waypoint_models')
+        const remoteModels = await invoke('list-waypoint-models')
         if (cancelled) return
 
         const ids = [...new Set([menuWorldModel, ...(Array.isArray(remoteModels) ? remoteModels : [])])]
           .map((id) => id.trim())
           .filter((id) => id.length > 0)
 
-        const availability = await invoke<Array<{ id: string; is_local: boolean }>>('list_model_availability', {
-          modelIds: ids
-        })
+        const availability = await invoke('list-model-availability', ids)
         if (cancelled) return
 
         const availabilityMap = new Map((availability || []).map((entry) => [entry.id, !!entry.is_local]))

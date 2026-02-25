@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react'
+import { invoke } from '../bridge'
 import type { AppConfig, EngineMode } from '../types/app'
 
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
@@ -57,11 +58,6 @@ const defaultConfig: AppConfig = {
   }
 }
 
-// Tauri invoke helper
-const invoke = async <T,>(cmd: string, args: Record<string, unknown> = {}): Promise<T> => {
-  return window.__TAURI_INTERNALS__.invoke<T>(cmd, args)
-}
-
 // Migrate legacy config fields to new format
 const migrateConfig = (loaded: AppConfig & { features?: Record<string, unknown> }): AppConfig => {
   if (loaded.features && typeof loaded.features.use_standalone_engine === 'boolean') {
@@ -105,11 +101,11 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const fileConfig = await invoke<AppConfig & { features?: Record<string, unknown> }>('read_config')
-        const migratedConfig = migrateConfig(fileConfig)
+        const fileConfig = await invoke('read-config')
+        const migratedConfig = migrateConfig(fileConfig as AppConfig & { features?: Record<string, unknown> })
         setConfig(mergeWithDefaults(migratedConfig, defaultConfig))
 
-        const path = await invoke<string>('get_config_path_str')
+        const path = await invoke('get-config-path-str')
         setConfigPath(path)
       } catch (err) {
         console.warn('Could not load config, using defaults:', err)
@@ -124,7 +120,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
   const reloadConfig = useCallback(async () => {
     try {
-      const fileConfig = await invoke<Partial<AppConfig>>('read_config')
+      const fileConfig = await invoke('read-config')
       setConfig(mergeWithDefaults(fileConfig, defaultConfig))
       setError(null)
       return true
@@ -137,7 +133,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
   const saveConfig = useCallback(async (newConfig: AppConfig) => {
     try {
-      await invoke('write_config', { config: newConfig })
+      await invoke('write-config', newConfig)
       setConfig(newConfig)
       setError(null)
       return true
@@ -180,7 +176,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
   const openConfig = useCallback(async () => {
     try {
-      await invoke('open_config')
+      await invoke('open-config')
       return true
     } catch (err) {
       console.error('Failed to open config:', err)

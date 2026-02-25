@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { listen } from '../bridge'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -296,7 +296,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       setUnlisten: (fn: () => void) => {
         unlisten = fn
       },
-      listenForServerReady: (onReady) => listen('server-ready', onReady),
+      listenForServerReady: (onReady) => Promise.resolve(listen('server-ready', () => onReady())),
       onServerError: handleServerError,
       isCancelled: () => cancelled,
       log

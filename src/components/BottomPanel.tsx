@@ -7,7 +7,7 @@ import {
   type MouseEvent,
   type ReactNode
 } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
 import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
@@ -185,7 +185,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
     const loadSeedsAndThumbnails = async () => {
       setLoadingSeeds(true)
       try {
-        const seedList = await invoke<SeedRecord[]>('list_seeds')
+        const seedList = await invoke('list-seeds')
         if (cancelled) return
         setSeeds(seedList)
 
@@ -193,7 +193,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
         for (const seed of seedList) {
           if (loadingThumbnailsRef.current.has(seed.filename)) continue
           loadingThumbnailsRef.current.add(seed.filename)
-          invoke<string>('read_seed_thumbnail', { filename: seed.filename, maxSize: 100 })
+          invoke('read-seed-thumbnail', seed.filename, 100)
             .then((base64) => {
               if (!cancelled) setSeedThumbnails((p) => ({ ...p, [seed.filename]: base64 }))
             })
@@ -233,7 +233,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
       return
     }
     try {
-      await invoke('delete_seed', { filename: seed.filename })
+      await invoke('delete-seed', seed.filename)
       setSeeds((prev) => prev.filter((s) => s.filename !== seed.filename))
       setSeedThumbnails((prev) => {
         const next = { ...prev }
@@ -282,11 +282,11 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
       const result = (await response.json()) as { is_safe?: boolean }
 
       // Refresh seeds list (includes unsafe seeds now)
-      const seedList = await invoke<SeedRecord[]>('list_seeds')
+      const seedList = await invoke('list-seeds')
       setSeeds(seedList)
 
       // Load thumbnail for the uploaded seed
-      invoke<string>('read_seed_thumbnail', { filename, maxSize: 100 })
+      invoke('read-seed-thumbnail', filename, 100)
         .then((base64) => setSeedThumbnails((prev) => ({ ...prev, [filename]: base64 })))
         .catch((err) => console.error('Failed to load thumbnail:', filename, err))
 
