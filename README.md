@@ -42,25 +42,21 @@ Grab the installer from the [Releases](https://github.com/Overworldai/Biome/rele
 If you want to hack on Biome yourself, you'll need:
 
 - [Node.js](https://nodejs.org/) 18+
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
 
 ```bash
-
 git clone https://github.com/Wayfarer-Labs/Biome.git
 cd Biome
 npm install
 
 # Development mode with hot-reload
-npm run tauri dev
+npm run dev
 
 # Production build
-npm run tauri build
+npm run build
 
-# On Linux, if the AppImage build fails during stripping, set:
-NO_STRIP=true npm run tauri build
+# Package without building installers
+npm run package
 ```
-
-> **Note (Linux):** The AppImage bundling step may fail with _"failed to bundle project: failed to run linuxdeploy"_. Setting `NO_STRIP=true` skips binary stripping and can resolve this. See [tauri-apps/tauri#13113](https://github.com/tauri-apps/tauri/issues/13113) for details.
 
 ## Releases
 

@@ -1,5 +1,5 @@
 """
-Tauri <> Python Communication Bridge
+Biome <> Python Communication Bridge
 
 Low-latency WebSocket server that orchestrates WorldEngine and Safety modules.
 This server acts as a unified interface for both world generation and safety checking.
@@ -139,7 +139,7 @@ def ensure_seed_directories():
 
 async def setup_default_seeds():
     """Setup default seeds from local directory (for dev/standalone usage only)."""
-    # Check if seeds already exist (bundled by Tauri on first run, or from previous setup)
+    # Check if seeds already exist (bundled by Biome on first run, or from previous setup)
     existing_seeds = glob_seeds(DEFAULT_SEEDS_DIR)
     if existing_seeds:
         logger.info(f"Found {len(existing_seeds)} seed(s) in {DEFAULT_SEEDS_DIR}")
@@ -166,7 +166,7 @@ async def setup_default_seeds():
     # No seeds found - error
     logger.error("No seed images found!")
     logger.error(f"Expected seeds in:")
-    logger.error(f"  - {DEFAULT_SEEDS_DIR} (bundled by Tauri installer)")
+    logger.error(f"  - {DEFAULT_SEEDS_DIR} (bundled by Biome installer)")
     logger.error(f"  - {LOCAL_SEEDS_DIR} (for development mode)")
     logger.error("Please ensure seeds are properly bundled or placed in the appropriate directory")
 
@@ -458,7 +458,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "tauri://localhost"],  # Vite dev server and Tauri
+    allow_origins=["http://localhost:5173"],  # Vite dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -486,7 +486,7 @@ def compute_file_hash(file_path: str) -> str:
 
 @app.get("/health")
 async def health():
-    """Health check for Tauri backend."""
+    """Health check for Biome backend."""
     return JSONResponse(
         {
             "status": "ok",

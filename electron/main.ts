@@ -19,6 +19,7 @@ const createWindow = () => {
     resizable: true,
     center: true,
     title: 'Biome',
+    icon: path.join(__dirname, '../../app-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

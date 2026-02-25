@@ -710,7 +710,7 @@
   }
 }
 
-/* Shrink frame when keyboard panel is open (both web and Tauri) */
+/* Shrink frame when keyboard panel is open (both web and desktop) */
 .holo-frame .holo-frame-inner {
   transition: transform 0.3s ease;
 }

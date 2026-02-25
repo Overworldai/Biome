@@ -54,7 +54,7 @@ export function registerServerIpc(): void {
 
     // Force-overwrite bundled server components
     const { getResourcePath } = await import('../lib/paths.js')
-    const resourceDir = getResourcePath('src-tauri/server-components')
+    const resourceDir = getResourcePath('server-components')
     const serverFiles = ['server.py', 'pyproject.toml', 'engine_manager.py', 'safety.py']
     for (const filename of serverFiles) {
       const srcPath = path.join(resourceDir, filename)

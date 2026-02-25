@@ -7,7 +7,8 @@ import { MakerDeb } from '@electron-forge/maker-deb'
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    extraResource: ['./src-tauri/server-components', './seeds']
+    icon: './app-icon',
+    extraResource: ['./server-components', './seeds']
   },
   makers: [new MakerSquirrel({}), new MakerDMG({}), new MakerDeb({})],
   plugins: [

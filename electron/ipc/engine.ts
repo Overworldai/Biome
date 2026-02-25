@@ -16,7 +16,7 @@ function unpackServerFilesInner(force: boolean): string {
   const engineDir = getEngineDir()
   fs.mkdirSync(engineDir, { recursive: true })
 
-  const resourceDir = getResourcePath('src-tauri/server-components')
+  const resourceDir = getResourcePath('server-components')
   const unpacked: string[] = []
 
   for (const filename of SERVER_COMPONENT_FILES) {
@@ -178,7 +178,7 @@ export function registerEngineIpc(): void {
     const engineDir = getEngineDir()
     fs.mkdirSync(engineDir, { recursive: true })
 
-    const resourceDir = getResourcePath('src-tauri/server-components')
+    const resourceDir = getResourcePath('server-components')
     for (const filename of SERVER_COMPONENT_FILES) {
       const srcPath = path.join(resourceDir, filename)
       const destPath = path.join(engineDir, filename)
