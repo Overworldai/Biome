@@ -49,6 +49,7 @@ export type IpcCommandMap = {
   // Backgrounds
   'list-background-images': { args: []; return: string[] }
   'read-background-image-as-base64': { args: [filename: string]; return: string }
+  'read-loading-tunnel-as-base64': { args: []; return: string }
 
   // Window
   'window-set-size': { args: [width: number, height: number]; return: void }

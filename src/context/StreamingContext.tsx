@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
-import { listen } from '../bridge'
+import { invoke, listen } from '../bridge'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -34,14 +34,7 @@ export const useStreaming = () => {
 }
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
-  const {
-    state,
-    states,
-    transitionTo,
-    shutdown,
-    isConnected: portalConnected,
-    isExpanded: portalExpanded
-  } = usePortal()
+  const { state, states, transitionTo, shutdown } = usePortal()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -66,6 +59,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     statusCode,
     error,
     frame,
+    hasRealFrame,
     frameId,
     genTime,
     connect,
@@ -76,6 +70,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendPromptWithSeed,
     sendInitialSeed,
     sendModel,
+    setPlaceholderFrame,
     reset,
     isConnected,
     isReady,
@@ -94,7 +89,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [engineError, setEngineError] = useState<string | null>(null)
   const [endpointUrl, setEndpointUrl] = useState<string | null>(null)
   const [canvasReady, setCanvasReady] = useState(false)
-  const [warmConnectionJobSeq, setWarmConnectionJobSeq] = useState(0)
+  const [loadingConnectionJobSeq, setLoadingConnectionJobSeq] = useState(0)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
   const prevEngineModeRef = useRef(engineMode)
@@ -145,8 +140,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     const prevMode = prevEngineModeRef.current
     prevEngineModeRef.current = engineMode
 
-    // Skip if mode hasn't actually changed, or if we're in COLD state (nothing to tear down)
-    if (prevMode === engineMode || !prevMode || state === states.COLD) return
+    // Skip if mode hasn't actually changed, or if we're in MAIN_MENU state (nothing to tear down)
+    if (prevMode === engineMode || !prevMode || state === states.MAIN_MENU) return
 
     log.info(`Engine mode changed: ${prevMode} -> ${engineMode}, performing teardown-and-reconnect`)
 
@@ -158,10 +153,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       stopServer().catch((err) => log.error('Failed to stop server during mode switch:', err))
     }
 
-    // Clear any existing error and transition to WARM to re-trigger connection
+    // Clear any existing error and transition to LOADING to re-trigger connection
     setEngineError(null)
-    transitionTo(states.WARM)
-  }, [engineMode, state, states.COLD, states.WARM, disconnect, isServerRunning, stopServer, transitionTo])
+    transitionTo(states.LOADING)
+  }, [engineMode, state, states.MAIN_MENU, states.LOADING, disconnect, isServerRunning, stopServer, transitionTo])
 
   // Initialize seeds on mount
   useEffect(() => {
@@ -170,26 +165,35 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [initializeSeeds])
 
-  // Bootstrap each new WARM websocket session deterministically:
+  // Bootstrap each new LOADING websocket session deterministically:
   // send model + seed together so server applies model first and can load seed
   // immediately when model load completes.
   useEffect(() => {
-    if (state !== states.WARM) return
+    if (state !== states.LOADING) return
     if (!isConnected) return
     if (warmBootstrapSentRef.current) return
 
     const selectedModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
-    log.info('WARM connected - bootstrapping session with model+seed:', selectedModel)
+    log.info('Loading connected - bootstrapping session with model+seed:', selectedModel)
+    // Use the default seed image as the immediate placeholder frame so transition
+    // to streaming never shows a blank frame while waiting for server output.
+    invoke('read-seed-as-base64', 'default.png')
+      .then((seedB64) => {
+        if (!seedB64) return
+        setPlaceholderFrame(`data:image/png;base64,${seedB64}`)
+      })
+      .catch(() => null)
     sendModel(selectedModel, 'default.png')
     lastAppliedModelRef.current = selectedModel
     warmBootstrapSentRef.current = true
-  }, [state, states.WARM, isConnected, config?.features?.world_engine_model, sendModel])
+  }, [state, states.LOADING, isConnected, config?.features?.world_engine_model, sendModel, setPlaceholderFrame])
 
   useEffect(() => {
     if (!isConnected) {
       warmBootstrapSentRef.current = false
+      setPlaceholderFrame(null)
     }
-  }, [isConnected])
+  }, [isConnected, setPlaceholderFrame])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
@@ -243,9 +247,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineError,
         statusCode,
         hasReceivedFrame,
-        canvasReady,
-        portalConnected,
-        portalExpanded,
         socketReady: isReady,
         isPointerLocked,
         settingsOpen,
@@ -260,9 +261,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineError,
     statusCode,
     hasReceivedFrame,
-    canvasReady,
-    portalConnected,
-    portalExpanded,
     isReady,
     isPointerLocked,
     settingsOpen,
@@ -270,7 +268,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   ])
 
   useEffect(() => {
-    if (warmConnectionJobSeq === 0) return
+    if (loadingConnectionJobSeq === 0) return
 
     let cancelled = false
     let unlisten: (() => void) | null = null
@@ -309,7 +307,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       cancelled = true
       unlisten?.()
     }
-  }, [warmConnectionJobSeq])
+  }, [loadingConnectionJobSeq])
 
   useEffect(() => {
     const { effects } = lifecycleState
@@ -318,7 +316,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       lifecycleState,
       config,
       setEngineError,
-      setWarmConnectionJobSeq,
+      setWarmConnectionJobSeq: setLoadingConnectionJobSeq,
       warmBootstrapSentRef,
       setConnectionLost,
       setSettingsOpen,
@@ -337,10 +335,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   }, [
     lifecycleState,
     transitionTo,
-    states.COLD,
-    states.HOT,
+    states.MAIN_MENU,
+    states.LOADING,
     states.STREAMING,
-    states.WARM,
     disconnect,
     config?.features?.world_engine_model,
     exitPointerLock,
@@ -366,13 +363,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const img = new Image()
     img.onload = () => {
-      if (canvas.width !== img.width || canvas.height !== img.height) {
-        canvas.width = img.width
-        canvas.height = img.height
-      }
-      ctx.drawImage(img, 0, 0)
+      const targetW = canvas.width
+      const targetH = canvas.height
+      ctx.clearRect(0, 0, targetW, targetH)
+      ctx.drawImage(img, 0, 0, targetW, targetH)
     }
-    img.src = `data:image/jpeg;base64,${frame}`
+    img.src = frame.startsWith('data:') ? frame : `data:image/jpeg;base64,${frame}`
   }, [frame, canvasReady])
 
   // Input loop at 60hz
@@ -452,8 +448,14 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     log.info('Cancelling connection')
     cleanupState()
     await stopServerIfRunning()
-    transitionTo(states.COLD)
-  }, [cleanupState, stopServerIfRunning, transitionTo, states.COLD])
+    transitionTo(states.MAIN_MENU)
+  }, [cleanupState, stopServerIfRunning, transitionTo, states.MAIN_MENU])
+
+  const prepareReturnToMainMenu = useCallback(async () => {
+    log.info('Preparing return to main menu')
+    cleanupState()
+    await stopServerIfRunning()
+  }, [cleanupState, stopServerIfRunning])
 
   // Handle mode choice from the choice dialog (when user selects Standalone or Server)
   const handleModeChoice = useCallback(
@@ -468,7 +470,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
           await reloadConfig()
           // Auto-start session after successful installation
           log.info('Auto-starting session after engine setup')
-          transitionTo(states.WARM)
+          transitionTo(states.LOADING)
         } catch (err) {
           log.error('Engine setup failed:', err)
           setEngineError(err instanceof Error ? err.message : String(err))
@@ -476,7 +478,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       }
       // For server mode, nothing special needed - config was already saved
     },
-    [setupEngine, reloadConfig, transitionTo, states.WARM]
+    [setupEngine, reloadConfig, transitionTo, states.LOADING]
   )
 
   const value: StreamingContextValue = {
@@ -552,6 +554,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     logout,
     dismissConnectionLost,
     cancelConnection,
+    prepareReturnToMainMenu,
     reset,
     sendPrompt,
     sendPromptWithSeed,

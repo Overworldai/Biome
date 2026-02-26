@@ -11,9 +11,6 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   engineError: string | null
   statusCode: string | null
   hasReceivedFrame: boolean
-  canvasReady: boolean
-  portalConnected: boolean
-  portalExpanded: boolean
   socketReady: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
@@ -34,9 +31,6 @@ export const buildStreamingLifecycleSyncPayload = (
     engineError: args.engineError,
     statusCode: args.statusCode,
     hasReceivedFrame: args.hasReceivedFrame,
-    canvasReady: args.canvasReady,
-    portalConnected: args.portalConnected,
-    portalExpanded: args.portalExpanded,
     socketReady: args.socketReady,
     isPointerLocked: args.isPointerLocked,
     settingsOpen: args.settingsOpen,

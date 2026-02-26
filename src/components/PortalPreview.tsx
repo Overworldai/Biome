@@ -2,6 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react'
 
 type PortalPreviewProps = {
   image: string | null
+  hoverImage?: string | null
+  isHovered?: boolean
   visible: boolean
   isShrinking: boolean
   isEntering: boolean
@@ -13,6 +15,8 @@ type PortalPreviewProps = {
 
 const PortalPreview = ({
   image,
+  hoverImage = null,
+  isHovered = false,
   visible,
   isShrinking,
   isEntering,
@@ -36,7 +40,7 @@ const PortalPreview = ({
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
-  if (!visible || !image) return null
+  if (!visible || (!image && !hoverImage)) return null
 
   const portalStyle: CSSProperties = {
     ['--portal-offset-x' as string]: `${offset.x}px`,
@@ -71,7 +75,18 @@ const PortalPreview = ({
             }
           }}
         >
-          <div className="portal-preview-image" style={{ backgroundImage: `url("${image}")` }} />
+          {image && (
+            <div
+              className={`portal-preview-image portal-preview-image-base ${isHovered && hoverImage ? 'is-fading' : ''}`}
+              style={{ backgroundImage: `url("${image}")` }}
+            />
+          )}
+          {hoverImage && (
+            <div
+              className={`portal-preview-image portal-preview-image-hover ${isHovered ? 'is-visible' : ''}`}
+              style={{ backgroundImage: `url("${hoverImage}")` }}
+            />
+          )}
         </div>
       </div>
     </div>

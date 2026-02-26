@@ -67,6 +67,7 @@ export type StreamingContextValue = {
   logout: () => Promise<void>
   dismissConnectionLost: () => Promise<void>
   cancelConnection: () => Promise<void>
+  prepareReturnToMainMenu: () => Promise<void>
   reset: () => void
   sendPrompt: (prompt: string) => void
   sendPromptWithSeed: (promptOrFilename: string, maybeSeedUrl?: string) => void

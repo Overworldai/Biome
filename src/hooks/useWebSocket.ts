@@ -10,6 +10,7 @@ type WebSocketHook = {
   statusCode: string | null
   error: string | null
   frame: string | null
+  hasRealFrame: boolean
   frameId: number
   genTime: number | null
   connect: (endpointUrl: string) => void
@@ -20,6 +21,7 @@ type WebSocketHook = {
   sendPromptWithSeed: (promptOrFilename: string, seedUrl?: string) => void
   sendInitialSeed: (filename: string) => void
   sendModel: (model: string, seed?: string | null) => void
+  setPlaceholderFrame: (dataUrl: string | null) => void
   reset: () => void
   isConnected: boolean
   isReady: boolean
@@ -34,6 +36,7 @@ export const useWebSocket = (): WebSocketHook => {
   const [genTime, setGenTime] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [statusCode, setStatusCode] = useState<string | null>(null)
+  const [hasRealFrame, setHasRealFrame] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
@@ -53,6 +56,7 @@ export const useWebSocket = (): WebSocketHook => {
     setConnectionState('connecting')
     setError(null)
     setStatusCode(null)
+    setHasRealFrame(false)
 
     let wsUrl: string
     if (endpointUrl.startsWith('ws://') || endpointUrl.startsWith('wss://')) {
@@ -87,6 +91,7 @@ export const useWebSocket = (): WebSocketHook => {
           }
           case 'frame': {
             setFrame((msg.data as string) ?? null)
+            setHasRealFrame(true)
             setFrameId((msg.frame_id as number) ?? 0)
             if (typeof msg.gen_ms === 'number') {
               setGenTime(Math.round(msg.gen_ms))
@@ -130,6 +135,7 @@ export const useWebSocket = (): WebSocketHook => {
       setIsReady(false)
       setStatusCode(null)
       setFrame(null)
+      setHasRealFrame(false)
       setFrameId(0)
       setGenTime(null)
     }
@@ -148,6 +154,7 @@ export const useWebSocket = (): WebSocketHook => {
     setError(null)
     setGenTime(null)
     setStatusCode(null)
+    setHasRealFrame(false)
   }, [])
 
   const sendControl = useCallback((buttons: string[] = [], mouseDx = 0, mouseDy = 0) => {
@@ -201,6 +208,10 @@ export const useWebSocket = (): WebSocketHook => {
     }
   }, [])
 
+  const setPlaceholderFrame = useCallback((dataUrl: string | null) => {
+    setFrame(dataUrl)
+  }, [])
+
   const reset = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'reset' }))
@@ -218,6 +229,7 @@ export const useWebSocket = (): WebSocketHook => {
     statusCode,
     error,
     frame,
+    hasRealFrame,
     frameId,
     genTime,
     connect,
@@ -228,6 +240,7 @@ export const useWebSocket = (): WebSocketHook => {
     sendPromptWithSeed,
     sendInitialSeed,
     sendModel,
+    setPlaceholderFrame,
     reset,
     isConnected: connectionState === 'connected',
     isReady,
