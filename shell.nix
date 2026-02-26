@@ -37,5 +37,12 @@ pkgs.mkShell {
 
   buildInputs = electronDeps;
 
-  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath electronDeps;
+  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (electronDeps ++ [
+    pkgs.stdenv.cc.cc.lib    # libstdc++.so.6 (needed by PyTorch native extensions)
+    "/run/opengl-driver"     # libcuda.so, libnvidia-ml.so (NVIDIA driver)
+  ]);
+
+  # Triton calls /sbin/ldconfig to find libcuda.so, which doesn't exist on NixOS.
+  # Point it directly at the driver library path instead.
+  TRITON_LIBCUDA_PATH = "/run/opengl-driver/lib";
 }
