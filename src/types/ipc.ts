@@ -56,6 +56,8 @@ export type IpcCommandMap = {
   'window-get-size': { args: []; return: { width: number; height: number } }
   'window-set-position': { args: [x: number, y: number]; return: void }
   'window-get-position': { args: []; return: { x: number; y: number } }
+  'window-minimize': { args: []; return: void }
+  'window-close': { args: []; return: void }
 }
 
 /**

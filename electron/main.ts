@@ -62,12 +62,13 @@ let mainWindow: BrowserWindow | null = null
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 800,
-    height: 500,
+    height: 450,
     minWidth: 800,
-    minHeight: 500,
+    minHeight: 450,
     maximizable: false,
     resizable: true,
     center: true,
+    frame: false,
     title: 'Biome',
     icon: path.join(__dirname, '../../app-icon.png'),
     webPreferences: {

@@ -16,6 +16,7 @@ import SocialCtaRow from './components/SocialCtaRow'
 import PauseOverlay from './components/PauseOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import ShutdownOverlay from './components/ShutdownOverlay'
+import WindowControls from './components/WindowControls'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 
@@ -265,6 +266,7 @@ const HoloFrame = () => {
     <div
       className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected && !isStreamingUi ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''} ${isStreamingUi ? 'streaming-fullscreen' : ''}`}
     >
+      <WindowControls />
       <div className={`holo-frame-inner ${!isConnected && isSettingsOpen ? 'menu-settings-open' : ''}`}>
         {useMainBackground && (
           <BackgroundSlideshow

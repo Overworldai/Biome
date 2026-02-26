@@ -10,7 +10,7 @@ export const useWindow = () => {
     try {
       return await invoke('window-get-size')
     } catch {
-      return { width: 800, height: 500 }
+      return { width: 800, height: 450 }
     }
   }, [])
 
@@ -26,15 +26,25 @@ export const useWindow = () => {
     }
   }, [])
 
+  const minimize = useCallback(async () => {
+    await invoke('window-minimize')
+  }, [])
+
+  const close = useCallback(async () => {
+    await invoke('window-close')
+  }, [])
+
   return {
     setSize,
     getSize,
     setPosition,
-    getPosition
+    getPosition,
+    minimize,
+    close
   }
 }
 
-export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs = 250) => {
+export const useFitWindowToContent = (contentAspectRatio = 16 / 9, debounceMs = 250) => {
   const isAdjusting = useRef(false)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSetSize = useRef<{ width: number; height: number } | null>(null)

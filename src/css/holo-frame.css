@@ -13,6 +13,50 @@
   align-items: center;
   justify-content: center;
   container-type: size;
+  -webkit-app-region: drag;
+}
+
+/* Window controls (frameless) */
+.window-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn {
+  width: 23px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(245, 251, 255, 0.8);
+  background: rgba(8, 12, 20, 0.28);
+  color: rgba(245, 249, 255, 0.95);
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn:hover {
+  background: rgba(245, 251, 255, 0.9);
+  color: rgba(15, 20, 32, 0.95);
+}
+
+.window-control-close:hover {
+  background: rgba(220, 50, 50, 0.9);
+  color: #fff;
 }
 
 /* Inner container that maintains 16:9 aspect ratio */
@@ -27,6 +71,7 @@
   container-name: holo-frame;
   overflow: visible;
   z-index: 0;
+  -webkit-app-region: no-drag;
 }
 
 .holo-frame.streaming-fullscreen .holo-frame-inner {
@@ -124,7 +169,7 @@
 
 .menu-cta-row {
   position: absolute;
-  top: 4.8%;
+  top: 7%;
   right: calc(var(--menu-right-edge) - 0.75cqw);
   display: flex;
   gap: 0.7cqw;

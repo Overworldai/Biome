@@ -14,7 +14,21 @@ export function registerWindowIpc(): void {
       const [width, height] = win.getSize()
       return { width, height }
     }
-    return { width: 800, height: 500 }
+    return { width: 800, height: 450 }
+  })
+
+  ipcMain.handle('window-minimize', (_event) => {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.minimize()
+    }
+  })
+
+  ipcMain.handle('window-close', (_event) => {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.close()
+    }
   })
 
   ipcMain.handle('window-set-position', (_event, x: number, y: number) => {
