@@ -8,15 +8,15 @@ export const STREAMING_LIFECYCLE_EVENT = {
 } as const
 
 export type StreamingLifecycleEffects = {
-  warmFailureError: string | null
+  loadingFailureError: string | null
+  transitionToMainMenuOnLoadingFailure: boolean
   connectionLost: boolean
   clearConnectionLost: boolean
   engineErrorDismissed: boolean
   startIntentionalReconnect: boolean
-  transitionToWarmAfterIntentionalDisconnect: boolean
-  clearEngineErrorOnWarmEntry: boolean
-  runWarmConnection: boolean
-  transitionToHot: boolean
+  transitionToLoadingAfterIntentionalDisconnect: boolean
+  clearEngineErrorOnLoadingEntry: boolean
+  runLoadingConnection: boolean
   transitionToStreaming: boolean
   teardownForInactivePortalState: boolean
   requestPointerLockOnStreamStart: boolean
@@ -27,15 +27,15 @@ export type StreamingLifecycleEffects = {
 }
 
 const emptyEffects = (): StreamingLifecycleEffects => ({
-  warmFailureError: null,
+  loadingFailureError: null,
+  transitionToMainMenuOnLoadingFailure: false,
   connectionLost: false,
   clearConnectionLost: false,
   engineErrorDismissed: false,
   startIntentionalReconnect: false,
-  transitionToWarmAfterIntentionalDisconnect: false,
-  clearEngineErrorOnWarmEntry: false,
-  runWarmConnection: false,
-  transitionToHot: false,
+  transitionToLoadingAfterIntentionalDisconnect: false,
+  clearEngineErrorOnLoadingEntry: false,
+  runLoadingConnection: false,
   transitionToStreaming: false,
   teardownForInactivePortalState: false,
   requestPointerLockOnStreamStart: false,
@@ -46,30 +46,28 @@ const emptyEffects = (): StreamingLifecycleEffects => ({
 })
 
 export type StreamingLifecycleState = {
-  warmAttempted: boolean
-  wasConnectedInActiveStreamState: boolean
+  loadingAttempted: boolean
+  wasConnectedInStreamingState: boolean
   hadEngineError: boolean
   intentionalReconnectInProgress: boolean
-  warmTransitionRequestedForIntentionalReconnect: boolean
-  hotTransitionRequested: boolean
+  loadingTransitionRequestedForIntentionalReconnect: boolean
   streamingTransitionRequested: boolean
   streamPointerLockRequested: boolean
-  warmConnectionRequestSeq: number
+  loadingConnectionRequestSeq: number
   lastPortalState: PortalState | null
   lastTeardownPortalState: PortalState | null
   effects: StreamingLifecycleEffects
 }
 
 export const initialStreamingLifecycleState: StreamingLifecycleState = {
-  warmAttempted: false,
-  wasConnectedInActiveStreamState: false,
+  loadingAttempted: false,
+  wasConnectedInStreamingState: false,
   hadEngineError: false,
   intentionalReconnectInProgress: false,
-  warmTransitionRequestedForIntentionalReconnect: false,
-  hotTransitionRequested: false,
+  loadingTransitionRequestedForIntentionalReconnect: false,
   streamingTransitionRequested: false,
   streamPointerLockRequested: false,
-  warmConnectionRequestSeq: 0,
+  loadingConnectionRequestSeq: 0,
   lastPortalState: null,
   lastTeardownPortalState: null,
   effects: emptyEffects()
@@ -85,8 +83,6 @@ export type StreamingLifecycleSyncPayload = {
   statusCode: string | null
   hasReceivedFrame: boolean
   canvasReady: boolean
-  portalConnected: boolean
-  portalExpanded: boolean
   socketReady: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
@@ -114,8 +110,6 @@ export const streamingLifecycleReducer = (
     statusCode,
     hasReceivedFrame,
     canvasReady,
-    portalConnected,
-    portalExpanded,
     socketReady,
     isPointerLocked,
     settingsOpen,
@@ -127,47 +121,41 @@ export const streamingLifecycleReducer = (
     effects: emptyEffects()
   }
 
-  const inWarmState = portalState === PORTAL_STATES.WARM
-  const inHotState = portalState === PORTAL_STATES.HOT
+  const inMainMenuState = portalState === PORTAL_STATES.MAIN_MENU
+  const inLoadingState = portalState === PORTAL_STATES.LOADING
   const inStreamingState = portalState === PORTAL_STATES.STREAMING
-  const inSessionPortalState = inWarmState || inHotState || inStreamingState
-  const inActiveStreamingState = inHotState || portalState === PORTAL_STATES.STREAMING
-  const inColdState = portalState === PORTAL_STATES.COLD
+  const inSessionPortalState = inLoadingState || inStreamingState
 
   const shouldIntentionalReconnect =
     inStreamingState && connectionState === 'connected' && selectedModel !== lastAppliedModel
 
-  const enteredWarm = inWarmState && state.lastPortalState !== PORTAL_STATES.WARM
-  if (enteredWarm) {
-    next.warmConnectionRequestSeq = state.warmConnectionRequestSeq + 1
-    next.effects.clearEngineErrorOnWarmEntry = true
-    next.effects.runWarmConnection = true
+  const enteredLoading = inLoadingState && state.lastPortalState !== PORTAL_STATES.LOADING
+  if (enteredLoading) {
+    next.loadingConnectionRequestSeq = state.loadingConnectionRequestSeq + 1
+    next.effects.clearEngineErrorOnLoadingEntry = true
+    next.effects.runLoadingConnection = true
   }
 
   if (shouldIntentionalReconnect && !next.intentionalReconnectInProgress) {
     next.intentionalReconnectInProgress = true
-    next.warmTransitionRequestedForIntentionalReconnect = false
+    next.loadingTransitionRequestedForIntentionalReconnect = false
     next.effects.startIntentionalReconnect = true
   }
 
   if (!next.intentionalReconnectInProgress) {
-    next.warmTransitionRequestedForIntentionalReconnect = false
+    next.loadingTransitionRequestedForIntentionalReconnect = false
   }
 
   if (
     next.intentionalReconnectInProgress &&
     inStreamingState &&
     connectionState === 'disconnected' &&
-    !next.warmTransitionRequestedForIntentionalReconnect
+    !next.loadingTransitionRequestedForIntentionalReconnect
   ) {
-    next.effects.transitionToWarmAfterIntentionalDisconnect = true
-    next.warmTransitionRequestedForIntentionalReconnect = true
+    next.effects.transitionToLoadingAfterIntentionalDisconnect = true
+    next.loadingTransitionRequestedForIntentionalReconnect = true
   }
-
-  if (!inWarmState) {
-    next.hotTransitionRequested = false
-  }
-  if (!inHotState) {
+  if (!inLoadingState) {
     next.streamingTransitionRequested = false
   }
   if (!inStreamingState) {
@@ -181,21 +169,8 @@ export const streamingLifecycleReducer = (
     next.lastTeardownPortalState = portalState
   }
 
-  const canTransitionToHot =
-    inWarmState && connectionState === 'connected' && statusCode === 'ready' && hasReceivedFrame && canvasReady
-
-  if (canTransitionToHot && !next.hotTransitionRequested) {
-    next.effects.transitionToHot = true
-    next.hotTransitionRequested = true
-  }
-
   const canTransitionToStreaming =
-    inHotState &&
-    connectionState === 'connected' &&
-    statusCode === 'ready' &&
-    portalConnected &&
-    portalExpanded &&
-    socketReady
+    inLoadingState && connectionState === 'connected' && statusCode === 'ready' && socketReady
 
   if (canTransitionToStreaming && !next.streamingTransitionRequested) {
     next.effects.transitionToStreaming = true
@@ -214,31 +189,27 @@ export const streamingLifecycleReducer = (
     next.effects.pauseOnPointerUnlock = true
   }
 
-  if (inWarmState && connectionState === 'connecting') {
-    next.warmAttempted = true
+  if (inLoadingState && connectionState === 'connecting') {
+    next.loadingAttempted = true
   }
 
-  if (inWarmState && next.warmAttempted && FAILURE_CONNECTION_STATES.has(connectionState)) {
+  if (inLoadingState && next.loadingAttempted && FAILURE_CONNECTION_STATES.has(connectionState)) {
     if (next.intentionalReconnectInProgress) {
       next.effects.suppressedIntentionalWarmError = true
     } else {
       const isError = connectionState === 'error'
-      next.effects.warmFailureError =
+      next.effects.loadingFailureError =
         transportError ||
         (isError ? 'Connection failed - server may have crashed' : 'Connection lost - server may have crashed')
     }
-    next.warmAttempted = false
+    next.loadingAttempted = false
   }
 
-  if (inActiveStreamingState && ACTIVE_CONNECTION_STATES.has(connectionState)) {
-    next.wasConnectedInActiveStreamState = true
+  if (inStreamingState && ACTIVE_CONNECTION_STATES.has(connectionState)) {
+    next.wasConnectedInStreamingState = true
   }
 
-  if (
-    next.wasConnectedInActiveStreamState &&
-    inActiveStreamingState &&
-    FAILURE_CONNECTION_STATES.has(connectionState)
-  ) {
+  if (next.wasConnectedInStreamingState && inStreamingState && FAILURE_CONNECTION_STATES.has(connectionState)) {
     if (next.intentionalReconnectInProgress) {
       next.effects.suppressedIntentionalConnectionLost = true
     } else {
@@ -246,24 +217,26 @@ export const streamingLifecycleReducer = (
     }
   }
 
-  if (inColdState) {
-    next.warmAttempted = false
-    next.wasConnectedInActiveStreamState = false
+  if (inMainMenuState) {
+    next.loadingAttempted = false
+    next.wasConnectedInStreamingState = false
     next.intentionalReconnectInProgress = false
-    next.warmTransitionRequestedForIntentionalReconnect = false
+    next.loadingTransitionRequestedForIntentionalReconnect = false
     next.effects.clearConnectionLost = true
   }
 
-  if (inWarmState && connectionState === 'connected' && next.intentionalReconnectInProgress) {
+  if (inLoadingState && connectionState === 'connected' && next.intentionalReconnectInProgress) {
     next.intentionalReconnectInProgress = false
-    next.warmTransitionRequestedForIntentionalReconnect = false
+    next.loadingTransitionRequestedForIntentionalReconnect = false
   }
 
   if (engineError) {
     next.hadEngineError = true
   } else if (next.hadEngineError) {
     next.hadEngineError = false
-    next.effects.engineErrorDismissed = true
+    // Engine error being cleared (including on loading re-entry) should not force
+    // navigation away from the current screen.
+    next.effects.engineErrorDismissed = false
   }
 
   next.lastPortalState = portalState

@@ -541,6 +541,20 @@
   background-repeat: no-repeat;
   transform: rotate(calc(var(--portal-tilt) * -1));
   transform-origin: center center;
+  opacity: 1;
+  transition: opacity 280ms ease;
+}
+
+.portal-preview-image-base.is-fading {
+  opacity: 0;
+}
+
+.portal-preview-image-hover {
+  opacity: 0;
+}
+
+.portal-preview-image-hover.is-visible {
+  opacity: 1;
 }
 
 .portal-preview-core::before {
@@ -613,6 +627,298 @@
   transition:
     opacity 0.22s ease,
     filter 0.22s ease;
+}
+
+.loading-background-void {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  background: radial-gradient(circle at center, rgba(2, 8, 20, 0.42) 0%, rgba(0, 0, 0, 0.96) 55%, #000 100%);
+}
+
+.loading-tunnel-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  filter: blur(2px);
+  transform: scale(1.02);
+  transform-origin: center;
+}
+
+.loading-ui-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+
+.loading-ui-layer.launch-revealing {
+  pointer-events: none;
+  clip-path: ellipse(6.6% 9.5% at 50% 53%);
+  -webkit-clip-path: ellipse(6.6% 9.5% at 50% 53%);
+  animation: portalBgReveal 960ms cubic-bezier(0.16, 0.86, 0.18, 1) forwards;
+  will-change: clip-path, transform;
+}
+
+.loading-ui-layer.launch-concealing {
+  pointer-events: none;
+  clip-path: circle(160% at 50% 53%);
+  -webkit-clip-path: circle(160% at 50% 53%);
+  animation: portalBgConceal 600ms cubic-bezier(0.14, 0.76, 0.2, 1) forwards;
+  will-change: clip-path, transform;
+}
+
+.loading-ui-layer .server-log-display {
+  top: 32%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 62%;
+  max-height: 24%;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.loading-ui-layer .terminal-display {
+  top: auto;
+  bottom: 4.2%;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 1.6cqh;
+  opacity: 1;
+  animation: none;
+  width: min(76cqw, 820px);
+  padding-bottom: 8.2cqh;
+}
+
+.loading-progress-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55cqh;
+  width: 66cqw;
+}
+
+.loading-ui-layer .terminal-status {
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(20px, 2.6cqw, 34px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  max-width: 66cqw;
+  text-align: center;
+}
+
+.loading-ui-layer .terminal-text,
+.loading-ui-layer .terminal-text.error {
+  color: #fff;
+}
+
+.loading-ui-layer .terminal-prompt {
+  display: none;
+}
+
+.loading-ui-layer .progress-bracket {
+  display: none;
+}
+
+.loading-ui-layer .progress-track {
+  width: 100%;
+  height: 0.9cqh;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.loading-ui-layer .progress-track::before {
+  display: none;
+}
+
+.loading-ui-layer .progress-scanner {
+  width: 22%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.95) 50%, transparent 100%);
+  box-shadow: none;
+}
+
+.loading-ui-layer .terminal-cancel-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  right: auto;
+  margin-top: 0;
+  animation: none;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(18px, 2.1cqw, 28px);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(255, 235, 235, 0.98);
+  border-color: rgba(255, 110, 110, 0.9);
+  background: rgba(130, 0, 0, 0.56);
+  border-radius: 0;
+  padding: 0.55cqh 2.2cqw;
+}
+
+.loading-ui-layer .terminal-cancel-btn:hover {
+  color: #fff;
+  border-color: rgba(255, 170, 170, 0.98);
+  background: rgba(180, 8, 8, 0.68);
+}
+
+.loading-ui-layer .server-log-header {
+  background: rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  justify-content: space-between;
+}
+
+.loading-ui-layer .server-log-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+}
+
+.loading-ui-layer .server-log-title {
+  font-family: 'Times New Roman', Georgia, serif;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.loading-ui-layer .server-log-indicator {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.loading-ui-layer .server-log-empty {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.loading-ui-layer .server-log-line {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.loading-ui-layer .server-log-line.log-info {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.loading-ui-layer .server-log-line.log-warning {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.loading-ui-layer .server-log-line.log-success {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.loading-ui-layer .server-log-content {
+  scrollbar-color: rgba(255, 255, 255, 0.34) transparent;
+}
+
+.loading-ui-layer .server-log-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.loading-ui-layer .server-log-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.loading-cinematic-progress {
+  width: min(76cqw, 820px);
+  margin: 0 auto;
+  justify-content: center;
+}
+
+.loading-ui-layer .terminal-display.state-loading .loading-cinematic-progress .progress-track {
+  width: 100%;
+  margin: 0;
+  height: 1cqh;
+}
+
+.loading-ui-layer .terminal-display.state-loading .loading-progress-block {
+  width: min(76cqw, 820px);
+}
+
+.loading-output-handle {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 0.55cqh;
+  padding-bottom: 0.1cqh;
+  cursor: grab;
+  touch-action: none;
+}
+
+.loading-output-handle.dragging {
+  cursor: grabbing;
+}
+
+.loading-output-handle-bar {
+  width: 6.8cqw;
+  min-width: 56px;
+  max-width: 96px;
+  height: 0.45cqh;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.34);
+}
+
+.loading-output-handle.expanded .loading-output-handle-bar {
+  background: rgba(255, 212, 212, 0.92);
+}
+
+.loading-inline-logs {
+  width: min(76cqw, 820px);
+  margin-top: 0.8cqh;
+  transform-origin: top center;
+  overflow: hidden;
+  transition:
+    height 280ms ease,
+    opacity 220ms ease,
+    transform 280ms ease;
+}
+
+.loading-inline-logs.dragging {
+  transition: none;
+}
+
+.loading-inline-logs-close {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.95);
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: clamp(14px, 1.25cqw, 18px);
+  padding: 0.35cqh 0.7cqw;
+  cursor: pointer;
+}
+
+.loading-inline-logs-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.loading-inline-logs-shell .server-log-display {
+  position: static;
+  transform: none;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.72);
+  opacity: 1;
+  animation: none;
+}
+
+.loading-tunnel-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .portal-preview:hover .portal-preview-shell::after {
@@ -707,6 +1013,19 @@
   100% {
     opacity: 1;
     clip-path: ellipse(170% 190% at 50% 53%);
+  }
+}
+
+@keyframes portalBgConceal {
+  0% {
+    opacity: 1;
+    clip-path: circle(160% at 50% 53%);
+    -webkit-clip-path: circle(160% at 50% 53%);
+  }
+  100% {
+    opacity: 1;
+    clip-path: circle(0% at 50% 53%);
+    -webkit-clip-path: circle(0% at 50% 53%);
   }
 }
 
@@ -2818,7 +3137,15 @@
   color: rgba(255, 200, 100, 0.9);
 }
 
+.terminal-display.state-loading .terminal-status {
+  color: rgba(255, 200, 100, 0.9);
+}
+
 .terminal-display.state-warm .terminal-prompt {
+  color: rgba(255, 200, 100, 0.5);
+}
+
+.terminal-display.state-loading .terminal-prompt {
   color: rgba(255, 200, 100, 0.5);
 }
 
@@ -3026,6 +3353,12 @@
   transition: opacity 0.2s ease-out;
 }
 
+.terminal-display.state-loading .terminal-progress {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.2s ease-out;
+}
+
 /* Bar wrapper with brackets */
 .progress-bar-wrapper {
   display: flex;
@@ -3053,6 +3386,14 @@
 }
 
 .terminal-display.state-warm .progress-track {
+  width: 18cqw;
+  margin: 0 0.5cqw;
+  transition:
+    width 0.3s ease-out,
+    margin 0.3s ease-out;
+}
+
+.terminal-display.state-loading .progress-track {
   width: 18cqw;
   margin: 0 0.5cqw;
   transition:

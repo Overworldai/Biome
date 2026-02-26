@@ -1,24 +1,14 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  type ReactNode,
-  type MutableRefObject
-} from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { createLogger } from '../utils/logger'
 import { PORTAL_STATES, canTransitionPortalState, type PortalState } from './portalStateMachine'
 
 const log = createLogger('Portal')
 const VISUAL_PHASES = {
-  COLD_IDLE: 'cold_idle',
-  WARM_IDLE: 'warm_idle',
-  HOT_SHRINKING: 'hot_shrinking',
-  HOT_EXPANDING: 'hot_expanding',
-  HOT_EXPANDED: 'hot_expanded',
-  STREAMING: 'streaming',
+  MENU_IDLE: 'menu_idle',
+  LAUNCH_SHRINKING: 'launch_shrinking',
+  LAUNCH_EXPANDING: 'launch_expanding',
+  LOADING_IDLE: 'loading_idle',
+  STREAMING_ACTIVE: 'streaming_active',
   SHUTTING_DOWN: 'shutting_down'
 } as const
 
@@ -35,6 +25,7 @@ type PortalContextValue = {
   isShuttingDown: boolean
   isSettingsOpen: boolean
   toggleSettings: () => void
+  runLaunchTransition: () => Promise<boolean>
   transitionTo: (newState: PortalState) => Promise<boolean>
   shutdown: () => Promise<void>
   onStateChange: (callback: (newState: PortalState, previousState: PortalState) => void) => () => void
@@ -62,8 +53,8 @@ export const usePortal = () => {
 }
 
 export const PortalProvider = ({ children }: { children: ReactNode }) => {
-  const [state, setState] = useState<PortalState>(PORTAL_STATES.COLD)
-  const [visualPhase, setVisualPhase] = useState<VisualPhase>(VISUAL_PHASES.COLD_IDLE)
+  const [state, setState] = useState<PortalState>(PORTAL_STATES.MAIN_MENU)
+  const [visualPhase, setVisualPhase] = useState<VisualPhase>(VISUAL_PHASES.MENU_IDLE)
   const [isShuttingDown, setIsShuttingDown] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const listenersRef = useRef<Array<(newState: PortalState, previousState: PortalState) => void>>([])
@@ -95,16 +86,13 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
   }, [setMaskProperty])
 
   const isAnimating =
-    visualPhase === VISUAL_PHASES.HOT_SHRINKING ||
-    visualPhase === VISUAL_PHASES.HOT_EXPANDING ||
+    visualPhase === VISUAL_PHASES.LAUNCH_SHRINKING ||
+    visualPhase === VISUAL_PHASES.LAUNCH_EXPANDING ||
     visualPhase === VISUAL_PHASES.SHUTTING_DOWN
-  const isShrinking = visualPhase === VISUAL_PHASES.HOT_SHRINKING
-  const isExpanded = visualPhase === VISUAL_PHASES.HOT_EXPANDED || visualPhase === VISUAL_PHASES.STREAMING
-  const isConnected =
-    visualPhase === VISUAL_PHASES.HOT_EXPANDING ||
-    visualPhase === VISUAL_PHASES.HOT_EXPANDED ||
-    visualPhase === VISUAL_PHASES.STREAMING
-  const showFlash = visualPhase === VISUAL_PHASES.HOT_EXPANDING
+  const isShrinking = visualPhase === VISUAL_PHASES.LAUNCH_SHRINKING
+  const isExpanded = visualPhase === VISUAL_PHASES.LAUNCH_EXPANDING
+  const isConnected = state === PORTAL_STATES.STREAMING
+  const showFlash = visualPhase === VISUAL_PHASES.LAUNCH_EXPANDING
 
   const notifyListeners = useCallback((newState: PortalState, previousState: PortalState) => {
     log.info(`State: ${previousState} → ${newState}`)
@@ -194,7 +182,7 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
       const targetSize = options.targetSize || 'hypot(100cqw, 100cqh)'
       const feather = options.feather || '8cqh'
 
-      setVisualPhase(VISUAL_PHASES.HOT_SHRINKING)
+      setVisualPhase(VISUAL_PHASES.LAUNCH_SHRINKING)
       setMaskProperty('--mask-duration', shrinkDuration)
 
       requestAnimationFrame(() => {
@@ -206,7 +194,7 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
       if (transitionRunRef.current !== runId) return
 
       onShrinkComplete()
-      setVisualPhase(VISUAL_PHASES.HOT_EXPANDING)
+      setVisualPhase(VISUAL_PHASES.LAUNCH_EXPANDING)
       setMaskProperty('--mask-duration', expandDuration)
       setMaskProperty('--mask-feather', feather)
       setMaskProperty('--mask-aspect', '1')
@@ -218,11 +206,17 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
 
       await waitForMaskSizeTransition(runId, parseDuration(expandDuration) + 120)
       if (transitionRunRef.current !== runId) return
-
-      setVisualPhase(VISUAL_PHASES.HOT_EXPANDED)
     },
     [setMaskProperty, waitForMaskSizeTransition]
   )
+
+  const runLaunchTransition = useCallback(async () => {
+    if (state !== PORTAL_STATES.MAIN_MENU) return false
+    transitionRunRef.current += 1
+    clearAllTimers()
+    await shrinkThenExpand()
+    return true
+  }, [state, clearAllTimers, shrinkThenExpand])
 
   const shutdown = useCallback(async () => {
     transitionRunRef.current += 1
@@ -238,10 +232,10 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
     if (transitionRunRef.current !== runId) return
 
     setIsShuttingDown(false)
-    setVisualPhase(VISUAL_PHASES.COLD_IDLE)
+    setVisualPhase(VISUAL_PHASES.MENU_IDLE)
     resetMaskToPortalIdle()
-    setState(PORTAL_STATES.COLD)
-    notifyListeners(PORTAL_STATES.COLD, previousState)
+    setState(PORTAL_STATES.MAIN_MENU)
+    notifyListeners(PORTAL_STATES.MAIN_MENU, previousState)
   }, [state, notifyListeners, clearAllTimers, resetMaskToPortalIdle, waitForShutdownAnimation])
 
   const transitionTo = useCallback(
@@ -254,30 +248,20 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
 
       transitionRunRef.current += 1
       clearAllTimers()
-      const runId = transitionRunRef.current
 
-      if (newState === PORTAL_STATES.HOT) {
-        setState(newState)
-        notifyListeners(newState, previousState)
-
-        await shrinkThenExpand({
-          onShrinkComplete: () => {
-            if (transitionRunRef.current !== runId) return
-          }
-        })
-      } else {
-        setState(newState)
-        if (newState === PORTAL_STATES.COLD || newState === PORTAL_STATES.WARM) {
-          resetMaskToPortalIdle()
-          setVisualPhase(newState === PORTAL_STATES.WARM ? VISUAL_PHASES.WARM_IDLE : VISUAL_PHASES.COLD_IDLE)
-        } else if (newState === PORTAL_STATES.STREAMING) {
-          setVisualPhase(VISUAL_PHASES.STREAMING)
-        }
-        notifyListeners(newState, previousState)
+      setState(newState)
+      if (newState === PORTAL_STATES.MAIN_MENU) {
+        resetMaskToPortalIdle()
+        setVisualPhase(VISUAL_PHASES.MENU_IDLE)
+      } else if (newState === PORTAL_STATES.LOADING) {
+        setVisualPhase(VISUAL_PHASES.LOADING_IDLE)
+      } else if (newState === PORTAL_STATES.STREAMING) {
+        setVisualPhase(VISUAL_PHASES.STREAMING_ACTIVE)
       }
+      notifyListeners(newState, previousState)
       return true
     },
-    [state, notifyListeners, shrinkThenExpand, clearAllTimers, resetMaskToPortalIdle]
+    [state, notifyListeners, clearAllTimers, resetMaskToPortalIdle]
   )
 
   useEffect(() => {
@@ -297,6 +281,7 @@ export const PortalProvider = ({ children }: { children: ReactNode }) => {
     isShuttingDown,
     isSettingsOpen,
     toggleSettings,
+    runLaunchTransition,
     transitionTo,
     shutdown,
     onStateChange,

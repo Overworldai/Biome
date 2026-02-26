@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { listen } from '@tauri-apps/api/event'
 
 // Determine log line color class based on content
@@ -23,13 +23,15 @@ const ServerLogDisplay = ({
   onDismiss,
   errorMessage = null,
   showProgress = false,
-  progressMessage = null
+  progressMessage = null,
+  headerAction = null
 }: {
   showDismiss?: boolean
   onDismiss?: () => void
   errorMessage?: string | null
   showProgress?: boolean
   progressMessage?: string | null
+  headerAction?: ReactNode
 }) => {
   const [logs, setLogs] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -73,8 +75,11 @@ const ServerLogDisplay = ({
   return (
     <div className={`server-log-display ${showDismiss ? 'has-error' : ''}`}>
       <div className="server-log-header">
-        <span className="server-log-title">{showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}</span>
-        <span className="server-log-indicator" />
+        <div className="server-log-header-main">
+          <span className="server-log-title">{showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}</span>
+          <span className="server-log-indicator" />
+        </div>
+        {headerAction}
       </div>
       {showProgress && progressMessage && (
         <div className="server-log-progress-banner">

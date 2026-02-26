@@ -4,12 +4,12 @@ import type { PortalState } from './portalStateMachine'
 
 export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
   'suppressedIntentionalWarmError',
-  'warmFailureError',
-  'clearEngineErrorOnWarmEntry',
-  'runWarmConnection',
+  'loadingFailureError',
+  'transitionToMainMenuOnLoadingFailure',
+  'clearEngineErrorOnLoadingEntry',
+  'runLoadingConnection',
   'startIntentionalReconnect',
-  'transitionToWarmAfterIntentionalDisconnect',
-  'transitionToHot',
+  'transitionToLoadingAfterIntentionalDisconnect',
   'transitionToStreaming',
   'teardownForInactivePortalState',
   'requestPointerLockOnStreamStart',
@@ -22,9 +22,8 @@ export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
 ]
 
 type PortalStatesLike = {
-  COLD: PortalState
-  WARM: PortalState
-  HOT: PortalState
+  MAIN_MENU: PortalState
+  LOADING: PortalState
   STREAMING: PortalState
 }
 
@@ -73,14 +72,17 @@ export const createStreamingLifecycleEffectHandlers = ({
 }: CreateHandlersArgs): LifecycleEffectHandlers => {
   return {
     suppressedIntentionalWarmError: () => {
-      log.info('Intentional reconnect in WARM state - suppressing engine error')
+      log.info('Intentional reconnect in loading state - suppressing engine error')
     },
-    warmFailureError: (errorMsg) => {
-      log.error('Connection error during WARM state')
+    loadingFailureError: (errorMsg) => {
+      log.error('Connection error during loading state')
       setEngineError(errorMsg)
     },
-    clearEngineErrorOnWarmEntry: () => setEngineError(null),
-    runWarmConnection: () => setWarmConnectionJobSeq(lifecycleState.warmConnectionRequestSeq),
+    transitionToMainMenuOnLoadingFailure: () => {
+      // Loading failures are surfaced in loading UI; user decides to cancel/retry.
+    },
+    clearEngineErrorOnLoadingEntry: () => setEngineError(null),
+    runLoadingConnection: () => setWarmConnectionJobSeq(lifecycleState.loadingConnectionRequestSeq),
     startIntentionalReconnect: () => {
       const selectedModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
       log.info('Model changed in settings while streaming - reconnecting to start a fresh session:', selectedModel)
@@ -91,13 +93,9 @@ export const createStreamingLifecycleEffectHandlers = ({
       setPausedAt(null)
       disconnect()
     },
-    transitionToWarmAfterIntentionalDisconnect: () => {
-      log.info('Model switch disconnect complete - transitioning to WARM')
-      transitionTo(states.WARM)
-    },
-    transitionToHot: () => {
-      log.info('First frame received - transitioning to HOT')
-      transitionTo(states.HOT)
+    transitionToLoadingAfterIntentionalDisconnect: () => {
+      log.info('Model switch disconnect complete - transitioning to loading')
+      transitionTo(states.LOADING)
     },
     transitionToStreaming: () => {
       log.info('Fully ready - transitioning to STREAMING')
@@ -131,8 +129,7 @@ export const createStreamingLifecycleEffectHandlers = ({
       log.info('Pointer unlocked - settings opened, paused')
     },
     engineErrorDismissed: () => {
-      log.info('Error dismissed - transitioning to COLD')
-      transitionTo(states.COLD)
+      log.info('Engine error cleared')
     },
     suppressedIntentionalConnectionLost: () => {
       log.info('Intentional reconnect in progress - suppressing connection lost overlay')

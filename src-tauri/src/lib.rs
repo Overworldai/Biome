@@ -513,6 +513,59 @@ fn get_backgrounds_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Err("Backgrounds directory not found. Expected seeds/backgrounds.".to_string())
 }
 
+/// Resolve the dedicated loading tunnel image path.
+///
+/// Search order:
+/// 1) Repository-local `seeds/tunnel/tunnel.png` (preferred)
+/// 2) Portable executable-local equivalents
+/// 3) Bundled resources `default_seeds/tunnel/tunnel.png`
+fn get_loading_tunnel_image_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("seeds").join("tunnel").join("tunnel.png"));
+        candidates.push(
+            cwd.join("..")
+                .join("seeds")
+                .join("tunnel")
+                .join("tunnel.png"),
+        );
+        candidates.push(
+            cwd.join("..")
+                .join("..")
+                .join("seeds")
+                .join("tunnel")
+                .join("tunnel.png"),
+        );
+    }
+
+    if let Ok(exe_dir) = get_exe_dir() {
+        candidates.push(exe_dir.join("seeds").join("tunnel").join("tunnel.png"));
+        candidates.push(
+            exe_dir
+                .join("..")
+                .join("seeds")
+                .join("tunnel")
+                .join("tunnel.png"),
+        );
+    }
+
+    if let Ok(resource_file) = app.path().resolve(
+        "default_seeds/tunnel/tunnel.png",
+        tauri::path::BaseDirectory::Resource,
+    ) {
+        candidates.push(resource_file);
+    }
+
+    for candidate in candidates {
+        if candidate.exists() && candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Loading tunnel image not found. Expected seeds/tunnel/tunnel.png.".to_string())
+}
+
 // Get the path to our local uv binary
 fn get_uv_binary_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let uv_dir = get_uv_dir(app)?;
@@ -1135,6 +1188,15 @@ fn read_background_image_as_base64(
     Ok(BASE64_STANDARD.encode(&bytes))
 }
 
+/// Read the dedicated loading tunnel image as base64.
+#[tauri::command]
+fn read_loading_tunnel_as_base64(app: tauri::AppHandle) -> Result<String, String> {
+    let path = get_loading_tunnel_image_path(&app)?;
+    let bytes =
+        fs::read(path).map_err(|e| format!("Failed to read loading tunnel image: {}", e))?;
+    Ok(BASE64_STANDARD.encode(&bytes))
+}
+
 // Safety cache functions removed - now handled server-side
 
 #[tauri::command]
@@ -1581,7 +1643,8 @@ pub fn run() {
             get_seeds_dir_path,
             open_seeds_dir,
             list_background_images,
-            read_background_image_as_base64
+            read_background_image_as_base64,
+            read_loading_tunnel_as_base64
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

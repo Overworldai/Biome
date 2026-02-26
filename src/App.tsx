@@ -11,9 +11,16 @@ import BottomPanel from './components/BottomPanel'
 import SettingsPanel from './components/SettingsPanel'
 import BackgroundSlideshow from './components/BackgroundSlideshow'
 import PortalPreview from './components/PortalPreview'
-import ServerLogDisplay from './components/ServerLogDisplay'
+import LoadingTunnelCanvas from './components/LoadingTunnelCanvas'
+import TerminalDisplay from './components/TerminalDisplay'
+import PauseOverlay from './components/PauseOverlay'
+import ConnectionLostOverlay from './components/ConnectionLostOverlay'
+import ShutdownOverlay from './components/ShutdownOverlay'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
+
+const LAUNCH_PRE_SHRINK_MS = 420
+const LOADING_TUNNEL_FALLBACK_MIME = 'image/png'
 
 type MenuModelOption = {
   id: string
@@ -34,8 +41,23 @@ const HoloFrame = () => {
   const [engineDirPath, setEngineDirPath] = useState<string | null>(null)
   const [showFixModal, setShowFixModal] = useState(false)
   const [showInstallLog, setShowInstallLog] = useState(false)
-  const { isConnected, isSettingsOpen, toggleSettings } = usePortal()
+  const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
+  const [isEnteringLoading, setIsEnteringLoading] = useState(false)
+  const [isReturningToMenu, setIsReturningToMenu] = useState(false)
+  const [isReplayingPortalEnter, setIsReplayingPortalEnter] = useState(false)
+  const [loadingTunnelImage, setLoadingTunnelImage] = useState<string | null>(null)
   const {
+    state: portalState,
+    states: portalStates,
+    isConnected,
+    isSettingsOpen,
+    toggleSettings,
+    transitionTo
+  } = usePortal()
+  const {
+    isStreaming,
+    isPaused,
+    connectionState,
     bottomPanelHidden,
     setBottomPanelHidden,
     engineStatus,
@@ -43,7 +65,8 @@ const HoloFrame = () => {
     setupProgress,
     engineSetupError,
     engineSetupInProgress,
-    checkEngineStatus
+    checkEngineStatus,
+    prepareReturnToMainMenu
   } = useStreaming()
   const { engineMode, config } = useConfig()
   const {
@@ -57,18 +80,60 @@ const HoloFrame = () => {
     isPortalEntering,
     completePortalShrink,
     completeTransition
-  } = useBackgroundCycle(isPortalHovered || (!isConnected && isSettingsOpen) || showInstallLog)
+  } = useBackgroundCycle(
+    isPortalHovered ||
+      (!isConnected && isSettingsOpen) ||
+      showInstallLog ||
+      isLaunchShrinking ||
+      isEnteringLoading ||
+      isReturningToMenu ||
+      portalState === portalStates.LOADING ||
+      portalState === portalStates.STREAMING
+  )
 
   const nextScenePreview = images[nextIndex] ?? null
-  const backgroundBlurPx = isSettingsOpen ? 8 : 2
+  const isLaunchTransition = isEnteringLoading
+  const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
+  const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
+  const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
+  const useMainBackground = !isStreamingUi
+  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 8 : 2) : 0
   const portalGlowRgb = useSceneGlowColor(images, currentIndex)
   const serverUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
+  const showMenuHome = isMainUi && !isConnected && !isSettingsOpen && !showInstallLog
+  const showMenuSettings = isMainUi && !isConnected && isSettingsOpen && !showInstallLog
+  const showInstallLogView = isMainUi && !isConnected && showInstallLog
 
   useEffect(() => {
     if (!portalVisible) {
       setIsPortalHovered(false)
     }
   }, [portalVisible])
+
+  useEffect(() => {
+    if (!isLoadingUi && portalState === portalStates.MAIN_MENU) {
+      setIsEnteringLoading(false)
+      setIsLaunchShrinking(false)
+      setIsReturningToMenu(false)
+    }
+  }, [isLoadingUi, portalState, portalStates.MAIN_MENU])
+
+  useEffect(() => {
+    if (!isReplayingPortalEnter) return
+    const timer = window.setTimeout(() => setIsReplayingPortalEnter(false), 760)
+    return () => window.clearTimeout(timer)
+  }, [isReplayingPortalEnter])
+
+  useEffect(() => {
+    if (!isLaunchShrinking) return
+
+    const timer = window.setTimeout(() => {
+      setIsLaunchShrinking(false)
+      setIsEnteringLoading(true)
+    }, LAUNCH_PRE_SHRINK_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [isLaunchShrinking])
 
   useEffect(() => {
     if (engineMode === ENGINE_MODES.SERVER) {
@@ -82,6 +147,25 @@ const HoloFrame = () => {
     invoke<string>('get_engine_dir_path')
       .then(setEngineDirPath)
       .catch(() => setEngineDirPath(null))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    invoke<string>('read_loading_tunnel_as_base64')
+      .then((base64) => {
+        if (cancelled || !base64) return
+        setLoadingTunnelImage(`data:${LOADING_TUNNEL_FALLBACK_MIME};base64,${base64}`)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadingTunnelImage(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -154,6 +238,13 @@ const HoloFrame = () => {
     }
   }
 
+  const handleCancelLoading = () => {
+    if (isReturningToMenu || portalState !== portalStates.LOADING) return
+    setIsReturningToMenu(true)
+    setIsPortalHovered(false)
+    void prepareReturnToMainMenu()
+  }
+
   // Force animation replay on mount by briefly removing the animated class
   useEffect(() => {
     // Small delay to ensure DOM is ready, then trigger animations
@@ -168,26 +259,41 @@ const HoloFrame = () => {
       className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}
     >
       <div className={`holo-frame-inner ${!isConnected && isSettingsOpen ? 'menu-settings-open' : ''}`}>
-        <BackgroundSlideshow
-          images={images}
-          currentIndex={currentIndex}
-          nextIndex={nextIndex}
-          blurPx={backgroundBlurPx}
-          isTransitioning={isTransitioning}
-          transitionKey={transitionKey}
-          onTransitionComplete={completeTransition}
-        />
+        {useMainBackground && (
+          <BackgroundSlideshow
+            images={images}
+            currentIndex={currentIndex}
+            nextIndex={nextIndex}
+            blurPx={backgroundBlurPx}
+            isTransitioning={isTransitioning}
+            transitionKey={transitionKey}
+            onTransitionComplete={completeTransition}
+          />
+        )}
         <PortalPreview
           image={nextScenePreview}
-          visible={!isConnected && portalVisible}
-          isShrinking={isPortalShrinking}
-          isEntering={isPortalEntering}
+          hoverImage={loadingTunnelImage}
+          isHovered={isPortalHovered}
+          visible={isMainUi && !isConnected && portalVisible && !isEnteringLoading}
+          isShrinking={isPortalShrinking || isLaunchShrinking}
+          isEntering={isPortalEntering || isReplayingPortalEnter}
           glowRgb={portalGlowRgb}
           onHoverChange={setIsPortalHovered}
-          onClick={() => {}}
+          onClick={() => {
+            if (
+              portalState === portalStates.MAIN_MENU &&
+              connectionState !== 'connecting' &&
+              !isSettingsOpen &&
+              !showInstallLog &&
+              !isEnteringLoading &&
+              !isLaunchShrinking
+            ) {
+              setIsLaunchShrinking(true)
+            }
+          }}
           onShrinkComplete={completePortalShrink}
         />
-        {!isConnected && !isSettingsOpen && !showInstallLog && (
+        {showMenuHome && (
           <div className="menu-chrome">
             <div className="menu-cta-row">
               <a
@@ -243,7 +349,7 @@ const HoloFrame = () => {
             </button>
           </div>
         )}
-        {!isConnected && isSettingsOpen && !showInstallLog && (
+        {showMenuSettings && (
           <div className="menu-chrome menu-settings-view">
             <div className="menu-settings-panel">
               <div className="menu-settings-group">
@@ -345,7 +451,7 @@ const HoloFrame = () => {
             )}
           </div>
         )}
-        {!isConnected && showInstallLog && (
+        {showInstallLogView && (
           <div className="menu-chrome menu-install-log-view">
             <ServerLogDisplay
               showProgress={true}
@@ -357,14 +463,50 @@ const HoloFrame = () => {
           </div>
         )}
 
-        <main className="content-area">
-          <VideoContainer />
-          <div className="logo-container" id="logo-container"></div>
-          {isConnected && <SettingsPanel />}
-        </main>
+        {isStreamingUi && (
+          <main className="content-area">
+            <VideoContainer />
+            <div className="logo-container" id="logo-container"></div>
+            <SettingsPanel />
+            <PauseOverlay isActive={isPaused} />
+            <ConnectionLostOverlay />
+          </main>
+        )}
+        {(isLoadingUi || isEnteringLoading || isReturningToMenu) && (
+          <div
+            className={`loading-ui-layer ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''}`}
+            onAnimationEnd={(event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.animationName !== 'portalBgReveal' && event.animationName !== 'portalBgConceal') return
+              if (isEnteringLoading) {
+                setIsEnteringLoading(false)
+                void transitionTo(portalStates.LOADING)
+                return
+              }
+              if (isReturningToMenu) {
+                setIsReturningToMenu(false)
+                setIsReplayingPortalEnter(true)
+                void transitionTo(portalStates.MAIN_MENU)
+              }
+            }}
+          >
+            <LoadingTunnelCanvas
+              intensity={1}
+              qualityMode="auto"
+              mouseReactive={true}
+              baseImageSrc={loadingTunnelImage}
+            />
+            {isLoadingUi && !isReturningToMenu && (
+              <>
+                <TerminalDisplay onCancel={handleCancelLoading} />
+              </>
+            )}
+          </div>
+        )}
+        <ShutdownOverlay />
 
         {/* Bottom panel - always visible when streaming connected */}
-        {isConnected && (
+        {isStreamingUi && (
           <BottomPanel
             isOpen={true}
             isHidden={bottomPanelHidden}
