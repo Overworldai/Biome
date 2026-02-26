@@ -49,7 +49,7 @@ const VideoContainer = () => {
     display: showMedia ? 'block' : 'none',
     width: '100%',
     height: '100%',
-    objectFit: 'contain',
+    backgroundColor: '#000',
     position: 'absolute',
     top: 0,
     left: 0,

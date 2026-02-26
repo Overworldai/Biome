@@ -15,9 +15,9 @@
       {
         "title": "Biome",
         "width": 800,
-        "height": 500,
+        "height": 450,
         "minWidth": 800,
-        "minHeight": 500,
+        "minHeight": 450,
         "decorations": true,
         "transparent": false,
         "shadow": true,

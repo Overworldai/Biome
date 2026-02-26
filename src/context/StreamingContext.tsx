@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
 import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -59,6 +60,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     statusCode,
     error,
     frame,
+    hasRealFrame,
     frameId,
     genTime,
     connect,
@@ -69,6 +71,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendPromptWithSeed,
     sendInitialSeed,
     sendModel,
+    setPlaceholderFrame,
     reset,
     isConnected,
     isReady,
@@ -173,16 +176,25 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const selectedModel = config?.features?.world_engine_model || DEFAULT_WORLD_ENGINE_MODEL
     log.info('Loading connected - bootstrapping session with model+seed:', selectedModel)
+    // Use the default seed image as the immediate placeholder frame so transition
+    // to streaming never shows a blank frame while waiting for server output.
+    invoke<string>('read_seed_as_base64', { filename: 'default.png' })
+      .then((seedB64) => {
+        if (!seedB64) return
+        setPlaceholderFrame(`data:image/png;base64,${seedB64}`)
+      })
+      .catch(() => null)
     sendModel(selectedModel, 'default.png')
     lastAppliedModelRef.current = selectedModel
     warmBootstrapSentRef.current = true
-  }, [state, states.LOADING, isConnected, config?.features?.world_engine_model, sendModel])
+  }, [state, states.LOADING, isConnected, config?.features?.world_engine_model, sendModel, setPlaceholderFrame])
 
   useEffect(() => {
     if (!isConnected) {
       warmBootstrapSentRef.current = false
+      setPlaceholderFrame(null)
     }
-  }, [isConnected])
+  }, [isConnected, setPlaceholderFrame])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
@@ -236,7 +248,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineError,
         statusCode,
         hasReceivedFrame,
-        canvasReady,
         socketReady: isReady,
         isPointerLocked,
         settingsOpen,
@@ -251,7 +262,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineError,
     statusCode,
     hasReceivedFrame,
-    canvasReady,
     isReady,
     isPointerLocked,
     settingsOpen,
@@ -354,13 +364,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const img = new Image()
     img.onload = () => {
-      if (canvas.width !== img.width || canvas.height !== img.height) {
-        canvas.width = img.width
-        canvas.height = img.height
-      }
-      ctx.drawImage(img, 0, 0)
+      const targetW = canvas.width
+      const targetH = canvas.height
+      ctx.clearRect(0, 0, targetW, targetH)
+      ctx.drawImage(img, 0, 0, targetW, targetH)
     }
-    img.src = `data:image/jpeg;base64,${frame}`
+    img.src = frame.startsWith('data:') ? frame : `data:image/jpeg;base64,${frame}`
   }, [frame, canvasReady])
 
   // Input loop at 60hz

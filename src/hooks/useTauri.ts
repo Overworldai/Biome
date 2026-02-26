@@ -39,7 +39,7 @@ export const useTauriWindow = () => {
         height: size.height / window.devicePixelRatio
       }
     }
-    return { width: 800, height: 500 }
+    return { width: 800, height: 450 }
   }
 
   return {
@@ -52,7 +52,7 @@ export const useTauriWindow = () => {
   }
 }
 
-export const useFitWindowToContent = (contentAspectRatio = 800 / 500, debounceMs = 250) => {
+export const useFitWindowToContent = (contentAspectRatio = 16 / 9, debounceMs = 250) => {
   const appWindow = useRef<TauriWindowApi | null>(null)
   const isAdjusting = useRef(false)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

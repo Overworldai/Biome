@@ -5,7 +5,6 @@ import type { PortalState } from './portalStateMachine'
 export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
   'suppressedIntentionalWarmError',
   'loadingFailureError',
-  'transitionToMainMenuOnLoadingFailure',
   'clearEngineErrorOnLoadingEntry',
   'runLoadingConnection',
   'startIntentionalReconnect',
@@ -77,9 +76,6 @@ export const createStreamingLifecycleEffectHandlers = ({
     loadingFailureError: (errorMsg) => {
       log.error('Connection error during loading state')
       setEngineError(errorMsg)
-    },
-    transitionToMainMenuOnLoadingFailure: () => {
-      // Loading failures are surfaced in loading UI; user decides to cancel/retry.
     },
     clearEngineErrorOnLoadingEntry: () => setEngineError(null),
     runLoadingConnection: () => setWarmConnectionJobSeq(lifecycleState.loadingConnectionRequestSeq),

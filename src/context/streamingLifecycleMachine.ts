@@ -9,7 +9,6 @@ export const STREAMING_LIFECYCLE_EVENT = {
 
 export type StreamingLifecycleEffects = {
   loadingFailureError: string | null
-  transitionToMainMenuOnLoadingFailure: boolean
   connectionLost: boolean
   clearConnectionLost: boolean
   engineErrorDismissed: boolean
@@ -28,7 +27,6 @@ export type StreamingLifecycleEffects = {
 
 const emptyEffects = (): StreamingLifecycleEffects => ({
   loadingFailureError: null,
-  transitionToMainMenuOnLoadingFailure: false,
   connectionLost: false,
   clearConnectionLost: false,
   engineErrorDismissed: false,
@@ -82,7 +80,6 @@ export type StreamingLifecycleSyncPayload = {
   engineError: string | null
   statusCode: string | null
   hasReceivedFrame: boolean
-  canvasReady: boolean
   socketReady: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
@@ -109,7 +106,6 @@ export const streamingLifecycleReducer = (
     engineError,
     statusCode,
     hasReceivedFrame,
-    canvasReady,
     socketReady,
     isPointerLocked,
     settingsOpen,
@@ -170,7 +166,7 @@ export const streamingLifecycleReducer = (
   }
 
   const canTransitionToStreaming =
-    inLoadingState && connectionState === 'connected' && statusCode === 'ready' && socketReady
+    inLoadingState && connectionState === 'connected' && statusCode === 'ready' && socketReady && hasReceivedFrame
 
   if (canTransitionToStreaming && !next.streamingTransitionRequested) {
     next.effects.transitionToStreaming = true
