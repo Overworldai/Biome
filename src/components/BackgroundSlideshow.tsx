@@ -45,7 +45,7 @@ const BackgroundSlideshow = ({
   const nextImage = images[nextIndex]
 
   return (
-    <div className="app-background" style={backgroundStyle} aria-hidden="true">
+    <div className="absolute inset-0 overflow-hidden -z-10 bg-darkest" style={backgroundStyle} aria-hidden="true">
       {currentImage && (
         <div
           key={`current-${currentIndex}`}

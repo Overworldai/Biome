@@ -17,6 +17,7 @@ import PauseOverlay from './components/PauseOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import ShutdownOverlay from './components/ShutdownOverlay'
 import WindowControls from './components/WindowControls'
+import ServerLogDisplay from './components/ServerLogDisplay'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 
@@ -29,7 +30,6 @@ type MenuModelOption = {
 }
 
 const HoloFrame = () => {
-  const [isReady, setIsReady] = useState(false)
   const [isPortalHovered, setIsPortalHovered] = useState(false)
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>('standalone')
   const [menuWorldModel, setMenuWorldModel] = useState('Overworld/Waypoint-1-Small')
@@ -100,7 +100,7 @@ const HoloFrame = () => {
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
-  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 8 : 2) : 0
+  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 2) : 0
   const portalGlowRgb = useSceneGlowColor(images, currentIndex)
   const serverUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen && !showInstallLog
@@ -253,21 +253,12 @@ const HoloFrame = () => {
     void prepareReturnToMainMenu()
   }
 
-  // Force animation replay on mount by briefly removing the animated class
-  useEffect(() => {
-    // Small delay to ensure DOM is ready, then trigger animations
-    const timer = requestAnimationFrame(() => {
-      setIsReady(true)
-    })
-    return () => cancelAnimationFrame(timer)
-  }, [])
-
   return (
     <div
-      className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected && !isStreamingUi ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''} ${isStreamingUi ? 'streaming-fullscreen' : ''}`}
+      className={`holo-frame relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? 'streaming-fullscreen' : ''}`}
     >
       <WindowControls />
-      <div className={`holo-frame-inner ${!isConnected && isSettingsOpen ? 'menu-settings-open' : ''}`}>
+      <div className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''} ${isConnected && !isStreamingUi && !bottomPanelHidden ? 'scale-[0.8] -translate-y-[12%] origin-center' : ''}`}>
         {useMainBackground && (
           <BackgroundSlideshow
             images={images}
@@ -286,6 +277,7 @@ const HoloFrame = () => {
           visible={isMainUi && !isConnected && portalVisible && !isEnteringLoading}
           isShrinking={isPortalShrinking || isLaunchShrinking}
           isEntering={isPortalEntering || isReplayingPortalEnter}
+          isSettingsOpen={!isConnected && isSettingsOpen}
           glowRgb={portalGlowRgb}
           onHoverChange={setIsPortalHovered}
           onClick={() => {
@@ -303,33 +295,33 @@ const HoloFrame = () => {
           onShrinkComplete={completePortalShrink}
         />
         {showMenuHome && (
-          <div className="menu-chrome">
+          <div className="menu-chrome absolute inset-0 z-[9] pointer-events-none">
             <SocialCtaRow />
 
-            <div className="menu-title">Biome</div>
+            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">Biome</div>
 
-            <button type="button" className="menu-settings-btn" onClick={toggleSettings}>
+            <button type="button" className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px" onClick={toggleSettings}>
               Settings
             </button>
           </div>
         )}
         {showMenuSettings && (
-          <div className="menu-chrome menu-settings-view">
-            <div className="menu-settings-panel">
+          <div className="menu-chrome menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
+            <div className="menu-settings-panel absolute flex flex-col z-[1] top-[8%] left-[39%] right-[4%] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
               <div className="menu-settings-group">
-                <h2>Engine Mode</h2>
-                <p>how will you run the model? as part of Biome, or elsewhere?</p>
-                <div className="menu-segmented">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Engine Mode</h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">how will you run the model? as part of Biome, or elsewhere?</p>
+                <div className="menu-segmented flex border border-[rgba(245,251,255,0.75)]">
                   <button
                     type="button"
-                    className={menuEngineMode === 'server' ? 'active' : ''}
+                    className={`flex-1 cursor-pointer font-serif p-[0.55cqh_0.8cqw] text-[clamp(18px,1.7cqw,28px)] border-r border-r-[rgba(245,251,255,0.5)] ${menuEngineMode === 'server' ? 'bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)]' : 'bg-[rgba(8,12,20,0.28)] text-[rgba(245,249,255,0.92)]'}`}
                     onClick={() => setMenuEngineMode('server')}
                   >
                     Server
                   </button>
                   <button
                     type="button"
-                    className={menuEngineMode === 'standalone' ? 'active' : ''}
+                    className={`flex-1 cursor-pointer font-serif p-[0.55cqh_0.8cqw] text-[clamp(18px,1.7cqw,28px)] border-r-0 ${menuEngineMode === 'standalone' ? 'bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)]' : 'bg-[rgba(8,12,20,0.28)] text-[rgba(245,249,255,0.92)]'}`}
                     onClick={() => setMenuEngineMode('standalone')}
                   >
                     Standalone
@@ -339,27 +331,28 @@ const HoloFrame = () => {
 
               {menuEngineMode === 'server' && (
                 <div className="menu-settings-group">
-                  <h2>Server Options</h2>
-                  <p>Install Dir: {engineDirPath || 'Loading...'}</p>
-                  <p>Server URL: {serverUrl}</p>
+                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Server Options</h2>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">Install Dir: {engineDirPath || 'Loading...'}</p>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">Server URL: {serverUrl}</p>
                 </div>
               )}
 
               {menuEngineMode === 'standalone' && (
                 <div className="menu-settings-group">
-                  <h2>Standalone Options</h2>
-                  <p>{standaloneStatusText}</p>
-                  <button type="button" className="menu-fix-btn" onClick={() => setShowFixModal(true)}>
+                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Standalone Options</h2>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">{standaloneStatusText}</p>
+                  <button type="button" className="block ml-auto w-fit cursor-pointer border-none bg-transparent font-serif text-right text-[rgba(246,249,255,0.95)] mt-[0.6cqh] p-0 text-[clamp(20px,1.8cqw,28px)] hover:bg-[rgba(245,251,255,0.95)] hover:text-[rgba(10,14,24,0.96)]" onClick={() => setShowFixModal(true)}>
                     Fix World Engine
                   </button>
                 </div>
               )}
 
               <div className="menu-settings-group">
-                <h2>World Model</h2>
-                <p>which Overworld model will simulate your world?</p>
-                <div className="menu-select-wrap">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">World Model</h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">which Overworld model will simulate your world?</p>
+                <div className="menu-select-wrap border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)]">
                   <select
+                    className="w-full cursor-pointer border-none bg-transparent font-serif text-[rgba(245,249,255,0.92)] outline-none appearance-none p-[0.55cqh_0.8cqw] text-[clamp(18px,1.5cqw,24px)]"
                     value={menuWorldModel}
                     onChange={(event) => setMenuWorldModel(event.target.value)}
                     disabled={menuModelsLoading}
@@ -371,42 +364,42 @@ const HoloFrame = () => {
                     ))}
                   </select>
                 </div>
-                {menuModelsError && <p>{menuModelsError}</p>}
+                {menuModelsError && <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">{menuModelsError}</p>}
               </div>
 
               <div className="menu-settings-group">
-                <h2>Mouse Sensitivity</h2>
-                <p>how much should the camera move when you move your mouse?</p>
-                <div className="menu-range-wrap">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Mouse Sensitivity</h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">how much should the camera move when you move your mouse?</p>
+                <div className="menu-range-wrap flex flex-col items-end gap-[0.4cqh]">
                   <input
-                    className="menu-range-slider"
+                    className="menu-range-slider w-full m-0 cursor-pointer outline-none appearance-none h-[0.8cqh] rounded-full bg-[rgba(245,251,255,0.42)]"
                     type="range"
                     min={10}
                     max={100}
                     value={menuMouseSensitivity}
                     onChange={(event) => setMenuMouseSensitivity(Number(event.target.value))}
                   />
-                  <span>{menuMouseSensitivity}%</span>
+                  <span className="font-serif text-[rgba(240,245,252,0.85)] text-[clamp(16px,1.35cqw,22px)]">{menuMouseSensitivity}%</span>
                 </div>
               </div>
             </div>
 
-            <div className="menu-title">Settings</div>
+            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">Settings</div>
 
-            <button type="button" className="menu-settings-btn" onClick={toggleSettings}>
+            <button type="button" className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px" onClick={toggleSettings}>
               Back
             </button>
 
             {showFixModal && (
-              <div className="menu-fix-modal-overlay" role="dialog" aria-modal="true">
-                <div className="menu-fix-modal">
-                  <h3>Fix World Engine?</h3>
-                  <p>This will run repair/setup and open the installation log screen.</p>
-                  <div className="menu-fix-modal-actions">
-                    <button type="button" onClick={() => setShowFixModal(false)}>
+              <div className="menu-fix-modal-overlay absolute inset-0 z-[3] flex items-center justify-center bg-[rgba(2,6,16,0.55)] backdrop-blur-sm" role="dialog" aria-modal="true">
+                <div className="border border-[rgba(245,251,255,0.66)] bg-[rgba(8,12,20,0.92)] text-[rgba(246,249,255,0.95)] w-[min(420px,76cqw)] p-[1.8cqh_1.6cqw]">
+                  <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[clamp(26px,2.2cqw,34px)]">Fix World Engine?</h3>
+                  <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[clamp(16px,1.35cqw,21px)]">This will run repair/setup and open the installation log screen.</p>
+                  <div className="flex justify-end mt-[1.4cqh] gap-[0.8cqw]">
+                    <button type="button" className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]" onClick={() => setShowFixModal(false)}>
                       Cancel
                     </button>
-                    <button type="button" className="confirm" onClick={handleConfirmFixEngine}>
+                    <button type="button" className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]" onClick={handleConfirmFixEngine}>
                       Confirm
                     </button>
                   </div>
@@ -416,7 +409,7 @@ const HoloFrame = () => {
           </div>
         )}
         {showInstallLogView && (
-          <div className="menu-chrome menu-install-log-view">
+          <div className="menu-chrome menu-install-log-view absolute inset-0 z-[9] pointer-events-auto">
             <ServerLogDisplay
               showProgress={true}
               progressMessage={setupProgress || 'Installing World Engine...'}
@@ -429,7 +422,7 @@ const HoloFrame = () => {
 
         {isStreamingUi && (
           <main
-            className={`content-area ${isStreamingReveal ? 'streaming-reveal' : ''}`}
+            className={`content-area absolute z-[5] inset-0 w-full h-full bg-black opacity-100 ${isStreamingReveal ? 'streaming-reveal' : ''}`}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
               if (event.animationName !== 'streamingCircularReveal') return
@@ -437,7 +430,7 @@ const HoloFrame = () => {
             }}
           >
             <VideoContainer />
-            <div className="logo-container" id="logo-container"></div>
+            <div className="logo-container absolute z-[2] pointer-events-none" id="logo-container"></div>
             <SettingsPanel />
             <PauseOverlay isActive={isPaused} />
             <ConnectionLostOverlay />
@@ -445,7 +438,7 @@ const HoloFrame = () => {
         )}
         {(isLoadingUi || isEnteringLoading || isReturningToMenu) && (
           <div
-            className={`loading-ui-layer ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''}`}
+            className={`loading-ui-layer absolute inset-0 z-20 ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''}`}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
               if (event.animationName !== 'portalBgReveal' && event.animationName !== 'portalBgConceal') return

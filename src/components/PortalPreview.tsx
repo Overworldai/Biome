@@ -7,6 +7,7 @@ type PortalPreviewProps = {
   visible: boolean
   isShrinking: boolean
   isEntering: boolean
+  isSettingsOpen?: boolean
   glowRgb: string
   onHoverChange: (hovered: boolean) => void
   onClick: () => void
@@ -20,6 +21,7 @@ const PortalPreview = ({
   visible,
   isShrinking,
   isEntering,
+  isSettingsOpen = false,
   glowRgb,
   onHoverChange,
   onClick,
@@ -50,7 +52,7 @@ const PortalPreview = ({
 
   return (
     <div
-      className={`portal-preview ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''}`}
+      className={`portal-preview absolute top-1/2 z-8 w-[22cqw] h-[27cqw] max-w-[200px] max-h-[250px] cursor-pointer ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'left-[20%] blur-[4px] saturate-[0.86] pointer-events-none' : 'left-1/2 pointer-events-auto'}`}
       style={portalStyle}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
@@ -65,9 +67,9 @@ const PortalPreview = ({
         }
       }}
     >
-      <div className="portal-preview-shell">
+      <div className="portal-preview-shell absolute inset-0 isolate p-[9%]">
         <div
-          className="portal-preview-core"
+          className="portal-preview-core relative w-full h-full overflow-hidden z-1"
           onAnimationEnd={(event) => {
             if (event.target !== event.currentTarget) return
             if (event.animationName === 'portalCorePreShrink') {
@@ -77,13 +79,13 @@ const PortalPreview = ({
         >
           {image && (
             <div
-              className={`portal-preview-image portal-preview-image-base ${isHovered && hoverImage ? 'is-fading' : ''}`}
+              className={`portal-preview-image absolute rounded-[inherit] origin-center ${isHovered && hoverImage ? 'opacity-0' : 'opacity-100'}`}
               style={{ backgroundImage: `url("${image}")` }}
             />
           )}
           {hoverImage && (
             <div
-              className={`portal-preview-image portal-preview-image-hover ${isHovered ? 'is-visible' : ''}`}
+              className={`portal-preview-image absolute rounded-[inherit] origin-center ${isHovered ? 'opacity-100' : 'opacity-0'}`}
               style={{ backgroundImage: `url("${hoverImage}")` }}
             />
           )}

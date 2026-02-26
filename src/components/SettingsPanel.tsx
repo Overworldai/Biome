@@ -296,34 +296,34 @@ const SettingsPanel = () => {
   if (!isSettingsOpen) return null
 
   return (
-    <div className="settings-overlay" onClick={handleBackdropClick}>
-      <div className="settings-panel">
-        <div className="panel-header">
-          <span className="panel-title">Settings</span>
-          <button className="panel-close" onClick={handleClose}>
+    <div className="settings-overlay absolute inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-[settingsOverlayFadeIn_0.2s_ease]" onClick={handleBackdropClick}>
+      <div className="settings-panel flex w-[65%] max-h-[85%] flex-col overflow-hidden border border-[rgba(120,255,245,0.3)] bg-[rgba(10,14,18,0.95)] animate-[settingsPanelSlideIn_0.25s_ease] shadow-[0_0_20px_rgba(0,0,0,0.4),0_0_10px_rgba(120,255,245,0.08),inset_0_1px_0_rgba(120,255,245,0.1)]">
+        <div className="panel-header flex items-center justify-between">
+          <span className="panel-title font-mono uppercase tracking-widest text-[rgba(120,255,245,0.85)]">Settings</span>
+          <button className="panel-close flex cursor-pointer items-center justify-center p-0" onClick={handleClose}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>
 
-        <div className="panel-content">
+        <div className="panel-content flex-1 overflow-y-auto">
           {/* World Engine Section */}
           <div className="settings-section">
-            <h3 className="settings-section-title">World Engine</h3>
+            <h3 className="settings-section-title font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">World Engine</h3>
 
             {/* Engine Directory - Always visible */}
-            <div className="engine-dir-row">
-              <span className="engine-dir-label">Engine Directory:</span>
-              <button className="engine-dir-button" onClick={handleOpenEngineDir} title={engineDirPath || 'Loading...'}>
-                <span className="engine-dir-path">
+            <div className="engine-dir-row flex items-center">
+              <span className="engine-dir-label font-mono whitespace-nowrap text-[rgba(200,200,200,0.7)]">Engine Directory:</span>
+              <button className="engine-dir-button flex flex-1 cursor-pointer items-center justify-between min-w-0 transition-all duration-200" onClick={handleOpenEngineDir} title={engineDirPath || 'Loading...'}>
+                <span className="engine-dir-path font-mono overflow-hidden text-ellipsis whitespace-nowrap text-[rgba(120,255,245,0.8)]">
                   {engineDirPath
                     ? engineDirPath.length > 40
                       ? '...' + engineDirPath.slice(-37)
                       : engineDirPath
                     : 'Loading...'}
                 </span>
-                <svg className="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="folder-icon shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path
                     d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
                     strokeLinecap="round"
@@ -334,31 +334,31 @@ const SettingsPanel = () => {
             </div>
 
             {/* Engine Mode Selector */}
-            <div className="setting-group">
-              <label className="setting-label">Engine Mode</label>
-              <div className="engine-mode-selector">
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">Engine Mode</label>
+              <div className="engine-mode-selector flex">
                 <button
-                  className={`mode-option ${isStandaloneMode ? 'active' : ''}`}
+                  className={`mode-option flex-1 cursor-pointer font-mono text-[rgba(200,200,200,0.7)] transition-all duration-200 ${isStandaloneMode ? 'active' : ''}`}
                   onClick={() => setEngineMode(ENGINE_MODES.STANDALONE)}
                 >
                   Standalone
                 </button>
                 <button
-                  className={`mode-option ${isServerMode ? 'active' : ''}`}
+                  className={`mode-option flex-1 cursor-pointer font-mono text-[rgba(200,200,200,0.7)] transition-all duration-200 ${isServerMode ? 'active' : ''}`}
                   onClick={() => setEngineMode(ENGINE_MODES.SERVER)}
                 >
                   Server
                 </button>
               </div>
-              <span className="setting-hint">
+              <span className="setting-hint block italic text-[rgba(120,255,245,0.5)]">
                 {isStandaloneMode ? 'Biome manages World Engine automatically' : 'You run the server yourself'}
               </span>
             </div>
 
-            <div className="setting-group">
-              <label className="setting-label">World Model</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">World Model</label>
               <select
-                className="setting-select"
+                className="setting-select w-full cursor-pointer font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                 value={worldEngineModel}
                 onChange={(e) => setWorldEngineModel(e.target.value)}
                 disabled={modelsLoading}
@@ -369,10 +369,10 @@ const SettingsPanel = () => {
                   </option>
                 ))}
               </select>
-              <div className="model-custom-row">
+              <div className="model-custom-row flex">
                 <input
                   type="text"
-                  className="setting-input"
+                  className="setting-input flex-1 w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                   value={customModelInput}
                   onChange={(e) => {
                     setCustomModelInput(e.target.value)
@@ -386,38 +386,40 @@ const SettingsPanel = () => {
                   }}
                   placeholder="https://huggingface.co/org/model or org/model"
                 />
-                <button type="button" className="engine-action-button secondary" onClick={handleAddCustomModel}>
+                <button type="button" className="engine-action-button secondary shrink-0 cursor-pointer font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200" onClick={handleAddCustomModel}>
                   Add
                 </button>
               </div>
-              <span className="setting-hint">
+              <span className="setting-hint block italic text-[rgba(120,255,245,0.5)]">
                 {modelsLoading
                   ? 'Loading models from Hugging Face...'
                   : modelsError ||
                     `${modelOptions.filter((m) => m.isLocal).length} local / ${modelOptions.length} total - hf.co/collections/Overworld/waypoint-1`}
               </span>
-              {customModelError && <span className="setting-hint">{customModelError}</span>}
+              {customModelError && <span className="setting-hint block italic text-[rgba(120,255,245,0.5)]">{customModelError}</span>}
             </div>
 
             {/* Standalone Engine Status */}
             {isStandaloneMode && (
               <div className="engine-status-box">
                 {engineLoading ? (
-                  <div className="engine-status-content">
-                    <div className="engine-status-spinner" />
-                    <span className="engine-status-text">{setupProgress || 'Checking status...'}</span>
+                  <div className="engine-status-content flex items-center flex-wrap">
+                    <div className="animate-[engineSpinner_0.8s_linear_infinite] shrink-0 rounded-full" />
+                    <span className="engine-status-text flex-1 min-w-0 font-mono text-[rgba(120,255,245,0.7)] break-words">
+                      {setupProgress || 'Checking status...'}
+                    </span>
                   </div>
                 ) : engineError ? (
-                  <div className="engine-status-content error">
-                    <span className="engine-status-text">{engineError}</span>
-                    <button className="engine-action-button" onClick={handleSetupEngine}>
+                  <div className="engine-status-content error flex items-center flex-wrap">
+                    <span className="engine-status-text flex-1 min-w-0 font-mono break-words">{engineError}</span>
+                    <button className="engine-action-button cursor-pointer font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200" onClick={handleSetupEngine}>
                       Retry Setup
                     </button>
                   </div>
                 ) : isEngineReady ? (
-                  <div className="engine-status-content ready">
+                  <div className="engine-status-content ready flex items-center flex-wrap">
                     <svg
-                      className="engine-status-icon"
+                      className="engine-status-icon shrink-0"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -426,9 +428,9 @@ const SettingsPanel = () => {
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" strokeLinecap="round" strokeLinejoin="round" />
                       <polyline points="22 4 12 14.01 9 11.01" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="engine-status-text">World Engine is ready</span>
+                    <span className="engine-status-text flex-1 min-w-0 font-mono break-words">World Engine is ready</span>
                     <button
-                      className="engine-action-button secondary"
+                      className="engine-action-button secondary cursor-pointer font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200"
                       onClick={handleSetupEngine}
                       disabled={engineLoading}
                     >
@@ -436,9 +438,9 @@ const SettingsPanel = () => {
                     </button>
                   </div>
                 ) : isEngineCorrupt ? (
-                  <div className="engine-status-content corrupt">
+                  <div className="engine-status-content corrupt flex items-center flex-wrap">
                     <svg
-                      className="engine-status-icon"
+                      className="engine-status-icon shrink-0"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -452,15 +454,15 @@ const SettingsPanel = () => {
                       <line x1="12" y1="9" x2="12" y2="13" />
                       <line x1="12" y1="17" x2="12.01" y2="17" />
                     </svg>
-                    <span className="engine-status-text">World Engine is corrupt</span>
-                    <button className="engine-action-button" onClick={handleSetupEngine} disabled={engineLoading}>
+                    <span className="engine-status-text flex-1 min-w-0 font-mono break-words">World Engine is corrupt</span>
+                    <button className="engine-action-button cursor-pointer font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200" onClick={handleSetupEngine} disabled={engineLoading}>
                       Reinstall Engine
                     </button>
                   </div>
                 ) : (
-                  <div className="engine-status-content not-ready">
+                  <div className="engine-status-content not-ready flex items-center flex-wrap">
                     <svg
-                      className="engine-status-icon"
+                      className="engine-status-icon shrink-0"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -470,8 +472,8 @@ const SettingsPanel = () => {
                       <line x1="12" y1="8" x2="12" y2="12" />
                       <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
-                    <span className="engine-status-text">World Engine not installed</span>
-                    <button className="engine-action-button" onClick={handleSetupEngine} disabled={engineLoading}>
+                    <span className="engine-status-text flex-1 min-w-0 font-mono break-words">World Engine not installed</span>
+                    <button className="engine-action-button cursor-pointer font-mono font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200" onClick={handleSetupEngine} disabled={engineLoading}>
                       Download & Setup
                     </button>
                   </div>
@@ -482,23 +484,23 @@ const SettingsPanel = () => {
             {/* Server Mode Settings */}
             {isServerMode && (
               <>
-                <div className="setting-group">
-                  <label className="setting-label">Server (host:port)</label>
+                <div className="group setting-group relative text-left transition-all duration-200">
+                  <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">Server (host:port)</label>
                   <input
                     type="text"
-                    className="setting-input"
+                    className="setting-input w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                     value={gpuServer}
                     onChange={(e) => setGpuServer(e.target.value)}
                     placeholder={`localhost:${STANDALONE_PORT}`}
                   />
                 </div>
 
-                <div className="setting-group">
-                  <div className="setting-row">
-                    <label className="setting-label">Use SSL</label>
+                <div className="group setting-group relative text-left transition-all duration-200">
+                  <div className="setting-row flex items-center justify-between">
+                    <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">Use SSL</label>
                     <input
                       type="checkbox"
-                      className="setting-checkbox"
+                      className="setting-checkbox relative cursor-pointer shrink-0 transition-all duration-[250ms]"
                       checked={useSsl}
                       onChange={(e) => setUseSsl(e.target.checked)}
                     />
@@ -510,65 +512,65 @@ const SettingsPanel = () => {
 
           {/* API Keys Section */}
           <div className="settings-section">
-            <h3 className="settings-section-title">API Keys</h3>
+            <h3 className="settings-section-title font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">API Keys</h3>
 
-            <div className="setting-group">
-              <label className="setting-label">OpenAI Key</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">OpenAI Key</label>
               <input
                 type="text"
-                className="setting-input"
+                className="setting-input w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                 value={openaiKey}
                 onChange={(e) => setOpenaiKey(e.target.value)}
                 placeholder="sk-..."
               />
             </div>
 
-            <div className="setting-group">
-              <label className="setting-label">FAL Key</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">FAL Key</label>
               <input
                 type="text"
-                className="setting-input"
+                className="setting-input w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                 value={falKey}
                 onChange={(e) => setFalKey(e.target.value)}
                 placeholder="fal-..."
               />
             </div>
 
-            <div className="setting-group">
-              <label className="setting-label">HuggingFace Token</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">HuggingFace Token</label>
               <input
                 type="text"
-                className="setting-input"
+                className="setting-input w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
                 value={huggingfaceKey}
                 onChange={(e) => setHuggingfaceKey(e.target.value)}
                 placeholder="hf_..."
               />
-              <span className="setting-hint">Required for World Engine model access</span>
+              <span className="setting-hint block italic text-[rgba(120,255,245,0.5)]">Required for World Engine model access</span>
             </div>
           </div>
 
           {/* Features Section */}
           <div className="settings-section">
-            <h3 className="settings-section-title">Features</h3>
+            <h3 className="settings-section-title font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">Features</h3>
 
-            <div className="setting-group">
-              <div className="setting-row">
-                <label className="setting-label">Prompt Sanitizer</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <div className="setting-row flex items-center justify-between">
+                <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">Prompt Sanitizer</label>
                 <input
                   type="checkbox"
-                  className="setting-checkbox"
+                  className="setting-checkbox relative cursor-pointer shrink-0 transition-all duration-[250ms]"
                   checked={promptSanitizer}
                   onChange={(e) => setPromptSanitizer(e.target.checked)}
                 />
               </div>
             </div>
 
-            <div className="setting-group">
-              <div className="setting-row">
-                <label className="setting-label">Seed Generation</label>
+            <div className="group setting-group relative text-left transition-all duration-200">
+              <div className="setting-row flex items-center justify-between">
+                <label className="setting-label block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">Seed Generation</label>
                 <input
                   type="checkbox"
-                  className="setting-checkbox"
+                  className="setting-checkbox relative cursor-pointer shrink-0 transition-all duration-[250ms]"
                   checked={seedGeneration}
                   onChange={(e) => setSeedGeneration(e.target.checked)}
                 />
@@ -578,16 +580,16 @@ const SettingsPanel = () => {
 
           {/* Config Path Display - Clickable */}
           {configPath && (
-            <div className="settings-config-path" onClick={handleOpenConfig} title="Open config.json">
-              <span className="config-path-label">Config file:</span>
-              <span className="config-path-value">{configPath}</span>
+            <div className="settings-config-path cursor-pointer font-mono transition-all duration-200" onClick={handleOpenConfig} title="Open config.json">
+              <span className="config-path-label text-[rgba(120,255,245,0.5)]">Config file:</span>
+              <span className="config-path-value break-all text-[rgba(120,255,245,0.7)]">{configPath}</span>
             </div>
           )}
         </div>
 
-        <div className="panel-footer">
+        <div className="panel-footer flex justify-end">
           <button
-            className={`setting-button ${isSaving ? 'loading' : ''} ${saveStatus === 'saved' ? 'success' : ''}`}
+            className={`setting-button relative cursor-pointer overflow-hidden font-mono font-medium uppercase tracking-wider transition-all duration-200 ${isSaving ? 'loading' : ''} ${saveStatus === 'saved' ? 'success' : ''}`}
             onClick={handleSave}
             disabled={isSaving}
           >
