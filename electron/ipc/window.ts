@@ -14,7 +14,7 @@ export function registerWindowIpc(): void {
       const [width, height] = win.getSize()
       return { width, height }
     }
-    return { width: 800, height: 450 }
+    return { width: 1280, height: 720 }
   })
 
   ipcMain.handle('window-minimize', (_event) => {

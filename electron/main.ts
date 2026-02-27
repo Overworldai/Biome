@@ -61,8 +61,8 @@ let mainWindow: BrowserWindow | null = null
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 450,
+    width: 1280,
+    height: 720,
     minWidth: 800,
     minHeight: 450,
     maximizable: false,
