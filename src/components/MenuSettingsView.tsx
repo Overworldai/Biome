@@ -250,7 +250,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
       <ViewLabel>Settings</ViewLabel>
 
       <MenuButton
-        variant="ghost"
+        variant="primary"
         className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
         onClick={onBack}
       >
