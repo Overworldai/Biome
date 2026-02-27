@@ -227,10 +227,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
             }
           >
             <div className="flex justify-end">
-              <SettingsButton
-                variant="ghost"
-                onClick={() => setShowFixModal(true)}
-              >
+              <SettingsButton variant="ghost" onClick={() => setShowFixModal(true)}>
                 Reinstall
               </SettingsButton>
             </div>

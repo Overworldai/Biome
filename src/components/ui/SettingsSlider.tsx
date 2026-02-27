@@ -57,9 +57,7 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
         <span className="invisible">X</span>
       </div>
       {label && (
-        <span className="font-serif text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)]">
-          {label}
-        </span>
+        <span className="font-serif text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)]">{label}</span>
       )}
     </div>
   )

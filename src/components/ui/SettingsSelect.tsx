@@ -15,11 +15,7 @@ type SettingsSelectProps = {
 
 const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
   <span className="flex items-center justify-between w-full">
-    {option.prefix ? (
-      <span className="text-[rgba(238,244,252,0.45)] lowercase">{option.prefix}</span>
-    ) : (
-      <span />
-    )}
+    {option.prefix ? <span className="text-[rgba(238,244,252,0.45)] lowercase">{option.prefix}</span> : <span />}
     <span>{option.label}</span>
   </span>
 )

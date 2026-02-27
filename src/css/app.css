@@ -250,20 +250,10 @@
 
   /* --- PORTAL PREVIEW --- */
   .portal-preview {
-    transform: translate(calc(-50% + var(--portal-offset-x, 0px)), calc(-50% + var(--portal-offset-y, 0px)))
-      scale(var(--portal-hover-scale));
+    transform: translate(var(--portal-offset-x, 0px), var(--portal-offset-y, 0px));
     transition:
-      left 0.48s cubic-bezier(0.2, 0.74, 0.26, 1),
-      top 0.48s cubic-bezier(0.2, 0.74, 0.26, 1),
       transform 0.18s ease-out,
       filter 0.32s ease;
-  }
-  .portal-preview:hover {
-    --portal-hover-scale: 1.05;
-  }
-  .portal-preview:focus-visible {
-    outline: 2px solid rgba(var(--portal-glow-rgb, 140, 206, 244), 0.7);
-    outline-offset: 4px;
   }
 
   .portal-preview-shell {
@@ -329,7 +319,7 @@
     pointer-events: none;
     transition: filter 0.22s ease;
   }
-  .portal-preview:hover .portal-preview-core::after {
+  .portal-preview.hovered .portal-preview-core::after {
     filter: drop-shadow(0 0 18px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.96))
       drop-shadow(0 0 34px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.76))
       drop-shadow(0 0 54px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.4));
@@ -380,7 +370,7 @@
       opacity 0.22s ease,
       filter 0.22s ease;
   }
-  .portal-preview:hover .portal-preview-shell::after {
+  .portal-preview.hovered .portal-preview-shell::after {
     opacity: 1;
     filter: blur(29px) saturate(1.2) brightness(1.16);
   }
@@ -506,7 +496,6 @@
     background: transparent;
     border-radius: 999px;
   }
-
 
   /* --- VIDEO CONTAINER --- */
   .video-container {

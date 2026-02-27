@@ -10,8 +10,6 @@ type PortalPreviewProps = {
   isEntering: boolean
   isSettingsOpen?: boolean
   glowRgb: string
-  onHoverChange: (hovered: boolean) => void
-  onClick: () => void
   onShrinkComplete: () => void
 }
 
@@ -24,8 +22,6 @@ const PortalPreview = ({
   isEntering,
   isSettingsOpen = false,
   glowRgb,
-  onHoverChange,
-  onClick,
   onShrinkComplete
 }: PortalPreviewProps) => {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -55,22 +51,10 @@ const PortalPreview = ({
 
   return (
     <div
-      className={`portal-preview absolute top-1/2 z-8 w-[24cqw] h-[29.5cqw] cursor-pointer ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'left-[var(--portal-settings-left)] blur-[4px] saturate-[0.86] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
+      className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[4px] saturate-[0.86]' : ''}`}
       style={portalStyle}
-      onMouseEnter={() => onHoverChange(true)}
-      onMouseLeave={() => onHoverChange(false)}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      aria-label="Portal preview"
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onClick()
-        }
-      }}
     >
-      <div className="portal-preview-shell absolute inset-0 isolate p-[9%]">
+      <div className="portal-preview-shell absolute inset-0 isolate p-[9%] pb-[2%]">
         <div
           className="portal-preview-core relative w-full h-full overflow-hidden z-1"
           onAnimationEnd={(event) => {

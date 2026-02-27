@@ -137,6 +137,19 @@ const AppShell = () => {
     }
   }, [])
 
+  const handleLaunch = () => {
+    if (
+      portalState === portalStates.MAIN_MENU &&
+      connectionState !== 'connecting' &&
+      !isSettingsOpen &&
+      !showInstallLog &&
+      !isEnteringLoading &&
+      !isLaunchShrinking
+    ) {
+      setIsLaunchShrinking(true)
+    }
+  }
+
   const handleCancelLoading = () => {
     if (isReturningToMenu || portalState !== portalStates.LOADING) return
     setIsReturningToMenu(true)
@@ -163,33 +176,41 @@ const AppShell = () => {
             onTransitionComplete={completeTransition}
           />
         )}
-        <PortalPreview
-          image={nextScenePreview}
-          hoverImage={loadingTunnelImage}
-          isHovered={isPortalHovered}
-          visible={isMainUi && !isConnected && portalVisible && !isEnteringLoading}
-          isShrinking={isPortalShrinking || isLaunchShrinking}
-          isEntering={isPortalEntering}
-          isSettingsOpen={!isConnected && isSettingsOpen}
-          glowRgb={portalGlowRgb}
-          onHoverChange={setIsPortalHovered}
-          onClick={() => {
-            if (
-              portalState === portalStates.MAIN_MENU &&
-              connectionState !== 'connecting' &&
-              !isSettingsOpen &&
-              !showInstallLog &&
-              !isEnteringLoading &&
-              !isLaunchShrinking
-            ) {
-              setIsLaunchShrinking(true)
-            }
-          }}
-          onShrinkComplete={completePortalShrink}
-        />
-        {showMenuHome && portalVisible && !isEnteringLoading && (
-          <div className="portal-subtitle absolute z-[9] left-1/2 bottom-[18%] -translate-x-1/2 pointer-events-none text-center font-serif text-[clamp(20px,2.2cqw,32px)] tracking-[0.03em] text-[rgb(170,170,170)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
-            Enter the Overworld
+        {isMainUi && !isConnected && !isEnteringLoading && (
+          <div
+            className={`absolute top-1/2 z-8 w-[24cqw] cursor-pointer transition-[transform,left] duration-[180ms] ease-out ${!isConnected && isSettingsOpen ? 'left-[var(--portal-settings-left)] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
+            style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
+            onMouseEnter={() => setIsPortalHovered(true)}
+            onMouseLeave={() => setIsPortalHovered(false)}
+            onClick={handleLaunch}
+            role="button"
+            tabIndex={0}
+            aria-label="Enter the Overworld"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleLaunch()
+              }
+            }}
+          >
+            <div className="relative w-full" style={{ paddingBottom: '123%' }}>
+              <PortalPreview
+                image={nextScenePreview}
+                hoverImage={loadingTunnelImage}
+                isHovered={isPortalHovered}
+                visible={portalVisible}
+                isShrinking={isPortalShrinking || isLaunchShrinking}
+                isEntering={isPortalEntering}
+                isSettingsOpen={!isConnected && isSettingsOpen}
+                glowRgb={portalGlowRgb}
+                onShrinkComplete={completePortalShrink}
+              />
+            </div>
+            {showMenuHome && (
+              <div className="portal-subtitle text-center font-serif text-[clamp(20px,2.2cqw,32px)] tracking-[0.03em] text-[rgb(255,255,255)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
+                Enter the Overworld
+              </div>
+            )}
           </div>
         )}
         {showMenuHome && (
