@@ -236,30 +236,50 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[7px] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
       id="pause-overlay"
     >
-      <div className="pause-scanlines absolute inset-0 pointer-events-none [background:repeating-linear-gradient(0deg,transparent_0px,transparent_2px,rgba(255,255,255,0.04)_2px,rgba(255,255,255,0.04)_4px)]"></div>
+      <div className="absolute inset-0 pointer-events-none [background:repeating-linear-gradient(0deg,transparent_0px,transparent_2px,rgba(255,255,255,0.04)_2px,rgba(255,255,255,0.04)_4px)]"></div>
       {view === 'main' ? (
-        <div className="absolute inset-0 p-[3.8%_4%]" style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}>
+        <div
+          className="absolute inset-0 p-[3.8%_4%]"
+          style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
+        >
           <SocialCtaRow rowClassName="absolute right-[4%] top-[5%] flex gap-[0.6cqw]" />
 
           <section className="absolute top-[12%] left-[4%] w-[70%] flex flex-col gap-[0.7cqh]">
-            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">Pinned Scenes</h2>
-            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.</p>
+            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">
+              Pinned Scenes
+            </h2>
+            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">
+              Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.
+            </p>
             <div className="flex gap-[0.5cqw] mt-[0.5cqh]">
               {pinnedScenes.length > 0 ? (
                 pinnedScenes.map((seed) => (
                   <button
                     type="button"
                     key={`pinned-${seed.filename}`}
-                    className="pause-scene-card relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
+                    className="relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
                     title={seed.filename}
                     onClick={() => handleSceneSelect(seed.filename)}
                   >
-                    <img className="w-full h-full object-cover block" src={thumbnails[seed.filename] || ''} alt={seed.filename} />
+                    <img
+                      className="w-full h-full object-cover block"
+                      src={thumbnails[seed.filename] || ''}
+                      alt={seed.filename}
+                    />
                   </button>
                 ))
               ) : (
-                <div className="pause-scene-card relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-dashed border-[rgba(245,249,255,0.42)] bg-[rgba(4,7,12,0.24)] p-0 overflow-hidden grid place-items-center" aria-hidden="true">
-                  <svg className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+                <div
+                  className="relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-dashed border-[rgba(245,249,255,0.42)] bg-[rgba(4,7,12,0.24)] p-0 overflow-hidden grid place-items-center"
+                  aria-hidden="true"
+                >
+                  <svg
+                    className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  >
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                     <circle cx="8.5" cy="8.5" r="1.4" />
                     <polyline points="21,15 16,10 5,21" />
@@ -269,7 +289,9 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             </div>
           </section>
 
-          <div className="absolute left-[4%] bottom-[var(--pause-bottom-baseline)] font-serif text-[clamp(56px,4.8cqw,82px)] leading-[0.8] text-left text-[rgba(248,248,245,0.95)] font-normal translate-y-[0.35cqh]">Paused</div>
+          <div className="absolute left-[4%] bottom-[var(--pause-bottom-baseline)] font-serif text-[clamp(56px,4.8cqw,82px)] leading-[0.8] text-left text-[rgba(248,248,245,0.95)] font-normal translate-y-[0.35cqh]">
+            Paused
+          </div>
 
           <div className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-[13cqw] min-w-[150px] flex flex-col gap-[1.1cqh]">
             <button
@@ -310,10 +332,17 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </div>
         </div>
       ) : (
-        <div className="absolute inset-0 p-[3.8%_4%]" style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}>
+        <div
+          className="absolute inset-0 p-[3.8%_4%]"
+          style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
+        >
           <section className="absolute top-[12%] left-[4%] w-[70%]">
-            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">Scenes</h2>
-            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">All of your scenes. Add more by using the + button, or by drag/pasting them in.</p>
+            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">
+              Scenes
+            </h2>
+            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">
+              All of your scenes. Add more by using the + button, or by drag/pasting them in.
+            </p>
             {uploadError && <p className="!mt-[0.6cqh] !text-[rgba(255,180,180,0.92)]">{uploadError}</p>}
             <input
               ref={fileInputRef}
@@ -333,7 +362,13 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                   onClick={() => void handleClipboardUpload()}
                   title="Paste image from clipboard"
                 >
-                  <svg className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg
+                    className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
                     <rect x="9" y="3" width="6" height="4" rx="1" />
                     <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
                     <rect x="12" y="10" width="8" height="10" rx="1" />
@@ -344,7 +379,13 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                   onClick={() => fileInputRef.current?.click()}
                   title="Browse for image file"
                 >
-                  <svg className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg
+                    className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
                     <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
                     <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
@@ -355,12 +396,16 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                 <button
                   type="button"
                   key={`scene-${seed.filename}`}
-                  className="group/scene pause-scene-card relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
+                  className="group/scene relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
                   title={seed.filename}
                   onClick={() => handleSceneSelect(seed.filename)}
                 >
-                  <img className="w-full h-full object-cover block" src={thumbnails[seed.filename] || ''} alt={seed.filename} />
-                  <span className="pause-scene-icons absolute top-1 right-1 flex gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
+                  <img
+                    className="w-full h-full object-cover block"
+                    src={thumbnails[seed.filename] || ''}
+                    alt={seed.filename}
+                  />
+                  <span className="absolute top-1 right-1 flex gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
                     <button
                       type="button"
                       className={`w-4 h-4 grid place-items-center border bg-[rgba(2,5,10,0.54)] text-[10px] leading-none rounded-none p-0 cursor-pointer ${pinnedSceneIds.includes(seed.filename) ? 'text-[rgba(255,237,127,0.96)] border-[rgba(255,237,127,0.9)]' : 'text-[rgba(245,249,255,0.92)] border-[rgba(245,249,255,0.7)]'}`}

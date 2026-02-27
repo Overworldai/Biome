@@ -4,16 +4,16 @@ import { listen } from '../bridge'
 // Determine log line color class based on content
 const getLogClass = (line: string): string => {
   if (line.includes('[ERROR]') || line.includes('FATAL') || line.includes('Error:')) {
-    return 'log-error text-[rgba(255,100,100,0.9)]'
+    return 'text-[rgba(255,100,100,0.9)]'
   }
   if (line.includes('[WARNING]') || line.includes('Warning:')) {
-    return 'log-warning text-[rgba(255,200,100,0.9)]'
+    return 'text-[rgba(255,200,100,0.9)]'
   }
   if (line.includes('[INFO]')) {
-    return 'log-info text-hud/90'
+    return 'text-hud/90'
   }
   if (line.includes('100%') || line.includes('SERVER READY') || line.includes('complete')) {
-    return 'log-success text-hot/90'
+    return 'text-hot/90'
   }
   return ''
 }
@@ -70,14 +70,20 @@ const ServerLogDisplay = ({
 
   return (
     <div
-      className={`server-log-display flex flex-col overflow-hidden ${showDismiss ? 'has-error' : ''} ${isLoadingInline ? 'static w-full h-full max-h-none border border-[rgba(255,255,255,0.55)] bg-[rgba(0,0,0,0.72)] opacity-100 !animate-none' : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-h-[50%] z-100 bg-[rgba(8,12,16,0.95)] border border-warm/30 rounded-[0.8cqw] opacity-0 animate-[serverLogFadeIn_0.3s_ease_forwards] shadow-[0_0_30px_rgba(0,0,0,0.6),0_0_15px_rgba(255,200,100,0.1)]'}`}
+      className={`flex flex-col overflow-hidden ${isLoadingInline ? 'static w-full h-full max-h-none border border-[rgba(255,255,255,0.55)] bg-[rgba(0,0,0,0.72)] opacity-100 !animate-none' : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-h-[50%] z-100 bg-[rgba(8,12,16,0.95)] border border-warm/30 rounded-[0.8cqw] opacity-0 animate-[serverLogFadeIn_0.3s_ease_forwards] shadow-[0_0_30px_rgba(0,0,0,0.6),0_0_15px_rgba(255,200,100,0.1)]'}`}
     >
-      <div className={`server-log-header flex items-center gap-[0.8cqw] px-[1.2cqw] py-[0.8cqh] ${isLoadingInline ? 'bg-[rgba(255,255,255,0.08)] border-b border-[rgba(255,255,255,0.2)] justify-between' : 'bg-warm/8 border-b border-warm/20'}`}>
-        <div className="server-log-header-main flex items-center gap-[0.8cqw]">
-          <span className={`server-log-title font-mono text-[1.2cqw] tracking-[0.1em] uppercase ${isLoadingInline ? 'font-serif tracking-[0.02em] text-[rgba(255,255,255,0.94)]' : 'text-warm/90'}`}>
+      <div
+        className={`flex items-center gap-[0.8cqw] px-[1.2cqw] py-[0.8cqh] ${isLoadingInline ? 'bg-[rgba(255,255,255,0.08)] border-b border-[rgba(255,255,255,0.2)] justify-between' : 'bg-warm/8 border-b border-warm/20'}`}
+      >
+        <div className="flex items-center gap-[0.8cqw]">
+          <span
+            className={`font-mono text-[1.2cqw] tracking-[0.1em] uppercase ${isLoadingInline ? 'font-serif tracking-[0.02em] text-[rgba(255,255,255,0.94)]' : 'text-warm/90'}`}
+          >
             {showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}
           </span>
-          <span className={`server-log-indicator w-[0.6cqw] h-[0.6cqw] rounded-full ${isLoadingInline ? 'bg-[rgba(255,255,255,0.82)]' : `bg-warm/90 ${showDismiss ? 'bg-[rgba(255,100,100,0.9)] !animate-none' : 'animate-[indicatorPulse_1s_ease-in-out_infinite]'}`}`} />
+          <span
+            className={`w-[0.6cqw] h-[0.6cqw] rounded-full ${isLoadingInline ? 'bg-[rgba(255,255,255,0.82)]' : `bg-warm/90 ${showDismiss ? 'bg-[rgba(255,100,100,0.9)] !animate-none' : 'animate-[indicatorPulse_1s_ease-in-out_infinite]'}`}`}
+          />
         </div>
         {headerAction}
       </div>
@@ -90,9 +96,7 @@ const ServerLogDisplay = ({
       {errorMessage && (
         <div className="flex flex-col gap-[0.4cqh] px-[1.2cqw] py-[0.8cqh] bg-error/10 border-b border-error/30">
           <div className="font-mono text-[1.1cqw] text-error/90">{errorMessage}</div>
-          <div className="font-mono text-[0.9cqw] text-white/50 italic">
-            Open Settings to reinstall the engine.
-          </div>
+          <div className="font-mono text-[0.9cqw] text-white/50 italic">Open Settings to reinstall the engine.</div>
         </div>
       )}
       <div
@@ -100,12 +104,14 @@ const ServerLogDisplay = ({
         ref={containerRef}
       >
         {logs.length === 0 ? (
-          <div className={`italic ${isLoadingInline ? 'text-[rgba(255,255,255,0.72)]' : 'text-warm/50'}`}>Waiting for server output...</div>
+          <div className={`italic ${isLoadingInline ? 'text-[rgba(255,255,255,0.72)]' : 'text-warm/50'}`}>
+            Waiting for server output...
+          </div>
         ) : (
           logs.map((line, index) => (
             <div
               key={index}
-              className={`server-log-line whitespace-pre-wrap break-all ${isLoadingInline ? 'text-[rgba(255,255,255,0.88)]' : `text-[rgba(200,200,200,0.9)] ${getLogClass(line)}`}`}
+              className={`whitespace-pre-wrap break-all ${isLoadingInline ? 'text-[rgba(255,255,255,0.88)]' : `text-[rgba(200,200,200,0.9)] ${getLogClass(line)}`}`}
             >
               {line}
             </div>

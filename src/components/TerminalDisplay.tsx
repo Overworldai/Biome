@@ -74,7 +74,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
 
   if (isEngineUnchosen) {
     return (
-      <div className="terminal-display state-loading absolute left-1/2 z-55 flex flex-col items-center">
+      <div className="terminal-display absolute left-1/2 z-55 flex flex-col items-center">
         <EngineModeChoice onChoiceMade={onModeChosen} />
       </div>
     )
@@ -84,15 +84,18 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const showLogPanel = logPanelProgress > 0.001 || isHandleDragging
 
   return (
-    <div className="terminal-display state-loading absolute z-55 flex flex-col items-center top-auto bottom-[4.2%] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[min(76cqw,820px)] pb-[8.2cqh]">
-      <div className="loading-progress-block flex flex-col items-center gap-[0.55cqh] w-[min(76cqw,820px)]">
-        <div className="terminal-status flex items-center font-serif text-[clamp(20px,2.6cqw,34px)] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] max-w-[66cqw] text-center" id="terminal-status">
-          <span className="terminal-text text-white">{statusText}</span>
+    <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[4.2%] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[min(76cqw,820px)] pb-[8.2cqh]">
+      <div className="flex flex-col items-center gap-[0.55cqh] w-[min(76cqw,820px)]">
+        <div
+          className="flex items-center font-serif text-[clamp(20px,2.6cqw,34px)] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] max-w-[66cqw] text-center"
+          id="terminal-status"
+        >
+          <span className="text-white">{statusText}</span>
         </div>
 
-        <div className="terminal-progress loading-cinematic-progress flex items-center w-[min(76cqw,820px)] mx-auto justify-center">
-          <div className="progress-track relative overflow-hidden w-full h-[0.9cqh] m-0 border border-[rgba(255,255,255,0.78)] bg-[rgba(255,255,255,0.08)] before:hidden">
-            <div className="progress-scanner absolute top-0 h-full w-[22%] bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.95)_50%,transparent_100%)] shadow-none" />
+        <div className="flex items-center w-[min(76cqw,820px)] mx-auto justify-center">
+          <div className="relative overflow-hidden w-full h-[0.9cqh] m-0 border border-[rgba(255,255,255,0.78)] bg-[rgba(255,255,255,0.08)] before:hidden">
+            <div className="absolute top-0 h-full w-[22%] bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.95)_50%,transparent_100%)] shadow-none" />
           </div>
         </div>
 
@@ -151,7 +154,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       </div>
 
       <button
-        className="terminal-cancel-btn absolute left-1/2 bottom-0 -translate-x-1/2 right-auto mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[clamp(18px,2.1cqw,28px)] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[2.2cqw] cursor-pointer hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)]"
+        className="absolute left-1/2 bottom-0 -translate-x-1/2 right-auto mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[clamp(18px,2.1cqw,28px)] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[2.2cqw] cursor-pointer hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)]"
         onClick={() => {
           if (onCancel) {
             onCancel()
@@ -173,7 +176,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             pointerEvents: logPanelProgress > 0.98 && !isHandleDragging ? 'auto' : 'none'
           }}
         >
-          <div className="loading-inline-logs-shell w-full h-full">
+          <div className="w-full h-full">
             <ServerLogDisplay
               variant="loading-inline"
               headerAction={

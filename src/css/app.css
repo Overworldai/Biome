@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "./animations.css";
-@import "./video-mask.css";
+@import 'tailwindcss';
+@import './animations.css';
+@import './video-mask.css';
 
 /* ============================================
    DESIGN TOKENS
@@ -125,7 +125,6 @@
    container query units, scrollbar styling, etc.
    ============================================ */
 @layer components {
-
   /* --- HOLO-FRAME LAYOUT --- */
   .holo-frame {
     container-type: size;
@@ -350,8 +349,14 @@
     width: 0;
     min-width: 6px;
   }
-  .menu-settings-panel::-webkit-scrollbar-track { background: transparent; border-radius: 999px; }
-  .menu-settings-panel::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; }
+  .menu-settings-panel::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 999px;
+  }
+  .menu-settings-panel::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
 
   .menu-select-wrap select option {
     color: rgba(245, 249, 255, 0.95);
@@ -433,73 +438,19 @@
   }
 
   /* --- PANEL SYSTEM --- */
-  /* Panel left: perspective + gradient background */
-  .panel-left {
-    top: -10%;
-    left: 0;
-    width: 0;
-    height: 120%;
-    padding-top: 8%;
-    padding-bottom: 1%;
-    border: none;
-    border-radius: 2.5% 0 0 2.5%;
-    z-index: 60;
-    transition: width 0.3s ease, transform 0.3s ease, visibility 0s ease 0.3s;
-    visibility: hidden;
-    transform-origin: left center;
-    transform: perspective(1000px) rotateY(8deg);
-    background:
-      linear-gradient(to right, transparent 0%, transparent calc(100% - 2px), rgba(120, 255, 245, 0.12) calc(100% - 1px), rgba(120, 255, 245, 0.03) 100%),
-      linear-gradient(to right, rgba(8, 12, 16, 0.88) 0%, rgba(8, 12, 16, 0.82) 40%, rgba(8, 12, 16, 0.65) 70%, rgba(8, 12, 16, 0.35) 88%, rgba(8, 12, 16, 0.08) 100%);
-    backdrop-filter: blur(8px) saturate(0.8);
-    -webkit-backdrop-filter: blur(8px) saturate(0.8);
-  }
-  .panel-left.open {
-    width: 50%;
-    visibility: visible;
-    transition: width 0.3s ease, visibility 0s ease 0s;
-  }
-  .panel-left::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 8%;
-    bottom: 8%;
-    width: 3px;
-    background: linear-gradient(to bottom, transparent 0%, rgba(120, 255, 245, 0.25) 15%, rgba(120, 255, 245, 0.35) 50%, rgba(120, 255, 245, 0.25) 85%, transparent 100%);
-    border-radius: 0 1px 1px 0;
-  }
-  .panel-left::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 10%;
-    bottom: 10%;
-    width: 1px;
-    background: rgba(120, 255, 245, 0.6);
-    box-shadow: 0 0 8px 2px rgba(120, 255, 245, 0.15), 0 0 20px 4px rgba(120, 255, 245, 0.08);
-    border-radius: 0 1px 1px 0;
-  }
-  .panel-left .panel-title::before {
-    content: '';
-    position: absolute;
-    left: -20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 2px;
-    height: 140%;
-    background: linear-gradient(to bottom, transparent 0%, rgba(120, 255, 245, 0.5) 20%, rgba(120, 255, 245, 0.5) 80%, transparent 100%);
-  }
-
   /* Panel bottom transition/visibility */
   .panel-bottom {
-    transition: height 0.3s ease, visibility 0s ease 0.3s;
+    transition:
+      height 0.3s ease,
+      visibility 0s ease 0.3s;
     visibility: hidden;
   }
   .panel-bottom.open {
     height: 28%;
     visibility: visible;
-    transition: height 0.3s ease, visibility 0s ease 0s;
+    transition:
+      height 0.3s ease,
+      visibility 0s ease 0s;
   }
   .panel-bottom.collapsed.open {
     height: 6cqh;
@@ -519,7 +470,12 @@
     margin-top: -18px;
   }
   .setting-group:hover {
-    background: linear-gradient(to right, rgba(120, 255, 245, 0.03) 0%, rgba(120, 255, 245, 0.01) 70%, transparent 100%);
+    background: linear-gradient(
+      to right,
+      rgba(120, 255, 245, 0.03) 0%,
+      rgba(120, 255, 245, 0.01) 70%,
+      transparent 100%
+    );
     margin-left: -16px;
     padding-left: 16px;
     border-radius: 4px;
@@ -554,10 +510,6 @@
   .setting-button:hover::before {
     background: rgba(120, 255, 245, 0.6);
     box-shadow: 0 0 8px rgba(120, 255, 245, 0.3);
-  }
-  .setting-button-danger:hover::before {
-    background: rgba(255, 80, 80, 0.7);
-    box-shadow: 0 0 8px rgba(255, 80, 80, 0.4);
   }
 
   /* Select dropdown arrow SVG */
@@ -600,7 +552,9 @@
   .setting-checkbox:checked::after {
     left: calc(100% - 9px - 2px);
     background: rgba(120, 255, 245, 0.95);
-    box-shadow: 0 0 8px rgba(120, 255, 245, 0.5), 0 0 16px rgba(120, 255, 245, 0.2);
+    box-shadow:
+      0 0 8px rgba(120, 255, 245, 0.5),
+      0 0 16px rgba(120, 255, 245, 0.2);
   }
 
   /* Settings panel checkbox variant (slightly different sizing) */
@@ -611,35 +565,6 @@
   }
   .settings-panel .setting-checkbox:checked::after {
     left: calc(100% - 11px - 3px);
-  }
-
-  /* Range slider pseudo-elements */
-  .setting-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    background: linear-gradient(135deg, rgba(120, 255, 245, 0.9) 0%, rgba(80, 200, 200, 0.9) 100%);
-    border: 1px solid rgba(120, 255, 245, 0.6);
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 0 8px rgba(120, 255, 245, 0.3);
-  }
-  .setting-range::-webkit-slider-thumb:hover {
-    background: linear-gradient(135deg, rgba(120, 255, 245, 1) 0%, rgba(100, 220, 220, 1) 100%);
-    transform: scaleY(1.15);
-    box-shadow: 0 0 12px rgba(120, 255, 245, 0.5), 0 0 20px rgba(120, 255, 245, 0.2);
-  }
-  .setting-range::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: linear-gradient(135deg, rgba(120, 255, 245, 0.9) 0%, rgba(80, 200, 200, 0.9) 100%);
-    border: 1px solid rgba(120, 255, 245, 0.6);
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 0 8px rgba(120, 255, 245, 0.3);
   }
 
   /* Sensitivity slider segmented track */
@@ -675,11 +600,23 @@
   }
 
   /* --- PROMPT CONTROLS --- */
-  .prompt-input-compact::-webkit-scrollbar { width: 6px; }
-  .prompt-input-compact::-webkit-scrollbar-track { background: transparent; }
-  .prompt-input-compact::-webkit-scrollbar-thumb { background: rgba(120, 255, 245, 0.3); border-radius: 3px; }
-  .prompt-input-compact::-webkit-scrollbar-thumb:hover { background: rgba(120, 255, 245, 0.5); }
-  .prompt-input-compact::placeholder { color: rgba(120, 255, 245, 0.3); font-style: italic; }
+  .prompt-input-compact::-webkit-scrollbar {
+    width: 6px;
+  }
+  .prompt-input-compact::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .prompt-input-compact::-webkit-scrollbar-thumb {
+    background: rgba(120, 255, 245, 0.3);
+    border-radius: 3px;
+  }
+  .prompt-input-compact::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 255, 245, 0.5);
+  }
+  .prompt-input-compact::placeholder {
+    color: rgba(120, 255, 245, 0.3);
+    font-style: italic;
+  }
 
   /* Submit button success animation */
   .prompt-submit-btn.success-flash {
@@ -690,41 +627,80 @@
   }
 
   /* --- SEEDS GALLERY --- */
-  .seeds-gallery::-webkit-scrollbar { width: 6px; }
-  .seeds-gallery::-webkit-scrollbar-track { background: rgba(120, 255, 245, 0.05); border-radius: 3px; }
-  .seeds-gallery::-webkit-scrollbar-thumb { background: rgba(120, 255, 245, 0.3); border-radius: 3px; }
-  .seeds-gallery::-webkit-scrollbar-thumb:hover { background: rgba(120, 255, 245, 0.5); }
+  .seeds-gallery::-webkit-scrollbar {
+    width: 6px;
+  }
+  .seeds-gallery::-webkit-scrollbar-track {
+    background: rgba(120, 255, 245, 0.05);
+    border-radius: 3px;
+  }
+  .seeds-gallery::-webkit-scrollbar-thumb {
+    background: rgba(120, 255, 245, 0.3);
+    border-radius: 3px;
+  }
+  .seeds-gallery::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 255, 245, 0.5);
+  }
 
-  .seed-upload-top { clip-path: polygon(0 0, 100% 0, 0 100%); }
-  .seed-upload-top svg { transform: translate(-30%, -30%); }
-  .seed-upload-bottom { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
-  .seed-upload-bottom svg { transform: translate(30%, 30%); }
+  .seed-upload-top {
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+  }
+  .seed-upload-top svg {
+    transform: translate(-30%, -30%);
+  }
+  .seed-upload-bottom {
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  }
+  .seed-upload-bottom svg {
+    transform: translate(30%, 30%);
+  }
 
   .seed-upload-divider {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(135deg, transparent calc(50% - 0.5px), rgba(120, 255, 245, 0.35) calc(50% - 0.5px), rgba(120, 255, 245, 0.35) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+    background: linear-gradient(
+      135deg,
+      transparent calc(50% - 0.5px),
+      rgba(120, 255, 245, 0.35) calc(50% - 0.5px),
+      rgba(120, 255, 245, 0.35) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    );
   }
 
   /* --- SETTINGS PANEL OVERLAY --- */
-  .settings-panel .panel-content::-webkit-scrollbar { width: 4px; }
-  .settings-panel .panel-content::-webkit-scrollbar-track { background: transparent; }
-  .settings-panel .panel-content::-webkit-scrollbar-thumb { background: rgba(120, 255, 245, 0.3); border-radius: 2px; }
+  .settings-panel .panel-content::-webkit-scrollbar {
+    width: 4px;
+  }
+  .settings-panel .panel-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .settings-panel .panel-content::-webkit-scrollbar-thumb {
+    background: rgba(120, 255, 245, 0.3);
+    border-radius: 2px;
+  }
 
   /* --- CONNECTION LOST OVERLAY --- */
   .connection-lost-overlay {
-    transition: opacity 0.3s ease, visibility 0s ease 0.3s;
+    transition:
+      opacity 0.3s ease,
+      visibility 0s ease 0.3s;
   }
   .connection-lost-overlay.active {
-    transition: opacity 0.3s ease, visibility 0s ease 0s;
+    transition:
+      opacity 0.3s ease,
+      visibility 0s ease 0s;
   }
   /* --- SEED REJECTED OVERLAY --- */
   .seed-rejected-overlay {
-    transition: opacity 0.3s ease, visibility 0s ease 0.3s;
+    transition:
+      opacity 0.3s ease,
+      visibility 0s ease 0.3s;
   }
   .seed-rejected-overlay.active {
-    transition: opacity 0.3s ease, visibility 0s ease 0s;
+    transition:
+      opacity 0.3s ease,
+      visibility 0s ease 0s;
   }
 
   /* --- SERVER LOG DISPLAY --- */
@@ -732,10 +708,19 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 200, 100, 0.3) transparent;
   }
-  .server-log-content::-webkit-scrollbar { width: 3px; }
-  .server-log-content::-webkit-scrollbar-track { background: transparent; }
-  .server-log-content::-webkit-scrollbar-thumb { background: rgba(255, 200, 100, 0.3); border-radius: 2px; }
-  .server-log-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 200, 100, 0.5); }
+  .server-log-content::-webkit-scrollbar {
+    width: 3px;
+  }
+  .server-log-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .server-log-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 200, 100, 0.3);
+    border-radius: 2px;
+  }
+  .server-log-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 200, 100, 0.5);
+  }
 
   /* Terminal-display container override for choice dialog */
   .terminal-display:has(.engine-mode-choice) {
@@ -801,20 +786,4 @@
     padding: 0.35cqh 0.7cqw;
     cursor: pointer;
   }
-  /* --- PANEL LEFT CQW PADDING --- */
-  .panel-left .panel-header {
-    justify-content: flex-start;
-    padding-left: 5cqw;
-    padding-right: 8cqw;
-    border-bottom: 1px solid rgba(120, 255, 245, 0.15);
-    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-  .panel-left .panel-title::before {
-    left: -2.5cqw;
-  }
-  .panel-left .panel-content {
-    padding-left: 5cqw;
-    padding-right: 10cqw;
-  }
-
 }

@@ -4,7 +4,11 @@
 
 const HudVideoFrame = () => {
   return (
-    <svg className="hud-video-frame w-full h-full max-w-full max-h-full aspect-video overflow-visible" viewBox="0 0 640 360" preserveAspectRatio="xMidYMid meet">
+    <svg
+      className="hud-video-frame w-full h-full max-w-full max-h-full aspect-video overflow-visible"
+      viewBox="0 0 640 360"
+      preserveAspectRatio="xMidYMid meet"
+    >
       <defs>
         <filter id="glow-frame" x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="1.9" result="b" />

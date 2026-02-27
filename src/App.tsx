@@ -255,10 +255,12 @@ const HoloFrame = () => {
 
   return (
     <div
-      className={`holo-frame relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? 'streaming-fullscreen' : ''}`}
+      className={`holo-frame relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
     >
       <WindowControls />
-      <div className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''} ${isConnected && !isStreamingUi && !bottomPanelHidden ? 'scale-[0.8] -translate-y-[12%] origin-center' : ''}`}>
+      <div
+        className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''} ${isConnected && !isStreamingUi && !bottomPanelHidden ? 'scale-[0.8] -translate-y-[12%] origin-center' : ''}`}
+      >
         {useMainBackground && (
           <BackgroundSlideshow
             images={images}
@@ -295,23 +297,33 @@ const HoloFrame = () => {
           onShrinkComplete={completePortalShrink}
         />
         {showMenuHome && (
-          <div className="menu-chrome absolute inset-0 z-[9] pointer-events-none">
+          <div className="absolute inset-0 z-[9] pointer-events-none">
             <SocialCtaRow />
 
-            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">Biome</div>
+            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">
+              Biome
+            </div>
 
-            <button type="button" className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px" onClick={toggleSettings}>
+            <button
+              type="button"
+              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
+              onClick={toggleSettings}
+            >
               Settings
             </button>
           </div>
         )}
         {showMenuSettings && (
-          <div className="menu-chrome menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
+          <div className="menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
             <div className="menu-settings-panel absolute flex flex-col z-[1] top-[8%] left-[39%] right-[4%] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
-              <div className="menu-settings-group">
-                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Engine Mode</h2>
-                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">how will you run the model? as part of Biome, or elsewhere?</p>
-                <div className="menu-segmented flex border border-[rgba(245,251,255,0.75)]">
+              <div className="">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">
+                  Engine Mode
+                </h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                  how will you run the model? as part of Biome, or elsewhere?
+                </p>
+                <div className="flex border border-[rgba(245,251,255,0.75)]">
                   <button
                     type="button"
                     className={`flex-1 cursor-pointer font-serif p-[0.55cqh_0.8cqw] text-[clamp(18px,1.7cqw,28px)] border-r border-r-[rgba(245,251,255,0.5)] ${menuEngineMode === 'server' ? 'bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)]' : 'bg-[rgba(8,12,20,0.28)] text-[rgba(245,249,255,0.92)]'}`}
@@ -330,26 +342,44 @@ const HoloFrame = () => {
               </div>
 
               {menuEngineMode === 'server' && (
-                <div className="menu-settings-group">
-                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Server Options</h2>
-                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">Install Dir: {engineDirPath || 'Loading...'}</p>
-                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">Server URL: {serverUrl}</p>
+                <div className="">
+                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">
+                    Server Options
+                  </h2>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                    Install Dir: {engineDirPath || 'Loading...'}
+                  </p>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                    Server URL: {serverUrl}
+                  </p>
                 </div>
               )}
 
               {menuEngineMode === 'standalone' && (
-                <div className="menu-settings-group">
-                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Standalone Options</h2>
-                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">{standaloneStatusText}</p>
-                  <button type="button" className="block ml-auto w-fit cursor-pointer border-none bg-transparent font-serif text-right text-[rgba(246,249,255,0.95)] mt-[0.6cqh] p-0 text-[clamp(20px,1.8cqw,28px)] hover:bg-[rgba(245,251,255,0.95)] hover:text-[rgba(10,14,24,0.96)]" onClick={() => setShowFixModal(true)}>
+                <div className="">
+                  <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">
+                    Standalone Options
+                  </h2>
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                    {standaloneStatusText}
+                  </p>
+                  <button
+                    type="button"
+                    className="block ml-auto w-fit cursor-pointer border-none bg-transparent font-serif text-right text-[rgba(246,249,255,0.95)] mt-[0.6cqh] p-0 text-[clamp(20px,1.8cqw,28px)] hover:bg-[rgba(245,251,255,0.95)] hover:text-[rgba(10,14,24,0.96)]"
+                    onClick={() => setShowFixModal(true)}
+                  >
                     Fix World Engine
                   </button>
                 </div>
               )}
 
-              <div className="menu-settings-group">
-                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">World Model</h2>
-                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">which Overworld model will simulate your world?</p>
+              <div className="">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">
+                  World Model
+                </h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                  which Overworld model will simulate your world?
+                </p>
                 <div className="menu-select-wrap border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)]">
                   <select
                     className="w-full cursor-pointer border-none bg-transparent font-serif text-[rgba(245,249,255,0.92)] outline-none appearance-none p-[0.55cqh_0.8cqw] text-[clamp(18px,1.5cqw,24px)]"
@@ -364,13 +394,21 @@ const HoloFrame = () => {
                     ))}
                   </select>
                 </div>
-                {menuModelsError && <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">{menuModelsError}</p>}
+                {menuModelsError && (
+                  <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                    {menuModelsError}
+                  </p>
+                )}
               </div>
 
-              <div className="menu-settings-group">
-                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">Mouse Sensitivity</h2>
-                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">how much should the camera move when you move your mouse?</p>
-                <div className="menu-range-wrap flex flex-col items-end gap-[0.4cqh]">
+              <div className="">
+                <h2 className="m-0 font-serif leading-[0.95] text-right text-[rgba(247,250,255,0.96)] text-[clamp(34px,4.2cqw,52px)] [text-shadow:0_0_12px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.45)]">
+                  Mouse Sensitivity
+                </h2>
+                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+                  how much should the camera move when you move your mouse?
+                </p>
+                <div className="flex flex-col items-end gap-[0.4cqh]">
                   <input
                     className="menu-range-slider w-full m-0 cursor-pointer outline-none appearance-none h-[0.8cqh] rounded-full bg-[rgba(245,251,255,0.42)]"
                     type="range"
@@ -379,27 +417,51 @@ const HoloFrame = () => {
                     value={menuMouseSensitivity}
                     onChange={(event) => setMenuMouseSensitivity(Number(event.target.value))}
                   />
-                  <span className="font-serif text-[rgba(240,245,252,0.85)] text-[clamp(16px,1.35cqw,22px)]">{menuMouseSensitivity}%</span>
+                  <span className="font-serif text-[rgba(240,245,252,0.85)] text-[clamp(16px,1.35cqw,22px)]">
+                    {menuMouseSensitivity}%
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">Settings</div>
+            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">
+              Settings
+            </div>
 
-            <button type="button" className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px" onClick={toggleSettings}>
+            <button
+              type="button"
+              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
+              onClick={toggleSettings}
+            >
               Back
             </button>
 
             {showFixModal && (
-              <div className="menu-fix-modal-overlay absolute inset-0 z-[3] flex items-center justify-center bg-[rgba(2,6,16,0.55)] backdrop-blur-sm" role="dialog" aria-modal="true">
+              <div
+                className="absolute inset-0 z-[3] flex items-center justify-center bg-[rgba(2,6,16,0.55)] backdrop-blur-sm"
+                role="dialog"
+                aria-modal="true"
+              >
                 <div className="border border-[rgba(245,251,255,0.66)] bg-[rgba(8,12,20,0.92)] text-[rgba(246,249,255,0.95)] w-[min(420px,76cqw)] p-[1.8cqh_1.6cqw]">
-                  <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[clamp(26px,2.2cqw,34px)]">Fix World Engine?</h3>
-                  <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[clamp(16px,1.35cqw,21px)]">This will run repair/setup and open the installation log screen.</p>
+                  <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[clamp(26px,2.2cqw,34px)]">
+                    Fix World Engine?
+                  </h3>
+                  <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[clamp(16px,1.35cqw,21px)]">
+                    This will run repair/setup and open the installation log screen.
+                  </p>
                   <div className="flex justify-end mt-[1.4cqh] gap-[0.8cqw]">
-                    <button type="button" className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]" onClick={() => setShowFixModal(false)}>
+                    <button
+                      type="button"
+                      className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]"
+                      onClick={() => setShowFixModal(false)}
+                    >
                       Cancel
                     </button>
-                    <button type="button" className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]" onClick={handleConfirmFixEngine}>
+                    <button
+                      type="button"
+                      className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]"
+                      onClick={handleConfirmFixEngine}
+                    >
                       Confirm
                     </button>
                   </div>
@@ -409,7 +471,7 @@ const HoloFrame = () => {
           </div>
         )}
         {showInstallLogView && (
-          <div className="menu-chrome menu-install-log-view absolute inset-0 z-[9] pointer-events-auto">
+          <div className="absolute inset-0 z-[9] pointer-events-auto">
             <ServerLogDisplay
               showProgress={true}
               progressMessage={setupProgress || 'Installing World Engine...'}
@@ -430,7 +492,7 @@ const HoloFrame = () => {
             }}
           >
             <VideoContainer />
-            <div className="logo-container absolute z-[2] pointer-events-none" id="logo-container"></div>
+            <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
             <SettingsPanel />
             <PauseOverlay isActive={isPaused} />
             <ConnectionLostOverlay />

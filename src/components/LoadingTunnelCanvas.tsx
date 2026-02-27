@@ -160,7 +160,10 @@ const LoadingTunnelCanvas = ({
   }, [intensity, mouseReactive])
 
   return (
-    <div className="absolute inset-0 z-[7] pointer-events-none blur-[2px] scale-[1.02] origin-center" aria-hidden="true">
+    <div
+      className="absolute inset-0 z-[7] pointer-events-none blur-[2px] scale-[1.02] origin-center"
+      aria-hidden="true"
+    >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
     </div>
   )

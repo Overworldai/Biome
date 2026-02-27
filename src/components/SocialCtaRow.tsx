@@ -32,10 +32,7 @@ const ROW_CLASSES: Record<string, string> = {
   'pause-cta-row': 'pause-cta-row absolute right-[4%] top-[5%] flex gap-[0.6cqw]'
 }
 
-const SocialCtaRow = ({
-  rowClassName = 'menu-cta-row',
-  buttonClassName = 'menu-cta-btn'
-}: SocialCtaRowProps) => {
+const SocialCtaRow = ({ rowClassName = 'menu-cta-row', buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
   return (
     <div className={ROW_CLASSES[rowClassName] ?? rowClassName}>
       {SOCIAL_CTAS.map((cta) => (

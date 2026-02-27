@@ -11,8 +11,8 @@ const ConnectionLostOverlay = () => {
     <div
       className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[4px] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
     >
-      <div className="connection-lost-content flex flex-col items-center gap-[2cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
-        <div className="connection-lost-icon w-[8cqw] h-[8cqw] min-w-12 min-h-12 text-[rgba(255,120,120,0.9)] animate-[connectionLostPulse_2s_ease-in-out_infinite]">
+      <div className="flex flex-col items-center gap-[2cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
+        <div className="w-[8cqw] h-[8cqw] min-w-12 min-h-12 text-[rgba(255,120,120,0.9)] animate-[connectionLostPulse_2s_ease-in-out_infinite]">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -31,7 +31,7 @@ const ConnectionLostOverlay = () => {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <span className="connection-lost-text font-mono text-[3cqw] font-bold tracking-[0.2em] text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
+        <span className="font-mono text-[3cqw] font-bold tracking-[0.2em] text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
           CONNECTION LOST
         </span>
         <button
