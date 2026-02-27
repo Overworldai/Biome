@@ -507,39 +507,6 @@
     border-radius: 999px;
   }
 
-  .menu-select-wrap select option {
-    color: rgba(245, 249, 255, 0.95);
-    background: rgba(12, 18, 30, 0.98);
-  }
-
-  /* Range slider pseudo-elements */
-  .menu-range-slider::-webkit-slider-runnable-track {
-    height: 0.8cqh;
-    border-radius: 999px;
-    background: rgba(245, 251, 255, 0.42);
-  }
-  .menu-range-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 1cqw;
-    height: 1.8cqh;
-    margin-top: -0.5cqh;
-    border: 1px solid rgba(255, 255, 255, 0.85);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.92);
-  }
-  .menu-range-slider::-moz-range-track {
-    height: 0.8cqh;
-    border-radius: 999px;
-    background: rgba(245, 251, 255, 0.42);
-  }
-  .menu-range-slider::-moz-range-thumb {
-    width: 1cqw;
-    height: 1.8cqh;
-    border: 1px solid rgba(255, 255, 255, 0.85);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.92);
-  }
 
   /* --- VIDEO CONTAINER --- */
   .video-container {

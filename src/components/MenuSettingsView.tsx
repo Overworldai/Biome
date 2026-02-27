@@ -5,9 +5,12 @@ import { useStreaming } from '../context/StreamingContext'
 import type { AppConfig } from '../types/app'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
+import SettingsButton from './ui/SettingsButton'
 import SettingsSection from './ui/SettingsSection'
 import SettingsToggle from './ui/SettingsToggle'
 import SettingsSelect from './ui/SettingsSelect'
+import SettingsTextInput from './ui/SettingsTextInput'
+import SettingsSlider from './ui/SettingsSlider'
 import ConfirmModal from './ui/ConfirmModal'
 
 type MenuModelOption = {
@@ -41,27 +44,14 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   ])
   const [menuModelsLoading, setMenuModelsLoading] = useState(false)
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
-  const [engineDirPath, setEngineDirPath] = useState<string | null>(null)
   const [showFixModal, setShowFixModal] = useState(false)
 
-  const serverUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
+  const configServerUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
+  const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
 
-  const standaloneStatusText = (() => {
-    if (!engineStatus) return 'Status unavailable'
-    const isReady = engineStatus.uv_installed && engineStatus.repo_cloned && engineStatus.dependencies_synced
-    if (isReady) return 'World Engine: Ready'
-    if (engineStatus.uv_installed || engineStatus.repo_cloned || engineStatus.dependencies_synced) {
-      return 'World Engine: Needs repair'
-    }
-    return 'World Engine: Not installed'
-  })()
-
-  // Fetch engine dir path
-  useEffect(() => {
-    invoke('get-engine-dir-path')
-      .then(setEngineDirPath)
-      .catch(() => setEngineDirPath(null))
-  }, [])
+  const engineReady = engineStatus
+    ? engineStatus.uv_installed && engineStatus.repo_cloned && engineStatus.dependencies_synced
+    : null
 
   // Check engine status in standalone mode
   useEffect(() => {
@@ -138,6 +128,25 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
     [config, saveConfig]
   )
 
+  const handleServerUrlBlur = useCallback(() => {
+    try {
+      const url = new URL(menuServerUrl)
+      const newConfig: AppConfig = {
+        ...config,
+        gpu_server: {
+          ...config.gpu_server,
+          host: url.hostname,
+          port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
+          use_ssl: url.protocol === 'https:'
+        }
+      }
+      saveConfig(newConfig)
+    } catch {
+      // Invalid URL — revert to config value
+      setMenuServerUrl(configServerUrl)
+    }
+  }, [menuServerUrl, config, configServerUrl, saveConfig])
+
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
     autoSaveEngineMode(mode)
@@ -185,41 +194,60 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
         </SettingsSection>
 
         {menuEngineMode === 'server' && (
-          <SettingsSection
-            title="Server Options"
-            description={
-              <>
-                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
-                  Install Dir: {engineDirPath || 'Loading...'}
-                </p>
-                <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
-                  Server URL: {serverUrl}
-                </p>
-              </>
-            }
-          />
+          <SettingsSection title="Server URL" description="the address of the GPU server running the model">
+            <SettingsTextInput
+              value={menuServerUrl}
+              onChange={setMenuServerUrl}
+              onBlur={handleServerUrlBlur}
+              placeholder="http://localhost:8000"
+            />
+          </SettingsSection>
         )}
 
         {menuEngineMode === 'standalone' && (
-          <SettingsSection title="Standalone Options" description={standaloneStatusText}>
-            <button
-              type="button"
-              className="block ml-auto w-fit cursor-pointer border-none bg-transparent font-serif text-right text-[rgba(246,249,255,0.95)] mt-[0.6cqh] p-0 text-[clamp(20px,1.8cqw,28px)] hover:bg-[rgba(245,251,255,0.95)] hover:text-[rgba(10,14,24,0.96)]"
-              onClick={() => setShowFixModal(true)}
-            >
-              Fix World Engine
-            </button>
+          <SettingsSection
+            title="World Engine"
+            description={
+              <span className="inline-flex items-center gap-[0.4cqw]">
+                is the local engine healthy?{' '}
+                {engineReady === null ? (
+                  'unknown'
+                ) : engineReady ? (
+                  <>
+                    yes
+                    <span className="inline-block w-[0.55cqw] h-[0.55cqw] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+                  </>
+                ) : (
+                  <>
+                    no
+                    <span className="inline-block w-[0.55cqw] h-[0.55cqw] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+                  </>
+                )}
+              </span>
+            }
+          >
+            <div className="flex justify-end">
+              <SettingsButton
+                variant="ghost"
+                onClick={() => setShowFixModal(true)}
+              >
+                Reinstall
+              </SettingsButton>
+            </div>
           </SettingsSection>
         )}
 
         <SettingsSection title="World Model" description="which Overworld model will simulate your world?">
-          <SettingsSelect value={menuWorldModel} onChange={handleWorldModelChange} disabled={menuModelsLoading}>
-            {menuModelOptions.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.id} {model.isLocal ? '- Local' : '- Download'}
-              </option>
-            ))}
-          </SettingsSelect>
+          <SettingsSelect
+            options={menuModelOptions.map((model) => ({
+              value: model.id,
+              label: model.id.replace(/^Overworld\//, ''),
+              prefix: model.isLocal ? 'local' : 'download'
+            }))}
+            value={menuWorldModel}
+            onChange={handleWorldModelChange}
+            disabled={menuModelsLoading}
+          />
           {menuModelsError && (
             <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
               {menuModelsError}
@@ -231,19 +259,13 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
           title="Mouse Sensitivity"
           description="how much should the camera move when you move your mouse?"
         >
-          <div className="flex flex-col items-end gap-[0.4cqh]">
-            <input
-              className="menu-range-slider w-full m-0 cursor-pointer outline-none appearance-none h-[0.8cqh] rounded-full bg-[rgba(245,251,255,0.42)]"
-              type="range"
-              min={10}
-              max={100}
-              value={menuMouseSensitivity}
-              onChange={(event) => handleMouseSensitivityChange(Number(event.target.value))}
-            />
-            <span className="font-serif text-[rgba(240,245,252,0.85)] text-[clamp(16px,1.35cqw,22px)]">
-              {menuMouseSensitivity}%
-            </span>
-          </div>
+          <SettingsSlider
+            min={10}
+            max={100}
+            value={menuMouseSensitivity}
+            onChange={handleMouseSensitivityChange}
+            label={`${menuMouseSensitivity}%`}
+          />
         </SettingsSection>
       </div>
 
