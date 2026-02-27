@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { PARALLAX_ENABLED } from '../constants'
 
 type BackgroundSlideshowProps = {
   images: string[]
@@ -22,6 +23,8 @@ const BackgroundSlideshow = ({
   const [offset, setOffset] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
+    if (!PARALLAX_ENABLED) return
+
     const handleMouseMove = (event: MouseEvent) => {
       const centerX = window.innerWidth * 0.5
       const centerY = window.innerHeight * 0.5
