@@ -56,9 +56,6 @@ export type StreamingContextValue = {
 
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
-  bottomPanelHidden: boolean
-  setBottomPanelHidden: (hidden: boolean) => Promise<void>
-
   pressedKeys: Set<string>
   isPointerLocked: boolean
 

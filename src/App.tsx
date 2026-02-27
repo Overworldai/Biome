@@ -47,8 +47,6 @@ const HoloFrame = () => {
     isStreaming,
     isPaused,
     connectionState,
-    bottomPanelHidden,
-    setBottomPanelHidden,
     setupProgress,
     engineSetupError,
     engineSetupInProgress,
@@ -158,7 +156,7 @@ const HoloFrame = () => {
     >
       <WindowControls />
       <div
-        className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''} ${isConnected && !isStreamingUi && !bottomPanelHidden ? 'scale-[0.8] -translate-y-[12%] origin-center' : ''}`}
+        className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
       >
         {useMainBackground && (
           <BackgroundSlideshow

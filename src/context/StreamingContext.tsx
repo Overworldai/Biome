@@ -119,15 +119,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(interval)
   }, [isPaused, pausedAt])
 
-  // Bottom panel visibility (persisted in config)
-  const bottomPanelHidden = config?.ui?.bottom_panel_hidden ?? false
-  const setBottomPanelHidden = useCallback(
-    async (hidden: boolean) => {
-      await saveConfig({ ...config, ui: { ...config.ui, bottom_panel_hidden: hidden } })
-    },
-    [config, saveConfig]
-  )
-
   // Check engine status on mount (for standalone mode)
   useEffect(() => {
     if (isStandaloneMode) {
@@ -541,8 +532,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
-    bottomPanelHidden,
-    setBottomPanelHidden,
 
     // Input state
     pressedKeys,

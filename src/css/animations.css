@@ -106,18 +106,6 @@
   }
 }
 
-@keyframes contentFadeIn {
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes contentFadeInDisabled {
-  to {
-    opacity: 0.3;
-  }
-}
-
 @keyframes streamingCircularReveal {
   0% {
     clip-path: circle(0% at 50% 50%);
@@ -126,53 +114,6 @@
   100% {
     clip-path: circle(150% at 50% 50%);
     -webkit-clip-path: circle(150% at 50% 50%);
-  }
-}
-
-@keyframes hudDrawIn {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes hudFadeIn {
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scannerSweep {
-  0% {
-    left: -30%;
-  }
-  100% {
-    left: 100%;
-  }
-}
-
-@keyframes settingsOverlayFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes settingsPanelSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes engineSpinner {
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -196,29 +137,6 @@
   50% {
     opacity: 1;
     filter: drop-shadow(0 0 16px rgba(255, 120, 120, 0.6));
-  }
-}
-
-@keyframes seedRejectedFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes seedRejectedPulse {
-  0%,
-  100% {
-    opacity: 0.9;
-    filter: drop-shadow(0 0 4px rgba(255, 100, 100, 0.4));
-  }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 8px rgba(255, 100, 100, 0.6));
   }
 }
 
@@ -262,65 +180,12 @@
   }
 }
 
-@keyframes submitFlash {
-  0% {
-    color: rgba(100, 255, 150, 1);
-  }
-  100% {
-    color: rgba(120, 255, 245, 0.6);
-  }
-}
-
-@keyframes spinPrompt {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes buttonSuccessFlash {
-  0% {
-    background: rgba(100, 255, 150, 0.3);
-    border-color: rgba(100, 255, 150, 0.6);
-    box-shadow: 0 0 20px rgba(100, 255, 150, 0.4);
-  }
-  50% {
-    background: rgba(100, 255, 150, 0.25);
-    border-color: rgba(100, 255, 150, 0.5);
-  }
-  100% {
-    background: rgba(120, 255, 245, 0.06);
-    border-color: rgba(120, 255, 245, 0.25);
-    box-shadow: none;
-  }
-}
-
-@keyframes keyPulse {
-  0% {
-    box-shadow:
-      0 0 12px rgba(120, 255, 245, 0.4),
-      inset 0 0 8px rgba(120, 255, 245, 0.1);
-  }
-  50% {
-    box-shadow:
-      0 0 20px rgba(120, 255, 245, 0.6),
-      inset 0 0 12px rgba(120, 255, 245, 0.2);
-  }
-  100% {
-    box-shadow:
-      0 0 12px rgba(120, 255, 245, 0.4),
-      inset 0 0 8px rgba(120, 255, 245, 0.1);
   }
 }
 

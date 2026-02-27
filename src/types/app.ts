@@ -21,15 +21,10 @@ export type FeaturesConfig = {
   custom_world_models: string[]
 }
 
-export type UiConfig = {
-  bottom_panel_hidden: boolean
-}
-
 export type AppConfig = {
   gpu_server: GpuServerConfig
   api_keys: ApiKeysConfig
   features: FeaturesConfig
-  ui: UiConfig
 }
 
 export type SeedRecord = {

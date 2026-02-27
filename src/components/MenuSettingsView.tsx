@@ -173,10 +173,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   return (
     <div className="menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
       <div className="menu-settings-panel absolute flex flex-col z-[1] top-[8%] left-[39%] right-[4%] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
-        <SettingsSection
-          title="Engine Mode"
-          description="how will you run the model? as part of Biome, or elsewhere?"
-        >
+        <SettingsSection title="Engine Mode" description="how will you run the model? as part of Biome, or elsewhere?">
           <SettingsToggle
             options={[
               { value: 'server', label: 'Server' },
@@ -215,15 +212,8 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
           </SettingsSection>
         )}
 
-        <SettingsSection
-          title="World Model"
-          description="which Overworld model will simulate your world?"
-        >
-          <SettingsSelect
-            value={menuWorldModel}
-            onChange={handleWorldModelChange}
-            disabled={menuModelsLoading}
-          >
+        <SettingsSection title="World Model" description="which Overworld model will simulate your world?">
+          <SettingsSelect value={menuWorldModel} onChange={handleWorldModelChange} disabled={menuModelsLoading}>
             {menuModelOptions.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.id} {model.isLocal ? '- Local' : '- Download'}

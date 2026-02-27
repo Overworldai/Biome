@@ -52,9 +52,6 @@ const defaultConfig: AppConfig = {
     seed_gallery: true,
     world_engine_model: DEFAULT_WORLD_ENGINE_MODEL,
     custom_world_models: []
-  },
-  ui: {
-    bottom_panel_hidden: false
   }
 }
 
