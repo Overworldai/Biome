@@ -121,12 +121,17 @@ export function registerServerIpc(): void {
     const logFilePath = path.join(engineDir, 'server.log')
 
     // Spawn the server
-    const child = spawn(uvBinary, ['run', 'python', '-u', 'server.py', '--port', String(port)], {
-      cwd: engineDir,
-      env: serverEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      ...getHiddenWindowOptions()
-    })
+    const child = spawn(
+      uvBinary,
+      ['run', 'python', '-u', 'server.py', '--port', String(port), '--parent-pid', String(process.pid)],
+      {
+        cwd: engineDir,
+        env: serverEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        ...(process.platform !== 'win32' ? { detached: true } : {}), // Unix: new process group for clean kill
+        ...getHiddenWindowOptions()
+      }
+    )
 
     const pid = child.pid
     console.log(`[ENGINE] Server process spawned with PID: ${pid}`)

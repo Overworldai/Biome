@@ -44,10 +44,19 @@ export function stopServerSync(): string | null {
 
   if (pid) {
     try {
-      treeKill(pid, 'SIGKILL')
-      console.log('[ENGINE] Kill signal sent to process tree')
+      if (process.platform !== 'win32') {
+        // Unix: kill the entire process group (negative PID).
+        // The server is spawned with detached:true to create a new group,
+        // so this kills uv + python together.
+        process.kill(-pid, 'SIGKILL')
+        console.log('[ENGINE] SIGKILL sent to process group')
+      } else {
+        // Windows: use tree-kill to walk the process tree via taskkill
+        treeKill(pid, 'SIGKILL')
+        console.log('[ENGINE] Kill signal sent to process tree')
+      }
     } catch (e) {
-      console.log('[ENGINE] tree-kill failed, falling back to direct kill:', e)
+      console.log('[ENGINE] Process tree kill failed, falling back to direct kill:', e)
       state.process.kill('SIGKILL')
     }
   } else {

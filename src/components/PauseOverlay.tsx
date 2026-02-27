@@ -11,7 +11,7 @@ const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { toggleSettings } = usePortal()
-  const { canUnpause, requestPointerLock, reset, logout, sendPromptWithSeed } = useStreaming()
+  const { canUnpause, requestPointerLock, reset, sendPromptWithSeed } = useStreaming()
   const { getUrl } = useConfig()
   const [view, setView] = useState<'main' | 'scenes'>('main')
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
@@ -325,7 +325,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <button
               type="button"
               className="w-full border border-[rgba(193,32,11,0.95)] bg-[rgba(156,23,8,0.9)] text-[rgba(255,240,240,0.98)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={() => void logout()}
+              onClick={() => void invoke('quit-app')}
             >
               Quit
             </button>

@@ -138,6 +138,12 @@ process.on('SIGTERM', () => {
   process.exit(0)
 })
 
+process.on('uncaughtException', (err) => {
+  console.error('[ENGINE] Uncaught exception, stopping server...', err)
+  stopServerSync()
+  process.exit(1)
+})
+
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow
 }

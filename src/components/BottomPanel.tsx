@@ -31,7 +31,6 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
     sendInitialSeed,
     requestPointerLock,
     reset,
-    logout,
     mouseSensitivity,
     setMouseSensitivity,
     isPaused,
@@ -149,7 +148,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
   }
 
   const handleLogout = () => {
-    logout()
+    void invoke('quit-app')
   }
 
   const handlePromptSubmit = async (e: KeyboardEvent<HTMLTextAreaElement>) => {

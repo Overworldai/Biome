@@ -15,7 +15,8 @@
     "@tailwindcss/vite": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwindcss": "^4.2.1"
+    "tailwindcss": "^4.2.1",
+    "tree-kill": "^1.2.2"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7",
@@ -33,7 +34,6 @@
     "husky": "^9.1.7",
     "prettier": "^3",
     "tar": "^7",
-    "tree-kill": "^1.2.2",
     "typescript": "^5.9.3",
     "vite": "^6.0.5"
   }

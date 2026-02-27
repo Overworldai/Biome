@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, app } from 'electron'
 
 export function registerWindowIpc(): void {
   ipcMain.handle('window-set-size', (_event, width: number, height: number) => {
@@ -29,6 +29,10 @@ export function registerWindowIpc(): void {
     if (win) {
       win.close()
     }
+  })
+
+  ipcMain.handle('quit-app', () => {
+    app.quit()
   })
 
   ipcMain.handle('window-set-position', (_event, x: number, y: number) => {

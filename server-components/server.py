@@ -43,6 +43,34 @@ logger = logging.getLogger("biome_server")
 
 print("[BIOME] Basic imports done", flush=True)
 
+# If launched with --parent-pid, ask the OS to kill us when the parent dies (Linux only),
+# and start a background thread to poll the parent PID as a cross-platform fallback.
+_parent_pid: Optional[int] = None
+
+
+def _check_parent_alive() -> None:
+    """Check if the monitored parent process is still alive. Exit if not."""
+    if _parent_pid is None:
+        return
+    try:
+        os.kill(_parent_pid, 0)
+    except OSError:
+        print(f"[BIOME] Parent process (PID {_parent_pid}) is already gone, shutting down", flush=True)
+        os._exit(1)
+
+
+async def _watch_parent_pid() -> None:
+    """Periodically check if the parent process is still alive. Exit if it's gone."""
+    if _parent_pid is None:
+        return
+    while True:
+        await asyncio.sleep(2)
+        try:
+            os.kill(_parent_pid, 0)  # Signal 0 = check if process exists
+        except OSError:
+            print(f"[BIOME] Parent process (PID {_parent_pid}) is gone, shutting down", flush=True)
+            os._exit(1)
+
 try:
     print("[BIOME] Importing torch...", flush=True)
     import torch
@@ -445,7 +473,15 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     print("SERVER READY", flush=True)  # Signal for Rust to detect
 
+    # Start parent-process watchdog (exits server if parent dies)
+    watchdog_task = None
+    if _parent_pid is not None:
+        watchdog_task = asyncio.create_task(_watch_parent_pid())
+
     yield
+
+    if watchdog_task is not None:
+        watchdog_task.cancel()
 
     # Cleanup
     logger.info("[SERVER] Shutting down")
@@ -1285,7 +1321,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Biome Server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=7987, help="Port to bind to")
+    parser.add_argument("--parent-pid", type=int, default=None, help="PID of parent process; server exits if parent dies")
     args = parser.parse_args()
+
+    if args.parent_pid is not None:
+        _parent_pid = args.parent_pid
+        print(f"[BIOME] Monitoring parent process PID {_parent_pid}", flush=True)
+        _check_parent_alive()
 
     uvicorn.run(
         app,
