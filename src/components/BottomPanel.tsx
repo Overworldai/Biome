@@ -12,6 +12,8 @@ import { useStreaming } from '../context/StreamingContext'
 import { useConfig } from '../hooks/useConfig'
 import { applyPrompt as processPrompt } from '../utils/promptSanitizer'
 import { RESET_KEY_DISPLAY } from '../hooks/useGameInput'
+import HudTabButton from './ui/HudTabButton'
+import HudActionButton from './ui/HudActionButton'
 import type { SeedRecord } from '../types/app'
 
 type BottomPanelProps = {
@@ -467,14 +469,14 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
         {availableTabs.length > 1 && (
           <div className="flex flex-col gap-[0.5cqh] py-[0.5cqh] px-[0.8cqw] shrink-0">
             {availableTabs.map((tab) => (
-              <button
+              <HudTabButton
                 key={tab.id}
-                className={`w-[3cqw] h-[3cqw] min-w-7 min-h-7 p-0 flex items-center justify-center text-hud/40 bg-hud/3 border border-hud/15 rounded-panel cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-[60%] [&>svg]:h-[60%] hover:text-hud/80 hover:bg-hud/8 hover:border-hud/30 ${activeTab === tab.id ? 'active text-hud bg-hud/12 !border-hud/50' : ''}`}
+                active={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 title={tab.title}
               >
                 {tab.icon}
-              </button>
+              </HudTabButton>
             ))}
           </div>
         )}
@@ -533,15 +535,8 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                 <div className="w-px h-[1.5cqw] min-h-3 bg-hud/20 mx-[0.3cqw]"></div>
 
                 {/* Reset world button */}
-                <div
-                  className="group flex items-center gap-[0.3cqw] cursor-pointer"
-                  onClick={handleResetWorld}
-                  title={`Reset world (${RESET_KEY_DISPLAY})`}
-                >
-                  <span
-                    ref={resetButtonRef}
-                    className="shrink-0 w-[2cqw] h-[2cqw] min-w-[18px] min-h-[18px] flex items-center justify-center p-0 bg-transparent border-none text-hud/60 cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-full [&>svg]:h-full group-hover:text-hud active:scale-95"
-                  >
+                <HudActionButton
+                  icon={
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path
                         d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
@@ -550,41 +545,32 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                       />
                       <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </span>
-                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-hud">
-                    RESET({RESET_KEY_DISPLAY})
-                  </span>
-                </div>
+                  }
+                  label={`RESET(${RESET_KEY_DISPLAY})`}
+                  onClick={handleResetWorld}
+                  title={`Reset world (${RESET_KEY_DISPLAY})`}
+                  iconRef={resetButtonRef}
+                />
 
                 {/* Logout button */}
-                <div
-                  className="group flex items-center gap-[0.3cqw] cursor-pointer"
-                  onClick={handleLogout}
-                  title="Logout"
-                >
-                  <span className="shrink-0 w-[2cqw] h-[2cqw] min-w-[18px] min-h-[18px] flex items-center justify-center p-0 bg-transparent border-none text-hud/60 cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-full [&>svg]:h-full group-hover:text-[rgba(255,120,120,1)] active:scale-95">
+                <HudActionButton
+                  icon={
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
                       <polyline points="16,17 21,12 16,7" strokeLinecap="round" strokeLinejoin="round" />
                       <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </span>
-                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-[rgba(255,120,120,1)]">
-                    EXIT
-                  </span>
-                </div>
+                  }
+                  label="EXIT"
+                  onClick={handleLogout}
+                  title="Logout"
+                  danger
+                />
 
                 {/* Submit button */}
-                <div
-                  className={`group flex items-center gap-[0.3cqw] cursor-pointer ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'cursor-not-allowed opacity-30' : ''}`}
-                  onClick={() => !(isLoading || !textPrompt.trim() || isDisabledByConfig) && applyPrompt()}
-                  title={isDisabledByConfig ? disabledMessage : 'Apply prompt'}
-                >
-                  <span
-                    ref={promptButtonRef}
-                    className={`prompt-submit-btn shrink-0 w-[2cqw] h-[2cqw] min-w-[18px] min-h-[18px] flex items-center justify-center p-0 bg-transparent border-none text-hud/60 cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-full [&>svg]:h-full group-hover:text-hud ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'opacity-30 cursor-not-allowed group-hover:text-hud/50' : ''}`}
-                  >
-                    {isLoading ? (
+                <HudActionButton
+                  icon={
+                    isLoading ? (
                       <svg
                         className="animate-[spinPrompt_1s_linear_infinite]"
                         viewBox="0 0 24 24"
@@ -599,14 +585,15 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                    )}
-                  </span>
-                  <span
-                    className={`font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-hud ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'group-hover:text-hud/50' : ''}`}
-                  >
-                    APPLY
-                  </span>
-                </div>
+                    )
+                  }
+                  label="APPLY"
+                  onClick={() => !(isLoading || !textPrompt.trim() || isDisabledByConfig) && applyPrompt()}
+                  title={isDisabledByConfig ? disabledMessage : 'Apply prompt'}
+                  disabled={isLoading || !textPrompt.trim() || isDisabledByConfig}
+                  iconRef={promptButtonRef}
+                  iconClassName="prompt-submit-btn"
+                />
               </div>
             </div>
           )}

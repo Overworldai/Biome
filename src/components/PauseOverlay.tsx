@@ -4,6 +4,8 @@ import { useStreaming } from '../context/StreamingContext'
 import type { SeedRecord } from '../types/app'
 import SocialCtaRow from './SocialCtaRow'
 import MenuSettingsView from './MenuSettingsView'
+import ViewLabel from './ui/ViewLabel'
+import MenuButton from './ui/MenuButton'
 import { useConfig } from '../hooks/useConfig'
 
 const MAX_THUMBNAILS = 24
@@ -303,46 +305,24 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             </div>
           </section>
 
-          <div className="absolute left-[4%] bottom-[var(--pause-bottom-baseline)] font-serif text-[clamp(56px,4.8cqw,82px)] leading-[0.8] text-left text-text-primary font-normal translate-y-[0.35cqh]">
-            Paused
-          </div>
+          <ViewLabel>Paused</ViewLabel>
 
           <div className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
-            <button
-              type="button"
-              className="w-full border border-border-light bg-surface-btn-primary text-text-inverse font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={() => canUnpause && requestPointerLock()}
-            >
+            <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
               Resume
-            </button>
-            <button
-              type="button"
-              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={handleResetAndResume}
-            >
+            </MenuButton>
+            <MenuButton variant="secondary" className="w-full px-0" onClick={handleResetAndResume}>
               Reset
-            </button>
-            <button
-              type="button"
-              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={() => setView('scenes')}
-            >
+            </MenuButton>
+            <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('scenes')}>
               Scenes
-            </button>
-            <button
-              type="button"
-              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={() => setView('settings')}
-            >
+            </MenuButton>
+            <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('settings')}>
               Settings
-            </button>
-            <button
-              type="button"
-              className="w-full border border-[rgba(193,32,11,0.95)] bg-[rgba(156,23,8,0.9)] text-[rgba(255,240,240,0.98)] font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={() => void invoke('quit-app')}
-            >
+            </MenuButton>
+            <MenuButton variant="danger" className="w-full px-0" onClick={() => void invoke('quit-app')}>
               Quit
-            </button>
+            </MenuButton>
           </div>
         </div>
       ) : (
@@ -447,13 +427,13 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               ))}
             </div>
           </section>
-          <button
-            type="button"
-            className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w border border-border-light bg-surface-btn-primary text-text-inverse font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+          <MenuButton
+            variant="primary"
+            className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w px-0"
             onClick={() => setView('main')}
           >
             Back
-          </button>
+          </MenuButton>
         </div>
       )}
     </div>

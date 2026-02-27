@@ -12,6 +12,8 @@ import PortalPreview from './components/PortalPreview'
 import LoadingTunnelCanvas from './components/LoadingTunnelCanvas'
 import TerminalDisplay from './components/TerminalDisplay'
 import SocialCtaRow from './components/SocialCtaRow'
+import ViewLabel from './components/ui/ViewLabel'
+import MenuButton from './components/ui/MenuButton'
 import PauseOverlay from './components/PauseOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import ShutdownOverlay from './components/ShutdownOverlay'
@@ -197,17 +199,15 @@ const HoloFrame = () => {
           <div className="absolute inset-0 z-[9] pointer-events-none">
             <SocialCtaRow />
 
-            <div className="absolute z-[1] left-[4.3%] bottom-[4.1%] font-serif text-[clamp(30px,4.2cqw,52px)] text-[rgba(248,248,245,0.92)] leading-none tracking-wider pointer-events-none [text-shadow:0_0_18px_rgba(0,0,0,0.38),0_0_4px_rgba(255,255,255,0.16)]">
-              Biome
-            </div>
+            <ViewLabel>Biome</ViewLabel>
 
-            <button
-              type="button"
-              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-text-secondary leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
+            <MenuButton
+              variant="ghost"
+              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
               onClick={toggleSettings}
             >
               Settings
-            </button>
+            </MenuButton>
           </div>
         )}
         {showMenuSettings && (
