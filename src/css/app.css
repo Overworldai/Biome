@@ -73,6 +73,16 @@
    CSS CUSTOM PROPERTIES (JS-driven values)
    ============================================ */
 :root {
+  /* Edge alignment tokens */
+  --edge-left: 4%;
+  --edge-right: 4%;
+  --edge-top: 6%;
+  --edge-top-lg: 8%;
+  --edge-top-xl: 12%;
+  --edge-bottom: 4.2%;
+  --edge-bottom-lg: 8%;
+
+  /* JS-driven values */
   --app-background-blur: 6px;
   --portal-offset-x: 0px;
   --portal-offset-y: 0px;
@@ -83,13 +93,10 @@
   --portal-tilt: -8deg;
   --portal-center-x: 50cqw;
   --portal-center-y: 50cqh;
-  --menu-right-edge: 3.8%;
-  --pause-bottom-baseline: 8%;
+  --portal-settings-left: 20%;
+  --menu-right-edge: var(--edge-right);
+  --pause-bottom-baseline: var(--edge-bottom-lg);
 }
-
-/* ============================================
-   BASE RESET
-   ============================================ */
 @layer base {
   :root {
     font-family: var(--font-sans);

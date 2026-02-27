@@ -172,7 +172,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
   return (
     <div className="menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
-      <div className="menu-settings-panel absolute flex flex-col z-[1] top-[8%] left-[39%] right-[4%] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
+      <div className="menu-settings-panel absolute flex flex-col z-[1] top-[var(--edge-top-lg)] left-[39%] right-[var(--edge-right)] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
         <SettingsSection title="Engine Mode" description="how will you run the model? as part of Biome, or elsewhere?">
           <SettingsToggle
             options={[
@@ -251,7 +251,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
       <MenuButton
         variant="ghost"
-        className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
+        className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
         onClick={onBack}
       >
         Back

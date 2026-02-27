@@ -63,7 +63,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const showLogPanel = logPanelProgress > 0.001 || isHandleDragging
 
   return (
-    <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[4.2%] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[min(76cqw,820px)] pb-[8.2cqh]">
+    <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[min(76cqw,820px)] pb-[8.2cqh]">
       <div className="flex flex-col items-center gap-[0.55cqh] w-[min(76cqw,820px)]">
         <div
           className="flex items-center font-serif text-[clamp(20px,2.6cqw,34px)] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] max-w-[66cqw] text-center"

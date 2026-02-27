@@ -28,8 +28,8 @@ const SOCIAL_CTAS = [
 
 const ROW_CLASSES: Record<string, string> = {
   'menu-cta-row':
-    'menu-cta-row absolute top-[7%] right-[calc(var(--menu-right-edge)-0.75cqw)] flex gap-[0.7cqw] pointer-events-auto',
-  'pause-cta-row': 'pause-cta-row absolute right-[4%] top-[5%] flex gap-[0.6cqw]'
+    'menu-cta-row absolute top-[var(--edge-top)] right-[calc(var(--menu-right-edge)-0.75cqw)] flex gap-[0.7cqw] pointer-events-auto',
+  'pause-cta-row': 'pause-cta-row absolute right-[var(--edge-right)] top-[var(--edge-top)] flex gap-[0.6cqw]'
 }
 
 const SocialCtaRow = ({ rowClassName = 'menu-cta-row', buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {

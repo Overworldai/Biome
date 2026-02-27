@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { registerAllIpc } from './ipc/index.js'
@@ -102,6 +102,12 @@ const createWindow = () => {
       }
     })
   }
+
+  // Make links to external websites opened in default OS browser (instead of electron app)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
 
   // Forward resize events to renderer
   mainWindow.on('resize', () => {

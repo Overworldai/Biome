@@ -256,13 +256,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <MenuSettingsView onBack={() => setView('main')} />
         </div>
       ) : view === 'main' ? (
-        <div
-          className="absolute inset-0 p-[3.8%_4%]"
-          style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
-        >
-          <SocialCtaRow rowClassName="absolute right-[4%] top-[5%] flex gap-[0.6cqw]" />
+        <div className="absolute inset-0 p-[3.8%_4%]">
+          <SocialCtaRow rowClassName="pause-cta-row" />
 
-          <section className="absolute top-[12%] left-[4%] w-[70%] flex flex-col gap-[0.7cqh]">
+          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col gap-[0.7cqh]">
             <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Pinned Scenes</h2>
             <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
               Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.
@@ -307,7 +304,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
           <ViewLabel>Paused</ViewLabel>
 
-          <div className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
+          <div className="absolute right-[var(--edge-right)] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
             <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
               Resume
             </MenuButton>
@@ -326,11 +323,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </div>
         </div>
       ) : (
-        <div
-          className="absolute inset-0 p-[3.8%_4%]"
-          style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
-        >
-          <section className="absolute top-[12%] left-[4%] w-[70%]">
+        <div className="absolute inset-0 p-[3.8%_4%]">
+          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%]">
             <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Scenes</h2>
             <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
               All of your scenes. Add more by using the + button, or by drag/pasting them in.
@@ -429,7 +423,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </section>
           <MenuButton
             variant="primary"
-            className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w px-0"
+            className="absolute right-[var(--edge-right)] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w px-0"
             onClick={() => setView('main')}
           >
             Back
