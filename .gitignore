@@ -38,3 +38,6 @@ out/
 .env
 .vercel
 .env*.local
+
+# Biome server seeds cache when running dev mode
+world_engine/

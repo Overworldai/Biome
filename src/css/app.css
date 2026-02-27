@@ -178,7 +178,7 @@
     container-type: size;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    -webkit-app-region: drag;
+    user-select: none;
   }
   .holo-frame::-webkit-scrollbar {
     display: none;
@@ -190,7 +190,6 @@
     height: clamp(225px, min(100cqh, calc(100cqw * 9 / 16)), 100cqh);
     container-type: size;
     container-name: holo-frame;
-    -webkit-app-region: no-drag;
   }
 
   /* Content area streaming reveal */

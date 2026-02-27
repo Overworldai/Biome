@@ -16,7 +16,6 @@ import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { createLogger } from '../utils/logger'
 import type { StreamingContextValue } from './streamingContextTypes'
-import type { EngineMode } from '../types/app'
 
 const log = createLogger('Streaming')
 
@@ -38,7 +37,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
-  const { config, reloadConfig, saveConfig, isStandaloneMode, engineMode } = useConfig()
+  const { config, isStandaloneMode, engineMode } = useConfig()
   const {
     status: engineStatus,
     startServer,
@@ -448,30 +447,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     await stopServerIfRunning()
   }, [cleanupState, stopServerIfRunning])
 
-  // Handle mode choice from the choice dialog (when user selects Standalone or Server)
-  const handleModeChoice = useCallback(
-    async (chosenMode: EngineMode) => {
-      log.info('Mode choice made:', chosenMode)
-      if (chosenMode === ENGINE_MODES.STANDALONE) {
-        // Start installation immediately
-        try {
-          await setupEngine()
-          log.info('Engine setup complete after mode choice')
-          // Config was already saved by EngineModeChoice, just refresh
-          await reloadConfig()
-          // Auto-start session after successful installation
-          log.info('Auto-starting session after engine setup')
-          transitionTo(states.LOADING)
-        } catch (err) {
-          log.error('Engine setup failed:', err)
-          setEngineError(err instanceof Error ? err.message : String(err))
-        }
-      }
-      // For server mode, nothing special needed - config was already saved
-    },
-    [setupEngine, reloadConfig, transitionTo, states.LOADING]
-  )
-
   const value: StreamingContextValue = {
     // Connection state
     connectionState,
@@ -523,7 +498,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineSetupInProgress,
     setupProgress,
     engineSetupError,
-    handleModeChoice,
 
     // Seeds
     openSeedsDir,

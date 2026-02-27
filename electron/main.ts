@@ -78,10 +78,29 @@ const createWindow = () => {
     }
   })
 
+  // Enforce a fixed 16:9 window aspect ratio natively.
+  mainWindow.setAspectRatio(16 / 9)
+
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
   } else {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+  }
+
+  // Enable DevTools shortcuts only in development builds.
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+
+      const key = input.key.toLowerCase()
+      const isF12 = key === 'f12'
+      const isCtrlShiftI = input.control && input.shift && key === 'i'
+
+      if (isF12 || isCtrlShiftI) {
+        event.preventDefault()
+        mainWindow?.webContents.toggleDevTools()
+      }
+    })
   }
 
   // Forward resize events to renderer

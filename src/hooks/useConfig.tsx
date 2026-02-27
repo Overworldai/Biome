@@ -29,7 +29,6 @@ type ConfigContextValue = {
   hasFalKey: boolean
   hasHuggingFaceKey: boolean
   engineMode: EngineMode
-  isEngineUnchosen: boolean
   isStandaloneMode: boolean
   isServerMode: boolean
 }
@@ -48,7 +47,7 @@ const defaultConfig: AppConfig = {
   features: {
     prompt_sanitizer: true,
     seed_generation: true,
-    engine_mode: ENGINE_MODES.UNCHOSEN,
+    engine_mode: ENGINE_MODES.STANDALONE,
     seed_gallery: true,
     world_engine_model: DEFAULT_WORLD_ENGINE_MODEL,
     custom_world_models: []
@@ -61,6 +60,10 @@ const migrateConfig = (loaded: AppConfig & { features?: Record<string, unknown> 
     loaded.features.engine_mode = loaded.features.use_standalone_engine ? ENGINE_MODES.STANDALONE : ENGINE_MODES.SERVER
     delete loaded.features.use_standalone_engine
     console.log('[Config] Migrated use_standalone_engine to engine_mode:', loaded.features.engine_mode)
+  }
+  if (loaded.features?.engine_mode === ENGINE_MODES.UNCHOSEN) {
+    loaded.features.engine_mode = ENGINE_MODES.STANDALONE
+    console.log('[Config] Migrated engine_mode from unchosen to standalone')
   }
   return loaded as AppConfig
 }
@@ -141,7 +144,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  const engineMode = (config.features?.engine_mode ?? ENGINE_MODES.UNCHOSEN) as EngineModes
+  const engineMode = (config.features?.engine_mode ?? ENGINE_MODES.STANDALONE) as EngineModes
 
   const getUrl = useCallback(() => {
     if (engineMode === ENGINE_MODES.STANDALONE) {
@@ -196,7 +199,6 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     hasFalKey: !!config.api_keys.fal,
     hasHuggingFaceKey: !!config.api_keys.huggingface,
     engineMode,
-    isEngineUnchosen: engineMode === ENGINE_MODES.UNCHOSEN,
     isStandaloneMode: engineMode === ENGINE_MODES.STANDALONE,
     isServerMode: engineMode === ENGINE_MODES.SERVER
   }

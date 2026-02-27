@@ -28,13 +28,10 @@ const defaultConfig: AppConfig = {
   features: {
     prompt_sanitizer: true,
     seed_generation: true,
-    engine_mode: 'unchosen',
+    engine_mode: 'standalone',
     seed_gallery: true,
     world_engine_model: 'Overworld/Waypoint-1-Small',
     custom_world_models: []
-  },
-  ui: {
-    bottom_panel_hidden: false
   }
 }
 
@@ -64,6 +61,12 @@ function readConfigSync(): AppConfig {
     // Save migrated config
     fs.writeFileSync(configPath, JSON.stringify(parsed, null, 2))
     console.log('[CONFIG] Migrated use_standalone_engine to engine_mode:', features.engine_mode)
+  }
+
+  if (features && features.engine_mode === 'unchosen') {
+    features.engine_mode = 'standalone'
+    fs.writeFileSync(configPath, JSON.stringify(parsed, null, 2))
+    console.log('[CONFIG] Migrated engine_mode from unchosen to standalone')
   }
 
   return parsed as AppConfig

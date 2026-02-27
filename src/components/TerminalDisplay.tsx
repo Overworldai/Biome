@@ -2,17 +2,14 @@ import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '../bridge'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
-import { useConfig } from '../hooks/useConfig'
-import EngineModeChoice from './EngineModeChoice'
 import ServerLogDisplay from './ServerLogDisplay'
-import type { EngineMode } from '../types/app'
 
 const statusCodeMessages: Record<string, string> = {
-  warmup: 'STARTING ENGINE...',
-  init: 'INITIALIZING WORLD...',
-  loading: 'READYING STREAM...',
-  ready: 'READYING STREAM...',
-  reset: 'RESETTING...'
+  warmup: 'Starting engine...',
+  init: 'Initializing world...',
+  loading: 'Readying stream...',
+  ready: 'Readying stream...',
+  reset: 'Resetting...'
 }
 
 const LOG_PANEL_MAX_HEIGHT_CQH = 34
@@ -24,8 +21,7 @@ type TerminalDisplayProps = {
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { state, states } = usePortal()
-  const { connectionState, statusCode, engineError, error, cancelConnection, handleModeChoice } = useStreaming()
-  const { isEngineUnchosen } = useConfig()
+  const { connectionState, statusCode, engineError, error, cancelConnection } = useStreaming()
   const [logPanelProgress, setLogPanelProgress] = useState(0)
   const [isHandleDragging, setIsHandleDragging] = useState(false)
   const [lastLogLine, setLastLogLine] = useState('')
@@ -54,31 +50,14 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
 
   const statusText = useMemo(() => {
     if (lastLogLine) return lastLogLine
-    if (engineError || error) return 'ERROR'
-    if (connectionState === 'connecting') return 'CONNECTING...'
+    if (engineError || error) return 'Error'
+    if (connectionState === 'connecting') return 'Connecting...'
     if (statusCode && statusCodeMessages[statusCode]) return statusCodeMessages[statusCode]
-    if (connectionState === 'connected') return 'READYING STREAM...'
-    return 'STARTING...'
+    if (connectionState === 'connected') return 'Readying stream...'
+    return 'Starting...'
   }, [lastLogLine, connectionState, statusCode, engineError, error])
 
-  const onModeChosen = useCallback(
-    (chosenMode: EngineMode) => {
-      if (handleModeChoice) {
-        handleModeChoice(chosenMode)
-      }
-    },
-    [handleModeChoice]
-  )
-
   if (state !== states.LOADING) return null
-
-  if (isEngineUnchosen) {
-    return (
-      <div className="terminal-display absolute left-1/2 z-55 flex flex-col items-center">
-        <EngineModeChoice onChoiceMade={onModeChosen} />
-      </div>
-    )
-  }
 
   const isLogPanelExpanded = logPanelProgress > 0.5
   const showLogPanel = logPanelProgress > 0.001 || isHandleDragging

@@ -133,7 +133,7 @@ DEFAULT_INITIAL_SEED = "default.png"
 CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".seeds_cache.bin"
 
 # Local seeds directory (for dev/standalone usage - relative to project root)
-LOCAL_SEEDS_DIR = Path(__file__).parent.parent.parent / "seeds"
+LOCAL_SEEDS_DIR = Path(__file__).parent.parent / "seeds"
 
 SUPPORTED_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 

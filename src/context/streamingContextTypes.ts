@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import type { EngineMode, EngineStatus } from '../types/app'
+import type { EngineStatus } from '../types/app'
 
 export type StreamingStats = {
   gentime: number
@@ -49,7 +49,6 @@ export type StreamingContextValue = {
   engineSetupInProgress: boolean
   setupProgress: string | null
   engineSetupError: string | null
-  handleModeChoice: (mode: EngineMode) => Promise<void>
 
   openSeedsDir: () => Promise<void>
   seedsDir: string | null

@@ -3,7 +3,6 @@ import { invoke } from './bridge'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
-import { useFitWindowToContent } from './hooks/useWindow'
 import { useAppStartup } from './hooks/useAppStartup'
 import VideoContainer from './components/VideoContainer'
 import MenuSettingsView from './components/MenuSettingsView'
@@ -284,9 +283,6 @@ const HoloFrame = () => {
 const App = () => {
   // Run startup tasks (unpack server files, etc.)
   useAppStartup()
-
-  // Snap window to fit content after resize stops
-  useFitWindowToContent()
 
   return (
     <ConfigProvider>
