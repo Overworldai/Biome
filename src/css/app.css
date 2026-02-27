@@ -94,8 +94,6 @@
   --portal-center-x: 50cqw;
   --portal-center-y: 50cqh;
   --portal-settings-left: 20%;
-  --menu-right-edge: var(--edge-right);
-  --pause-bottom-baseline: var(--edge-bottom-lg);
 }
 @layer base {
   :root {
@@ -180,27 +178,27 @@
    container query units, scrollbar styling, etc.
    ============================================ */
 @layer components {
-  /* --- HOLO-FRAME LAYOUT --- */
-  .holo-frame {
+  /* --- APP SHELL LAYOUT --- */
+  .app-shell {
     container-type: size;
     scrollbar-width: none;
     -ms-overflow-style: none;
     user-select: none;
   }
-  .holo-frame::-webkit-scrollbar {
+  .app-shell::-webkit-scrollbar {
     display: none;
   }
 
-  .holo-frame-inner {
+  .app-shell-inner {
     aspect-ratio: 16 / 9;
     width: clamp(400px, min(100cqw, calc(100cqh * 16 / 9)), 100cqw);
     height: clamp(225px, min(100cqh, calc(100cqw * 9 / 16)), 100cqh);
     container-type: size;
-    container-name: holo-frame;
+    container-name: app-shell;
   }
 
   /* Content area streaming reveal */
-  .holo-frame .content-area.streaming-reveal {
+  .app-shell .content-area.streaming-reveal {
     overflow: hidden;
     clip-path: circle(0% at 50% 50%);
     -webkit-clip-path: circle(0% at 50% 50%);
@@ -505,7 +503,7 @@
     pointer-events: none;
     clip-path: circle(160% at 50% 53%);
     -webkit-clip-path: circle(160% at 50% 53%);
-    animation: portalBgConceal 600ms cubic-bezier(0.14, 0.76, 0.2, 1) forwards;
+    animation: portalBgConceal 960ms cubic-bezier(0.16, 0.86, 0.18, 1) forwards;
     will-change: clip-path, transform;
   }
 

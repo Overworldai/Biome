@@ -304,7 +304,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
           <ViewLabel>Paused</ViewLabel>
 
-          <div className="absolute right-[var(--edge-right)] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
+          <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
             <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
               Resume
             </MenuButton>
@@ -423,7 +423,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </section>
           <MenuButton
             variant="primary"
-            className="absolute right-[var(--edge-right)] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w px-0"
+            className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w min-w-btn-min-w px-0"
             onClick={() => setView('main')}
           >
             Back

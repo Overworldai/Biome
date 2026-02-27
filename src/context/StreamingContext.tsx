@@ -75,7 +75,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isReady,
     isLoading
   } = useWebSocket()
-  const { initializeSeeds, openSeedsDir, seedsDir } = useSeeds()
+  const { getSeedsDirPath, openSeedsDir, seedsDir } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
   const [pausedAt, setPausedAt] = useState<number | null>(null)
@@ -148,12 +148,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     transitionTo(states.LOADING)
   }, [engineMode, state, states.MAIN_MENU, states.LOADING, disconnect, isServerRunning, stopServer, transitionTo])
 
-  // Initialize seeds on mount
+  // Resolve local seeds dir path on mount (does not require server availability)
   useEffect(() => {
-    initializeSeeds().catch((err) => {
-      log.error('Failed to initialize seeds:', err)
+    getSeedsDirPath().catch((err) => {
+      log.error('Failed to resolve seeds directory path:', err)
     })
-  }, [initializeSeeds])
+  }, [getSeedsDirPath])
 
   // Bootstrap each new LOADING websocket session deterministically:
   // send model + seed together so server applies model first and can load seed

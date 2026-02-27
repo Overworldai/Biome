@@ -55,7 +55,7 @@ const PortalPreview = ({
 
   return (
     <div
-      className={`portal-preview absolute top-1/2 z-8 w-[22cqw] h-[27cqw] max-w-[200px] max-h-[250px] cursor-pointer ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'left-[var(--portal-settings-left)] blur-[4px] saturate-[0.86] pointer-events-none' : 'left-1/2 pointer-events-auto'}`}
+      className={`portal-preview absolute top-1/2 z-8 w-[24cqw] h-[29.5cqw] cursor-pointer ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'left-[var(--portal-settings-left)] blur-[4px] saturate-[0.86] pointer-events-none' : 'left-1/2 pointer-events-auto'}`}
       style={portalStyle}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}

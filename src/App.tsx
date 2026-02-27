@@ -24,13 +24,12 @@ import useSceneGlowColor from './hooks/useSceneGlowColor'
 const LAUNCH_PRE_SHRINK_MS = 420
 const LOADING_TUNNEL_FALLBACK_MIME = 'image/png'
 
-const HoloFrame = () => {
+const AppShell = () => {
   const [isPortalHovered, setIsPortalHovered] = useState(false)
   const [showInstallLog, setShowInstallLog] = useState(false)
   const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
-  const [isReplayingPortalEnter, setIsReplayingPortalEnter] = useState(false)
   const [isStreamingReveal, setIsStreamingReveal] = useState(false)
   const [loadingTunnelImage, setLoadingTunnelImage] = useState<string | null>(null)
   const prevStreamingUiRef = useRef(false)
@@ -60,6 +59,7 @@ const HoloFrame = () => {
     transitionKey,
     portalVisible,
     isPortalEntering,
+    triggerPortalEnter,
     completePortalShrink,
     completeTransition
   } = useBackgroundCycle(
@@ -107,12 +107,6 @@ const HoloFrame = () => {
   }, [isLoadingUi, portalState, portalStates.MAIN_MENU])
 
   useEffect(() => {
-    if (!isReplayingPortalEnter) return
-    const timer = window.setTimeout(() => setIsReplayingPortalEnter(false), 760)
-    return () => window.clearTimeout(timer)
-  }, [isReplayingPortalEnter])
-
-  useEffect(() => {
     if (!isLaunchShrinking) return
 
     const timer = window.setTimeout(() => {
@@ -151,11 +145,11 @@ const HoloFrame = () => {
 
   return (
     <div
-      className={`holo-frame relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
+      className={`app-shell relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
     >
       <WindowControls />
       <div
-        className={`holo-frame-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
+        className={`app-shell-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
       >
         {useMainBackground && (
           <BackgroundSlideshow
@@ -174,7 +168,7 @@ const HoloFrame = () => {
           isHovered={isPortalHovered}
           visible={isMainUi && !isConnected && portalVisible && !isEnteringLoading}
           isShrinking={isPortalShrinking || isLaunchShrinking}
-          isEntering={isPortalEntering || isReplayingPortalEnter}
+          isEntering={isPortalEntering}
           isSettingsOpen={!isConnected && isSettingsOpen}
           glowRgb={portalGlowRgb}
           onHoverChange={setIsPortalHovered}
@@ -200,7 +194,7 @@ const HoloFrame = () => {
 
             <MenuButton
               variant="ghost"
-              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
+              className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
               onClick={toggleSettings}
             >
               Settings
@@ -255,8 +249,8 @@ const HoloFrame = () => {
                 return
               }
               if (isReturningToMenu) {
+                triggerPortalEnter()
                 setIsReturningToMenu(false)
-                setIsReplayingPortalEnter(true)
                 void transitionTo(portalStates.MAIN_MENU)
               }
             }}
@@ -288,7 +282,7 @@ const App = () => {
     <ConfigProvider>
       <PortalProvider>
         <StreamingProvider>
-          <HoloFrame />
+          <AppShell />
         </StreamingProvider>
       </PortalProvider>
     </ConfigProvider>

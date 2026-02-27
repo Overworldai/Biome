@@ -28,7 +28,7 @@ const SOCIAL_CTAS = [
 
 const ROW_CLASSES: Record<string, string> = {
   'menu-cta-row':
-    'menu-cta-row absolute top-[var(--edge-top)] right-[calc(var(--menu-right-edge)-0.75cqw)] flex gap-[0.7cqw] pointer-events-auto',
+    'menu-cta-row absolute top-[var(--edge-top)] right-[var(--edge-right)] flex gap-[0.7cqw] pointer-events-auto',
   'pause-cta-row': 'pause-cta-row absolute right-[var(--edge-right)] top-[var(--edge-top)] flex gap-[0.6cqw]'
 }
 

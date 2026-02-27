@@ -4,7 +4,7 @@ import { invoke } from '../bridge'
 const CYCLE_INTERVAL_MS = 5000
 const PORTAL_ENTER_DURATION_MS = 700
 const PORTAL_PRE_SHRINK_FAILSAFE_MS = 700
-const POST_TRANSITION_DWELL_MS = 180
+const TRANSITION_VISIBLE_MS = 100
 const TRANSITION_FAILSAFE_MS = 1400
 
 const getMimeType = (filename: string): string => {
@@ -24,6 +24,7 @@ type BackgroundCycleState = {
   transitionKey: number
   portalVisible: boolean
   isPortalEntering: boolean
+  triggerPortalEnter: () => void
   completePortalShrink: () => void
   completeTransition: () => void
 }
@@ -36,7 +37,6 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
   const [transitionKey, setTransitionKey] = useState(0)
   const [portalVisible, setPortalVisible] = useState(true)
   const [isPortalEntering, setIsPortalEntering] = useState(false)
-  const [pendingPortalRespawn, setPendingPortalRespawn] = useState(false)
 
   const completePortalShrink = useCallback(() => {
     if (!isPortalShrinking || isTransitioning) return
@@ -49,8 +49,14 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
     if (!isTransitioning) return
     setCurrentIndex((prev) => (prev + 1) % (images.length || 1))
     setIsTransitioning(false)
-    setPendingPortalRespawn(true)
+    setPortalVisible(true)
+    setIsPortalEntering(true)
   }, [images.length, isTransitioning])
+
+  const triggerPortalEnter = useCallback(() => {
+    setPortalVisible(true)
+    setIsPortalEntering(true)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -129,27 +135,21 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
   useEffect(() => {
     if (!isTransitioning || images.length < 2) return
 
+    // Complete once the reveal is visually complete.
+    const visibleTimer = window.setTimeout(() => {
+      completeTransition()
+    }, TRANSITION_VISIBLE_MS)
+
     // Failsafe in case animationend doesn't fire (tab/background/browser edge cases).
     const failsafeTimer = window.setTimeout(() => {
       completeTransition()
     }, TRANSITION_FAILSAFE_MS)
 
     return () => {
+      window.clearTimeout(visibleTimer)
       window.clearTimeout(failsafeTimer)
     }
   }, [isTransitioning, images, completeTransition])
-
-  useEffect(() => {
-    if (!pendingPortalRespawn) return
-
-    const timer = window.setTimeout(() => {
-      setPortalVisible(true)
-      setIsPortalEntering(true)
-      setPendingPortalRespawn(false)
-    }, POST_TRANSITION_DWELL_MS)
-
-    return () => window.clearTimeout(timer)
-  }, [pendingPortalRespawn])
 
   const nextIndex = images.length > 1 ? (currentIndex + 1) % images.length : 0
 
@@ -162,6 +162,7 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
     transitionKey,
     portalVisible,
     isPortalEntering,
+    triggerPortalEnter,
     completePortalShrink,
     completeTransition
   }
