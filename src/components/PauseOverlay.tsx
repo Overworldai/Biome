@@ -73,8 +73,21 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   useEffect(() => {
     if (!isActive) {
       setView('main')
+      return
     }
-  }, [isActive])
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (view === 'scenes') {
+        setView('main')
+      } else if (canUnpause) {
+        requestPointerLock()
+      }
+    }
+
+    window.addEventListener('keyup', handleKeyUp)
+    return () => window.removeEventListener('keyup', handleKeyUp)
+  }, [isActive, view, canUnpause, requestPointerLock])
 
   useEffect(() => {
     try {
