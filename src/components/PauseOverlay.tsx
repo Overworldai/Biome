@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { invoke } from '../bridge'
-import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
 import type { SeedRecord } from '../types/app'
 import SocialCtaRow from './SocialCtaRow'
+import MenuSettingsView from './MenuSettingsView'
 import { useConfig } from '../hooks/useConfig'
 
 const MAX_THUMBNAILS = 24
 const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { toggleSettings } = usePortal()
   const { canUnpause, requestPointerLock, reset, sendPromptWithSeed } = useStreaming()
   const { getUrl } = useConfig()
-  const [view, setView] = useState<'main' | 'scenes'>('main')
+  const [view, setView] = useState<'main' | 'scenes' | 'settings'>('main')
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -78,7 +77,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (view === 'scenes') {
+      if (view === 'scenes' || view === 'settings') {
         setView('main')
       } else if (canUnpause) {
         requestPointerLock()
@@ -250,7 +249,11 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       id="pause-overlay"
     >
       <div className="absolute inset-0 pointer-events-none [background:repeating-linear-gradient(0deg,transparent_0px,transparent_2px,rgba(255,255,255,0.04)_2px,rgba(255,255,255,0.04)_4px)]"></div>
-      {view === 'main' ? (
+      {view === 'settings' ? (
+        <div className="absolute inset-0">
+          <MenuSettingsView onBack={() => setView('main')} />
+        </div>
+      ) : view === 'main' ? (
         <div
           className="absolute inset-0 p-[3.8%_4%]"
           style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
@@ -329,7 +332,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <button
               type="button"
               className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
-              onClick={toggleSettings}
+              onClick={() => setView('settings')}
             >
               Settings
             </button>
