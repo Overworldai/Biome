@@ -19,6 +19,59 @@
   --color-darker: #080c10;
   --color-darkest: #020617;
   --color-close-hover: #dc3232;
+
+  /* Text colors */
+  --color-text-primary: rgba(248, 248, 245, 0.95);
+  --color-text-secondary: rgba(245, 249, 255, 0.95);
+  --color-text-muted: rgba(238, 244, 252, 0.68);
+  --color-text-dim: rgba(200, 200, 200, 0.7);
+  --color-text-inverse: rgba(18, 22, 30, 0.95);
+  --color-text-hud: rgba(230, 255, 255, 0.9);
+  --color-text-error: rgba(255, 100, 100, 0.9);
+
+  /* HUD cyan opacity variants */
+  --color-hud-85: rgba(120, 255, 245, 0.85);
+  --color-hud-70: rgba(120, 255, 245, 0.7);
+  --color-hud-60: rgba(120, 255, 245, 0.6);
+  --color-hud-50: rgba(120, 255, 245, 0.5);
+  --color-hud-45: rgba(120, 255, 245, 0.45);
+  --color-hud-30: rgba(120, 255, 245, 0.3);
+  --color-hud-20: rgba(120, 255, 245, 0.2);
+  --color-hud-18: rgba(120, 255, 245, 0.18);
+  --color-hud-10: rgba(120, 255, 245, 0.1);
+  --color-hud-08: rgba(120, 255, 245, 0.08);
+  --color-hud-04: rgba(120, 255, 245, 0.04);
+
+  /* Surface/background colors */
+  --color-surface-btn-primary: rgba(248, 248, 245, 0.95);
+  --color-surface-btn-secondary: rgba(10, 16, 28, 0.38);
+  --color-surface-card: rgba(4, 7, 12, 0.5);
+  --color-surface-control: rgba(2, 5, 10, 0.54);
+
+  /* Border colors */
+  --color-border-light: rgba(245, 249, 255, 0.8);
+  --color-border-medium: rgba(245, 249, 255, 0.52);
+
+  /* Font sizes */
+  --text-body: clamp(22px, 2.1cqw, 34px);
+  --text-heading: clamp(40px, 4.4cqw, 68px);
+  --text-caption: clamp(16px, 1.3cqw, 22px);
+  --text-small: clamp(14px, 1.15cqw, 19px);
+
+  /* Spacing */
+  --spacing-card-w: 7.8cqw;
+  --spacing-btn-w: 13cqw;
+  --spacing-btn-min-w: 150px;
+
+  /* Border radius */
+  --radius-card: 0.35cqw;
+  --radius-panel: 0.4cqw;
+  --radius-lg: 0.5cqw;
+
+  /* Letter spacing */
+  --tracking-wide: 0.05em;
+  --tracking-wider: 0.1em;
+  --tracking-widest: 0.2em;
 }
 
 /* ============================================

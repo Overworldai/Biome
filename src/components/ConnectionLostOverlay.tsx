@@ -31,11 +31,11 @@ const ConnectionLostOverlay = () => {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <span className="font-mono text-[3cqw] font-bold tracking-[0.2em] text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
+        <span className="font-mono text-[3cqw] font-bold tracking-widest text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
           CONNECTION LOST
         </span>
         <button
-          className="mt-[1cqh] px-[3cqw] py-[1.2cqh] font-mono text-[1.5cqw] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-[0.5cqw] cursor-pointer transition-all duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
+          className="mt-[1cqh] px-[3cqw] py-[1.2cqh] font-mono text-[1.5cqw] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-lg cursor-pointer transition-all duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
           onClick={handleDismiss}
         >
           RECONNECT

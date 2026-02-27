@@ -4,7 +4,7 @@ import { listen } from '../bridge'
 // Determine log line color class based on content
 const getLogClass = (line: string): string => {
   if (line.includes('[ERROR]') || line.includes('FATAL') || line.includes('Error:')) {
-    return 'text-[rgba(255,100,100,0.9)]'
+    return 'text-text-error'
   }
   if (line.includes('[WARNING]') || line.includes('Warning:')) {
     return 'text-[rgba(255,200,100,0.9)]'
@@ -77,7 +77,7 @@ const ServerLogDisplay = ({
       >
         <div className="flex items-center gap-[0.8cqw]">
           <span
-            className={`font-mono text-[1.2cqw] tracking-[0.1em] uppercase ${isLoadingInline ? 'font-serif tracking-[0.02em] text-[rgba(255,255,255,0.94)]' : 'text-warm/90'}`}
+            className={`font-mono text-[1.2cqw] tracking-wider uppercase ${isLoadingInline ? 'font-serif tracking-[0.02em] text-[rgba(255,255,255,0.94)]' : 'text-warm/90'}`}
           >
             {showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}
           </span>
@@ -120,7 +120,7 @@ const ServerLogDisplay = ({
       </div>
       {showDismiss && (
         <button
-          className="mx-[1.2cqw] my-[1cqh] px-[1.5cqw] py-[0.6cqh] bg-[rgba(255,100,100,0.15)] border border-[rgba(255,100,100,0.4)] rounded-[0.4cqw] text-[rgba(255,100,100,0.9)] font-mono text-[1cqw] tracking-[0.1em] cursor-pointer transition-all duration-200 ease-in-out hover:bg-[rgba(255,100,100,0.25)] hover:border-[rgba(255,100,100,0.6)]"
+          className="mx-[1.2cqw] my-[1cqh] px-[1.5cqw] py-[0.6cqh] bg-[rgba(255,100,100,0.15)] border border-[rgba(255,100,100,0.4)] rounded-panel text-text-error font-mono text-[1cqw] tracking-wider cursor-pointer transition-all duration-200 ease-in-out hover:bg-[rgba(255,100,100,0.25)] hover:border-[rgba(255,100,100,0.6)]"
           onClick={onDismiss}
         >
           DISMISS

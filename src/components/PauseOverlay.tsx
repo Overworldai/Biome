@@ -258,10 +258,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <SocialCtaRow rowClassName="absolute right-[4%] top-[5%] flex gap-[0.6cqw]" />
 
           <section className="absolute top-[12%] left-[4%] w-[70%] flex flex-col gap-[0.7cqh]">
-            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">
-              Pinned Scenes
-            </h2>
-            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">
+            <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Pinned Scenes</h2>
+            <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
               Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.
             </p>
             <div className="flex gap-[0.5cqw] mt-[0.5cqh]">
@@ -270,7 +268,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                   <button
                     type="button"
                     key={`pinned-${seed.filename}`}
-                    className="relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
+                    className="relative w-card-w min-w-24 aspect-video rounded-card border border-border-medium bg-surface-card p-0 cursor-pointer overflow-hidden"
                     title={seed.filename}
                     onClick={() => handleSceneSelect(seed.filename)}
                   >
@@ -283,7 +281,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                 ))
               ) : (
                 <div
-                  className="relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-dashed border-[rgba(245,249,255,0.42)] bg-[rgba(4,7,12,0.24)] p-0 overflow-hidden grid place-items-center"
+                  className="relative w-card-w min-w-24 aspect-video rounded-card border border-dashed border-[rgba(245,249,255,0.42)] bg-[rgba(4,7,12,0.24)] p-0 overflow-hidden grid place-items-center"
                   aria-hidden="true"
                 >
                   <svg
@@ -302,42 +300,42 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             </div>
           </section>
 
-          <div className="absolute left-[4%] bottom-[var(--pause-bottom-baseline)] font-serif text-[clamp(56px,4.8cqw,82px)] leading-[0.8] text-left text-[rgba(248,248,245,0.95)] font-normal translate-y-[0.35cqh]">
+          <div className="absolute left-[4%] bottom-[var(--pause-bottom-baseline)] font-serif text-[clamp(56px,4.8cqw,82px)] leading-[0.8] text-left text-text-primary font-normal translate-y-[0.35cqh]">
             Paused
           </div>
 
-          <div className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-[13cqw] min-w-[150px] flex flex-col gap-[1.1cqh]">
+          <div className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
             <button
               type="button"
-              className="w-full border border-[rgba(245,249,255,0.8)] bg-[rgba(248,248,245,0.95)] text-[rgba(18,22,30,0.95)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+              className="w-full border border-border-light bg-surface-btn-primary text-text-inverse font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
               onClick={() => canUnpause && requestPointerLock()}
             >
               Resume
             </button>
             <button
               type="button"
-              className="w-full border border-[rgba(245,249,255,0.8)] bg-[rgba(10,16,28,0.38)] text-[rgba(245,249,255,0.95)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
               onClick={handleResetAndResume}
             >
               Reset
             </button>
             <button
               type="button"
-              className="w-full border border-[rgba(245,249,255,0.8)] bg-[rgba(10,16,28,0.38)] text-[rgba(245,249,255,0.95)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
               onClick={() => setView('scenes')}
             >
               Scenes
             </button>
             <button
               type="button"
-              className="w-full border border-[rgba(245,249,255,0.8)] bg-[rgba(10,16,28,0.38)] text-[rgba(245,249,255,0.95)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+              className="w-full border border-border-light bg-surface-btn-secondary text-text-secondary font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
               onClick={toggleSettings}
             >
               Settings
             </button>
             <button
               type="button"
-              className="w-full border border-[rgba(193,32,11,0.95)] bg-[rgba(156,23,8,0.9)] text-[rgba(255,240,240,0.98)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+              className="w-full border border-[rgba(193,32,11,0.95)] bg-[rgba(156,23,8,0.9)] text-[rgba(255,240,240,0.98)] font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
               onClick={() => void invoke('quit-app')}
             >
               Quit
@@ -350,10 +348,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           style={{ '--pause-bottom-baseline': '8%' } as React.CSSProperties}
         >
           <section className="absolute top-[12%] left-[4%] w-[70%]">
-            <h2 className="m-0 font-serif text-[clamp(40px,4.4cqw,68px)] text-[rgba(248,248,245,0.95)] font-normal text-left">
-              Scenes
-            </h2>
-            <p className="m-0 font-serif text-[clamp(16px,1.3cqw,22px)] text-[rgba(238,244,252,0.68)] max-w-[58cqw] text-left">
+            <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Scenes</h2>
+            <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
               All of your scenes. Add more by using the + button, or by drag/pasting them in.
             </p>
             {uploadError && <p className="!mt-[0.6cqh] !text-[rgba(255,180,180,0.92)]">{uploadError}</p>}
@@ -367,11 +363,11 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <div className="mt-[1.1cqh] flex gap-[0.45cqw] flex-wrap w-full">
               <button
                 type="button"
-                className={`w-[7.8cqw] min-w-24 aspect-video border border-[rgba(245,249,255,0.84)] bg-[rgba(248,248,245,0.14)] p-0 grid grid-cols-2 overflow-hidden ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
+                className={`w-card-w min-w-24 aspect-video border border-[rgba(245,249,255,0.84)] bg-[rgba(248,248,245,0.14)] p-0 grid grid-cols-2 overflow-hidden ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
                 onClick={(event) => event.preventDefault()}
               >
                 <span
-                  className="grid place-items-center font-serif text-[clamp(14px,1.15cqw,19px)] text-[rgba(245,249,255,0.95)] cursor-pointer"
+                  className="grid place-items-center font-serif text-small text-text-secondary cursor-pointer"
                   onClick={() => void handleClipboardUpload()}
                   title="Paste image from clipboard"
                 >
@@ -388,7 +384,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                   </svg>
                 </span>
                 <span
-                  className="grid place-items-center font-serif text-[clamp(14px,1.15cqw,19px)] text-[rgba(245,249,255,0.95)] cursor-pointer border-l border-[rgba(245,249,255,0.35)]"
+                  className="grid place-items-center font-serif text-small text-text-secondary cursor-pointer border-l border-[rgba(245,249,255,0.35)]"
                   onClick={() => fileInputRef.current?.click()}
                   title="Browse for image file"
                 >
@@ -409,7 +405,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                 <button
                   type="button"
                   key={`scene-${seed.filename}`}
-                  className="group/scene relative w-[7.8cqw] min-w-24 aspect-video rounded-[0.35cqw] border border-[rgba(245,249,255,0.52)] bg-[rgba(4,7,12,0.5)] p-0 cursor-pointer overflow-hidden"
+                  className="group/scene relative w-card-w min-w-24 aspect-video rounded-card border border-border-medium bg-surface-card p-0 cursor-pointer overflow-hidden"
                   title={seed.filename}
                   onClick={() => handleSceneSelect(seed.filename)}
                 >
@@ -421,7 +417,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                   <span className="absolute top-1 right-1 flex gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
                     <button
                       type="button"
-                      className={`w-4 h-4 grid place-items-center border bg-[rgba(2,5,10,0.54)] text-[10px] leading-none rounded-none p-0 cursor-pointer ${pinnedSceneIds.includes(seed.filename) ? 'text-[rgba(255,237,127,0.96)] border-[rgba(255,237,127,0.9)]' : 'text-[rgba(245,249,255,0.92)] border-[rgba(245,249,255,0.7)]'}`}
+                      className={`w-4 h-4 grid place-items-center border bg-surface-control text-[10px] leading-none rounded-none p-0 cursor-pointer ${pinnedSceneIds.includes(seed.filename) ? 'text-[rgba(255,237,127,0.96)] border-[rgba(255,237,127,0.9)]' : 'text-[rgba(245,249,255,0.92)] border-[rgba(245,249,255,0.7)]'}`}
                       title={pinnedSceneIds.includes(seed.filename) ? 'Unpin scene' : 'Pin scene'}
                       onClick={(event) => {
                         event.stopPropagation()
@@ -433,7 +429,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                     {!seed.is_default && (
                       <button
                         type="button"
-                        className="w-4 h-4 grid place-items-center border border-[rgba(255,170,170,0.82)] bg-[rgba(2,5,10,0.54)] text-[rgba(255,205,205,0.95)] text-[10px] leading-none rounded-none p-0 cursor-pointer"
+                        className="w-4 h-4 grid place-items-center border border-[rgba(255,170,170,0.82)] bg-surface-control text-[rgba(255,205,205,0.95)] text-[10px] leading-none rounded-none p-0 cursor-pointer"
                         title="Remove scene"
                         onClick={(event) => {
                           event.stopPropagation()
@@ -450,7 +446,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </section>
           <button
             type="button"
-            className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-[13cqw] min-w-[150px] border border-[rgba(245,249,255,0.8)] bg-[rgba(248,248,245,0.95)] text-[rgba(18,22,30,0.95)] font-serif text-[clamp(22px,2.1cqw,34px)] leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
+            className="absolute right-[4%] bottom-[var(--pause-bottom-baseline)] w-btn-w min-w-btn-min-w border border-border-light bg-surface-btn-primary text-text-inverse font-serif text-body leading-none py-[0.8cqh] px-0 rounded-none cursor-pointer"
             onClick={() => setView('main')}
           >
             Back

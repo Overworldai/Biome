@@ -469,7 +469,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
             {availableTabs.map((tab) => (
               <button
                 key={tab.id}
-                className={`w-[3cqw] h-[3cqw] min-w-7 min-h-7 p-0 flex items-center justify-center text-hud/40 bg-hud/3 border border-hud/15 rounded-[0.4cqw] cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-[60%] [&>svg]:h-[60%] hover:text-hud/80 hover:bg-hud/8 hover:border-hud/30 ${activeTab === tab.id ? 'active text-hud bg-hud/12 !border-hud/50' : ''}`}
+                className={`w-[3cqw] h-[3cqw] min-w-7 min-h-7 p-0 flex items-center justify-center text-hud/40 bg-hud/3 border border-hud/15 rounded-panel cursor-pointer transition-all duration-200 ease-in-out [&>svg]:w-[60%] [&>svg]:h-[60%] hover:text-hud/80 hover:bg-hud/8 hover:border-hud/30 ${activeTab === tab.id ? 'active text-hud bg-hud/12 !border-hud/50' : ''}`}
                 onClick={() => setActiveTab(tab.id)}
                 title={tab.title}
               >
@@ -483,10 +483,10 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           {/* Prompt tab content */}
           {activeTab === 'prompt' && (
-            <div className="flex-1 flex flex-col bg-hud/4 border border-hud/15 rounded-[0.5cqw] overflow-hidden min-h-0 transition-[border-color,background,box-shadow] duration-200 ease-in-out hover:border-hud/30 hover:bg-hud/6 focus-within:border-hud/50 focus-within:bg-hud/8 focus-within:shadow-[0_0_0_1px_rgba(120,255,245,0.1)]">
+            <div className="flex-1 flex flex-col bg-hud/4 border border-hud/15 rounded-lg overflow-hidden min-h-0 transition-[border-color,background,box-shadow] duration-200 ease-in-out hover:border-hud/30 hover:bg-hud/6 focus-within:border-hud/50 focus-within:bg-hud/8 focus-within:shadow-[0_0_0_1px_rgba(120,255,245,0.1)]">
               <textarea
                 ref={textareaRef}
-                className="prompt-input-compact flex-1 w-full min-h-[4cqh] py-[1cqh] px-[1.5cqw] font-mono text-[1.5cqw] leading-[1.4] text-[rgba(230,255,255,0.9)] bg-transparent border-none outline-none resize-none overflow-y-auto overflow-x-hidden [scrollbar-width:thin] [scrollbar-color:rgba(120,255,245,0.3)_transparent] disabled:opacity-70 disabled:cursor-not-allowed"
+                className="prompt-input-compact flex-1 w-full min-h-[4cqh] py-[1cqh] px-[1.5cqw] font-mono text-[1.5cqw] leading-[1.4] text-text-hud bg-transparent border-none outline-none resize-none overflow-y-auto overflow-x-hidden [scrollbar-width:thin] [scrollbar-color:rgba(120,255,245,0.3)_transparent] disabled:opacity-70 disabled:cursor-not-allowed"
                 placeholder={isDisabledByConfig ? disabledMessage : lastPrompt || 'Describe a scene...'}
                 value={isLoading ? status || '' : textPrompt}
                 onChange={(e) => setTextPrompt(e.target.value)}
@@ -502,7 +502,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
               <div className="flex flex-row justify-end items-center gap-[1.2cqw] py-[0.8cqh] px-[1cqw] shrink-0">
                 {/* Mouse sensitivity slider */}
                 <div className="flex items-center gap-[0.5cqw] group">
-                  <span className="font-mono text-[1.4cqw] text-hud/50 tracking-[0.05em] uppercase transition-colors duration-200 ease-in-out group-hover:text-hud">
+                  <span className="font-mono text-[1.4cqw] text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-hud">
                     MOUSE SENS
                   </span>
                   <div className="flex items-center gap-0 min-w-[6cqw]">
@@ -525,7 +525,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                       ></div>
                     </div>
                   </div>
-                  <span className="font-mono text-[1.4cqw] min-w-[2.5cqw] text-hud/80 tracking-[0.05em] text-right transition-colors duration-200 ease-in-out group-hover:text-hud">
+                  <span className="font-mono text-[1.4cqw] min-w-[2.5cqw] text-hud/80 tracking-wide text-right transition-colors duration-200 ease-in-out group-hover:text-hud">
                     {mouseSensitivity.toFixed(1)}
                   </span>
                 </div>
@@ -551,7 +551,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                       <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-[0.05em] uppercase transition-colors duration-200 ease-in-out group-hover:text-hud">
+                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-hud">
                     RESET({RESET_KEY_DISPLAY})
                   </span>
                 </div>
@@ -569,7 +569,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                       <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-[0.05em] uppercase transition-colors duration-200 ease-in-out group-hover:text-[rgba(255,120,120,1)]">
+                  <span className="font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-[rgba(255,120,120,1)]">
                     EXIT
                   </span>
                 </div>
@@ -602,7 +602,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                     )}
                   </span>
                   <span
-                    className={`font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-[0.05em] uppercase transition-colors duration-200 ease-in-out group-hover:text-hud ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'group-hover:text-hud/50' : ''}`}
+                    className={`font-mono text-[1.4cqw] min-w-max text-hud/50 tracking-wide uppercase transition-colors duration-200 ease-in-out group-hover:text-hud ${isLoading || !textPrompt.trim() || isDisabledByConfig ? 'group-hover:text-hud/50' : ''}`}
                   >
                     APPLY
                   </span>
@@ -623,7 +623,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                 style={{ display: 'none' }}
               />
 
-              <div className="seeds-gallery flex-1 flex flex-wrap content-start gap-[0.6cqw] overflow-y-auto overflow-x-hidden p-[0.5cqw] bg-black/15 border border-hud/10 rounded-[0.4cqw] min-h-0">
+              <div className="seeds-gallery flex-1 flex flex-wrap content-start gap-[0.6cqw] overflow-y-auto overflow-x-hidden p-[0.5cqw] bg-black/15 border border-hud/10 rounded-panel min-h-0">
                 {/* Upload button - always first */}
                 <div
                   className={`relative w-[8cqw] h-[8cqw] min-w-[60px] min-h-[60px] border-2 border-dashed border-hud/20 rounded-[0.3cqw] overflow-hidden cursor-pointer transition-all duration-200 ease-in-out bg-black/30 hover:border-hud/60 hover:shadow-[0_0_8px_rgba(120,255,245,0.3)] hover:scale-105 hover:bg-hud/5 ${uploadingImage ? 'uploading' : ''} ${seedsDisabled ? 'disabled opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
@@ -733,7 +733,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
                         </div>
                       )}
                       {!seed.is_safe && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[rgba(255,100,100,0.9)] [&>svg]:w-[40%] [&>svg]:h-[40%]">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-text-error [&>svg]:w-[40%] [&>svg]:h-[40%]">
                           <svg
                             viewBox="0 0 24 24"
                             fill="none"
@@ -758,7 +758,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
 
           {/* Error display */}
           {error && (
-            <div className="absolute -bottom-[4cqh] left-0 right-0 py-[0.6cqh] px-[1.5cqw] font-mono text-[1.1cqw] text-[#ff6b6b] bg-[rgba(255,80,80,0.15)] border border-[rgba(255,80,80,0.3)] rounded-[0.5cqw] text-center">
+            <div className="absolute -bottom-[4cqh] left-0 right-0 py-[0.6cqh] px-[1.5cqw] font-mono text-[1.1cqw] text-[#ff6b6b] bg-[rgba(255,80,80,0.15)] border border-[rgba(255,80,80,0.3)] rounded-lg text-center">
               {error}
             </div>
           )}
@@ -772,7 +772,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
         <div className="flex flex-col items-center gap-[1cqh] py-[1cqh] px-[2cqw] animate-[seedRejectedFadeIn_0.4s_ease-out]">
           <div className="flex items-center gap-[0.5cqw]">
             <svg
-              className="w-[1.6cqw] h-[1.6cqw] min-w-4 min-h-4 shrink-0 text-[rgba(255,100,100,0.9)] animate-[seedRejectedPulse_2s_ease-in-out_infinite]"
+              className="w-[1.6cqw] h-[1.6cqw] min-w-4 min-h-4 shrink-0 text-text-error animate-[seedRejectedPulse_2s_ease-in-out_infinite]"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -792,7 +792,7 @@ const BottomPanel = ({ isOpen, isHidden, onToggleHidden }: BottomPanelProps) => 
             it.
           </span>
           <button
-            className="py-[0.5cqh] px-[1.5cqw] font-mono text-[0.9cqw] font-medium tracking-[0.1em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-[0.4cqw] cursor-pointer transition-all duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
+            className="py-[0.5cqh] px-[1.5cqw] font-mono text-[0.9cqw] font-medium tracking-wider uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-panel cursor-pointer transition-all duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
             onClick={() => setRejectedSeed(null)}
           >
             DISMISS

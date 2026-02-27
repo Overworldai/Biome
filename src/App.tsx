@@ -306,7 +306,7 @@ const HoloFrame = () => {
 
             <button
               type="button"
-              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
+              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-text-secondary leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
               onClick={toggleSettings}
             >
               Settings
@@ -430,7 +430,7 @@ const HoloFrame = () => {
 
             <button
               type="button"
-              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-[rgba(245,249,255,0.95)] leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
+              className="absolute z-[1] right-[var(--menu-right-edge)] bottom-[4.1%] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none cursor-pointer font-serif text-[clamp(19px,2.2cqw,30px)] text-text-secondary leading-none tracking-tight bg-[rgba(8,12,20,0.28)] border border-[rgba(245,251,255,0.8)] pointer-events-auto transition-all duration-[160ms] hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:-translate-y-px"
               onClick={toggleSettings}
             >
               Back

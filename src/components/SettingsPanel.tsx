@@ -300,9 +300,9 @@ const SettingsPanel = () => {
       className="absolute inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-[settingsOverlayFadeIn_0.2s_ease]"
       onClick={handleBackdropClick}
     >
-      <div className="settings-panel flex w-[65%] max-h-[85%] flex-col overflow-hidden border border-[rgba(120,255,245,0.3)] bg-[rgba(10,14,18,0.95)] animate-[settingsPanelSlideIn_0.25s_ease] shadow-[0_0_20px_rgba(0,0,0,0.4),0_0_10px_rgba(120,255,245,0.08),inset_0_1px_0_rgba(120,255,245,0.1)]">
+      <div className="settings-panel flex w-[65%] max-h-[85%] flex-col overflow-hidden border border-hud-30 bg-[rgba(10,14,18,0.95)] animate-[settingsPanelSlideIn_0.25s_ease] shadow-[0_0_20px_rgba(0,0,0,0.4),0_0_10px_rgba(120,255,245,0.08),inset_0_1px_0_rgba(120,255,245,0.1)]">
         <div className="flex items-center justify-between">
-          <span className="font-mono uppercase tracking-widest text-[rgba(120,255,245,0.85)]">Settings</span>
+          <span className="font-mono uppercase tracking-widest text-hud-85">Settings</span>
           <button className="flex cursor-pointer items-center justify-center p-0" onClick={handleClose}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
@@ -313,13 +313,11 @@ const SettingsPanel = () => {
         <div className="panel-content flex-1 overflow-y-auto">
           {/* World Engine Section */}
           <div className="">
-            <h3 className="font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">
-              World Engine
-            </h3>
+            <h3 className="font-mono font-semibold uppercase tracking-widest text-hud-50">World Engine</h3>
 
             {/* Engine Directory - Always visible */}
             <div className="flex items-center">
-              <span className="font-mono whitespace-nowrap text-[rgba(200,200,200,0.7)]">Engine Directory:</span>
+              <span className="font-mono whitespace-nowrap text-text-dim">Engine Directory:</span>
               <button
                 className="flex flex-1 cursor-pointer items-center justify-between min-w-0 transition-all duration-200"
                 onClick={handleOpenEngineDir}
@@ -344,34 +342,34 @@ const SettingsPanel = () => {
 
             {/* Engine Mode Selector */}
             <div className="group setting-group relative text-left transition-all duration-200">
-              <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+              <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                 Engine Mode
               </label>
               <div className="flex">
                 <button
-                  className={`flex-1 cursor-pointer font-mono text-[rgba(200,200,200,0.7)] transition-all duration-200 ${isStandaloneMode ? 'active' : ''}`}
+                  className={`flex-1 cursor-pointer font-mono text-text-dim transition-all duration-200 ${isStandaloneMode ? 'active' : ''}`}
                   onClick={() => setEngineMode(ENGINE_MODES.STANDALONE)}
                 >
                   Standalone
                 </button>
                 <button
-                  className={`flex-1 cursor-pointer font-mono text-[rgba(200,200,200,0.7)] transition-all duration-200 ${isServerMode ? 'active' : ''}`}
+                  className={`flex-1 cursor-pointer font-mono text-text-dim transition-all duration-200 ${isServerMode ? 'active' : ''}`}
                   onClick={() => setEngineMode(ENGINE_MODES.SERVER)}
                 >
                   Server
                 </button>
               </div>
-              <span className="block italic text-[rgba(120,255,245,0.5)]">
+              <span className="block italic text-hud-50">
                 {isStandaloneMode ? 'Biome manages World Engine automatically' : 'You run the server yourself'}
               </span>
             </div>
 
             <div className="group setting-group relative text-left transition-all duration-200">
-              <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+              <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                 World Model
               </label>
               <select
-                className="setting-select w-full cursor-pointer font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                className="setting-select w-full cursor-pointer font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                 value={worldEngineModel}
                 onChange={(e) => setWorldEngineModel(e.target.value)}
                 disabled={modelsLoading}
@@ -385,7 +383,7 @@ const SettingsPanel = () => {
               <div className="flex">
                 <input
                   type="text"
-                  className="flex-1 w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                  className="flex-1 w-full font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                   value={customModelInput}
                   onChange={(e) => {
                     setCustomModelInput(e.target.value)
@@ -407,15 +405,13 @@ const SettingsPanel = () => {
                   Add
                 </button>
               </div>
-              <span className="block italic text-[rgba(120,255,245,0.5)]">
+              <span className="block italic text-hud-50">
                 {modelsLoading
                   ? 'Loading models from Hugging Face...'
                   : modelsError ||
                     `${modelOptions.filter((m) => m.isLocal).length} local / ${modelOptions.length} total - hf.co/collections/Overworld/waypoint-1`}
               </span>
-              {customModelError && (
-                <span className="block italic text-[rgba(120,255,245,0.5)]">{customModelError}</span>
-              )}
+              {customModelError && <span className="block italic text-hud-50">{customModelError}</span>}
             </div>
 
             {/* Standalone Engine Status */}
@@ -424,7 +420,7 @@ const SettingsPanel = () => {
                 {engineLoading ? (
                   <div className="flex items-center flex-wrap">
                     <div className="animate-[engineSpinner_0.8s_linear_infinite] shrink-0 rounded-full" />
-                    <span className="flex-1 min-w-0 font-mono text-[rgba(120,255,245,0.7)] break-words">
+                    <span className="flex-1 min-w-0 font-mono text-hud-70 break-words">
                       {setupProgress || 'Checking status...'}
                     </span>
                   </div>
@@ -497,12 +493,12 @@ const SettingsPanel = () => {
             {isServerMode && (
               <>
                 <div className="group setting-group relative text-left transition-all duration-200">
-                  <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+                  <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                     Server (host:port)
                   </label>
                   <input
                     type="text"
-                    className="w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                    className="w-full font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                     value={gpuServer}
                     onChange={(e) => setGpuServer(e.target.value)}
                     placeholder={`localhost:${STANDALONE_PORT}`}
@@ -511,7 +507,7 @@ const SettingsPanel = () => {
 
                 <div className="group setting-group relative text-left transition-all duration-200">
                   <div className="flex items-center justify-between">
-                    <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+                    <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 !mb-0 transition-colors duration-200 group-hover:text-hud-85">
                       Use SSL
                     </label>
                     <input
@@ -528,17 +524,15 @@ const SettingsPanel = () => {
 
           {/* API Keys Section */}
           <div className="">
-            <h3 className="font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">
-              API Keys
-            </h3>
+            <h3 className="font-mono font-semibold uppercase tracking-widest text-hud-50">API Keys</h3>
 
             <div className="group setting-group relative text-left transition-all duration-200">
-              <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+              <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                 OpenAI Key
               </label>
               <input
                 type="text"
-                className="w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                className="w-full font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                 value={openaiKey}
                 onChange={(e) => setOpenaiKey(e.target.value)}
                 placeholder="sk-..."
@@ -546,12 +540,12 @@ const SettingsPanel = () => {
             </div>
 
             <div className="group setting-group relative text-left transition-all duration-200">
-              <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+              <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                 FAL Key
               </label>
               <input
                 type="text"
-                className="w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                className="w-full font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                 value={falKey}
                 onChange={(e) => setFalKey(e.target.value)}
                 placeholder="fal-..."
@@ -559,29 +553,27 @@ const SettingsPanel = () => {
             </div>
 
             <div className="group setting-group relative text-left transition-all duration-200">
-              <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+              <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 transition-colors duration-200 group-hover:text-hud-85">
                 HuggingFace Token
               </label>
               <input
                 type="text"
-                className="w-full font-mono text-[rgba(230,255,255,0.9)] bg-[rgba(120,255,245,0.04)] border border-[rgba(120,255,245,0.2)] outline-none transition-all duration-200"
+                className="w-full font-mono text-text-hud bg-hud-04 border border-hud-20 outline-none transition-all duration-200"
                 value={huggingfaceKey}
                 onChange={(e) => setHuggingfaceKey(e.target.value)}
                 placeholder="hf_..."
               />
-              <span className="block italic text-[rgba(120,255,245,0.5)]">Required for World Engine model access</span>
+              <span className="block italic text-hud-50">Required for World Engine model access</span>
             </div>
           </div>
 
           {/* Features Section */}
           <div className="">
-            <h3 className="font-mono font-semibold uppercase tracking-[0.2em] text-[rgba(120,255,245,0.5)]">
-              Features
-            </h3>
+            <h3 className="font-mono font-semibold uppercase tracking-widest text-hud-50">Features</h3>
 
             <div className="group setting-group relative text-left transition-all duration-200">
               <div className="flex items-center justify-between">
-                <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+                <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 !mb-0 transition-colors duration-200 group-hover:text-hud-85">
                   Prompt Sanitizer
                 </label>
                 <input
@@ -595,7 +587,7 @@ const SettingsPanel = () => {
 
             <div className="group setting-group relative text-left transition-all duration-200">
               <div className="flex items-center justify-between">
-                <label className="block font-mono font-medium uppercase tracking-wider text-[rgba(120,255,245,0.6)] !mb-0 transition-colors duration-200 group-hover:text-[rgba(120,255,245,0.85)]">
+                <label className="block font-mono font-medium uppercase tracking-wider text-hud-60 !mb-0 transition-colors duration-200 group-hover:text-hud-85">
                   Seed Generation
                 </label>
                 <input
@@ -615,8 +607,8 @@ const SettingsPanel = () => {
               onClick={handleOpenConfig}
               title="Open config.json"
             >
-              <span className="text-[rgba(120,255,245,0.5)]">Config file:</span>
-              <span className="break-all text-[rgba(120,255,245,0.7)]">{configPath}</span>
+              <span className="text-hud-50">Config file:</span>
+              <span className="break-all text-hud-70">{configPath}</span>
             </div>
           )}
         </div>
