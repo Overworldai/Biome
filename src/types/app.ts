@@ -33,6 +33,10 @@ export type SeedRecord = {
   is_default: boolean
 }
 
+export type SeedRecordWithThumbnail = SeedRecord & {
+  thumbnail_base64: string | null
+}
+
 export type EngineStatus = {
   uv_installed: boolean
   repo_cloned: boolean

@@ -199,3 +199,13 @@
     transform: translateY(0) scale(1);
   }
 }
+
+@keyframes portalSubtitleBreath {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}

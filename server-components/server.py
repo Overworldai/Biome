@@ -89,7 +89,7 @@ try:
 
     print("[BIOME] Importing FastAPI...", flush=True)
     import uvicorn
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel
 
@@ -610,6 +610,126 @@ async def list_seeds():
     return JSONResponse({"seeds": all_seeds, "count": len(all_seeds)})
 
 
+def _generate_thumbnail_jpeg_bytes(file_path: str, size: int = 80) -> bytes:
+    """Generate a square JPEG thumbnail and return bytes."""
+    import io
+
+    img = Image.open(file_path)
+    img.thumbnail((size, size))
+
+    # Convert to RGB if needed (JPEG doesn't support alpha/palette modes)
+    if img.mode in ("RGBA", "LA", "P"):
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue()
+
+
+@app.get("/seeds/list-with-thumbnails")
+async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge=1, le=200)):
+    """Return all seed metadata plus base64 JPEG thumbnails in one response."""
+    # Wait for any in-progress scan to complete before reading cache
+    async with rescan_lock:
+        pass
+
+    cache_count = len(safe_seeds_cache)
+    safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe", False))
+    existing_path_count = sum(
+        1 for data in safe_seeds_cache.values() if os.path.exists(str(data.get("path", "")))
+    )
+    sample_filenames = list(safe_seeds_cache.keys())[:5]
+    logger.info(
+        "[SEEDS] /seeds/list requested: cache=%d safe=%d existing_paths=%d sample=%s",
+        cache_count,
+        safe_count,
+        existing_path_count,
+        sample_filenames,
+    )
+    if cache_count == 0:
+        logger.warning(
+            "[SEEDS] /seeds/list returning empty cache. "
+            "default_dir=%s uploads_dir=%s cache_file=%s",
+            DEFAULT_SEEDS_DIR,
+            UPLOADS_DIR,
+            CACHE_FILE,
+        )
+
+    cache_count = len(safe_seeds_cache)
+    safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe", False))
+    sample_filenames = list(safe_seeds_cache.keys())[:5]
+    logger.info(
+        "[SEEDS] /seeds/list-with-thumbnails requested: cache=%d safe=%d thumbnail_limit=%d sample=%s",
+        cache_count,
+        safe_count,
+        thumbnail_limit,
+        sample_filenames,
+    )
+    if cache_count == 0:
+        logger.warning(
+            "[SEEDS] /seeds/list-with-thumbnails returning empty cache. "
+            "default_dir=%s uploads_dir=%s cache_file=%s",
+            DEFAULT_SEEDS_DIR,
+            UPLOADS_DIR,
+            CACHE_FILE,
+        )
+
+    async def build_seed_entry(filename: str, data: dict) -> tuple[str, dict]:
+        file_path = str(data.get("path", ""))
+        is_default = not file_path.startswith(str(UPLOADS_DIR))
+        thumbnail_base64: str | None = None
+
+        if file_path and os.path.exists(file_path):
+            try:
+                thumb_bytes = await asyncio.to_thread(_generate_thumbnail_jpeg_bytes, file_path, 80)
+                thumbnail_base64 = base64.b64encode(thumb_bytes).decode("ascii")
+            except Exception as exc:
+                logger.error(f"Failed to generate thumbnail for {filename}: {exc}")
+
+        return (
+            filename,
+            {
+                "filename": filename,
+                "hash": data.get("hash", ""),
+                "is_safe": data.get("is_safe", False),
+                "is_default": is_default,
+                "checked_at": data.get("checked_at", 0),
+                "thumbnail_base64": thumbnail_base64,
+            },
+        )
+
+    ordered_items = list(safe_seeds_cache.items())
+    entries = await asyncio.gather(
+        *(
+            build_seed_entry(filename, data)
+            if idx < thumbnail_limit
+            else asyncio.sleep(
+                0,
+                result=(
+                    filename,
+                    {
+                        "filename": filename,
+                        "hash": data.get("hash", ""),
+                        "is_safe": data.get("is_safe", False),
+                        "is_default": not str(data.get("path", "")).startswith(str(UPLOADS_DIR)),
+                        "checked_at": data.get("checked_at", 0),
+                        "thumbnail_base64": None,
+                    },
+                ),
+            )
+            for idx, (filename, data) in enumerate(ordered_items)
+        )
+    )
+    seeds_with_thumbnails = dict(entries)
+    return JSONResponse({"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)})
+
+
 @app.get("/seeds/image/{filename}")
 async def get_seed_image(filename: str):
     """Serve full PNG seed image."""
@@ -635,8 +755,6 @@ async def get_seed_image(filename: str):
 @app.get("/seeds/thumbnail/{filename}")
 async def get_seed_thumbnail(filename: str):
     """Serve 80x80 JPEG thumbnail of seed image."""
-    import io
-
     # Validate filename is in cache
     if filename not in safe_seeds_cache:
         return JSONResponse({"error": "Seed not found"}, status_code=404)
@@ -647,24 +765,10 @@ async def get_seed_thumbnail(filename: str):
         return JSONResponse({"error": "Seed file not found"}, status_code=404)
 
     try:
-        # Generate thumbnail
-        img = await asyncio.to_thread(Image.open, file_path)
-        img.thumbnail((80, 80))
+        import io
 
-        # Convert RGBA to RGB if needed (JPEG doesn't support transparency)
-        if img.mode in ('RGBA', 'LA', 'P'):
-            # Create white background and composite
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-
-        # Convert to JPEG in memory
-        buffer = io.BytesIO()
-        await asyncio.to_thread(img.save, buffer, format="JPEG", quality=85)
+        thumbnail_bytes = await asyncio.to_thread(_generate_thumbnail_jpeg_bytes, file_path, 80)
+        buffer = io.BytesIO(thumbnail_bytes)
         buffer.seek(0)
 
         from fastapi.responses import StreamingResponse

@@ -385,6 +385,103 @@
     filter: blur(29px) saturate(1.2) brightness(1.16);
   }
 
+  .portal-subtitle {
+    animation: portalSubtitleBreath 3.2s ease-in-out infinite;
+    will-change: opacity, transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .portal-subtitle {
+      animation: none;
+    }
+  }
+
+  /* --- PAUSE SCENE GRIDS --- */
+  .pause-scene-scroll {
+    overflow-y: auto;
+    padding-right: 0.45cqw;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(220, 235, 255, 0.58) rgba(9, 14, 24, 0.32);
+  }
+  .pause-scene-scroll-pinned {
+    max-height: 36cqh;
+  }
+  .pause-scene-scroll-main {
+    max-height: 45cqh;
+  }
+  .pause-scene-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .pause-scene-scroll::-webkit-scrollbar-track {
+    background: rgba(9, 14, 24, 0.32);
+    border-radius: 999px;
+  }
+  .pause-scene-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, rgba(228, 239, 255, 0.8), rgba(171, 195, 224, 0.56));
+    border-radius: 999px;
+    border: 1px solid rgba(245, 249, 255, 0.34);
+  }
+  .pause-scene-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, rgba(240, 247, 255, 0.92), rgba(184, 206, 233, 0.72));
+  }
+
+  .pause-scene-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(175px, 14.5cqw, 280px), 1fr));
+    gap: clamp(8px, 0.72cqw, 16px);
+    width: 100%;
+  }
+  .pause-scene-card {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius-card);
+    border: 1px solid var(--color-border-medium);
+    background: var(--color-surface-card);
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .pause-scene-card-empty {
+    border-style: dashed;
+    border-color: rgba(245, 249, 255, 0.42);
+    background: rgba(4, 7, 12, 0.24);
+    cursor: default;
+  }
+  .pause-scene-add-card {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 1px solid rgba(245, 249, 255, 0.84);
+    background: rgba(248, 248, 245, 0.14);
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .pause-scene-action {
+    width: clamp(18px, 1.55cqw, 30px);
+    height: clamp(18px, 1.55cqw, 30px);
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(245, 249, 255, 0.7);
+    background: var(--color-surface-control);
+    color: rgba(245, 249, 255, 0.92);
+    font-size: clamp(10px, 0.95cqw, 16px);
+    line-height: 1;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .pause-scene-action.is-pinned {
+    color: rgba(255, 237, 127, 0.96);
+    border-color: rgba(255, 237, 127, 0.9);
+  }
+  .pause-scene-action.is-default {
+    color: rgba(245, 249, 255, 0.92);
+    border-color: rgba(245, 249, 255, 0.7);
+  }
+  .pause-scene-action.is-delete {
+    color: rgba(255, 205, 205, 0.95);
+    border-color: rgba(255, 170, 170, 0.82);
+  }
+
   /* --- MENU CHROME --- */
   .menu-settings-view::before {
     content: '';

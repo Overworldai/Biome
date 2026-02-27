@@ -1,4 +1,4 @@
-import type { AppConfig, EngineStatus, SeedRecord } from './app'
+import type { AppConfig, EngineStatus, SeedRecord, SeedRecordWithThumbnail } from './app'
 
 export type ModelAvailability = {
   id: string
@@ -40,6 +40,7 @@ export type IpcCommandMap = {
 
   // Seeds
   'list-seeds': { args: []; return: SeedRecord[] }
+  'list-seeds-with-thumbnails': { args: []; return: SeedRecordWithThumbnail[] }
   'delete-seed': { args: [filename: string]; return: void }
   'read-seed-as-base64': { args: [filename: string]; return: string }
   'read-seed-thumbnail': { args: [filename: string, maxSize: number]; return: string }

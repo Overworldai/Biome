@@ -186,6 +186,11 @@ const AppShell = () => {
           }}
           onShrinkComplete={completePortalShrink}
         />
+        {showMenuHome && portalVisible && !isEnteringLoading && (
+          <div className="portal-subtitle absolute z-[9] left-1/2 bottom-[18%] -translate-x-1/2 pointer-events-none text-center font-serif text-[clamp(20px,2.2cqw,32px)] tracking-[0.03em] text-[rgb(170,170,170)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
+            Enter the Overworld
+          </div>
+        )}
         {showMenuHome && (
           <div className="absolute inset-0 z-[9] pointer-events-none">
             <SocialCtaRow />
