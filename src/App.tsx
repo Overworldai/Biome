@@ -4,6 +4,7 @@ import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
 import { useAppStartup } from './hooks/useAppStartup'
+import { useFitWindowToContent } from './hooks/useWindow'
 import VideoContainer from './components/VideoContainer'
 import MenuSettingsView from './components/MenuSettingsView'
 import BackgroundSlideshow from './components/BackgroundSlideshow'
@@ -282,6 +283,9 @@ const AppShell = () => {
 const App = () => {
   // Run startup tasks (unpack server files, etc.)
   useAppStartup()
+
+  // Snap window to 16:9 after resize stops
+  useFitWindowToContent()
 
   return (
     <ConfigProvider>
