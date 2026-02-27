@@ -343,9 +343,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <ViewLabel>Paused</ViewLabel>
 
           <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
-            <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
-              Resume
-            </MenuButton>
             <MenuButton variant="secondary" className="w-full px-0" onClick={handleResetAndResume}>
               Reset
             </MenuButton>
@@ -355,8 +352,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('settings')}>
               Settings
             </MenuButton>
-            <MenuButton variant="danger" className="w-full px-0" onClick={() => void invoke('quit-app')}>
-              Quit
+            <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
+              Resume
             </MenuButton>
           </div>
         </div>
