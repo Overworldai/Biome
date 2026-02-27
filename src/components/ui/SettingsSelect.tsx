@@ -47,11 +47,11 @@ const SettingsSelect = ({ options, value, onChange, disabled }: SettingsSelectPr
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         disabled={disabled}
       >
-        <span className="flex-1 font-serif leading-[1.2] text-right text-[rgba(245,249,255,0.92)] p-[0.55cqh_0.8cqw] text-[clamp(18px,1.5cqw,24px)]">
+        <span className="flex-1 font-serif leading-[1.2] text-right text-[rgba(245,249,255,0.92)] p-[0.55cqh_1.42cqh] text-[2.67cqh]">
           {selectedOption ? <OptionContent option={selectedOption} /> : value}
         </span>
-        <span className="flex items-center justify-center w-[2cqw] bg-[rgba(245,251,255,0.95)]">
-          <svg className="w-[0.8cqw] h-[0.8cqw]" viewBox="0 0 10 6" fill="none">
+        <span className="flex items-center justify-center w-[3.56cqh] bg-[rgba(245,251,255,0.95)]">
+          <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 6" fill="none">
             <path d="M0 0L5 6L10 0H0Z" fill="rgba(10,14,24,0.95)" />
           </svg>
         </span>
@@ -63,7 +63,7 @@ const SettingsSelect = ({ options, value, onChange, disabled }: SettingsSelectPr
             <button
               key={option.value}
               type="button"
-              className={`w-full font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_0.8cqw] pr-[2.8cqw] text-[clamp(18px,1.5cqw,24px)] ${
+              className={`w-full font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] pr-[4.98cqh] text-[2.67cqh] ${
                 option.value === value
                   ? 'bg-[rgba(245,251,255,0.15)] text-[rgba(245,249,255,0.95)]'
                   : 'bg-transparent text-[rgba(245,249,255,0.82)] hover:bg-[rgba(245,251,255,0.08)]'

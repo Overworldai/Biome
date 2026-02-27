@@ -28,8 +28,8 @@ const SOCIAL_CTAS = [
 
 const ROW_CLASSES: Record<string, string> = {
   'menu-cta-row':
-    'menu-cta-row absolute top-[var(--edge-top)] right-[var(--edge-right)] flex gap-[0.7cqw] pointer-events-auto',
-  'pause-cta-row': 'pause-cta-row absolute right-[var(--edge-right)] top-[var(--edge-top)] flex gap-[0.6cqw]'
+    'menu-cta-row absolute top-[var(--edge-top)] right-[var(--edge-right)] flex gap-[1.24cqh] pointer-events-auto',
+  'pause-cta-row': 'pause-cta-row absolute right-[var(--edge-right)] top-[var(--edge-top)] flex gap-[1.07cqh]'
 }
 
 const SocialCtaRow = ({ rowClassName = 'menu-cta-row', buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
@@ -41,7 +41,7 @@ const SocialCtaRow = ({ rowClassName = 'menu-cta-row', buttonClassName = 'menu-c
           href={cta.href}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${buttonClassName} w-[2.6cqw] h-[2.6cqw] min-w-[22px] min-h-[22px] m-0 grid place-items-center box-border text-[rgba(238,248,255,0.88)] bg-[rgba(7,13,24,0.24)] border border-[rgba(236,247,255,0.34)] rounded-[0.45cqw] no-underline cursor-pointer transition-[transform,border-color,background] duration-150 ease-in-out hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] [&>svg]:w-[62%] [&>svg]:h-[62%]`}
+          className={`${buttonClassName} w-[4.62cqh] h-[4.62cqh] m-0 grid place-items-center box-border text-[rgba(238,248,255,0.88)] bg-[rgba(7,13,24,0.24)] border border-[rgba(236,247,255,0.34)] rounded-[0.8cqh] no-underline cursor-pointer transition-[transform,border-color,background-color] duration-150 ease-in-out hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] [&>svg]:w-[62%] [&>svg]:h-[62%]`}
           aria-label={cta.ariaLabel}
         >
           <svg viewBox="0 0 24 24" fill="currentColor">

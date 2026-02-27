@@ -20,7 +20,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 const Button = ({ variant, children, className = '', ...rest }: ButtonProps) => (
   <button
     type="button"
-    className={`font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-all duration-150 ${variantClasses[variant]} ${className}`}
+    className={`font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150 ${variantClasses[variant]} ${className}`}
     {...rest}
   >
     {children}

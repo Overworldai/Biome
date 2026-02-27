@@ -46,7 +46,7 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
     <div className="flex flex-col items-end gap-[0.4cqh]">
       <div
         ref={trackRef}
-        className="relative w-full border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)] cursor-pointer leading-[1.2] p-[0.275cqh_0.8cqw] text-[clamp(9px,0.75cqw,12px)]"
+        className="relative w-full border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)] cursor-pointer leading-[1.2] p-[0.275cqh_1.42cqh] text-[1.33cqh]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
       >
@@ -56,9 +56,7 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
         />
         <span className="invisible">X</span>
       </div>
-      {label && (
-        <span className="font-serif text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)]">{label}</span>
-      )}
+      {label && <span className="font-serif text-[rgba(238,244,252,0.66)] text-[2.4cqh]">{label}</span>}
     </div>
   )
 }

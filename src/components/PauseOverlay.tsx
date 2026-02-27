@@ -297,7 +297,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
           <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col gap-[0.7cqh]">
             <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Pinned Scenes</h2>
-            <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
+            <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
               Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.
             </p>
             <div className="pause-scene-scroll pause-scene-scroll-pinned mt-[0.7cqh]">
@@ -342,7 +342,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
           <ViewLabel>Paused</ViewLabel>
 
-          <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w min-w-btn-min-w flex flex-col gap-[1.1cqh]">
+          <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
             <MenuButton variant="secondary" className="w-full px-0" onClick={handleResetAndResume}>
               Reset
             </MenuButton>
@@ -361,10 +361,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         <div className="absolute inset-0 p-[3.8%_4%] z-[2]">
           <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] z-[3]">
             <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Scenes</h2>
-            <p className="m-0 font-serif text-caption text-text-muted max-w-[58cqw] text-left">
+            <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
               All of your scenes. Add more by using the + button, or by drag/pasting them in.
             </p>
-            <p className="m-0 mt-[0.4cqh] font-serif text-[clamp(12px,1.1cqw,16px)] text-[rgba(245,249,255,0.7)]">
+            <p className="m-0 mt-[0.4cqh] font-serif text-[1.96cqh] text-[rgba(245,249,255,0.7)]">
               Scenes loaded: {sceneList.length}
             </p>
             {uploadError && <p className="!mt-[0.6cqh] !text-[rgba(255,180,180,0.92)]">{uploadError}</p>}
@@ -388,7 +388,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                     title="Paste image from clipboard"
                   >
                     <svg
-                      className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4"
+                      className="w-[2.67cqh] h-[2.67cqh]"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -405,7 +405,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                     title="Browse for image file"
                   >
                     <svg
-                      className="w-[1.5cqw] min-w-4 h-[1.5cqw] min-h-4"
+                      className="w-[2.67cqh] h-[2.67cqh]"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -500,7 +500,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </section>
           <MenuButton
             variant="primary"
-            className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w min-w-btn-min-w px-0"
+            className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
             onClick={() => setView('main')}
           >
             Back

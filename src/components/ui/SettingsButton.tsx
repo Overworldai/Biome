@@ -9,7 +9,7 @@ type SettingsButtonProps = {
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'>
 
 const SettingsButton = ({ className = '', ...rest }: SettingsButtonProps) => (
-  <Button className={`leading-[1.2] p-[0.55cqh_0.8cqw] text-[clamp(18px,1.5cqw,24px)] ${className}`} {...rest} />
+  <Button className={`leading-[1.2] p-[0.55cqh_1.42cqh] text-[2.67cqh] ${className}`} {...rest} />
 )
 
 export default SettingsButton

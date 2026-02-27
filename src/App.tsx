@@ -178,7 +178,7 @@ const AppShell = () => {
         )}
         {isMainUi && !isConnected && !isEnteringLoading && (
           <div
-            className={`absolute top-1/2 z-8 w-[24cqw] cursor-pointer transition-[transform,left] duration-[180ms] ease-out ${!isConnected && isSettingsOpen ? 'left-[var(--portal-settings-left)] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
+            className={`absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-[180ms] ease-out ${!isConnected && isSettingsOpen ? 'left-[var(--portal-settings-left)] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
             style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
             onMouseEnter={() => setIsPortalHovered(true)}
             onMouseLeave={() => setIsPortalHovered(false)}
@@ -207,7 +207,7 @@ const AppShell = () => {
               />
             </div>
             {showMenuHome && (
-              <div className="portal-subtitle text-center font-serif text-[clamp(20px,2.2cqw,32px)] tracking-[0.03em] text-[rgb(255,255,255)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
+              <div className="portal-subtitle text-center font-serif text-[3.91cqh] tracking-[0.03em] text-[rgb(255,255,255)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
                 Enter the Overworld
               </div>
             )}
@@ -221,7 +221,7 @@ const AppShell = () => {
 
             <MenuButton
               variant="ghost"
-              className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
+              className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
               onClick={toggleSettings}
             >
               Settings

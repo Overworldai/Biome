@@ -12,7 +12,7 @@ const ConnectionLostOverlay = () => {
       className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[4px] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
     >
       <div className="flex flex-col items-center gap-[2cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
-        <div className="w-[8cqw] h-[8cqw] min-w-12 min-h-12 text-[rgba(255,120,120,0.9)] animate-[connectionLostPulse_2s_ease-in-out_infinite]">
+        <div className="w-[14.22cqh] h-[14.22cqh] text-[rgba(255,120,120,0.9)] animate-[connectionLostPulse_2s_ease-in-out_infinite]">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -31,11 +31,11 @@ const ConnectionLostOverlay = () => {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <span className="font-mono text-[3cqw] font-bold tracking-widest text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
+        <span className="font-mono text-[5.33cqh] font-bold tracking-widest text-white/95 [text-shadow:0_0_20px_rgba(255,120,120,0.5),0_0_40px_rgba(255,120,120,0.3)]">
           CONNECTION LOST
         </span>
         <button
-          className="mt-[1cqh] px-[3cqw] py-[1.2cqh] font-mono text-[1.5cqw] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-lg cursor-pointer transition-all duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
+          className="mt-[1cqh] px-[5.33cqh] py-[1.2cqh] font-mono text-[2.67cqh] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-lg cursor-pointer transition-[color,background-color,border-color,box-shadow] duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
           onClick={handleDismiss}
         >
           RECONNECT

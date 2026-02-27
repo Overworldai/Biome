@@ -20,20 +20,20 @@ const ConfirmModal = ({
     role="dialog"
     aria-modal="true"
   >
-    <div className="border border-[rgba(245,251,255,0.66)] bg-[rgba(8,12,20,0.92)] text-[rgba(246,249,255,0.95)] w-[min(420px,76cqw)] p-[1.8cqh_1.6cqw]">
-      <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[clamp(26px,2.2cqw,34px)]">{title}</h3>
-      <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[clamp(16px,1.35cqw,21px)]">{description}</p>
-      <div className="flex justify-end mt-[1.4cqh] gap-[0.8cqw]">
+    <div className="border border-[rgba(245,251,255,0.66)] bg-[rgba(8,12,20,0.92)] text-[rgba(246,249,255,0.95)] w-[58.33cqh] p-[1.8cqh_2.84cqh]">
+      <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[3.91cqh]">{title}</h3>
+      <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[2.4cqh]">{description}</p>
+      <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
         <button
           type="button"
-          className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]"
+          className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1.78cqh] text-[2.49cqh]"
           onClick={onCancel}
         >
           {cancelLabel}
         </button>
         <button
           type="button"
-          className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1cqw] text-[clamp(17px,1.4cqw,22px)]"
+          className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1.78cqh] text-[2.49cqh]"
           onClick={onConfirm}
         >
           {confirmLabel}

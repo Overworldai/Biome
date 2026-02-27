@@ -48,20 +48,19 @@
   --color-border-medium: rgba(245, 249, 255, 0.52);
 
   /* Font sizes */
-  --text-body: clamp(22px, 2.1cqw, 34px);
-  --text-heading: clamp(40px, 4.4cqw, 68px);
-  --text-caption: clamp(16px, 1.3cqw, 22px);
-  --text-small: clamp(14px, 1.15cqw, 19px);
+  --text-body: 3.73cqh;
+  --text-heading: 7.82cqh;
+  --text-caption: 2.31cqh;
+  --text-small: 2.04cqh;
 
   /* Spacing */
-  --spacing-card-w: 7.8cqw;
-  --spacing-btn-w: 13cqw;
-  --spacing-btn-min-w: 150px;
+  --spacing-card-w: 13.87cqh;
+  --spacing-btn-w: 23.11cqh;
 
   /* Border radius */
-  --radius-card: 0.35cqw;
-  --radius-panel: 0.4cqw;
-  --radius-lg: 0.5cqw;
+  --radius-card: 0.62cqh;
+  --radius-panel: 0.71cqh;
+  --radius-lg: 0.89cqh;
 
   /* Letter spacing */
   --tracking-wide: 0.05em;
@@ -91,7 +90,7 @@
   --bg-parallax-y: 0px;
   --portal-hover-scale: 1;
   --portal-tilt: -8deg;
-  --portal-center-x: 50cqw;
+  --portal-center-x: 88.9cqh;
   --portal-center-y: 50cqh;
   --portal-settings-left: 20%;
 }
@@ -149,7 +148,11 @@
     font-family: inherit;
     color: #fff;
     background-color: rgba(255, 255, 255, 0.05);
-    transition: all 0.2s ease;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   input:focus {
@@ -389,7 +392,7 @@
   /* --- PAUSE SCENE GRIDS --- */
   .pause-scene-scroll {
     overflow-y: auto;
-    padding-right: 0.45cqw;
+    padding-right: 0.8cqh;
     scrollbar-width: thin;
     scrollbar-color: rgba(220, 235, 255, 0.58) rgba(9, 14, 24, 0.32);
   }
@@ -417,8 +420,8 @@
 
   .pause-scene-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(clamp(175px, 14.5cqw, 280px), 1fr));
-    gap: clamp(8px, 0.72cqw, 16px);
+    grid-template-columns: repeat(auto-fill, minmax(25.78cqh, 1fr));
+    gap: 1.28cqh;
     width: 100%;
   }
   .pause-scene-card {
@@ -447,14 +450,14 @@
   }
 
   .pause-scene-action {
-    width: clamp(18px, 1.55cqw, 30px);
-    height: clamp(18px, 1.55cqw, 30px);
+    width: 2.76cqh;
+    height: 2.76cqh;
     display: grid;
     place-items: center;
     border: 1px solid rgba(245, 249, 255, 0.7);
     background: var(--color-surface-control);
     color: rgba(245, 249, 255, 0.92);
-    font-size: clamp(10px, 0.95cqw, 16px);
+    font-size: 1.69cqh;
     line-height: 1;
     border-radius: 2px;
     cursor: pointer;
@@ -566,9 +569,7 @@
     padding-bottom: 0.1cqh;
   }
   .loading-output-handle-bar {
-    width: 6.8cqw;
-    min-width: 56px;
-    max-width: 96px;
+    width: 12.09cqh;
     height: 0.45cqh;
     background: rgba(255, 255, 255, 0.85);
     box-shadow: 0 0 4px rgba(255, 255, 255, 0.34);
@@ -577,7 +578,7 @@
     background: rgba(255, 212, 212, 0.92);
   }
   .loading-inline-logs {
-    width: min(76cqw, 820px);
+    width: 135.11cqh;
     margin-top: 0.8cqh;
     transition:
       height 280ms ease,
@@ -592,8 +593,8 @@
     background: rgba(0, 0, 0, 0.45);
     color: rgba(255, 255, 255, 0.95);
     font-family: var(--font-serif);
-    font-size: clamp(14px, 1.25cqw, 18px);
-    padding: 0.35cqh 0.7cqw;
+    font-size: 2.22cqh;
+    padding: 0.35cqh 1.24cqh;
     cursor: pointer;
   }
 }

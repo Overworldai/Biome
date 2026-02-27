@@ -181,7 +181,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
   return (
     <div className="menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
-      <div className="menu-settings-panel absolute flex flex-col z-[1] top-[var(--edge-top-lg)] right-[var(--edge-right)] w-auto max-w-[760px] max-h-[78%] gap-[2.3cqh] pr-[0.4cqw] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
+      <div className="menu-settings-panel absolute flex flex-col z-[1] top-[var(--edge-top-lg)] right-[var(--edge-right)] w-auto max-w-[105.56cqh] max-h-[78%] gap-[2.3cqh] pr-[0.71cqh] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
         <SettingsSection title="Engine Mode" description="how will you run the model? as part of Biome, or elsewhere?">
           <SettingsToggle
             options={[
@@ -208,19 +208,19 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
           <SettingsSection
             title="World Engine"
             description={
-              <span className="inline-flex items-center gap-[0.4cqw]">
+              <span className="inline-flex items-center gap-[0.71cqh]">
                 is the local engine healthy?{' '}
                 {engineReady === null ? (
                   'unknown'
                 ) : engineReady ? (
                   <>
                     yes
-                    <span className="inline-block w-[0.55cqw] h-[0.55cqw] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+                    <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
                   </>
                 ) : (
                   <>
                     no
-                    <span className="inline-block w-[0.55cqw] h-[0.55cqw] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+                    <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
                   </>
                 )}
               </span>
@@ -246,7 +246,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
             disabled={menuModelsLoading}
           />
           {menuModelsError && (
-            <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[clamp(16px,1.35cqw,22px)] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+            <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[2.4cqh] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
               {menuModelsError}
             </p>
           )}
@@ -270,7 +270,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
       <MenuButton
         variant="primary"
-        className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_1.5cqw] box-border appearance-none text-[clamp(19px,2.2cqw,30px)] tracking-tight pointer-events-auto"
+        className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
         onClick={onBack}
       >
         Back
