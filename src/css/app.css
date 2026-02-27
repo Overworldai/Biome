@@ -2,12 +2,20 @@
 @import './animations.css';
 @import './video-mask.css';
 
+@font-face {
+  font-family: 'Salernomi J';
+  src: url('../../assets/9SALERNO.TTF') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ============================================
    DESIGN TOKENS
    ============================================ */
 @theme {
   --font-sans: 'Segoe UI', 'Inter', sans-serif;
-  --font-serif: 'Times New Roman', Georgia, serif;
+  --font-serif: 'Salernomi J', 'Times New Roman', Georgia, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --color-hud: #78fff5;
