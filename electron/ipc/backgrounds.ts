@@ -82,15 +82,4 @@ export function registerBackgroundsIpc(): void {
     const bytes = fs.readFileSync(filePath)
     return bytes.toString('base64')
   })
-
-  ipcMain.handle('read-loading-tunnel-as-base64', () => {
-    const tunnelPath = path.join(getResourcePath('seeds'), 'tunnel', 'tunnel.png')
-
-    if (!fs.existsSync(tunnelPath)) {
-      throw new Error('Loading tunnel image not found')
-    }
-
-    const bytes = fs.readFileSync(tunnelPath)
-    return bytes.toString('base64')
-  })
 }

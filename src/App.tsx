@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { invoke } from './bridge'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
+import { VortexProvider } from './context/VortexContext'
 import { useAppStartup } from './hooks/useAppStartup'
 import { useFitWindowToContent } from './hooks/useWindow'
 import VideoContainer from './components/VideoContainer'
 import MenuSettingsView from './components/MenuSettingsView'
 import BackgroundSlideshow from './components/BackgroundSlideshow'
 import PortalPreview from './components/PortalPreview'
-import LoadingTunnelCanvas from './components/LoadingTunnelCanvas'
+import VortexHost from './components/VortexHost'
 import TerminalDisplay from './components/TerminalDisplay'
 import SocialCtaRow from './components/SocialCtaRow'
 import ViewLabel from './components/ui/ViewLabel'
@@ -23,7 +23,6 @@ import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 
 const LAUNCH_PRE_SHRINK_MS = 420
-const LOADING_TUNNEL_FALLBACK_MIME = 'image/png'
 
 const AppShell = () => {
   const [isPortalHovered, setIsPortalHovered] = useState(false)
@@ -32,7 +31,6 @@ const AppShell = () => {
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
   const [isStreamingReveal, setIsStreamingReveal] = useState(false)
-  const [loadingTunnelImage, setLoadingTunnelImage] = useState<string | null>(null)
   const prevStreamingUiRef = useRef(false)
   const {
     state: portalState,
@@ -118,25 +116,6 @@ const AppShell = () => {
     return () => window.clearTimeout(timer)
   }, [isLaunchShrinking])
 
-  useEffect(() => {
-    let cancelled = false
-
-    invoke('read-loading-tunnel-as-base64')
-      .then((base64) => {
-        if (cancelled || !base64) return
-        setLoadingTunnelImage(`data:${LOADING_TUNNEL_FALLBACK_MIME};base64,${base64}`)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadingTunnelImage(null)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const handleLaunch = () => {
     if (
       portalState === portalStates.MAIN_MENU &&
@@ -196,7 +175,7 @@ const AppShell = () => {
             <div className="relative w-full" style={{ paddingBottom: '123%' }}>
               <PortalPreview
                 image={nextScenePreview}
-                hoverImage={loadingTunnelImage}
+                hoverContent={nextScenePreview ? <VortexHost mode="portal" /> : undefined}
                 isHovered={isPortalHovered}
                 visible={portalVisible}
                 isShrinking={isPortalShrinking || isLaunchShrinking}
@@ -282,12 +261,9 @@ const AppShell = () => {
               }
             }}
           >
-            <LoadingTunnelCanvas
-              intensity={1}
-              qualityMode="auto"
-              mouseReactive={true}
-              baseImageSrc={loadingTunnelImage}
-            />
+            <div className="absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
+              <VortexHost mode="loading" />
+            </div>
             {isLoadingUi && !isReturningToMenu && (
               <>
                 <TerminalDisplay onCancel={handleCancelLoading} />
@@ -312,7 +288,9 @@ const App = () => {
     <ConfigProvider>
       <PortalProvider>
         <StreamingProvider>
-          <AppShell />
+          <VortexProvider>
+            <AppShell />
+          </VortexProvider>
         </StreamingProvider>
       </PortalProvider>
     </ConfigProvider>

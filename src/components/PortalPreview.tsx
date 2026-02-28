@@ -1,9 +1,9 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { PARALLAX_ENABLED } from '../constants'
 
 type PortalPreviewProps = {
   image: string | null
-  hoverImage?: string | null
+  hoverContent?: ReactNode
   isHovered?: boolean
   visible: boolean
   isShrinking: boolean
@@ -15,7 +15,7 @@ type PortalPreviewProps = {
 
 const PortalPreview = ({
   image,
-  hoverImage = null,
+  hoverContent = null,
   isHovered = false,
   visible,
   isShrinking,
@@ -41,7 +41,7 @@ const PortalPreview = ({
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
-  if (!visible || (!image && !hoverImage)) return null
+  if (!visible || (!image && !hoverContent)) return null
 
   const portalStyle: CSSProperties = {
     ['--portal-offset-x' as string]: `${offset.x}px`,
@@ -66,15 +66,19 @@ const PortalPreview = ({
         >
           {image && (
             <div
-              className={`portal-preview-image absolute rounded-[inherit] origin-center ${isHovered && hoverImage ? 'opacity-0' : 'opacity-100'}`}
+              className="portal-preview-image absolute rounded-[inherit] origin-center opacity-100"
               style={{ backgroundImage: `url("${image}")` }}
             />
           )}
-          {hoverImage && (
+          {/* Vortex overlay: rendered at 70% opacity on hover so the scene image
+              darkens underneath the additive-blended streaks. The vortex canvas is
+              physically reparented here by VortexHost when this component mounts. */}
+          {hoverContent && (
             <div
-              className={`portal-preview-image absolute rounded-[inherit] origin-center ${isHovered ? 'opacity-100' : 'opacity-0'}`}
-              style={{ backgroundImage: `url("${hoverImage}")` }}
-            />
+              className={`absolute inset-0 rounded-[inherit] transition-opacity duration-200 ${isHovered ? 'opacity-70' : 'opacity-0'}`}
+            >
+              {hoverContent}
+            </div>
           )}
         </div>
       </div>
