@@ -20,6 +20,7 @@ export type FeaturesConfig = {
   world_engine_model: string
   custom_world_models: string[]
   mouse_sensitivity: number
+  pinned_scenes: string[]
 }
 
 export type AppConfig = {

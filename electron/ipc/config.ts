@@ -33,7 +33,8 @@ const defaultConfig: AppConfig = {
     seed_gallery: true,
     world_engine_model: DEFAULT_WORLD_ENGINE_MODEL,
     custom_world_models: [],
-    mouse_sensitivity: 1.0
+    mouse_sensitivity: 1.0,
+    pinned_scenes: []
   }
 }
 

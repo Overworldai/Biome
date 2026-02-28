@@ -12,7 +12,7 @@ const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { canUnpause, requestPointerLock, reset, sendPromptWithSeed } = useStreaming()
-  const { getUrl } = useConfig()
+  const { config, isLoaded, saveConfig, getUrl } = useConfig()
   const [view, setView] = useState<'main' | 'scenes' | 'settings'>('main')
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
@@ -21,6 +21,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const [pinnedSceneIds, setPinnedSceneIds] = useState<string[]>([])
   const loadingRef = useRef(false)
   const isMountedRef = useRef(true)
+  const hasHydratedPinnedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadBaseUrl = getUrl()
 
@@ -130,21 +131,51 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   }, [isActive, view, canUnpause, requestPointerLock])
 
   useEffect(() => {
+    if (!isLoaded || hasHydratedPinnedRef.current) return
+
+    const fromConfig = Array.isArray(config.features?.pinned_scenes)
+      ? config.features.pinned_scenes.filter((value) => typeof value === 'string')
+      : []
+
+    if (fromConfig.length > 0) {
+      setPinnedSceneIds(fromConfig)
+      hasHydratedPinnedRef.current = true
+      return
+    }
+
+    // One-time migration fallback from localStorage to config persistence.
     try {
       const raw = localStorage.getItem(PINNED_SCENES_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        setPinnedSceneIds(parsed.filter((v) => typeof v === 'string'))
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          const migrated = parsed.filter((value) => typeof value === 'string')
+          setPinnedSceneIds(migrated)
+        }
       }
     } catch {
-      // Ignore malformed storage.
+      // Ignore malformed legacy storage.
     }
-  }, [])
+
+    hasHydratedPinnedRef.current = true
+  }, [isLoaded, config.features?.pinned_scenes])
 
   useEffect(() => {
-    localStorage.setItem(PINNED_SCENES_KEY, JSON.stringify(pinnedSceneIds))
-  }, [pinnedSceneIds])
+    if (!isLoaded || !hasHydratedPinnedRef.current) return
+
+    const currentPinned = Array.isArray(config.features?.pinned_scenes) ? config.features.pinned_scenes : []
+    const nextPinned = pinnedSceneIds
+
+    if (JSON.stringify(currentPinned) === JSON.stringify(nextPinned)) return
+
+    void saveConfig({
+      ...config,
+      features: {
+        ...config.features,
+        pinned_scenes: nextPinned
+      }
+    })
+  }, [pinnedSceneIds, isLoaded, config, saveConfig])
 
   const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
   const sceneList = useMemo(() => seeds, [seeds])
@@ -170,7 +201,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       if (prev.includes(filename)) {
         return prev.filter((id) => id !== filename)
       }
-      return [filename, ...prev].slice(0, 24)
+      return [filename, ...prev]
     })
   }
 
