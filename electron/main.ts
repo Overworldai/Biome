@@ -79,6 +79,7 @@ const createWindow = () => {
   })
 
   // Enforce a fixed 16:9 window aspect ratio natively.
+  // Replaces old useFitWindowToContent()
   mainWindow.setAspectRatio(16 / 9)
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
