@@ -19,6 +19,7 @@ export type FeaturesConfig = {
   seed_gallery: boolean
   world_engine_model: string
   custom_world_models: string[]
+  mouse_sensitivity: number
 }
 
 export type AppConfig = {

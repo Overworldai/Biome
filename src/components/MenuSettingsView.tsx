@@ -38,7 +38,9 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
     configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
   )
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
-  const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() => streamingToMenu(mouseSensitivity))
+  const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
+    streamingToMenu(config.features?.mouse_sensitivity ?? mouseSensitivity)
+  )
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
     { id: configWorldModel, isLocal: false }
   ])
@@ -159,11 +161,16 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
   const handleMouseSensitivityChange = (value: number) => {
     setMenuMouseSensitivity(value)
-    if (isStreaming) {
-      // Convert 10-100 integer scale to 0.1-3.0 float scale
-      const streamingValue = 0.1 + ((value - 10) * 2.9) / 90
-      setMouseSensitivity(streamingValue)
-    }
+    // Convert 10-100 integer scale to 0.1-3.0 float scale
+    const streamingValue = 0.1 + ((value - 10) * 2.9) / 90
+    setMouseSensitivity(streamingValue)
+    saveConfig({
+      ...config,
+      features: {
+        ...config.features,
+        mouse_sensitivity: streamingValue
+      }
+    })
   }
 
   const handleConfirmFixEngine = async () => {

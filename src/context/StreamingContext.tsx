@@ -82,7 +82,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [pauseElapsedMs, setPauseElapsedMs] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
-  const [mouseSensitivity, setMouseSensitivity] = useState(1.0)
+  const [mouseSensitivity, setMouseSensitivity] = useState(() => config.features?.mouse_sensitivity ?? 1.0)
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)

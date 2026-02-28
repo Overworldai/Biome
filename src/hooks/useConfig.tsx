@@ -50,7 +50,8 @@ const defaultConfig: AppConfig = {
     engine_mode: ENGINE_MODES.STANDALONE,
     seed_gallery: true,
     world_engine_model: DEFAULT_WORLD_ENGINE_MODEL,
-    custom_world_models: []
+    custom_world_models: [],
+    mouse_sensitivity: 1.0
   }
 }
 
