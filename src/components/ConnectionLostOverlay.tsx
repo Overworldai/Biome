@@ -35,7 +35,7 @@ const ConnectionLostOverlay = () => {
           CONNECTION LOST
         </span>
         <button
-          className="mt-[1cqh] px-[5.33cqh] py-[1.2cqh] font-mono text-[2.67cqh] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-lg cursor-pointer transition-[color,background-color,border-color,box-shadow] duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:shadow-[0_0_20px_rgba(120,255,245,0.3)] active:scale-[0.97] active:bg-hud/25"
+          className="mt-[1cqh] px-[5.33cqh] py-[1.2cqh] font-mono text-[2.67cqh] font-medium tracking-[0.15em] uppercase text-hud/90 bg-hud/10 border border-hud/40 rounded-lg cursor-pointer outline-0 outline-hud/60 transition-[color,background-color,border-color,outline-width] duration-200 ease-in-out hover:text-hud hover:bg-hud/20 hover:border-hud/60 hover:outline-2 active:scale-[0.97] active:bg-hud/25"
           onClick={handleDismiss}
         >
           RECONNECT

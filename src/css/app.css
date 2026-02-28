@@ -152,13 +152,12 @@
       color 0.2s ease,
       background-color 0.2s ease,
       border-color 0.2s ease,
-      box-shadow 0.2s ease;
+      outline-width 0.2s ease;
   }
 
   input:focus {
-    outline: none;
     border-color: rgba(0, 255, 255, 0.4);
-    box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+    outline: 2px solid rgba(0, 255, 255, 0.4);
   }
 
   button {
@@ -170,7 +169,7 @@
   button:hover {
     background: rgba(0, 255, 255, 0.2);
     border-color: rgba(0, 255, 255, 0.5);
-    box-shadow: 0 0 12px rgba(0, 255, 255, 0.3);
+    outline: 2px solid rgba(0, 255, 255, 0.5);
   }
 }
 

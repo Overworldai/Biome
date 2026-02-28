@@ -43,7 +43,7 @@ const SettingsSelect = ({ options, value, onChange, disabled }: SettingsSelectPr
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        className="w-full flex items-stretch cursor-pointer rounded-none border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)] p-0 outline-none"
+        className="w-full flex items-stretch cursor-pointer rounded-none border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)] p-0 outline-0 outline-[rgba(245,251,255,0.75)] transition-[outline-width] duration-150 hover:outline-2"
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         disabled={disabled}
       >

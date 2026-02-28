@@ -120,7 +120,7 @@ const ServerLogDisplay = ({
       </div>
       {showDismiss && (
         <button
-          className="mx-[2.13cqh] my-[1cqh] px-[2.67cqh] py-[0.6cqh] bg-[rgba(255,100,100,0.15)] border border-[rgba(255,100,100,0.4)] rounded-panel text-text-error font-mono text-[1.78cqh] tracking-wider cursor-pointer transition-[color,background-color,border-color] duration-200 ease-in-out hover:bg-[rgba(255,100,100,0.25)] hover:border-[rgba(255,100,100,0.6)]"
+          className="mx-[2.13cqh] my-[1cqh] px-[2.67cqh] py-[0.6cqh] bg-[rgba(255,100,100,0.15)] border border-[rgba(255,100,100,0.4)] rounded-panel text-text-error font-mono text-[1.78cqh] tracking-wider cursor-pointer outline-0 outline-[rgba(255,100,100,0.6)] transition-[color,background-color,border-color,outline-width] duration-200 ease-in-out hover:bg-[rgba(255,100,100,0.25)] hover:border-[rgba(255,100,100,0.6)] hover:outline-2"
           onClick={onDismiss}
         >
           DISMISS
