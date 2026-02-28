@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 
 type SettingsSelectOption = {
   value: string
@@ -43,11 +44,11 @@ const SettingsSelect = ({ options, value, onChange, disabled }: SettingsSelectPr
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        className="w-full flex items-stretch cursor-pointer rounded-none border border-[rgba(245,251,255,0.75)] bg-[rgba(8,12,20,0.28)] p-0 outline-0 outline-[rgba(245,251,255,0.75)] transition-[outline-width] duration-150 hover:outline-2"
+        className={`w-full flex items-stretch cursor-pointer rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${SETTINGS_OUTLINE_HOVER}`}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         disabled={disabled}
       >
-        <span className="flex-1 font-serif leading-[1.2] text-right text-[rgba(245,249,255,0.92)] p-[0.55cqh_1.42cqh] text-[2.67cqh]">
+        <span className={`flex-1 ${SETTINGS_CONTROL_TEXT}`}>
           {selectedOption ? <OptionContent option={selectedOption} /> : value}
         </span>
         <span className="flex items-center justify-center w-[3.56cqh] bg-[rgba(245,251,255,0.95)]">

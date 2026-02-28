@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SETTINGS_MUTED_TEXT } from '../../styles'
 
 type SettingsSectionProps = {
   title: string
@@ -12,7 +13,9 @@ const SettingsSection = ({ title, description, children }: SettingsSectionProps)
       {title}
     </h2>
     {description != null && (
-      <p className="font-serif text-right text-[rgba(238,244,252,0.66)] text-[2.4cqh] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]">
+      <p
+        className={`${SETTINGS_MUTED_TEXT} text-right [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] [margin:0.35cqh_0_0.8cqh]`}
+      >
         {description}
       </p>
     )}

@@ -1,3 +1,5 @@
+import { CONFIRM_BUTTON_BASE } from '../../styles'
+
 type ConfirmModalProps = {
   title: string
   description: string
@@ -26,14 +28,14 @@ const ConfirmModal = ({
       <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
         <button
           type="button"
-          className="cursor-pointer font-serif border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)] p-[0.5cqh_1.78cqh] text-[2.49cqh]"
+          className={`${CONFIRM_BUTTON_BASE} border border-[rgba(245,251,255,0.7)] bg-[rgba(8,12,20,0.18)] text-[rgba(245,251,255,0.95)]`}
           onClick={onCancel}
         >
           {cancelLabel}
         </button>
         <button
           type="button"
-          className="cursor-pointer font-serif bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)] p-[0.5cqh_1.78cqh] text-[2.49cqh]"
+          className={`${CONFIRM_BUTTON_BASE} bg-[rgba(245,251,255,0.9)] text-[rgba(15,20,32,0.95)]`}
           onClick={onConfirm}
         >
           {confirmLabel}

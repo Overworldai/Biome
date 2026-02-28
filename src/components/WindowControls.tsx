@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useWindow } from '../hooks/useWindow'
 import { useStreaming } from '../context/StreamingContext'
+import { WINDOW_CONTROL_BASE } from '../styles'
 
 const WindowControls = () => {
   const { minimize, close } = useWindow()
@@ -31,7 +32,7 @@ const WindowControls = () => {
       >
         <button
           type="button"
-          className="flex items-center justify-center w-[23px] h-4 m-0 p-0 rounded-sm text-[9px] leading-none cursor-pointer bg-[rgba(8,12,20,0.28)] text-text-secondary font-serif border border-[rgba(245,251,255,0.8)] outline-0 outline-[rgba(245,251,255,0.8)] transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:outline-2"
+          className={`${WINDOW_CONTROL_BASE} outline-0 outline-[rgba(245,251,255,0.8)] transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:outline-2`}
           onClick={minimize}
           aria-label="Minimize"
           style={noDragRegionStyle}
@@ -40,7 +41,7 @@ const WindowControls = () => {
         </button>
         <button
           type="button"
-          className="flex items-center justify-center w-[23px] h-4 m-0 p-0 rounded-sm text-[9px] leading-none cursor-pointer bg-[rgba(8,12,20,0.28)] text-text-secondary font-serif border border-[rgba(245,251,255,0.8)] outline-0 outline-[rgba(220,50,50,0.9)] transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-[rgba(220,50,50,0.9)] hover:text-white hover:outline-2"
+          className={`${WINDOW_CONTROL_BASE} outline-0 outline-[rgba(220,50,50,0.9)] transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-[rgba(220,50,50,0.9)] hover:text-white hover:outline-2`}
           onClick={close}
           aria-label="Close"
           style={noDragRegionStyle}

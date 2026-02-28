@@ -2,6 +2,7 @@ import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '../bridge'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
+import { INTERACTIVE_TRANSITION } from '../styles'
 import ServerLogDisplay from './ServerLogDisplay'
 
 const statusCodeMessages: Record<string, string> = {
@@ -133,7 +134,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       </div>
 
       <button
-        className="absolute left-1/2 bottom-0 -translate-x-1/2 right-auto mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[3.73cqh] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[3.91cqh] cursor-pointer outline-0 outline-[rgba(255,170,170,0.98)] transition-[color,background-color,border-color,outline-width] duration-150 hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)] hover:outline-2"
+        className={`absolute left-1/2 bottom-0 -translate-x-1/2 right-auto mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[3.73cqh] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[3.91cqh] cursor-pointer outline-0 outline-[rgba(255,170,170,0.98)] ${INTERACTIVE_TRANSITION} duration-150 hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)] hover:outline-2`}
         onClick={() => {
           if (onCancel) {
             onCancel()
