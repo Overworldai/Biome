@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getConfigDir } from '../lib/paths.js'
 import type { AppConfig } from '../../src/types/app.js'
+import { STANDALONE_PORT, DEFAULT_WORLD_ENGINE_MODEL, ENGINE_MODES } from '../../src/constants/configShared.js'
 
 const CONFIG_FILENAME = 'config.json'
 
@@ -17,7 +18,7 @@ function getConfigPath(): string {
 const defaultConfig: AppConfig = {
   gpu_server: {
     host: 'localhost',
-    port: 7987,
+    port: STANDALONE_PORT,
     use_ssl: false
   },
   api_keys: {
@@ -28,11 +29,33 @@ const defaultConfig: AppConfig = {
   features: {
     prompt_sanitizer: true,
     seed_generation: true,
-    engine_mode: 'standalone',
+    engine_mode: ENGINE_MODES.STANDALONE,
     seed_gallery: true,
-    world_engine_model: 'Overworld/Waypoint-1-Small',
-    custom_world_models: []
+    world_engine_model: DEFAULT_WORLD_ENGINE_MODEL,
+    custom_world_models: [],
+    mouse_sensitivity: 1.0
   }
+}
+
+function mergeWithDefaults<T extends Record<string, unknown>>(loaded: Partial<T>, defaults: T): T {
+  const result: Record<string, unknown> = { ...defaults }
+  for (const key of Object.keys(loaded)) {
+    const loadedValue = loaded[key as keyof T]
+    const defaultValue = defaults[key as keyof T]
+    if (
+      loadedValue &&
+      typeof loadedValue === 'object' &&
+      !Array.isArray(loadedValue) &&
+      defaultValue &&
+      typeof defaultValue === 'object' &&
+      !Array.isArray(defaultValue)
+    ) {
+      result[key] = mergeWithDefaults(loadedValue as Record<string, unknown>, defaultValue as Record<string, unknown>)
+    } else if (loadedValue !== undefined) {
+      result[key] = loadedValue
+    }
+  }
+  return result as T
 }
 
 function readConfigSync(): AppConfig {
@@ -51,11 +74,12 @@ function readConfigSync(): AppConfig {
   } catch {
     return { ...defaultConfig }
   }
+  const rawJson = JSON.stringify(parsed)
 
   // Handle legacy migration: use_standalone_engine -> engine_mode
   const features = parsed.features as Record<string, unknown> | undefined
   if (features && typeof features.use_standalone_engine === 'boolean') {
-    features.engine_mode = features.use_standalone_engine ? 'standalone' : 'server'
+    features.engine_mode = features.use_standalone_engine ? ENGINE_MODES.STANDALONE : ENGINE_MODES.SERVER
     delete features.use_standalone_engine
 
     // Save migrated config
@@ -63,18 +87,29 @@ function readConfigSync(): AppConfig {
     console.log('[CONFIG] Migrated use_standalone_engine to engine_mode:', features.engine_mode)
   }
 
-  if (features && features.engine_mode === 'unchosen') {
-    features.engine_mode = 'standalone'
+  if (features && features.engine_mode === ENGINE_MODES.UNCHOSEN) {
+    features.engine_mode = ENGINE_MODES.STANDALONE
     fs.writeFileSync(configPath, JSON.stringify(parsed, null, 2))
     console.log('[CONFIG] Migrated engine_mode from unchosen to standalone')
   }
 
-  return parsed as AppConfig
+  const normalized = mergeWithDefaults(parsed as Partial<AppConfig>, defaultConfig)
+
+  // Persist normalized shape so future loads are stable and renderer can trust config shape.
+  if (JSON.stringify(normalized) !== rawJson) {
+    fs.writeFileSync(configPath, JSON.stringify(normalized, null, 2))
+  }
+
+  return normalized
 }
 
 export function registerConfigIpc(): void {
   ipcMain.handle('read-config', () => {
     return readConfigSync()
+  })
+
+  ipcMain.handle('read-default-config', () => {
+    return JSON.parse(JSON.stringify(defaultConfig)) as AppConfig
   })
 
   ipcMain.handle('write-config', (_event, config: AppConfig) => {

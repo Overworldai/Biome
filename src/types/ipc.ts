@@ -12,6 +12,7 @@ export type ModelAvailability = {
 export type IpcCommandMap = {
   // Config
   'read-config': { args: []; return: AppConfig }
+  'read-default-config': { args: []; return: AppConfig }
   'write-config': { args: [config: AppConfig]; return: void }
   'get-config-path-str': { args: []; return: string }
   'open-config': { args: []; return: void }

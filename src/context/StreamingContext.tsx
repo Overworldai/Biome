@@ -270,8 +270,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       // Don't transition to cold immediately - wait for user to dismiss the error
     }
 
+    const standalonePort = config.gpu_server?.port ?? STANDALONE_PORT
+
     runWarmConnectionFlow({
-      standalonePort: STANDALONE_PORT,
+      standalonePort,
       isStandaloneMode,
       endpointUrl,
       gpuServer: config.gpu_server,
