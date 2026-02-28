@@ -88,6 +88,28 @@ export function VortexProvider({ children }: { children: ReactNode }) {
     renderer.resize(w, h, dpr)
   }, [])
 
+  const syncViewWarp = useCallback(() => {
+    const renderer = rendererRef.current
+    const owner = ownerRef.current
+    if (!renderer || !owner) return
+
+    const styles = window.getComputedStyle(owner)
+    const rawWarpX = Number.parseFloat(styles.getPropertyValue('--vortex-warp-x'))
+    const rawWarpY = Number.parseFloat(styles.getPropertyValue('--vortex-warp-y'))
+    const rawSpeedMult = Number.parseFloat(styles.getPropertyValue('--vortex-speed-mult'))
+    const rawProgress = Number.parseFloat(styles.getPropertyValue('--vortex-progress-percent'))
+    const warpX = Number.isFinite(rawWarpX) ? rawWarpX : 1
+    const warpY = Number.isFinite(rawWarpY) ? rawWarpY : 1
+    const speedMult = Number.isFinite(rawSpeedMult) ? rawSpeedMult : 1
+    const progressPercent = clamp(Number.isFinite(rawProgress) ? rawProgress : 0, 0, 100)
+    const progressBoostX = 1 + (progressPercent / 100) * 0.2
+    const progressBoostY = 1 + (progressPercent / 100) * 0.08
+    const effectiveWarpY = Math.min(1.3, warpY * progressBoostY)
+    renderer.setViewWarp(warpX * progressBoostX, effectiveWarpY)
+    const progressSpeedBoost = 1 + (progressPercent / 100) * 0.6
+    renderer.setSpeedMultiplier(speedMult * progressSpeedBoost)
+  }, [])
+
   const frame = useCallback(
     (now: number) => {
       const renderer = rendererRef.current
@@ -97,11 +119,12 @@ export function VortexProvider({ children }: { children: ReactNode }) {
       lastTimeRef.current = now
 
       syncSize()
+      syncViewWarp()
 
       renderer.render(dt)
       rafRef.current = requestAnimationFrame(frame)
     },
-    [syncSize]
+    [syncSize, syncViewWarp]
   )
 
   const claimCanvas = useCallback(
@@ -114,19 +137,22 @@ export function VortexProvider({ children }: { children: ReactNode }) {
       container.appendChild(canvas)
 
       renderer.setTargetCount(PARTICLE_COUNTS[mode])
+      renderer.setViewWarp(1, 1)
+      renderer.setSpeedMultiplier(1)
       lastSizeRef.current = { w: 0, h: 0 }
 
       resizeObserverRef.current?.disconnect()
       resizeObserverRef.current = new ResizeObserver(() => syncSize())
       resizeObserverRef.current.observe(container)
       syncSize()
+      syncViewWarp()
 
       if (rafRef.current == null && !document.hidden) {
         lastTimeRef.current = 0
         rafRef.current = requestAnimationFrame(frame)
       }
     },
-    [syncSize, frame]
+    [syncSize, syncViewWarp, frame]
   )
 
   const releaseCanvas = useCallback(() => {

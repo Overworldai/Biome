@@ -26,6 +26,22 @@ function processLogLine(line: string, _isStderr: boolean): void {
   // Print to console
   console.log(`[SERVER] ${line}`)
 
+  if (line.startsWith('STAGE_JSON:')) {
+    try {
+      const raw = line.slice('STAGE_JSON:'.length).trim()
+      const parsed = JSON.parse(raw) as { id?: unknown; label?: unknown; percent?: unknown }
+      if (typeof parsed.id === 'string' && typeof parsed.label === 'string' && typeof parsed.percent === 'number') {
+        emitToAllWindows('server-stage', {
+          id: parsed.id,
+          label: parsed.label,
+          percent: Math.max(0, Math.min(100, Math.round(parsed.percent)))
+        })
+      }
+    } catch (err) {
+      console.error('[ENGINE] Failed to parse STAGE_JSON log line:', err)
+    }
+  }
+
   // Emit event to frontend
   emitToAllWindows('server-log', line)
 
@@ -231,5 +247,48 @@ export function registerServerIpc(): void {
       })
       server.listen(port, '127.0.0.1')
     })
+  })
+
+  ipcMain.handle('fetch-server-admin-logs', async (_event, baseUrl: string, cursor: number | null, limit: number) => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const safeCursor = Number.isFinite(cursor) ? Math.max(0, Number(cursor)) : 0
+    const safeLimit = Number.isFinite(limit) ? Math.min(500, Math.max(1, Number(limit))) : 200
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/admin/logs?cursor=${encodeURIComponent(String(safeCursor))}&limit=${encodeURIComponent(String(safeLimit))}`,
+        { method: 'GET', signal: controller.signal }
+      )
+      if (!response.ok) {
+        throw new Error(`Hosted logs endpoint returned HTTP ${response.status}`)
+      }
+      const payload = (await response.json()) as { lines?: unknown; next_cursor?: unknown }
+      return {
+        lines: Array.isArray(payload.lines) ? payload.lines.map((line) => String(line ?? '')) : [],
+        next_cursor: typeof payload.next_cursor === 'number' ? payload.next_cursor : safeCursor
+      }
+    } finally {
+      clearTimeout(timeout)
+    }
+  })
+
+  ipcMain.handle('shutdown-server-admin', async (_event, baseUrl: string) => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    try {
+      const response = await fetch(`${baseUrl}/admin/shutdown`, {
+        method: 'POST',
+        signal: controller.signal
+      })
+      if (!response.ok) {
+        throw new Error(`Hosted shutdown endpoint returned HTTP ${response.status}`)
+      }
+      const payload = (await response.json()) as { status?: unknown }
+      return { status: typeof payload.status === 'string' ? payload.status : 'unknown' }
+    } finally {
+      clearTimeout(timeout)
+    }
   })
 }

@@ -108,12 +108,44 @@
 
 @keyframes streamingCircularReveal {
   0% {
-    clip-path: circle(0% at 50% 50%);
-    -webkit-clip-path: circle(0% at 50% 50%);
+    clip-path: circle(0% at 50% 53%);
+    -webkit-clip-path: circle(0% at 50% 53%);
+  }
+  72% {
+    clip-path: circle(42% at 50% 53%);
+    -webkit-clip-path: circle(42% at 50% 53%);
   }
   100% {
-    clip-path: circle(150% at 50% 50%);
-    -webkit-clip-path: circle(150% at 50% 50%);
+    clip-path: circle(168% at 50% 53%);
+    -webkit-clip-path: circle(168% at 50% 53%);
+  }
+}
+
+@keyframes streamingVortexPullIn {
+  0% {
+    --vortex-warp-x: 2.08;
+    --vortex-warp-y: 1.24;
+    --vortex-speed-mult: 2.5;
+  }
+  56% {
+    --vortex-warp-x: 1.98;
+    --vortex-warp-y: 1.24;
+    --vortex-speed-mult: 2.25;
+  }
+  82% {
+    --vortex-warp-x: 1.48;
+    --vortex-warp-y: 1.24;
+    --vortex-speed-mult: 1.45;
+  }
+  94% {
+    --vortex-warp-x: 1.24;
+    --vortex-warp-y: 1.24;
+    --vortex-speed-mult: 1.18;
+  }
+  100% {
+    --vortex-warp-x: 1.08;
+    --vortex-warp-y: 1.24;
+    --vortex-speed-mult: 1.05;
   }
 }
 

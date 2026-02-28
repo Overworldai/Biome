@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
@@ -43,6 +43,7 @@ const AppShell = () => {
     isStreaming,
     isPaused,
     connectionState,
+    statusStage,
     setupProgress,
     engineSetupError,
     engineSetupInProgress,
@@ -82,6 +83,10 @@ const AppShell = () => {
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen && !showInstallLog
   const showMenuSettings = isMainUi && !isConnected && isSettingsOpen && !showInstallLog
   const showInstallLogView = isMainUi && !isConnected && showInstallLog
+  const loadingProgressPercent = Math.max(0, Math.min(100, Math.round(statusStage?.percent ?? 0)))
+  const loadingLayerStyle = {
+    '--vortex-progress-percent': loadingProgressPercent.toString()
+  } as CSSProperties
 
   useEffect(() => {
     if (isStreamingUi && !prevStreamingUiRef.current) {
@@ -128,11 +133,11 @@ const AppShell = () => {
     }
   }
 
-  const handleCancelLoading = () => {
+  const handleCancelLoading = (options?: { shutdownHosted?: boolean }) => {
     if (isReturningToMenu || portalState !== portalStates.LOADING) return
     setIsReturningToMenu(true)
     setIsPortalHovered(false)
-    void prepareReturnToMainMenu()
+    void prepareReturnToMainMenu(options)
   }
 
   return (
@@ -242,9 +247,10 @@ const AppShell = () => {
             <ConnectionLostOverlay />
           </main>
         )}
-        {(isLoadingUi || isEnteringLoading || isReturningToMenu) && (
+        {(isLoadingUi || isEnteringLoading || isReturningToMenu || isStreamingReveal) && (
           <div
-            className={`loading-ui-layer absolute inset-0 z-20 ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''}`}
+            className={`loading-ui-layer absolute inset-0 ${isStreamingReveal ? 'z-[4]' : 'z-20'} ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''} ${isStreamingReveal ? 'streaming-pullout' : ''}`}
+            style={loadingLayerStyle}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
               if (event.animationName !== 'portalBgReveal' && event.animationName !== 'portalBgConceal') return
@@ -260,12 +266,12 @@ const AppShell = () => {
               }
             }}
           >
-            <div className="absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
+            <div className="loading-vortex-layer absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
               <VortexHost mode="loading" />
             </div>
-            {isLoadingUi && !isReturningToMenu && (
+            {(isLoadingUi || isStreamingReveal) && !isReturningToMenu && (
               <>
-                <TerminalDisplay onCancel={handleCancelLoading} />
+                <TerminalDisplay onCancel={handleCancelLoading} keepVisible={isStreamingReveal} />
               </>
             )}
           </div>

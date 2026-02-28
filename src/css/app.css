@@ -2,6 +2,24 @@
 @import './animations.css';
 @import './video-mask.css';
 
+@property --vortex-warp-x {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --vortex-warp-y {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --vortex-speed-mult {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
 @font-face {
   font-family: 'Salernomi J';
   src: url('../../assets/9SALERNO.TTF') format('truetype');
@@ -93,6 +111,10 @@
   --portal-center-x: 88.9cqh;
   --portal-center-y: 50cqh;
   --portal-settings-left: 20%;
+  --vortex-warp-x: 1;
+  --vortex-warp-y: 1;
+  --vortex-speed-mult: 1;
+  --vortex-progress-percent: 0;
 }
 @layer base {
   :root {
@@ -204,8 +226,16 @@
     overflow: hidden;
     clip-path: circle(0% at 50% 50%);
     -webkit-clip-path: circle(0% at 50% 50%);
-    animation: streamingCircularReveal 1000ms cubic-bezier(0.12, 0.78, 0.6, 1) forwards;
+    animation: streamingCircularReveal 950ms cubic-bezier(0.52, 0.02, 0.96, 0.46) forwards;
+    animation-delay: 1120ms;
     will-change: clip-path;
+  }
+  .loading-ui-layer.streaming-pullout .loading-vortex-layer {
+    --vortex-warp-x: 1;
+    --vortex-warp-y: 1;
+    --vortex-speed-mult: 1;
+    animation: streamingVortexPullIn 1500ms linear forwards;
+    will-change: --vortex-warp-x, --vortex-warp-y, --vortex-speed-mult;
   }
 
   /* --- BACKGROUND SLIDESHOW --- */
@@ -560,6 +590,10 @@
     -webkit-clip-path: circle(160% at 50% 53%);
     animation: portalBgConceal 960ms cubic-bezier(0.16, 0.86, 0.18, 1) forwards;
     will-change: clip-path, transform;
+  }
+  .loading-ui-layer.streaming-pullout {
+    pointer-events: none;
+    background: transparent;
   }
 
   /* --- LOADING UI CQW/CQH ELEMENTS --- */

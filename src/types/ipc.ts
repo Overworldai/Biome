@@ -5,6 +5,11 @@ export type ModelAvailability = {
   is_local: boolean
 }
 
+export type ServerAdminLogsResponse = {
+  lines: string[]
+  next_cursor: number
+}
+
 /**
  * Maps each IPC command channel to its argument tuple and return type.
  * This is the single source of truth for all invoke() calls.
@@ -38,6 +43,11 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
+  'fetch-server-admin-logs': {
+    args: [baseUrl: string, cursor: number | null, limit: number]
+    return: ServerAdminLogsResponse
+  }
+  'shutdown-server-admin': { args: [baseUrl: string]; return: { status: string } }
 
   // Seeds
   'list-seeds': { args: []; return: SeedRecord[] }
@@ -67,5 +77,6 @@ export type IpcCommandMap = {
 export type IpcEventMap = {
   'server-log': string
   'server-ready': boolean
+  'server-stage': { id: string; label: string; percent: number }
   'window-resized': { width: number; height: number }
 }

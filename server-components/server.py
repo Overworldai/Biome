@@ -25,7 +25,9 @@ import logging
 import os
 import pickle
 import shutil
+import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -40,6 +42,35 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger("biome_server")
+
+_LOG_BUFFER_MAX_LINES = 5000
+_log_buffer_lock = threading.Lock()
+_log_buffer: deque[tuple[int, str]] = deque(maxlen=_LOG_BUFFER_MAX_LINES)
+_log_cursor = 0
+
+
+class InMemoryLogHandler(logging.Handler):
+    """Keep a bounded in-memory copy of server logs for hosted log polling."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        global _log_cursor
+        try:
+            line = self.format(record)
+        except Exception:
+            line = record.getMessage()
+        with _log_buffer_lock:
+            _log_cursor += 1
+            _log_buffer.append((_log_cursor, line))
+
+
+_memory_log_handler = InMemoryLogHandler()
+_memory_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+logging.getLogger().addHandler(_memory_log_handler)
+
+
+def emit_stage_log(stage_id: str, label: str, percent: int) -> None:
+    payload = {"id": stage_id, "label": label, "percent": max(0, min(100, int(percent)))}
+    logger.info(f"STAGE_JSON:{json.dumps(payload, separators=(',', ':'))}")
 
 print("[BIOME] Basic imports done", flush=True)
 
@@ -420,21 +451,25 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("BIOME SERVER STARTUP")
     logger.info("=" * 60)
+    emit_stage_log("startup.begin", "Starting server components...", 5)
 
     # Initialize lock for rescan operations
     rescan_lock = asyncio.Lock()
 
     # Initialize modules
     logger.info("Initializing WorldEngine...")
+    emit_stage_log("startup.world_engine_manager", "Initializing world engine manager...", 10)
     world_engine = WorldEngineManager()
 
     logger.info("Initializing Safety Checker...")
+    emit_stage_log("startup.safety_checker", "Initializing safety checker...", 15)
     safety_checker = SafetyChecker()
 
     # Warmup safety checker to trigger first-time transformers initialization
     # This prevents CUDA state pollution from affecting WorldEngine's first operations
     # Without this it seems that the first upload of seed image will have a 
     logger.info("Warming up Safety Checker (first-time model load)...")
+    emit_stage_log("startup.safety_warmup", "Warming safety checker...", 20)
     warmup_start = time.perf_counter()
 
     # Create a small dummy image for warmup
@@ -451,17 +486,20 @@ async def lifespan(app: FastAPI):
     os.unlink(dummy_path)
 
     logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
+    emit_stage_log("startup.safety_ready", "Safety checker ready.", 25)
 
     # WorldEngine is loaded lazily on first client connection.
     # This allows remote clients to select model per session.
 
     # Initialize seed management system
     logger.info("Initializing server-side seed storage...")
+    emit_stage_log("startup.seed_storage", "Preparing seed storage...", 30)
     ensure_seed_directories()
     await setup_default_seeds()
 
     # Validate and update seed cache (checks for stale data, missing files, new files)
     async with rescan_lock:
+        emit_stage_log("startup.seed_validation", "Validating seed cache...", 35)
         cache = await validate_and_update_cache()
 
     # Update global cache (map filename -> metadata)
@@ -471,6 +509,7 @@ async def lifespan(app: FastAPI):
     logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
     logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
     logger.info("=" * 60)
+    emit_stage_log("startup.ready", "Server backend ready. Waiting for model selection...", 40)
     print("SERVER READY", flush=True)  # Signal for Rust to detect
 
     # Start parent-process watchdog (exits server if parent dies)
@@ -644,6 +683,32 @@ async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge
     existing_path_count = sum(
         1 for data in safe_seeds_cache.values() if os.path.exists(str(data.get("path", "")))
     )
+
+
+@app.get("/admin/logs")
+async def admin_logs(cursor: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=500)):
+    """Return incremental server logs for hosted clients."""
+    with _log_buffer_lock:
+        lines = [line for idx, line in _log_buffer if idx > cursor][:limit]
+        next_cursor = cursor
+        if lines:
+            matched = [idx for idx, line in _log_buffer if idx > cursor][:limit]
+            if matched:
+                next_cursor = matched[-1]
+    return JSONResponse({"lines": lines, "next_cursor": next_cursor})
+
+
+@app.post("/admin/shutdown")
+async def admin_shutdown():
+    """Shut down this server process."""
+
+    async def _shutdown() -> None:
+        await asyncio.sleep(0.2)
+        os._exit(0)
+
+    asyncio.create_task(_shutdown())
+    logger.warning("[ADMIN] Hosted shutdown requested")
+    return JSONResponse({"status": "shutting_down"})
     sample_filenames = list(safe_seeds_cache.keys())[:5]
     logger.info(
         "[SEEDS] /seeds/list requested: cache=%d safe=%d existing_paths=%d sample=%s",
@@ -942,6 +1007,16 @@ class Status:
     WARMUP = "warmup"
 
 
+STATUS_STAGE = {
+    Status.WAITING_FOR_SEED: ("session.waiting_for_seed", "Waiting for initial seed...", 48),
+    Status.LOADING: ("session.loading_model", "Loading selected world model...", 64),
+    Status.WARMUP: ("session.warmup", "Warming up selected model...", 80),
+    Status.INIT: ("session.init", "Initializing world state...", 92),
+    Status.RESET: ("session.reset", "Resetting world state...", 72),
+    Status.READY: ("session.ready", "Ready.", 100),
+}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -977,10 +1052,20 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_json(data: dict):
         await websocket.send_text(json.dumps(data))
 
+    async def send_status(code: str) -> None:
+        stage_id, label, percent = STATUS_STAGE.get(code, ("session.unknown", "Loading...", 0))
+        await send_json(
+            {
+                "type": "status",
+                "code": code,
+                "stage": {"id": stage_id, "label": label, "percent": percent},
+            }
+        )
+
     async def reset_engine():
         await world_engine.reset_state()
         session.frame_count = 0
-        await send_json({"type": "status", "code": Status.RESET})
+        await send_status(Status.RESET)
         logger.info(f"[{client_host}] Engine Reset")
 
     async def load_initial_seed(filename: str | None) -> bool:
@@ -1053,14 +1138,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Model switches can take tens of seconds. Keep emitting loading status so
         # clients don't treat the connection as stalled mid-switch.
-        await send_json({"type": "status", "code": Status.LOADING})
+        await send_status(Status.LOADING)
         load_task = asyncio.create_task(world_engine.load_engine(model_uri))
         while True:
             try:
                 await asyncio.wait_for(asyncio.shield(load_task), timeout=5.0)
                 break
             except asyncio.TimeoutError:
-                await send_json({"type": "status", "code": Status.LOADING})
+                await send_status(Status.LOADING)
 
         world_engine.seed_frame = None
         session.frame_count = 0
@@ -1073,12 +1158,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 f"[{client_host}] Failed to load explicit seed '{seed_filename}', waiting for client seed"
             )
         if not seed_loaded:
-            await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
+            await send_status(Status.WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
 
     try:
         # Wait for initial seed from client
-        await send_json({"type": "status", "code": Status.WAITING_FOR_SEED})
+        await send_status(Status.WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for initial seed from client...")
 
         # Wait for model selection + initial seed message
@@ -1110,7 +1195,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # If no model was selected by client, load default/current model now.
         if world_engine.engine is None:
-            await send_json({"type": "status", "code": Status.LOADING})
+            await send_status(Status.LOADING)
             await world_engine.load_engine()
 
         if world_engine.seed_frame is None:
@@ -1121,16 +1206,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
-            await send_json({"type": "status", "code": Status.WARMUP})
+            await send_status(Status.WARMUP)
             await world_engine.warmup()
 
-        await send_json({"type": "status", "code": Status.INIT})
+        await send_status(Status.INIT)
 
         logger.info(f"[{client_host}] Calling engine.reset()...")
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(world_engine.cuda_executor, world_engine.engine.reset)
 
-        await send_json({"type": "status", "code": Status.LOADING})
+        await send_status(Status.LOADING)
 
         logger.info(f"[{client_host}] Calling append_frame...")
         await loop.run_in_executor(
@@ -1152,7 +1237,7 @@ async def websocket_endpoint(websocket: WebSocket):
             }
         )
 
-        await send_json({"type": "status", "code": Status.READY})
+        await send_status(Status.READY)
         logger.info(f"[{client_host}] Ready for game loop")
         paused = False
 
@@ -1384,6 +1469,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 await send_json({
                                     "type": "status",
                                     "code": Status.RESET,
+                                    "stage": {"id": "session.reset", "label": "Recovering from CUDA error...", "percent": 58},
                                     "message": "Recovered from CUDA error - engine reset"
                                 })
                                 logger.info(f"[{client_host}] Successfully recovered from CUDA error")

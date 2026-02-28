@@ -26,7 +26,10 @@ const ServerLogDisplay = ({
   showProgress = false,
   progressMessage = null,
   headerAction = null,
-  variant = 'default'
+  variant = 'default',
+  externalLogs = null,
+  disableLiveIpc = false,
+  title = null
 }: {
   showDismiss?: boolean
   onDismiss?: () => void
@@ -35,12 +38,16 @@ const ServerLogDisplay = ({
   progressMessage?: string | null
   headerAction?: ReactNode
   variant?: 'default' | 'loading-inline'
+  externalLogs?: string[] | null
+  disableLiveIpc?: boolean
+  title?: string | null
 }) => {
   const isLoadingInline = variant === 'loading-inline'
   const [logs, setLogs] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    if (disableLiveIpc) return
     let mounted = true
 
     const unlisten = listen('server-log', (line) => {
@@ -60,14 +67,16 @@ const ServerLogDisplay = ({
       mounted = false
       unlisten()
     }
-  }, [])
+  }, [disableLiveIpc])
+
+  const visibleLogs = externalLogs ?? logs
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [logs])
+  }, [visibleLogs])
 
   return (
     <div
@@ -80,7 +89,7 @@ const ServerLogDisplay = ({
           <span
             className={`font-mono text-[2.13cqh] tracking-wider uppercase ${isLoadingInline ? 'font-serif tracking-[0.02em] text-[rgba(255,255,255,0.94)]' : 'text-warm/90'}`}
           >
-            {showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT'}
+            {title ?? (showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT')}
           </span>
           <span
             className={`w-[1.07cqh] h-[1.07cqh] rounded-full ${isLoadingInline ? 'bg-[rgba(255,255,255,0.82)]' : `bg-warm/90 ${showDismiss ? 'bg-[rgba(255,100,100,0.9)] !animate-none' : 'animate-[indicatorPulse_1s_ease-in-out_infinite]'}`}`}
@@ -104,12 +113,12 @@ const ServerLogDisplay = ({
         className={`server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed ${isLoadingInline ? '[scrollbar-color:rgba(255,255,255,0.34)_transparent]' : ''}`}
         ref={containerRef}
       >
-        {logs.length === 0 ? (
+        {visibleLogs.length === 0 ? (
           <div className={`italic ${isLoadingInline ? 'text-[rgba(255,255,255,0.72)]' : 'text-warm/50'}`}>
             Waiting for server output...
           </div>
         ) : (
-          logs.map((line, index) => (
+          visibleLogs.map((line, index) => (
             <div
               key={index}
               className={`whitespace-pre-wrap break-all ${isLoadingInline ? 'text-[rgba(255,255,255,0.88)]' : `text-[rgba(200,200,200,0.9)] ${getLogClass(line)}`}`}

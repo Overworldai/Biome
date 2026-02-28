@@ -251,6 +251,9 @@ export class VortexRenderer {
   private width = 0
   private height = 0
   private contextLost = false
+  private viewWarpX = 1
+  private viewWarpY = 1
+  private speedMultiplier = 1
 
   settings: VortexSettings = { ...DEFAULT_SETTINGS }
 
@@ -441,6 +444,16 @@ export class VortexRenderer {
     this._targetCount = Math.min(count, VORTEX_MAX_PARTICLES)
   }
 
+  setViewWarp(scaleX: number, scaleY: number): void {
+    const clampWarp = (v: number) => Math.max(0.1, Math.min(4, Number.isFinite(v) ? v : 1))
+    this.viewWarpX = clampWarp(scaleX)
+    this.viewWarpY = clampWarp(scaleY)
+  }
+
+  setSpeedMultiplier(multiplier: number): void {
+    this.speedMultiplier = Math.max(0.1, Math.min(5, Number.isFinite(multiplier) ? multiplier : 1))
+  }
+
   get activeCount(): number {
     return this._activeCount
   }
@@ -465,7 +478,7 @@ export class VortexRenderer {
     for (let i = 0; i < writeCount; i++) {
       const off = i * FLOATS_PER_PARTICLE
 
-      this.particles[off + P_Z] += this.particles[off + P_SPEED] * dtClamped
+      this.particles[off + P_Z] += this.particles[off + P_SPEED] * this.speedMultiplier * dtClamped
 
       if (this.particles[off + P_Z] > 1.0) {
         if (writeCount > this._targetCount) {
@@ -510,21 +523,24 @@ export class VortexRenderer {
       const bHead = brightness * (0.2 + z * 0.8) * fadeIn * fadeOut
       const bTail = bHead * VORTEX_TAIL_BRIGHTNESS
 
+      const warpX = this.viewWarpX
+      const warpY = this.viewWarpY
+
       const vOff = i * VERTS_PER_QUAD * FLOATS_PER_VERTEX
-      this.quadVerts[vOff] = tx - ntx
-      this.quadVerts[vOff + 1] = ty - nty
+      this.quadVerts[vOff] = (tx - ntx) * warpX
+      this.quadVerts[vOff + 1] = (ty - nty) * warpY
       this.quadVerts[vOff + 2] = bTail
       this.quadVerts[vOff + 3] = colorType
-      this.quadVerts[vOff + 4] = tx + ntx
-      this.quadVerts[vOff + 5] = ty + nty
+      this.quadVerts[vOff + 4] = (tx + ntx) * warpX
+      this.quadVerts[vOff + 5] = (ty + nty) * warpY
       this.quadVerts[vOff + 6] = bTail
       this.quadVerts[vOff + 7] = colorType
-      this.quadVerts[vOff + 8] = hx - nx
-      this.quadVerts[vOff + 9] = hy - ny
+      this.quadVerts[vOff + 8] = (hx - nx) * warpX
+      this.quadVerts[vOff + 9] = (hy - ny) * warpY
       this.quadVerts[vOff + 10] = bHead
       this.quadVerts[vOff + 11] = colorType
-      this.quadVerts[vOff + 12] = hx + nx
-      this.quadVerts[vOff + 13] = hy + ny
+      this.quadVerts[vOff + 12] = (hx + nx) * warpX
+      this.quadVerts[vOff + 13] = (hy + ny) * warpY
       this.quadVerts[vOff + 14] = bHead
       this.quadVerts[vOff + 15] = colorType
     }

@@ -56,6 +56,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const {
     connectionState,
     statusCode,
+    statusStage,
     error,
     frame,
     hasRealFrame,
@@ -420,6 +421,25 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isStandaloneMode, isServerRunning, stopServer])
 
+  const getHostedBaseUrl = useCallback(() => {
+    if (endpointUrl) {
+      if (endpointUrl.startsWith('http://') || endpointUrl.startsWith('https://')) return endpointUrl
+      if (endpointUrl.startsWith('ws://')) return `http://${endpointUrl.slice(5)}`
+      if (endpointUrl.startsWith('wss://')) return `https://${endpointUrl.slice(6)}`
+      return `http://${endpointUrl}`
+    }
+
+    const protocol = config.gpu_server.use_ssl ? 'https' : 'http'
+    return `${protocol}://${config.gpu_server.host}:${config.gpu_server.port}`
+  }, [endpointUrl, config.gpu_server])
+
+  const shutdownHostedServer = useCallback(async () => {
+    if (isStandaloneMode) return
+    const baseUrl = getHostedBaseUrl()
+    log.info('Requesting hosted server shutdown at', baseUrl)
+    await invoke('shutdown-server-admin', baseUrl)
+  }, [isStandaloneMode, getHostedBaseUrl])
+
   const logout = useCallback(async () => {
     log.info('Logout initiated')
     cleanupState()
@@ -436,18 +456,38 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     await shutdown()
   }, [cleanupState, stopServerIfRunning, shutdown])
 
-  const cancelConnection = useCallback(async () => {
-    log.info('Cancelling connection')
-    cleanupState()
-    await stopServerIfRunning()
-    transitionTo(states.MAIN_MENU)
-  }, [cleanupState, stopServerIfRunning, transitionTo, states.MAIN_MENU])
+  const cancelConnection = useCallback(
+    async (options?: { shutdownHosted?: boolean }) => {
+      log.info('Cancelling connection')
+      cleanupState()
+      await stopServerIfRunning()
+      if (options?.shutdownHosted) {
+        try {
+          await shutdownHostedServer()
+        } catch (err) {
+          log.error('Hosted shutdown failed:', err)
+        }
+      }
+      transitionTo(states.MAIN_MENU)
+    },
+    [cleanupState, stopServerIfRunning, shutdownHostedServer, transitionTo, states.MAIN_MENU]
+  )
 
-  const prepareReturnToMainMenu = useCallback(async () => {
-    log.info('Preparing return to main menu')
-    cleanupState()
-    await stopServerIfRunning()
-  }, [cleanupState, stopServerIfRunning])
+  const prepareReturnToMainMenu = useCallback(
+    async (options?: { shutdownHosted?: boolean }) => {
+      log.info('Preparing return to main menu')
+      cleanupState()
+      await stopServerIfRunning()
+      if (options?.shutdownHosted) {
+        try {
+          await shutdownHostedServer()
+        } catch (err) {
+          log.error('Hosted shutdown failed:', err)
+        }
+      }
+    },
+    [cleanupState, stopServerIfRunning, shutdownHostedServer]
+  )
 
   const value: StreamingContextValue = {
     // Connection state
@@ -466,6 +506,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     pauseElapsedMs,
     settingsOpen,
     statusCode,
+    statusStage,
 
     // Stats
     genTime,
