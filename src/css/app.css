@@ -396,10 +396,10 @@
     scrollbar-color: rgba(220, 235, 255, 0.58) rgba(9, 14, 24, 0.32);
   }
   .pause-scene-scroll-pinned {
-    max-height: 36cqh;
+    max-height: 50cqh;
   }
   .pause-scene-scroll-main {
-    max-height: 45cqh;
+    max-height: 50cqh;
   }
   .pause-scene-scroll::-webkit-scrollbar {
     width: 8px;
@@ -462,12 +462,12 @@
     cursor: pointer;
   }
   .pause-scene-action.is-pinned {
-    color: rgba(255, 237, 127, 0.96);
-    border-color: rgba(255, 237, 127, 0.9);
+    color: rgba(255, 72, 72, 0.98);
+    border-color: rgba(255, 104, 104, 0.94);
   }
   .pause-scene-action.is-default {
-    color: rgba(245, 249, 255, 0.92);
-    border-color: rgba(245, 249, 255, 0.7);
+    color: rgba(255, 142, 142, 0.95);
+    border-color: rgba(255, 128, 128, 0.82);
   }
   .pause-scene-action.is-delete {
     color: rgba(255, 205, 205, 0.95);

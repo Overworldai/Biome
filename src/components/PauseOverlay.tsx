@@ -329,7 +329,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col gap-[0.7cqh]">
             <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Pinned Scenes</h2>
             <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-              Your favorite scenes. Use the Scenes button to set favorites, or drag/paste an image in to play it.
+              Your pinned scenes. Use the Scenes button to pin scenes, or drag/paste an image in to play it.
             </p>
             <div className="pause-scene-scroll pause-scene-scroll-pinned mt-[0.7cqh]">
               <div className="pause-scene-grid">
@@ -338,7 +338,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                     <button
                       type="button"
                       key={`pinned-${seed.filename}`}
-                      className="pause-scene-card relative"
+                      className="pause-scene-card group/scene relative"
                       title={seed.filename}
                       onClick={() => handleSceneSelect(seed.filename)}
                     >
@@ -347,6 +347,77 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                         src={thumbnails[seed.filename] || ''}
                         alt={seed.filename}
                       />
+                      <span className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="pause-scene-action is-pinned"
+                          title="Unpin scene"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            togglePinnedScene(seed.filename)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              togglePinnedScene(seed.filename)
+                            }
+                          }}
+                        >
+                          <svg
+                            className="w-[66%] h-[66%]"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="10.6" r="4.1" />
+                            <circle cx="12" cy="10.6" r="1.55" fill="currentColor" stroke="none" />
+                            <path d="M12 14.7v2.35" />
+                            <path d="M10.98 16.9L12 19.1 13.02 16.95z" fill="currentColor" stroke="none" />
+                          </svg>
+                        </span>
+                        {!seed.is_default && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="pause-scene-action is-delete"
+                            title="Remove scene"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void removeScene(seed)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                void removeScene(seed)
+                              }
+                            }}
+                          >
+                            <svg
+                              className="w-[66%] h-[66%]"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <rect x="6.5" y="6.5" width="11" height="13" rx="1.5" />
+                              <path d="M10 10v6" />
+                              <path d="M14 10v6" />
+                            </svg>
+                          </span>
+                        )}
+                      </span>
                     </button>
                   ))
                 ) : (
@@ -483,9 +554,41 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
                           }
                         }}
                       >
-                        <svg className="w-[66%] h-[66%]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                          <path d="M12 2.75l2.83 5.74 6.34.92-4.58 4.46 1.08 6.31L12 17.2l-5.67 2.98 1.08-6.31-4.58-4.46 6.34-.92L12 2.75z" />
-                        </svg>
+                        {pinnedSceneIds.includes(seed.filename) ? (
+                          <svg
+                            className="w-[66%] h-[66%]"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="10.6" r="4.1" />
+                            <circle cx="12" cy="10.6" r="1.55" fill="currentColor" stroke="none" />
+                            <path d="M12 14.7v2.35" />
+                            <path d="M10.98 16.9L12 19.1 13.02 16.95z" fill="currentColor" stroke="none" />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-[66%] h-[66%]"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <g transform="rotate(-36 12 12)">
+                              <rect x="9.25" y="4.1" width="5.5" height="5.6" rx="1.2" />
+                              <path d="M7.5 9.7h9l-4.5 4.55z" />
+                              <path d="M12 14.2v5.1" />
+                              <path d="M10.92 19.1L12 22 13.08 19.15z" fill="currentColor" stroke="none" />
+                            </g>
+                          </svg>
+                        )}
                       </span>
                       {!seed.is_default && (
                         <span
