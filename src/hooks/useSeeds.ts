@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
 import type { SeedRecord } from '../types/app'
 
@@ -27,9 +27,9 @@ export const useSeeds = (): UseSeedsResult => {
     setIsLoading(true)
     setError(null)
     try {
-      const seedList = await invoke<SeedRecord[]>('list_seeds')
+      const seedList = await invoke('list-seeds')
       setSeeds(seedList)
-      const path = await invoke<string>('get_seeds_dir_path')
+      const path = await invoke('get-seeds-dir-path')
       setSeedsDir(path)
       return seedList
     } catch (err) {
@@ -46,7 +46,7 @@ export const useSeeds = (): UseSeedsResult => {
     setIsLoading(true)
     setError(null)
     try {
-      const seedList = await invoke<SeedRecord[]>('list_seeds')
+      const seedList = await invoke('list-seeds')
       setSeeds(seedList)
       return seedList
     } catch (err) {
@@ -63,7 +63,7 @@ export const useSeeds = (): UseSeedsResult => {
     try {
       let seedList = seeds
       if (seedList.length === 0) {
-        seedList = await invoke<SeedRecord[]>('list_seeds')
+        seedList = await invoke('list-seeds')
         setSeeds(seedList)
       }
 
@@ -71,7 +71,7 @@ export const useSeeds = (): UseSeedsResult => {
         throw new Error('Required seed file "default.png" not found in seeds folder')
       }
 
-      return await invoke<string>('read_seed_as_base64', { filename: 'default.png' })
+      return await invoke('read-seed-as-base64', 'default.png')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
@@ -81,7 +81,7 @@ export const useSeeds = (): UseSeedsResult => {
 
   const openSeedsDir = useCallback(async () => {
     try {
-      await invoke('open_seeds_dir')
+      await invoke('open-seeds-dir')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
@@ -91,7 +91,7 @@ export const useSeeds = (): UseSeedsResult => {
 
   const getSeedsDirPath = useCallback(async () => {
     try {
-      const path = await invoke<string>('get_seeds_dir_path')
+      const path = await invoke('get-seeds-dir-path')
       setSeedsDir(path)
       return path
     } catch (err) {

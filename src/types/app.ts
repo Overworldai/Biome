@@ -19,23 +19,24 @@ export type FeaturesConfig = {
   seed_gallery: boolean
   world_engine_model: string
   custom_world_models: string[]
-}
-
-export type UiConfig = {
-  bottom_panel_hidden: boolean
+  mouse_sensitivity: number
+  pinned_scenes: string[]
 }
 
 export type AppConfig = {
   gpu_server: GpuServerConfig
   api_keys: ApiKeysConfig
   features: FeaturesConfig
-  ui: UiConfig
 }
 
 export type SeedRecord = {
   filename: string
   is_safe: boolean
   is_default: boolean
+}
+
+export type SeedRecordWithThumbnail = SeedRecord & {
+  thumbnail_base64: string | null
 }
 
 export type EngineStatus = {
@@ -48,3 +49,9 @@ export type EngineStatus = {
 }
 
 export type SetupStatus = 'saved' | 'error' | null
+
+export type LoadingStage = {
+  id: string
+  label: string
+  percent: number
+}

@@ -1,53 +1,282 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
-import { useFitWindowToContent } from './hooks/useTauri'
+import { VortexProvider } from './context/VortexContext'
 import { useAppStartup } from './hooks/useAppStartup'
-import Titlebar from './components/Titlebar'
 import VideoContainer from './components/VideoContainer'
-import HudOverlay from './components/HudOverlay'
-import BottomPanel from './components/BottomPanel'
-import SettingsPanel from './components/SettingsPanel'
-import WindowAnchors from './components/WindowAnchors'
+import MenuSettingsView from './components/MenuSettingsView'
+import BackgroundSlideshow from './components/BackgroundSlideshow'
+import PortalPreview from './components/PortalPreview'
+import VortexHost from './components/VortexHost'
+import TerminalDisplay from './components/TerminalDisplay'
+import SocialCtaRow from './components/SocialCtaRow'
+import ViewLabel from './components/ui/ViewLabel'
+import MenuButton from './components/ui/MenuButton'
+import PauseOverlay from './components/PauseOverlay'
+import ConnectionLostOverlay from './components/ConnectionLostOverlay'
+import ShutdownOverlay from './components/ShutdownOverlay'
+import WindowControls from './components/WindowControls'
+import ServerLogDisplay from './components/ServerLogDisplay'
+import useBackgroundCycle from './hooks/useBackgroundCycle'
+import useSceneGlowColor from './hooks/useSceneGlowColor'
 
-const HoloFrame = () => {
-  const [isReady, setIsReady] = useState(false)
-  const { isConnected } = usePortal()
-  const { bottomPanelHidden, setBottomPanelHidden } = useStreaming()
+const LAUNCH_PRE_SHRINK_MS = 420
 
-  // Force animation replay on mount by briefly removing the animated class
+const AppShell = () => {
+  const [isPortalHovered, setIsPortalHovered] = useState(false)
+  const [showInstallLog, setShowInstallLog] = useState(false)
+  const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
+  const [isEnteringLoading, setIsEnteringLoading] = useState(false)
+  const [isReturningToMenu, setIsReturningToMenu] = useState(false)
+  const [isStreamingReveal, setIsStreamingReveal] = useState(false)
+  const prevStreamingUiRef = useRef(false)
+  const {
+    state: portalState,
+    states: portalStates,
+    isConnected,
+    isSettingsOpen,
+    toggleSettings,
+    transitionTo
+  } = usePortal()
+  const {
+    isStreaming,
+    isPaused,
+    connectionState,
+    statusStage,
+    setupProgress,
+    engineSetupError,
+    engineSetupInProgress,
+    prepareReturnToMainMenu
+  } = useStreaming()
+  const {
+    images,
+    currentIndex,
+    nextIndex,
+    isTransitioning,
+    isPortalShrinking,
+    transitionKey,
+    portalVisible,
+    isPortalEntering,
+    triggerPortalEnter,
+    completePortalShrink,
+    completeTransition
+  } = useBackgroundCycle(
+    isPortalHovered ||
+      (!isConnected && isSettingsOpen) ||
+      showInstallLog ||
+      isLaunchShrinking ||
+      isEnteringLoading ||
+      isReturningToMenu ||
+      portalState === portalStates.LOADING ||
+      portalState === portalStates.STREAMING
+  )
+
+  const nextScenePreview = images[nextIndex] ?? null
+  const isLaunchTransition = isEnteringLoading
+  const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
+  const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
+  const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
+  const useMainBackground = !isStreamingUi
+  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 2) : 0
+  const portalGlowRgb = useSceneGlowColor(images, currentIndex)
+  const showMenuHome = isMainUi && !isConnected && !isSettingsOpen && !showInstallLog
+  const showMenuSettings = isMainUi && !isConnected && isSettingsOpen && !showInstallLog
+  const showInstallLogView = isMainUi && !isConnected && showInstallLog
+  const loadingProgressPercent = Math.max(0, Math.min(100, Math.round(statusStage?.percent ?? 0)))
+  const loadingLayerStyle = {
+    '--vortex-progress-percent': loadingProgressPercent.toString()
+  } as CSSProperties
+
   useEffect(() => {
-    // Small delay to ensure DOM is ready, then trigger animations
-    const timer = requestAnimationFrame(() => {
-      setIsReady(true)
-    })
-    return () => cancelAnimationFrame(timer)
-  }, [])
+    if (isStreamingUi && !prevStreamingUiRef.current) {
+      setIsStreamingReveal(true)
+    }
+    prevStreamingUiRef.current = isStreamingUi
+  }, [isStreamingUi])
+
+  useEffect(() => {
+    if (!portalVisible) {
+      setIsPortalHovered(false)
+    }
+  }, [portalVisible])
+
+  useEffect(() => {
+    if (!isLoadingUi && portalState === portalStates.MAIN_MENU) {
+      setIsEnteringLoading(false)
+      setIsLaunchShrinking(false)
+      setIsReturningToMenu(false)
+    }
+  }, [isLoadingUi, portalState, portalStates.MAIN_MENU])
+
+  useEffect(() => {
+    if (!isLaunchShrinking) return
+
+    const timer = window.setTimeout(() => {
+      setIsLaunchShrinking(false)
+      setIsEnteringLoading(true)
+    }, LAUNCH_PRE_SHRINK_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [isLaunchShrinking])
+
+  const handleLaunch = () => {
+    if (
+      portalState === portalStates.MAIN_MENU &&
+      connectionState !== 'connecting' &&
+      !isSettingsOpen &&
+      !showInstallLog &&
+      !isEnteringLoading &&
+      !isLaunchShrinking
+    ) {
+      setIsLaunchShrinking(true)
+    }
+  }
+
+  const handleCancelLoading = (options?: { shutdownHosted?: boolean }) => {
+    if (isReturningToMenu || portalState !== portalStates.LOADING) return
+    setIsReturningToMenu(true)
+    setIsPortalHovered(false)
+    void prepareReturnToMainMenu(options)
+  }
 
   return (
     <div
-      className={`holo-frame ${isReady ? 'animate' : ''} ${isConnected ? 'keyboard-open' : ''} ${bottomPanelHidden ? 'panel-hidden' : ''}`}
+      className={`app-shell relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
     >
-      <div className="holo-frame-inner">
-        <Titlebar />
-
-        <main className="content-area">
-          <VideoContainer />
-          <div className="logo-container" id="logo-container"></div>
-          <SettingsPanel />
-        </main>
-
-        <HudOverlay />
-
-        {/* Bottom panel - always visible when streaming connected */}
-        {isConnected && (
-          <BottomPanel
-            isOpen={true}
-            isHidden={bottomPanelHidden}
-            onToggleHidden={() => setBottomPanelHidden(!bottomPanelHidden)}
+      <WindowControls />
+      <div
+        className={`app-shell-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
+      >
+        {useMainBackground && (
+          <BackgroundSlideshow
+            images={images}
+            currentIndex={currentIndex}
+            nextIndex={nextIndex}
+            blurPx={backgroundBlurPx}
+            isTransitioning={isTransitioning}
+            transitionKey={transitionKey}
+            onTransitionComplete={completeTransition}
           />
         )}
+        {isMainUi && !isConnected && !isEnteringLoading && (
+          <div
+            className={`absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-[180ms] ease-out ${!isConnected && isSettingsOpen ? 'left-[var(--portal-settings-left)] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
+            style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
+            onMouseEnter={() => setIsPortalHovered(true)}
+            onMouseLeave={() => setIsPortalHovered(false)}
+            onClick={handleLaunch}
+            role="button"
+            tabIndex={0}
+            aria-label="Enter the Overworld"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleLaunch()
+              }
+            }}
+          >
+            <div className="relative w-full" style={{ paddingBottom: '123%' }}>
+              <PortalPreview
+                image={nextScenePreview}
+                hoverContent={nextScenePreview ? <VortexHost mode="portal" /> : undefined}
+                isHovered={isPortalHovered}
+                visible={portalVisible}
+                isShrinking={isPortalShrinking || isLaunchShrinking}
+                isEntering={isPortalEntering}
+                isSettingsOpen={!isConnected && isSettingsOpen}
+                glowRgb={portalGlowRgb}
+                onShrinkComplete={completePortalShrink}
+              />
+            </div>
+            {showMenuHome && (
+              <div className="portal-subtitle text-center font-serif text-[3.91cqh] tracking-[0.03em] text-[rgb(255,255,255)] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
+                Enter the Overworld
+              </div>
+            )}
+          </div>
+        )}
+        {showMenuHome && (
+          <div className="absolute inset-0 z-[9] pointer-events-none">
+            <SocialCtaRow />
+
+            <ViewLabel>Biome</ViewLabel>
+
+            <MenuButton
+              variant="ghost"
+              className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
+              onClick={toggleSettings}
+            >
+              Settings
+            </MenuButton>
+          </div>
+        )}
+        {showMenuSettings && (
+          <MenuSettingsView
+            onBack={toggleSettings}
+            onFixEngine={() => {
+              if (isSettingsOpen) toggleSettings()
+              setShowInstallLog(true)
+            }}
+          />
+        )}
+        {showInstallLogView && (
+          <div className="absolute inset-0 z-[9] pointer-events-auto">
+            <ServerLogDisplay
+              showProgress={true}
+              progressMessage={setupProgress || 'Installing World Engine...'}
+              errorMessage={engineSetupError}
+              showDismiss={!engineSetupInProgress}
+              onDismiss={() => setShowInstallLog(false)}
+            />
+          </div>
+        )}
+
+        {isStreamingUi && (
+          <main
+            className={`content-area absolute z-[5] inset-0 w-full h-full bg-black opacity-100 ${isStreamingReveal ? 'streaming-reveal' : ''}`}
+            onAnimationEnd={(event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.animationName !== 'streamingCircularReveal') return
+              setIsStreamingReveal(false)
+            }}
+          >
+            <VideoContainer />
+            <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
+            <PauseOverlay isActive={isPaused} />
+            <ConnectionLostOverlay />
+          </main>
+        )}
+        {(isLoadingUi || isEnteringLoading || isReturningToMenu || isStreamingReveal) && (
+          <div
+            className={`loading-ui-layer absolute inset-0 ${isStreamingReveal ? 'z-[4]' : 'z-20'} ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''} ${isStreamingReveal ? 'streaming-pullout' : ''}`}
+            style={loadingLayerStyle}
+            onAnimationEnd={(event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.animationName !== 'portalBgReveal' && event.animationName !== 'portalBgConceal') return
+              if (isEnteringLoading) {
+                setIsEnteringLoading(false)
+                void transitionTo(portalStates.LOADING)
+                return
+              }
+              if (isReturningToMenu) {
+                triggerPortalEnter()
+                setIsReturningToMenu(false)
+                void transitionTo(portalStates.MAIN_MENU)
+              }
+            }}
+          >
+            <div className="loading-vortex-layer absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
+              <VortexHost mode="loading" />
+            </div>
+            {(isLoadingUi || isStreamingReveal) && !isReturningToMenu && (
+              <>
+                <TerminalDisplay onCancel={handleCancelLoading} keepVisible={isStreamingReveal} />
+              </>
+            )}
+          </div>
+        )}
+        <ShutdownOverlay />
       </div>
     </div>
   )
@@ -57,15 +286,13 @@ const App = () => {
   // Run startup tasks (unpack server files, etc.)
   useAppStartup()
 
-  // Snap window to fit content after resize stops
-  useFitWindowToContent()
-
   return (
     <ConfigProvider>
       <PortalProvider>
         <StreamingProvider>
-          <WindowAnchors />
-          <HoloFrame />
+          <VortexProvider>
+            <AppShell />
+          </VortexProvider>
         </StreamingProvider>
       </PortalProvider>
     </ConfigProvider>

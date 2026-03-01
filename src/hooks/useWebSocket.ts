@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createLogger } from '../utils/logger'
+import type { LoadingStage } from '../types/app'
 
 const log = createLogger('WebSocket')
 
@@ -8,8 +9,10 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 type WebSocketHook = {
   connectionState: ConnectionState
   statusCode: string | null
+  statusStage: LoadingStage | null
   error: string | null
   frame: string | null
+  hasRealFrame: boolean
   frameId: number
   genTime: number | null
   connect: (endpointUrl: string) => void
@@ -20,6 +23,7 @@ type WebSocketHook = {
   sendPromptWithSeed: (promptOrFilename: string, seedUrl?: string) => void
   sendInitialSeed: (filename: string) => void
   sendModel: (model: string, seed?: string | null) => void
+  setPlaceholderFrame: (dataUrl: string | null) => void
   reset: () => void
   isConnected: boolean
   isReady: boolean
@@ -34,6 +38,8 @@ export const useWebSocket = (): WebSocketHook => {
   const [genTime, setGenTime] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [statusCode, setStatusCode] = useState<string | null>(null)
+  const [statusStage, setStatusStage] = useState<LoadingStage | null>(null)
+  const [hasRealFrame, setHasRealFrame] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
@@ -53,6 +59,8 @@ export const useWebSocket = (): WebSocketHook => {
     setConnectionState('connecting')
     setError(null)
     setStatusCode(null)
+    setStatusStage(null)
+    setHasRealFrame(false)
 
     let wsUrl: string
     if (endpointUrl.startsWith('ws://') || endpointUrl.startsWith('wss://')) {
@@ -61,7 +69,15 @@ export const useWebSocket = (): WebSocketHook => {
       wsUrl = `ws://${endpointUrl}/ws`
     }
 
-    const ws = new WebSocket(wsUrl)
+    let ws: WebSocket
+    try {
+      ws = new WebSocket(wsUrl)
+    } catch (err) {
+      isConnectingRef.current = false
+      setConnectionState('error')
+      setError(err instanceof Error ? err.message : 'Failed to create WebSocket connection')
+      return
+    }
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -77,8 +93,21 @@ export const useWebSocket = (): WebSocketHook => {
 
         switch (msg.type) {
           case 'status': {
-            const code = (msg.code || msg.status || msg.message || null) as string | null
+            const code = (typeof msg.code === 'string' ? msg.code : null) as string | null
             setStatusCode(code)
+            const rawStage = msg.stage as Partial<LoadingStage> | undefined
+            if (
+              rawStage &&
+              typeof rawStage.id === 'string' &&
+              typeof rawStage.label === 'string' &&
+              typeof rawStage.percent === 'number'
+            ) {
+              setStatusStage({
+                id: rawStage.id,
+                label: rawStage.label,
+                percent: Math.max(0, Math.min(100, Math.round(rawStage.percent)))
+              })
+            }
             if (code === 'ready') {
               setIsReady(true)
               isReadyRef.current = true
@@ -87,6 +116,7 @@ export const useWebSocket = (): WebSocketHook => {
           }
           case 'frame': {
             setFrame((msg.data as string) ?? null)
+            setHasRealFrame(true)
             setFrameId((msg.frame_id as number) ?? 0)
             if (typeof msg.gen_ms === 'number') {
               setGenTime(Math.round(msg.gen_ms))
@@ -129,25 +159,30 @@ export const useWebSocket = (): WebSocketHook => {
       setConnectionState('disconnected')
       setIsReady(false)
       setStatusCode(null)
+      setStatusStage(null)
       setFrame(null)
+      setHasRealFrame(false)
       setFrameId(0)
       setGenTime(null)
     }
   }, [])
 
   const disconnect = useCallback(() => {
+    isConnectingRef.current = false
+    isReadyRef.current = false
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
     setConnectionState('disconnected')
     setIsReady(false)
-    isReadyRef.current = false
     setFrame(null)
     setFrameId(0)
     setError(null)
     setGenTime(null)
     setStatusCode(null)
+    setStatusStage(null)
+    setHasRealFrame(false)
   }, [])
 
   const sendControl = useCallback((buttons: string[] = [], mouseDx = 0, mouseDy = 0) => {
@@ -201,6 +236,10 @@ export const useWebSocket = (): WebSocketHook => {
     }
   }, [])
 
+  const setPlaceholderFrame = useCallback((dataUrl: string | null) => {
+    setFrame(dataUrl)
+  }, [])
+
   const reset = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'reset' }))
@@ -216,8 +255,10 @@ export const useWebSocket = (): WebSocketHook => {
   return {
     connectionState,
     statusCode,
+    statusStage,
     error,
     frame,
+    hasRealFrame,
     frameId,
     genTime,
     connect,
@@ -228,6 +269,7 @@ export const useWebSocket = (): WebSocketHook => {
     sendPromptWithSeed,
     sendInitialSeed,
     sendModel,
+    setPlaceholderFrame,
     reset,
     isConnected: connectionState === 'connected',
     isReady,

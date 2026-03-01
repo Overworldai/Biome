@@ -1,0 +1,21 @@
+[project]
+name = "biome-server"
+version = "0.1.0"
+requires-python = "==3.13.*"
+dependencies = [
+  "world-engine @ https://github.com/Wayfarer-Labs/world_engine/archive/a30a00c302380c0f657347e8456bb6837ff37c22.zip",
+  "pillow",
+  "fastapi>=0.128.0",
+  "uvicorn>=0.40.0",
+  "httpx>=0.27.0",
+  "websockets>=15.0.1",
+  "hf-xet>=1.0.0",
+  "transformers>=4.30.0",
+  "timm>=0.9.0",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+index-strategy = "unsafe-best-match"

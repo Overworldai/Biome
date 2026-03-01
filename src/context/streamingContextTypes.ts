@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import type { EngineMode, EngineStatus } from '../types/app'
+import type { EngineStatus, LoadingStage } from '../types/app'
 
 export type StreamingStats = {
   gentime: number
@@ -22,6 +22,7 @@ export type StreamingContextValue = {
   pauseElapsedMs: number
   settingsOpen: boolean
   statusCode: string | null
+  statusStage: LoadingStage | null
 
   genTime: number | null
   frameId: number
@@ -49,24 +50,22 @@ export type StreamingContextValue = {
   engineSetupInProgress: boolean
   setupProgress: string | null
   engineSetupError: string | null
-  handleModeChoice: (mode: EngineMode) => Promise<void>
 
   openSeedsDir: () => Promise<void>
   seedsDir: string | null
 
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
-  bottomPanelHidden: boolean
-  setBottomPanelHidden: (hidden: boolean) => Promise<void>
-
   pressedKeys: Set<string>
   isPointerLocked: boolean
+  pointerLockBlockedSeq: number
 
   connect: (endpointUrl: string) => void
   disconnect: () => void
   logout: () => Promise<void>
   dismissConnectionLost: () => Promise<void>
-  cancelConnection: () => Promise<void>
+  cancelConnection: (options?: { shutdownHosted?: boolean }) => Promise<void>
+  prepareReturnToMainMenu: (options?: { shutdownHosted?: boolean }) => Promise<void>
   reset: () => void
   sendPrompt: (prompt: string) => void
   sendPromptWithSeed: (promptOrFilename: string, maybeSeedUrl?: string) => void

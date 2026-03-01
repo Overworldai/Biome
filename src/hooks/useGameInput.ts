@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type RefObject } from 'react'
 
 export const RESET_KEY = 'KeyU'
-export const RESET_KEY_DISPLAY = RESET_KEY.replace('Key', '')
 
 const KEY_MAP: Record<string, string> = {}
 for (let i = 65; i <= 90; i++) {
