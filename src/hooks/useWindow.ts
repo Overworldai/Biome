@@ -30,6 +30,10 @@ export const useWindow = () => {
     await invoke('window-minimize')
   }, [])
 
+  const toggleMaximize = useCallback(async () => {
+    await invoke('window-toggle-maximize')
+  }, [])
+
   const close = useCallback(async () => {
     await invoke('window-close')
   }, [])
@@ -40,6 +44,7 @@ export const useWindow = () => {
     setPosition,
     getPosition,
     minimize,
+    toggleMaximize,
     close
   }
 }

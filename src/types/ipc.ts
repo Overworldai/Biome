@@ -67,6 +67,7 @@ export type IpcCommandMap = {
   'window-set-position': { args: [x: number, y: number]; return: void }
   'window-get-position': { args: []; return: { x: number; y: number } }
   'window-minimize': { args: []; return: void }
+  'window-toggle-maximize': { args: []; return: void }
   'window-close': { args: []; return: void }
   'quit-app': { args: []; return: void }
 }

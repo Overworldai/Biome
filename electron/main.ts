@@ -69,6 +69,7 @@ const createWindow = () => {
     resizable: true,
     center: true,
     frame: false,
+    backgroundColor: '#000000',
     title: 'Biome',
     icon: path.join(__dirname, '../../app-icon.png'),
     webPreferences: {

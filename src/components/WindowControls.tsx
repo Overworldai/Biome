@@ -4,7 +4,7 @@ import { useStreaming } from '../context/StreamingContext'
 import { WINDOW_CONTROL_BASE } from '../styles'
 
 const WindowControls = () => {
-  const { minimize, close } = useWindow()
+  const { minimize, toggleMaximize, close } = useWindow()
   const { isStreaming, isPaused } = useStreaming()
   const dragRegionStyle = {
     WebkitAppRegion: 'drag',
@@ -38,6 +38,26 @@ const WindowControls = () => {
           style={noDragRegionStyle}
         >
           &#x2014;
+        </button>
+        <button
+          type="button"
+          className={`${WINDOW_CONTROL_BASE} outline-0 outline-[rgba(245,251,255,0.8)] transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-[rgba(245,251,255,0.9)] hover:text-[rgba(15,20,32,0.95)] hover:outline-2`}
+          onClick={toggleMaximize}
+          aria-label="Maximize"
+          style={noDragRegionStyle}
+        >
+          <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true" className="block">
+            <rect
+              x="2.25"
+              y="2.25"
+              width="7.5"
+              height="7.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.1"
+              rx="0.5"
+            />
+          </svg>
         </button>
         <button
           type="button"

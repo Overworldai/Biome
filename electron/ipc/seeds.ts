@@ -5,6 +5,11 @@ import type { SeedRecord, SeedRecordWithThumbnail } from '../../src/types/app.js
 
 const SERVER_BASE_URL = 'http://localhost:7987'
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
 export function registerSeedsIpc(): void {
   ipcMain.handle('list-seeds', async () => {
     const response = await fetch(`${SERVER_BASE_URL}/seeds/list`)
@@ -12,17 +17,15 @@ export function registerSeedsIpc(): void {
       throw new Error(`Server returned error: ${response.status}`)
     }
 
-    const result = (await response.json()) as { seeds: Record<string, { is_safe: boolean; is_default: boolean }> }
-    const seedsObj = result.seeds
-    if (!seedsObj || typeof seedsObj !== 'object') {
-      throw new Error('Invalid response format')
-    }
+    const raw = (await response.json()) as unknown
+    const result = asObject(raw)
+    const seedsObj = asObject(result?.seeds) ?? {}
 
     const seeds: SeedRecord[] = Object.entries(seedsObj)
       .map(([filename, data]) => ({
         filename,
-        is_safe: data.is_safe ?? false,
-        is_default: data.is_default ?? true
+        is_safe: Boolean((data as { is_safe?: unknown }).is_safe ?? false),
+        is_default: Boolean((data as { is_default?: unknown }).is_default ?? true)
       }))
       .sort((a, b) => a.filename.localeCompare(b.filename))
 
@@ -34,28 +37,29 @@ export function registerSeedsIpc(): void {
     if (!listResponse.ok) {
       throw new Error(`Server returned error: ${listResponse.status}`)
     }
-    const listResult = (await listResponse.json()) as { count?: number }
-    const seedCount = Math.max(1, listResult.count ?? 1)
+    const listRaw = (await listResponse.json()) as unknown
+    const listResult = asObject(listRaw)
+    const countValue = listResult?.count
+    const seedCount = Math.max(1, typeof countValue === 'number' ? countValue : 1)
 
     const response = await fetch(`${SERVER_BASE_URL}/seeds/list-with-thumbnails?thumbnail_limit=${seedCount}`)
     if (!response.ok) {
       throw new Error(`Server returned error: ${response.status}`)
     }
 
-    const result = (await response.json()) as {
-      seeds: Record<string, { is_safe: boolean; is_default: boolean; thumbnail_base64?: string | null }>
-    }
-    const seedsObj = result.seeds
-    if (!seedsObj || typeof seedsObj !== 'object') {
-      throw new Error('Invalid response format')
-    }
+    const raw = (await response.json()) as unknown
+    const result = asObject(raw)
+    const seedsObj = asObject(result?.seeds) ?? {}
 
     const seeds: SeedRecordWithThumbnail[] = Object.entries(seedsObj)
       .map(([filename, data]) => ({
         filename,
-        is_safe: data.is_safe ?? false,
-        is_default: data.is_default ?? true,
-        thumbnail_base64: data.thumbnail_base64 ?? null
+        is_safe: Boolean((data as { is_safe?: unknown }).is_safe ?? false),
+        is_default: Boolean((data as { is_default?: unknown }).is_default ?? true),
+        thumbnail_base64:
+          typeof (data as { thumbnail_base64?: unknown }).thumbnail_base64 === 'string'
+            ? ((data as { thumbnail_base64: string }).thumbnail_base64 ?? null)
+            : null
       }))
       .sort((a, b) => a.filename.localeCompare(b.filename))
 
