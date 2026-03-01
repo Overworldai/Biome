@@ -11,7 +11,15 @@ import { useConfig } from '../hooks/useConfig'
 const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { canUnpause, requestPointerLock, reset, sendPromptWithSeed } = useStreaming()
+  const {
+    canUnpause,
+    unlockDelayMs,
+    pauseElapsedMs,
+    pointerLockBlockedSeq,
+    requestPointerLock,
+    reset,
+    sendPromptWithSeed
+  } = useStreaming()
   const { config, isLoaded, saveConfig, getUrl } = useConfig()
   const [view, setView] = useState<'main' | 'scenes' | 'settings'>('main')
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
@@ -19,6 +27,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [pinnedSceneIds, setPinnedSceneIds] = useState<string[]>([])
+  const [showUnlockHint, setShowUnlockHint] = useState(false)
+  const lastPointerLockBlockedSeqRef = useRef(0)
   const loadingRef = useRef(false)
   const isMountedRef = useRef(true)
   const hasHydratedPinnedRef = useRef(false)
@@ -114,6 +124,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   useEffect(() => {
     if (!isActive) {
       setView('main')
+      setShowUnlockHint(false)
       return
     }
 
@@ -121,14 +132,34 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       if (e.key !== 'Escape') return
       if (view === 'scenes' || view === 'settings') {
         setView('main')
-      } else if (canUnpause) {
+      } else {
         requestPointerLock()
       }
     }
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, canUnpause, requestPointerLock])
+  }, [isActive, view, requestPointerLock])
+
+  useEffect(() => {
+    if (!showUnlockHint) return
+    const timer = window.setTimeout(() => setShowUnlockHint(false), 1200)
+    return () => window.clearTimeout(timer)
+  }, [showUnlockHint])
+
+  useEffect(() => {
+    if (canUnpause) {
+      setShowUnlockHint(false)
+    }
+  }, [canUnpause])
+
+  useEffect(() => {
+    if (!isActive) return
+    if (pointerLockBlockedSeq <= 0) return
+    if (pointerLockBlockedSeq === lastPointerLockBlockedSeqRef.current) return
+    lastPointerLockBlockedSeqRef.current = pointerLockBlockedSeq
+    setShowUnlockHint(true)
+  }, [isActive, pointerLockBlockedSeq])
 
   useEffect(() => {
     if (!isLoaded || hasHydratedPinnedRef.current) return
@@ -179,12 +210,13 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
   const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
   const sceneList = useMemo(() => seeds, [seeds])
+  const pauseLockoutRemainingMs = Math.max(0, unlockDelayMs - pauseElapsedMs)
+  const showPauseLockoutTimer = isActive && !canUnpause && pauseLockoutRemainingMs > 0 && showUnlockHint
+  const pauseLockoutSecondsText = (pauseLockoutRemainingMs / 1000).toFixed(1)
 
   const handleSceneSelect = (filename: string) => {
     sendPromptWithSeed(filename)
-    if (canUnpause) {
-      requestPointerLock()
-    }
+    requestPointerLock()
   }
 
   const handleResetAndResume = () => {
@@ -442,7 +474,20 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             </div>
           </section>
 
-          <ViewLabel>Paused</ViewLabel>
+          <ViewLabel>
+            <span className="inline-flex items-end gap-[1.42cqh]">
+              <span>Paused</span>
+              <span
+                className={`self-end font-serif text-[2.13cqh] leading-[1.0] tracking-[0.03em] text-[rgba(245,249,255,0.62)] transition-opacity duration-120 ${
+                  showPauseLockoutTimer
+                    ? 'opacity-100 [animation:pauseUnlockHintPulse_1200ms_ease-out_forwards]'
+                    : 'opacity-0'
+                }`}
+              >
+                {showPauseLockoutTimer ? `unlock in ${pauseLockoutSecondsText}s` : ''}
+              </span>
+            </span>
+          </ViewLabel>
 
           <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
             <MenuButton variant="secondary" className="w-full px-0" onClick={handleResetAndResume}>
@@ -454,7 +499,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('settings')}>
               Settings
             </MenuButton>
-            <MenuButton variant="primary" className="w-full px-0" onClick={() => canUnpause && requestPointerLock()}>
+            <MenuButton variant="primary" className="w-full px-0" onClick={requestPointerLock}>
               Resume
             </MenuButton>
           </div>

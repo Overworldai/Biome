@@ -90,6 +90,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [endpointUrl, setEndpointUrl] = useState<string | null>(null)
   const [canvasReady, setCanvasReady] = useState(false)
   const [loadingConnectionJobSeq, setLoadingConnectionJobSeq] = useState(0)
+  const [pointerLockBlockedSeq, setPointerLockBlockedSeq] = useState(0)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
   const prevEngineModeRef = useRef(engineMode)
@@ -188,10 +189,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
+    // https://github.com/electron/electron/issues/33587 seems like there's no way around the pointerLock cooldown
     // Enforce browser pointer-lock cooldown after an unlock to avoid dropped lock requests.
     if (isPaused && !canUnpause) {
       const remainingMs = Math.max(0, UNLOCK_DELAY_MS - pauseElapsedMs)
       log.info(`Pointer lock request blocked by cooldown (${remainingMs}ms remaining)`)
+      setPointerLockBlockedSeq((seq) => seq + 1)
       return false
     }
 
@@ -553,6 +556,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Input state
     pressedKeys,
     isPointerLocked,
+    pointerLockBlockedSeq,
 
     // Actions
     connect,
