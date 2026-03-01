@@ -680,9 +680,58 @@ async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge
 
     cache_count = len(safe_seeds_cache)
     safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe", False))
-    existing_path_count = sum(
-        1 for data in safe_seeds_cache.values() if os.path.exists(str(data.get("path", "")))
+    sample_filenames = list(safe_seeds_cache.keys())[:5]
+    logger.info(
+        "[SEEDS] /seeds/list-with-thumbnails requested: cache=%d safe=%d thumbnail_limit=%d sample=%s",
+        cache_count,
+        safe_count,
+        thumbnail_limit,
+        sample_filenames,
     )
+    if cache_count == 0:
+        logger.warning(
+            "[SEEDS] /seeds/list-with-thumbnails returning empty cache. "
+            "default_dir=%s uploads_dir=%s cache_file=%s",
+            DEFAULT_SEEDS_DIR,
+            UPLOADS_DIR,
+            CACHE_FILE,
+        )
+
+    async def build_seed_entry(
+        filename: str, data: dict, include_thumbnail: bool
+    ) -> tuple[str, dict]:
+        file_path = str(data.get("path", ""))
+        is_default = not file_path.startswith(str(UPLOADS_DIR))
+        thumbnail_base64: str | None = None
+
+        if include_thumbnail and file_path and os.path.exists(file_path):
+            try:
+                thumb_bytes = await asyncio.to_thread(_generate_thumbnail_jpeg_bytes, file_path, 80)
+                thumbnail_base64 = base64.b64encode(thumb_bytes).decode("ascii")
+            except Exception as exc:
+                logger.error(f"Failed to generate thumbnail for {filename}: {exc}")
+
+        return (
+            filename,
+            {
+                "filename": filename,
+                "hash": data.get("hash", ""),
+                "is_safe": data.get("is_safe", False),
+                "is_default": is_default,
+                "checked_at": data.get("checked_at", 0),
+                "thumbnail_base64": thumbnail_base64,
+            },
+        )
+
+    ordered_items = sorted(safe_seeds_cache.items(), key=lambda item: item[0].lower())
+    entries = await asyncio.gather(
+        *(
+            build_seed_entry(filename, data, idx < thumbnail_limit)
+            for idx, (filename, data) in enumerate(ordered_items)
+        )
+    )
+    seeds_with_thumbnails = dict(entries)
+    return JSONResponse({"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)})
 
 
 @app.get("/admin/logs")
@@ -709,90 +758,6 @@ async def admin_shutdown():
     asyncio.create_task(_shutdown())
     logger.warning("[ADMIN] Hosted shutdown requested")
     return JSONResponse({"status": "shutting_down"})
-    sample_filenames = list(safe_seeds_cache.keys())[:5]
-    logger.info(
-        "[SEEDS] /seeds/list requested: cache=%d safe=%d existing_paths=%d sample=%s",
-        cache_count,
-        safe_count,
-        existing_path_count,
-        sample_filenames,
-    )
-    if cache_count == 0:
-        logger.warning(
-            "[SEEDS] /seeds/list returning empty cache. "
-            "default_dir=%s uploads_dir=%s cache_file=%s",
-            DEFAULT_SEEDS_DIR,
-            UPLOADS_DIR,
-            CACHE_FILE,
-        )
-
-    cache_count = len(safe_seeds_cache)
-    safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe", False))
-    sample_filenames = list(safe_seeds_cache.keys())[:5]
-    logger.info(
-        "[SEEDS] /seeds/list-with-thumbnails requested: cache=%d safe=%d thumbnail_limit=%d sample=%s",
-        cache_count,
-        safe_count,
-        thumbnail_limit,
-        sample_filenames,
-    )
-    if cache_count == 0:
-        logger.warning(
-            "[SEEDS] /seeds/list-with-thumbnails returning empty cache. "
-            "default_dir=%s uploads_dir=%s cache_file=%s",
-            DEFAULT_SEEDS_DIR,
-            UPLOADS_DIR,
-            CACHE_FILE,
-        )
-
-    async def build_seed_entry(filename: str, data: dict) -> tuple[str, dict]:
-        file_path = str(data.get("path", ""))
-        is_default = not file_path.startswith(str(UPLOADS_DIR))
-        thumbnail_base64: str | None = None
-
-        if file_path and os.path.exists(file_path):
-            try:
-                thumb_bytes = await asyncio.to_thread(_generate_thumbnail_jpeg_bytes, file_path, 80)
-                thumbnail_base64 = base64.b64encode(thumb_bytes).decode("ascii")
-            except Exception as exc:
-                logger.error(f"Failed to generate thumbnail for {filename}: {exc}")
-
-        return (
-            filename,
-            {
-                "filename": filename,
-                "hash": data.get("hash", ""),
-                "is_safe": data.get("is_safe", False),
-                "is_default": is_default,
-                "checked_at": data.get("checked_at", 0),
-                "thumbnail_base64": thumbnail_base64,
-            },
-        )
-
-    ordered_items = list(safe_seeds_cache.items())
-    entries = await asyncio.gather(
-        *(
-            build_seed_entry(filename, data)
-            if idx < thumbnail_limit
-            else asyncio.sleep(
-                0,
-                result=(
-                    filename,
-                    {
-                        "filename": filename,
-                        "hash": data.get("hash", ""),
-                        "is_safe": data.get("is_safe", False),
-                        "is_default": not str(data.get("path", "")).startswith(str(UPLOADS_DIR)),
-                        "checked_at": data.get("checked_at", 0),
-                        "thumbnail_base64": None,
-                    },
-                ),
-            )
-            for idx, (filename, data) in enumerate(ordered_items)
-        )
-    )
-    seeds_with_thumbnails = dict(entries)
-    return JSONResponse({"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)})
 
 
 @app.get("/seeds/image/{filename}")
