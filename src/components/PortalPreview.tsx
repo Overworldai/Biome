@@ -56,8 +56,7 @@ const PortalPreview = ({
       className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[4px] saturate-[0.86]' : ''}`}
       style={portalStyle}
     >
-      <PortalSparks glowRgb={glowRgb} isHovered={isHovered} visible={true} coreRef={coreRef} />
-      <div className="portal-preview-shell absolute inset-0 isolate p-[9%] pb-[2%]">
+      <div className="portal-preview-shell absolute inset-0 isolate z-[2] p-[9%] pb-[2%]">
         <div
           ref={coreRef}
           className="portal-preview-core relative w-full h-full overflow-hidden z-1"
@@ -86,6 +85,7 @@ const PortalPreview = ({
           )}
         </div>
       </div>
+      <PortalSparks glowRgb={glowRgb} isHovered={isHovered} visible={true} coreRef={coreRef} />
     </div>
   )
 }
