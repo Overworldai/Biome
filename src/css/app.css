@@ -288,6 +288,15 @@
       filter 0.32s ease;
   }
 
+  .portal-sparks-canvas {
+    position: absolute;
+    inset: -50%;
+    width: 200%;
+    height: 200%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
   .portal-preview-shell {
     border-radius: 46% / 50%;
     isolation: isolate;

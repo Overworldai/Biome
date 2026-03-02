@@ -1,5 +1,6 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { PARALLAX_ENABLED } from '../constants'
+import PortalSparks from './PortalSparks'
 
 type PortalPreviewProps = {
   image: string | null
@@ -24,6 +25,7 @@ const PortalPreview = ({
   glowRgb,
   onShrinkComplete
 }: PortalPreviewProps) => {
+  const coreRef = useRef<HTMLDivElement>(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
@@ -54,8 +56,10 @@ const PortalPreview = ({
       className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[4px] saturate-[0.86]' : ''}`}
       style={portalStyle}
     >
+      <PortalSparks glowRgb={glowRgb} isHovered={isHovered} visible={true} coreRef={coreRef} />
       <div className="portal-preview-shell absolute inset-0 isolate p-[9%] pb-[2%]">
         <div
+          ref={coreRef}
           className="portal-preview-core relative w-full h-full overflow-hidden z-1"
           onAnimationEnd={(event) => {
             if (event.target !== event.currentTarget) return
