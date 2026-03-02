@@ -356,7 +356,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <MenuSettingsView onBack={() => setView('main')} />
         </div>
       ) : view === 'main' ? (
-        <div className="absolute inset-0 p-[3.8%_4%]">
+        <div className="overlay-darken absolute inset-0 p-[3.8%_4%]">
           <SocialCtaRow rowClassName="pause-cta-row" />
 
           <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col">

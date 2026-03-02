@@ -505,7 +505,7 @@
   }
 
   /* --- MENU CHROME --- */
-  .menu-settings-view::before {
+  .overlay-darken::before {
     content: '';
     position: absolute;
     inset: 0;

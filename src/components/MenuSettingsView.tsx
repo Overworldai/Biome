@@ -188,7 +188,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   }
 
   return (
-    <div className="menu-settings-view absolute inset-0 z-[9] pointer-events-auto">
+    <div className="overlay-darken absolute inset-0 z-[9] pointer-events-auto">
       <div className="menu-settings-panel absolute flex flex-col z-[1] top-[var(--edge-top-lg)] right-[var(--edge-right)] w-auto max-w-[105.56cqh] max-h-[78%] gap-[2.3cqh] pr-[0.71cqh] overflow-y-auto overflow-x-hidden [scrollbar-width:none]">
         <SettingsSection title="Engine Mode" description="how will you run the model? as part of Biome, or elsewhere?">
           <SettingsToggle
