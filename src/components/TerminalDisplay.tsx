@@ -130,7 +130,9 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
               {errorDetail}
             </div>
           )}
-          <div className="relative w-full">
+          <div
+            className={`w-full ${errorDetail && errorDetail.length < 80 ? 'flex items-baseline justify-between' : ''}`}
+          >
             <div
               className={`font-serif text-[4.62cqh] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] ${errorDetail && errorDetail.length < 80 ? 'text-left' : 'text-center'}`}
               id="terminal-status"
@@ -138,7 +140,7 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
               {statusText}
             </div>
             {errorDetail && errorDetail.length < 80 && (
-              <div className="absolute right-0 bottom-0 font-serif text-[3.2cqh] leading-[1.15] text-[rgba(255,205,205,0.96)] whitespace-nowrap">
+              <div className="font-serif text-[3.2cqh] leading-[1.15] text-[rgba(255,205,205,0.96)] whitespace-nowrap">
                 {errorDetail}
               </div>
             )}
