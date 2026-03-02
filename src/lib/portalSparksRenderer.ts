@@ -31,6 +31,8 @@ const BRIGHTNESS_MAX = 1.0
 const HOT_SPARK_CHANCE = 0.12
 const HOT_SPARK_MULT = 1.8
 const FADE_OUT_START = 0.65
+// Global spin: rotates all particles around the portal center (rad/s)
+const GLOBAL_SPIN = -0.8
 
 // Edge map sampling resolution (width; height derived from aspect)
 const EDGE_SAMPLE_W = 128
@@ -480,6 +482,21 @@ export class PortalSparksRenderer {
         }
         i--
         continue
+      }
+
+      // --- Global spin: rotate position + velocity CW around portal center ---
+      {
+        const spinAngle = -GLOBAL_SPIN * dtClamped // negative = CW in screen space
+        const cs = Math.cos(spinAngle)
+        const sn = Math.sin(spinAngle)
+        const rx = this.particles[off + P_X] - this.edgeCx
+        const ry = this.particles[off + P_Y] - this.edgeCy
+        this.particles[off + P_X] = this.edgeCx + rx * cs - ry * sn
+        this.particles[off + P_Y] = this.edgeCy + rx * sn + ry * cs
+        const vx0 = this.particles[off + P_VX]
+        const vy0 = this.particles[off + P_VY]
+        this.particles[off + P_VX] = vx0 * cs - vy0 * sn
+        this.particles[off + P_VY] = vx0 * sn + vy0 * cs
       }
 
       // --- Elliptical gravity + surface repulsion ---
