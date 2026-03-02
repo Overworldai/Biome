@@ -3,8 +3,8 @@ import { invoke, listen } from '../bridge'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
 import { useConfig } from '../hooks/useConfig'
-import { INTERACTIVE_TRANSITION } from '../styles'
 import OverlayModal from './ui/OverlayModal'
+import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
 
 type TerminalDisplayProps = {
@@ -115,19 +115,26 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
 
   return (
     <>
-      <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[135.11cqh] pb-[8.2cqh]">
+      <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[135.11cqh]">
         <div className="flex flex-col items-center gap-[0.55cqh] w-[135.11cqh]">
-          <div
-            className="flex items-center font-serif text-[4.62cqh] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] max-w-[117.35cqh] text-center"
-            id="terminal-status"
-          >
-            <span className="text-white">{statusText}</span>
-          </div>
-          {errorDetail && (
-            <div className="max-w-[117.35cqh] text-center font-serif text-[2.13cqh] leading-[1.15] text-[rgba(255,205,205,0.96)]">
+          {errorDetail && errorDetail.length >= 80 && (
+            <div className="max-w-[117.35cqh] text-center font-serif text-[3.2cqh] leading-[1.15] text-[rgba(255,205,205,0.96)]">
               {errorDetail}
             </div>
           )}
+          <div className="relative w-full">
+            <div
+              className={`font-serif text-[4.62cqh] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] ${errorDetail && errorDetail.length < 80 ? 'text-left' : 'text-center'}`}
+              id="terminal-status"
+            >
+              {statusText}
+            </div>
+            {errorDetail && errorDetail.length < 80 && (
+              <div className="absolute right-0 bottom-0 font-serif text-[3.2cqh] leading-[1.15] text-[rgba(255,205,205,0.96)] whitespace-nowrap">
+                {errorDetail}
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center w-[135.11cqh] mx-auto justify-center">
             <div className="relative overflow-hidden w-full h-[0.9cqh] m-0 border border-[rgba(255,255,255,0.78)] bg-[rgba(255,255,255,0.08)] before:hidden">
@@ -184,57 +191,46 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
                 }
               />
             ) : (
-              <ServerLogDisplay
-                variant="loading-inline"
-                headerAction={
-                  <button type="button" className="loading-inline-logs-close" onClick={() => setShowLogsPanel(false)}>
-                    Hide
-                  </button>
-                }
-              />
+              <ServerLogDisplay variant="loading-inline" />
             )}
           </div>
-          <div className="!mt-[0.32cqh] flex flex-col items-center gap-[0.22cqh]">
-            <button
-              type="button"
-              className="grid place-items-center w-[4.6cqh] h-[2.9cqh] p-0 cursor-pointer bg-transparent border-0 outline-0 transition-opacity duration-150 hover:opacity-80"
+          <div className="flex items-center justify-end gap-[1.2cqh] w-full">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-[0.8cqh]"
               aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
               title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
               onClick={() => setShowLogsPanel((prev) => !prev)}
             >
+              <span>{showLogsPanel ? 'Hide Logs' : 'Show Logs'}</span>
               {showLogsPanel ? (
-                <svg className="w-[3.7cqh] h-[1.9cqh]" viewBox="0 0 24 12" aria-hidden="true">
-                  <path d="M2 3h20L12 10z" fill="rgba(245,251,255,0.92)" />
+                <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                  <path d="M2 3h20L12 10z" fill="currentColor" />
                 </svg>
               ) : (
-                <svg className="w-[3.7cqh] h-[1.9cqh]" viewBox="0 0 24 12" aria-hidden="true">
-                  <path d="M2 9h20L12 2z" fill="rgba(245,251,255,0.92)" />
+                <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                  <path d="M2 9h20L12 2z" fill="currentColor" />
                 </svg>
               )}
-            </button>
-            <span className="w-full text-center font-serif text-[1.7cqh] leading-[1] tracking-[0.03em] text-[rgba(245,251,255,0.78)]">
-              {showLogsPanel ? 'Hide Logs' : 'Show Logs'}
-            </span>
+            </Button>
+            <Button
+              variant="danger"
+              className="!animate-none"
+              onClick={() => {
+                if (isServerMode) {
+                  setShowCancelModal(true)
+                  return
+                }
+                if (onCancel) {
+                  onCancel()
+                  return
+                }
+                void cancelConnection()
+              }}
+            >
+              Cancel
+            </Button>
           </div>
-        </div>
-
-        <div className="absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center gap-[1.2cqh]">
-          <button
-            className={`mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[3.73cqh] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[3.91cqh] cursor-pointer outline-0 outline-[rgba(255,170,170,0.98)] ${INTERACTIVE_TRANSITION} duration-150 hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)] hover:outline-2`}
-            onClick={() => {
-              if (isServerMode) {
-                setShowCancelModal(true)
-                return
-              }
-              if (onCancel) {
-                onCancel()
-                return
-              }
-              void cancelConnection()
-            }}
-          >
-            Cancel
-          </button>
         </div>
       </div>
 
