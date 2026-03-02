@@ -9,6 +9,9 @@ export const SETTINGS_CONTROL_TEXT =
 export const SETTINGS_OUTLINE_HOVER =
   'outline-0 outline-[rgba(245,251,255,0.75)] transition-[outline-width] duration-150 hover:outline-2'
 
+/** Shared heading base: tight leading so subtitles sit close */
+export const HEADING_BASE = 'm-0 font-serif leading-[0.95]'
+
 /** Muted description/label text */
 export const SETTINGS_MUTED_TEXT = 'font-serif text-[rgba(238,244,252,0.66)] text-[2.4cqh]'
 

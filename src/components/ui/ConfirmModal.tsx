@@ -23,7 +23,7 @@ const ConfirmModal = ({
     aria-modal="true"
   >
     <div className="border border-[rgba(245,251,255,0.66)] bg-[rgba(8,12,20,0.92)] text-[rgba(246,249,255,0.95)] w-[58.33cqh] p-[1.8cqh_2.84cqh]">
-      <h3 className="m-0 mb-[0.6cqh] font-serif font-medium text-[3.91cqh]">{title}</h3>
+      <h3 className="m-0 mb-[0.2cqh] font-serif font-medium text-[3.91cqh]">{title}</h3>
       <p className="m-0 font-serif text-[rgba(233,242,255,0.82)] text-[2.4cqh]">{description}</p>
       <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
         <button

@@ -7,6 +7,7 @@ import MenuSettingsView from './MenuSettingsView'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
 import { useConfig } from '../hooks/useConfig'
+import { HEADING_BASE } from '../styles'
 
 const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
@@ -358,8 +359,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         <div className="absolute inset-0 p-[3.8%_4%]">
           <SocialCtaRow rowClassName="pause-cta-row" />
 
-          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col gap-[0.7cqh]">
-            <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Pinned Scenes</h2>
+          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col">
+            <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Pinned Scenes</h2>
             <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
               Your pinned scenes. Use the Scenes button to pin scenes, or drag/paste an image in to play it.
             </p>
@@ -505,14 +506,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </div>
         </div>
       ) : (
-        <div className="absolute inset-0 p-[3.8%_4%] z-[2]">
-          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] z-[3]">
-            <h2 className="m-0 font-serif text-heading text-text-primary font-normal text-left">Scenes</h2>
+        <div className="overlay-darken absolute inset-0 p-[3.8%_4%] z-[2]">
+          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] z-[3] flex flex-col">
+            <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Scenes</h2>
             <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-              All of your scenes. Add more by using the + button, or by drag/pasting them in.
-            </p>
-            <p className="m-0 mt-[0.4cqh] font-serif text-[1.96cqh] text-[rgba(245,249,255,0.7)]">
-              Scenes loaded: {sceneList.length}
+              All of your {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}. Add more by using the +
+              button, or by drag/pasting them in.
             </p>
             {uploadError && <p className="!mt-[0.6cqh] !text-[rgba(255,180,180,0.92)]">{uploadError}</p>}
             <input
