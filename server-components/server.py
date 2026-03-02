@@ -27,7 +27,6 @@ import pickle
 import shutil
 import threading
 import time
-from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -43,29 +42,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger("biome_server")
 
-_LOG_BUFFER_MAX_LINES = 5000
-_log_buffer_lock = threading.Lock()
-_log_buffer: deque[tuple[int, str]] = deque(maxlen=_LOG_BUFFER_MAX_LINES)
-_log_cursor = 0
+HOSTED_LOG_FILE = Path(__file__).with_name("server-hosted.log")
+_log_file_lock = threading.Lock()
 
 
-class InMemoryLogHandler(logging.Handler):
-    """Keep a bounded in-memory copy of server logs for hosted log polling."""
+class TeeStream:
+    """Mirror stdout/stderr to a file while preserving console output."""
 
-    def emit(self, record: logging.LogRecord) -> None:
-        global _log_cursor
-        try:
-            line = self.format(record)
-        except Exception:
-            line = record.getMessage()
-        with _log_buffer_lock:
-            _log_cursor += 1
-            _log_buffer.append((_log_cursor, line))
+    def __init__(self, stream, log_fp):
+        self._stream = stream
+        self._log_fp = log_fp
+
+    def write(self, data):
+        written = self._stream.write(data)
+        if data:
+            with _log_file_lock:
+                self._log_fp.write(data)
+                self._log_fp.flush()
+        return written
+
+    def flush(self):
+        self._stream.flush()
+        with _log_file_lock:
+            self._log_fp.flush()
+
+    def isatty(self):
+        return self._stream.isatty()
+
+    def fileno(self):
+        return self._stream.fileno()
+
+    @property
+    def encoding(self):
+        return getattr(self._stream, "encoding", "utf-8")
 
 
-_memory_log_handler = InMemoryLogHandler()
-_memory_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
-logging.getLogger().addHandler(_memory_log_handler)
+# Hosted logs file receives both logger output and direct stdout/stderr writes.
+_hosted_log_fp = open(HOSTED_LOG_FILE, "a", encoding="utf-8", buffering=1)
+sys.stdout = TeeStream(sys.stdout, _hosted_log_fp)
+sys.stderr = TeeStream(sys.stderr, _hosted_log_fp)
+
+_file_log_handler = logging.FileHandler(HOSTED_LOG_FILE, mode="a", encoding="utf-8")
+_file_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+logging.getLogger().addHandler(_file_log_handler)
 
 
 def emit_stage_log(stage_id: str, label: str, percent: int) -> None:
@@ -736,14 +755,34 @@ async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge
 
 @app.get("/admin/logs")
 async def admin_logs(cursor: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=500)):
-    """Return incremental server logs for hosted clients."""
-    with _log_buffer_lock:
-        lines = [line for idx, line in _log_buffer if idx > cursor][:limit]
-        next_cursor = cursor
-        if lines:
-            matched = [idx for idx, line in _log_buffer if idx > cursor][:limit]
-            if matched:
-                next_cursor = matched[-1]
+    """Return incremental server logs from file for hosted clients.
+
+    Cursor is a byte offset into HOSTED_LOG_FILE.
+    """
+    try:
+        if not HOSTED_LOG_FILE.exists():
+            return JSONResponse({"lines": [], "next_cursor": 0})
+
+        file_size = HOSTED_LOG_FILE.stat().st_size
+        start_offset = max(0, int(cursor))
+        if start_offset > file_size:
+            # File was likely truncated/rotated; restart from beginning.
+            start_offset = 0
+
+        with _log_file_lock:
+            with open(HOSTED_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                f.seek(start_offset)
+                lines: list[str] = []
+                for _ in range(limit):
+                    line = f.readline()
+                    if not line:
+                        break
+                    lines.append(line.rstrip("\r\n"))
+                next_cursor = f.tell()
+    except Exception as exc:
+        logger.error(f"[ADMIN] Failed to read hosted logs: {exc}")
+        return JSONResponse({"lines": [], "next_cursor": max(0, int(cursor))})
+
     return JSONResponse({"lines": lines, "next_cursor": next_cursor})
 
 

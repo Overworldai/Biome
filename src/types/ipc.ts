@@ -43,6 +43,7 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
+  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
   'fetch-server-admin-logs': {
     args: [baseUrl: string, cursor: number | null, limit: number]
     return: ServerAdminLogsResponse

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
 import { invoke, listen } from '../bridge'
 import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
@@ -16,21 +16,26 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
   const { state, states } = usePortal()
   const { connectionState, statusStage, engineError, error, cancelConnection, endpointUrl } = useStreaming()
   const { isServerMode, getUrl } = useConfig()
-  const [showLogsModal, setShowLogsModal] = useState(false)
+  const [showLogsPanel, setShowLogsPanel] = useState(false)
+  const logsPanelHeight = 260
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [logLines, setLogLines] = useState<string[]>([])
   const [logCursor, setLogCursor] = useState<number | null>(null)
+  const logCursorRef = useRef<number | null>(null)
   const [logError, setLogError] = useState<string | null>(null)
+  const [syncSpinSeq, setSyncSpinSeq] = useState(0)
+  const logsFetchInFlightRef = useRef(false)
   const [fallbackStage, setFallbackStage] = useState<{ id: string; label: string; percent: number } | null>(null)
 
+  const errorDetail = engineError || error
   const currentStage = statusStage ?? fallbackStage
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
-    if (engineError || error) return 'Error'
+    if (errorDetail) return 'Error'
     if (currentStage?.label) return currentStage.label
     if (connectionState === 'connecting') return 'Connecting...'
     return 'Starting...'
-  }, [connectionState, currentStage?.label, engineError, error])
+  }, [connectionState, currentStage?.label, errorDetail])
 
   const resolveHostedBaseUrl = useCallback(() => {
     if (endpointUrl) {
@@ -43,36 +48,44 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
   }, [endpointUrl, getUrl])
 
   useEffect(() => {
-    if (!showLogsModal || !isServerMode) return
+    if (!showLogsPanel || !isServerMode) return
     setLogLines([])
     setLogCursor(null)
+    logCursorRef.current = null
     setLogError(null)
-  }, [isServerMode, showLogsModal])
+    logsFetchInFlightRef.current = false
+  }, [isServerMode, showLogsPanel])
+
+  const syncHostedLogs = useCallback(async () => {
+    if (!showLogsPanel || !isServerMode) return
+    if (logsFetchInFlightRef.current) return
+
+    logsFetchInFlightRef.current = true
+    try {
+      const result = await invoke('fetch-server-admin-logs', resolveHostedBaseUrl(), logCursorRef.current, 200)
+      if (result.lines.length > 0) {
+        setLogLines((prev) => [...prev, ...result.lines].slice(-500))
+      }
+      logCursorRef.current = result.next_cursor
+      setLogCursor(result.next_cursor)
+      setLogError(null)
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : String(err))
+    } finally {
+      logsFetchInFlightRef.current = false
+    }
+  }, [isServerMode, resolveHostedBaseUrl, showLogsPanel])
 
   useEffect(() => {
-    if (!showLogsModal || !isServerMode) return
+    if (!showLogsPanel || !isServerMode) return
 
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
-    let cursor = logCursor
-
     const pollLogs = async () => {
-      try {
-        const result = await invoke('fetch-server-admin-logs', resolveHostedBaseUrl(), cursor, 200)
-        if (cancelled) return
-        if (result.lines.length > 0) {
-          setLogLines((prev) => [...prev, ...result.lines].slice(-500))
-        }
-        cursor = result.next_cursor
-        setLogCursor(cursor)
-        setLogError(null)
-      } catch (err) {
-        if (cancelled) return
-        setLogError(err instanceof Error ? err.message : String(err))
-      } finally {
-        if (!cancelled) {
-          timer = setTimeout(pollLogs, 1000)
-        }
+      if (cancelled) return
+      await syncHostedLogs()
+      if (!cancelled) {
+        timer = setTimeout(pollLogs, 3000)
       }
     }
 
@@ -82,7 +95,7 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [isServerMode, resolveHostedBaseUrl, showLogsModal])
+  }, [isServerMode, showLogsPanel, syncHostedLogs])
 
   useEffect(() => {
     const unlisten = listen('server-stage', (payload) => {
@@ -110,6 +123,11 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
           >
             <span className="text-white">{statusText}</span>
           </div>
+          {errorDetail && (
+            <div className="max-w-[117.35cqh] text-center font-serif text-[2.13cqh] leading-[1.15] text-[rgba(255,205,205,0.96)]">
+              {errorDetail}
+            </div>
+          )}
 
           <div className="flex items-center w-[135.11cqh] mx-auto justify-center">
             <div className="relative overflow-hidden w-full h-[0.9cqh] m-0 border border-[rgba(255,255,255,0.78)] bg-[rgba(255,255,255,0.08)] before:hidden">
@@ -119,17 +137,88 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
               />
             </div>
           </div>
+          <div
+            className="loading-inline-logs"
+            style={{
+              height: showLogsPanel ? `${logsPanelHeight}px` : '0px',
+              opacity: showLogsPanel ? 1 : 0,
+              transform: showLogsPanel ? 'translateY(0)' : 'translateY(6px)',
+              pointerEvents: showLogsPanel ? 'auto' : 'none',
+              overflow: 'hidden'
+            }}
+          >
+            {isServerMode ? (
+              <ServerLogDisplay
+                variant="loading-inline"
+                disableLiveIpc={true}
+                externalLogs={logLines}
+                errorMessage={logError}
+                title="HOSTED SERVER OUTPUT"
+                headerAction={
+                  <button
+                    type="button"
+                    className="loading-inline-logs-close grid place-items-center w-[3.4cqh] h-[3.4cqh] p-0"
+                    onClick={() => {
+                      setSyncSpinSeq((seq) => seq + 1)
+                      void syncHostedLogs()
+                    }}
+                    aria-label="Synchronise logs"
+                    title="Synchronise logs"
+                  >
+                    <svg
+                      key={syncSpinSeq}
+                      className={`w-[1.9cqh] h-[1.9cqh] ${syncSpinSeq > 0 ? 'animate-[spin_220ms_linear_1]' : ''}`}
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M19 5v5h-5M5 19v-5h5M7 8l2-2h6l2 2M17 16l-2 2H9l-2-2"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                }
+              />
+            ) : (
+              <ServerLogDisplay
+                variant="loading-inline"
+                headerAction={
+                  <button type="button" className="loading-inline-logs-close" onClick={() => setShowLogsPanel(false)}>
+                    Hide
+                  </button>
+                }
+              />
+            )}
+          </div>
+          <div className="!mt-[0.32cqh] flex flex-col items-center gap-[0.22cqh]">
+            <button
+              type="button"
+              className="grid place-items-center w-[4.6cqh] h-[2.9cqh] p-0 cursor-pointer bg-transparent border-0 outline-0 transition-opacity duration-150 hover:opacity-80"
+              aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
+              title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
+              onClick={() => setShowLogsPanel((prev) => !prev)}
+            >
+              {showLogsPanel ? (
+                <svg className="w-[3.7cqh] h-[1.9cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                  <path d="M2 3h20L12 10z" fill="rgba(245,251,255,0.92)" />
+                </svg>
+              ) : (
+                <svg className="w-[3.7cqh] h-[1.9cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                  <path d="M2 9h20L12 2z" fill="rgba(245,251,255,0.92)" />
+                </svg>
+              )}
+            </button>
+            <span className="w-full text-center font-serif text-[1.7cqh] leading-[1] tracking-[0.03em] text-[rgba(245,251,255,0.78)]">
+              {showLogsPanel ? 'Hide Logs' : 'Show Logs'}
+            </span>
+          </div>
         </div>
 
         <div className="absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center gap-[1.2cqh]">
-          <button
-            className={`mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[3.2cqh] tracking-[0.02em] normal-case text-[rgba(235,245,255,0.98)] border border-[rgba(170,205,255,0.85)] bg-[rgba(10,34,60,0.55)] rounded-none py-[0.55cqh] px-[2.8cqh] cursor-pointer outline-0 outline-[rgba(170,205,255,0.98)] ${INTERACTIVE_TRANSITION} duration-150 hover:text-white hover:border-[rgba(205,225,255,0.98)] hover:bg-[rgba(20,56,92,0.66)] hover:outline-2`}
-            onClick={() => {
-              setShowLogsModal(true)
-            }}
-          >
-            Show Logs
-          </button>
           <button
             className={`mt-0 !animate-none leading-[1.1] whitespace-nowrap font-serif text-[3.73cqh] tracking-[0.02em] normal-case text-[rgba(255,235,235,0.98)] border border-[rgba(255,110,110,0.9)] bg-[rgba(130,0,0,0.56)] rounded-none py-[0.55cqh] px-[3.91cqh] cursor-pointer outline-0 outline-[rgba(255,170,170,0.98)] ${INTERACTIVE_TRANSITION} duration-150 hover:text-white hover:border-[rgba(255,170,170,0.98)] hover:bg-[rgba(180,8,8,0.68)] hover:outline-2`}
             onClick={() => {
@@ -148,25 +237,6 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
           </button>
         </div>
       </div>
-
-      <OverlayModal
-        open={showLogsModal}
-        title="Engine Logs"
-        onClose={() => setShowLogsModal(false)}
-        widthClassName="w-[128cqh]"
-      >
-        {isServerMode ? (
-          <ServerLogDisplay
-            variant="loading-inline"
-            disableLiveIpc={true}
-            externalLogs={logLines}
-            errorMessage={logError}
-            title="HOSTED SERVER OUTPUT"
-          />
-        ) : (
-          <ServerLogDisplay variant="loading-inline" />
-        )}
-      </OverlayModal>
 
       <OverlayModal
         open={showCancelModal}

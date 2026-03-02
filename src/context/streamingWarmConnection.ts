@@ -2,10 +2,11 @@ type WarmConnectionOptions = {
   standalonePort: number
   isStandaloneMode: boolean
   endpointUrl: string | null
-  gpuServer: { host: string; port: number }
+  gpuServer: { host: string; port: number; use_ssl?: boolean }
   isServerRunning: boolean
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
   checkEngineStatus: () => Promise<{
     uv_installed?: boolean
     repo_cloned?: boolean
@@ -20,6 +21,63 @@ type WarmConnectionOptions = {
   log: { info: (...args: unknown[]) => void }
 }
 
+const CONNECTIVITY_TIMEOUT_MS = 2500
+const CONNECTIVITY_RETRIES = 4
+const CONNECTIVITY_RETRY_DELAY_MS = 450
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+const normalizeWsEndpoint = (endpoint: string, preferSecure: boolean): string => {
+  let raw = endpoint.trim()
+  if (!raw) return preferSecure ? 'wss://localhost/ws' : 'ws://localhost/ws'
+
+  if (!/^[a-z]+:\/\//i.test(raw)) {
+    raw = `${preferSecure ? 'wss' : 'ws'}://${raw}`
+  }
+
+  const url = new URL(raw)
+  if (url.protocol === 'http:') url.protocol = 'ws:'
+  if (url.protocol === 'https:') url.protocol = 'wss:'
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    url.protocol = preferSecure ? 'wss:' : 'ws:'
+  }
+  if (!url.pathname || url.pathname === '/') {
+    url.pathname = '/ws'
+  }
+  return url.toString()
+}
+
+const toHealthUrl = (normalizedWsUrl: string): string => {
+  const url = new URL(normalizedWsUrl)
+  if (url.protocol === 'wss:') {
+    url.protocol = 'https:'
+  } else {
+    url.protocol = 'http:'
+  }
+  url.pathname = '/health'
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
+
+const probeServerHealth = async (
+  wsUrl: string,
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+): Promise<boolean> => {
+  const healthUrl = toHealthUrl(wsUrl)
+
+  for (let attempt = 1; attempt <= CONNECTIVITY_RETRIES; attempt++) {
+    const ok = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
+    if (ok) return true
+
+    if (attempt < CONNECTIVITY_RETRIES) {
+      await delay(CONNECTIVITY_RETRY_DELAY_MS)
+    }
+  }
+
+  return false
+}
+
 export const runWarmConnectionFlow = async ({
   standalonePort,
   isStandaloneMode,
@@ -28,6 +86,7 @@ export const runWarmConnectionFlow = async ({
   isServerRunning,
   checkServerReady,
   checkPortInUse,
+  probeServerHealthViaMain,
   checkEngineStatus,
   startServer,
   connect,
@@ -38,7 +97,9 @@ export const runWarmConnectionFlow = async ({
   log
 }: WarmConnectionOptions): Promise<void> => {
   const standaloneUrl = `localhost:${standalonePort}`
-  const wsUrl = isStandaloneMode ? standaloneUrl : endpointUrl || `${gpuServer.host}:${gpuServer.port}`
+  const rawEndpoint = isStandaloneMode ? standaloneUrl : endpointUrl || `${gpuServer.host}:${gpuServer.port}`
+  const preferSecureTransport = isStandaloneMode ? false : Boolean(gpuServer.use_ssl)
+  const wsUrl = normalizeWsEndpoint(rawEndpoint, preferSecureTransport)
 
   const waitForServerReady = () => {
     return new Promise<void>((resolve, reject) => {
@@ -100,6 +161,12 @@ export const runWarmConnectionFlow = async ({
         }
       }
     }
+  }
+
+  const responsive = await probeServerHealth(wsUrl, probeServerHealthViaMain)
+  if (!responsive) {
+    onServerError(new Error(`Server is not responding at ${toHealthUrl(wsUrl)}.`))
+    return
   }
 
   if (isCancelled()) return

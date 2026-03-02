@@ -47,6 +47,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     checkStatus: checkEngineStatus,
     checkServerReady,
     checkPortInUse,
+    probeServerHealth,
     serverLogPath,
     setupEngine,
     setupProgress,
@@ -271,7 +272,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       const errorMsg = err instanceof Error ? err.message : String(err)
       log.error('Server error:', errorMsg)
       setEngineError(errorMsg)
-      // Don't transition to cold immediately - wait for user to dismiss the error
+      // Don't transition to main menu immediately - wait for user to dismiss the error
     }
 
     const standalonePort = config.gpu_server?.port ?? STANDALONE_PORT
@@ -284,6 +285,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       isServerRunning,
       checkServerReady,
       checkPortInUse,
+      probeServerHealthViaMain: probeServerHealth,
       checkEngineStatus,
       startServer,
       connect,

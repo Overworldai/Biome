@@ -18,6 +18,7 @@ export type UseEngineResult = {
   checkServerRunning: () => Promise<boolean>
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
+  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
   isReady: boolean
   isServerRunning: boolean
   serverPort: number | null
@@ -180,6 +181,14 @@ export const useEngine = (): UseEngineResult => {
     }
   }, [])
 
+  const probeServerHealth = useCallback(async (healthUrl: string, timeoutMs?: number) => {
+    try {
+      return await invoke('probe-server-health', healthUrl, timeoutMs)
+    } catch {
+      return false
+    }
+  }, [])
+
   return {
     status,
     isLoading,
@@ -196,6 +205,7 @@ export const useEngine = (): UseEngineResult => {
     checkServerRunning,
     checkServerReady,
     checkPortInUse,
+    probeServerHealth,
     isReady: !!(status?.uv_installed && status?.repo_cloned && status?.dependencies_synced),
     isServerRunning: status?.server_running ?? false,
     serverPort: status?.server_port ?? null,

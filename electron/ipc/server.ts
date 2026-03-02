@@ -249,6 +249,25 @@ export function registerServerIpc(): void {
     })
   })
 
+  ipcMain.handle('probe-server-health', async (_event, healthUrl: string, timeoutMs?: number) => {
+    const timeout = Math.max(500, Math.min(10000, Number(timeoutMs ?? 2500)))
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal
+      })
+      return response.ok
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  })
+
   ipcMain.handle('fetch-server-admin-logs', async (_event, baseUrl: string, cursor: number | null, limit: number) => {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)

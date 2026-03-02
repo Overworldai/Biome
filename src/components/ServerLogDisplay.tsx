@@ -71,13 +71,6 @@ const ServerLogDisplay = ({
 
   const visibleLogs = externalLogs ?? logs
 
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-    }
-  }, [visibleLogs])
-
   return (
     <div
       className={`flex flex-col overflow-hidden ${isLoadingInline ? 'static w-full h-full max-h-none border border-[rgba(255,255,255,0.55)] bg-[rgba(0,0,0,0.72)] opacity-100 !animate-none' : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-h-[50%] z-100 bg-[rgba(8,12,16,0.95)] border border-warm/30 rounded-[1.42cqh] opacity-0 animate-[serverLogFadeIn_0.3s_ease_forwards] shadow-[0_0_30px_rgba(0,0,0,0.6),0_0_15px_rgba(255,200,100,0.1)]'}`}
