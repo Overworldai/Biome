@@ -409,6 +409,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const cleanupState = useCallback(() => {
     exitPointerLock()
     disconnect()
+    setEngineError(null)
     setSettingsOpen(false)
     setIsPaused(false)
     setPausedAt(null)

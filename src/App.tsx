@@ -285,9 +285,9 @@ const AppShell = () => {
             <div className="loading-vortex-layer absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
               <VortexHost mode="loading" />
             </div>
-            {(isLoadingUi || isStreamingReveal) && !isReturningToMenu && (
+            {(isLoadingUi || isEnteringLoading || isStreamingReveal) && !isReturningToMenu && (
               <>
-                <TerminalDisplay onCancel={handleCancelLoading} keepVisible={isStreamingReveal} />
+                <TerminalDisplay onCancel={handleCancelLoading} />
               </>
             )}
           </div>

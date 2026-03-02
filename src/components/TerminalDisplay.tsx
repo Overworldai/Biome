@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
 import { invoke, listen } from '../bridge'
-import { usePortal } from '../context/PortalContext'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
 import { useConfig } from '../hooks/useConfig'
@@ -10,11 +9,9 @@ import ServerLogDisplay from './ServerLogDisplay'
 
 type TerminalDisplayProps = {
   onCancel?: (options?: { shutdownHosted?: boolean }) => void
-  keepVisible?: boolean
 }
 
-const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps) => {
-  const { state, states } = usePortal()
+const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { connectionState, statusStage, engineError, error, cancelConnection, endpointUrl } = useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode, getUrl } = useConfig()
@@ -118,8 +115,6 @@ const TerminalDisplay = ({ onCancel, keepVisible = false }: TerminalDisplayProps
     })
     return () => unlisten()
   }, [])
-
-  if (state !== states.LOADING && !keepVisible) return null
 
   return (
     <>
