@@ -13,6 +13,7 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import ConfirmModal from './ui/ConfirmModal'
+import ServerLogDisplay from './ServerLogDisplay'
 
 type MenuModelOption = {
   id: string
@@ -26,8 +27,17 @@ type MenuSettingsViewProps = {
 
 const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   const { config, saveConfig } = useConfig()
-  const { engineStatus, checkEngineStatus, setupEngine, isStreaming, mouseSensitivity, setMouseSensitivity } =
-    useStreaming()
+  const {
+    engineStatus,
+    checkEngineStatus,
+    setupEngine,
+    engineSetupInProgress,
+    setupProgress,
+    engineSetupError,
+    isStreaming,
+    mouseSensitivity,
+    setMouseSensitivity
+  } = useStreaming()
 
   // Convert streaming scale (0.1-3.0) to menu scale (10-100)
   const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
@@ -49,6 +59,7 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
   const [showFixModal, setShowFixModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
+  const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
 
   const configServerUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -199,6 +210,8 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
     setShowFixModal(false)
     if (onFixEngine) {
       onFixEngine()
+    } else {
+      setShowLocalInstallLog(true)
     }
     try {
       await setupEngine()
@@ -329,6 +342,39 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
           confirmLabel="Switch Mode"
           cancelLabel="Keep Current"
         />
+      )}
+
+      {!onFixEngine && showLocalInstallLog && (
+        <div className="absolute inset-0 z-[12] pointer-events-none flex items-center justify-center bg-[rgba(2,6,16,0.62)] backdrop-blur-sm">
+          <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
+            <ServerLogDisplay
+              variant="loading-inline"
+              title="WORLD ENGINE INSTALL"
+              showProgress={engineSetupInProgress}
+              progressMessage={
+                engineSetupInProgress
+                  ? setupProgress || 'Installing World Engine...'
+                  : engineSetupError
+                    ? 'World Engine installation failed.'
+                    : 'World Engine installation complete.'
+              }
+              errorMessage={engineSetupError}
+              showDismiss={false}
+              headerAction={
+                !engineSetupInProgress ? (
+                  <button
+                    type="button"
+                    className="loading-inline-logs-close"
+                    onClick={() => setShowLocalInstallLog(false)}
+                    aria-label="Close install logs"
+                  >
+                    Close
+                  </button>
+                ) : null
+              }
+            />
+          </div>
+        </div>
       )}
     </div>
   )
