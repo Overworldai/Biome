@@ -136,7 +136,19 @@ export const runWarmConnectionFlow = async ({
     } else {
       const portInUse = await checkPortInUse(standalonePort)
       if (portInUse) {
-        log.info(`Port ${standalonePort} already in use - assuming server is ready`)
+        log.info(`Port ${standalonePort} already in use - waiting for health endpoint`)
+        try {
+          await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
+          if (isCancelled()) return
+        } catch (err) {
+          if (isCancelled()) return
+          onServerError(
+            new Error(
+              `Port ${standalonePort} is already in use, but no healthy standalone server responded at ${toHealthUrl(wsUrl)}.`
+            )
+          )
+          return
+        }
       } else if (isServerRunning) {
         log.info('Server running but not ready - polling health...')
         try {
