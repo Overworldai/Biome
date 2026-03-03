@@ -52,6 +52,10 @@ async function runUvSyncWithMirroredLogs(uvBinary: string, cwd: string, env: Nod
   })
 }
 
+function isLocalhost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
     const engineDir = getEngineDir()
@@ -225,7 +229,9 @@ export function registerServerIpc(): void {
   })
 
   ipcMain.handle('is-server-ready', () => {
-    return getServerState().ready
+    const state = getServerState()
+    // "Ready" is meaningful only for a managed local process.
+    return Boolean(state.process) && state.ready
   })
 
   ipcMain.handle('is-port-in-use', (_event, port: number) => {
@@ -257,8 +263,17 @@ export function registerServerIpc(): void {
         signal: controller.signal
       })
       if (response.ok) {
-        // Mark server as ready when health probe succeeds
-        setServerReady()
+        // Mark local managed server ready only when probe matches the running local server.
+        try {
+          const parsed = new URL(healthUrl)
+          const parsedPort = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
+          const state = getServerState()
+          if (state.process && state.port === parsedPort && isLocalhost(parsed.hostname)) {
+            setServerReady()
+          }
+        } catch {
+          // Ignore URL parse issues for readiness marking; fetch result is still returned.
+        }
       }
       return response.ok
     } catch {
