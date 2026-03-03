@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
-import { invoke, listen } from '../bridge'
+import { useEffect, useMemo, useState } from 'react'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
 import { useConfig } from '../hooks/useConfig'
@@ -15,28 +14,34 @@ type TerminalDisplayProps = {
 }
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
-  const { connectionState, statusStage, engineError, error, cancelConnection, endpointUrl } = useStreaming()
+  const { connectionState, statusStage, engineError, error, cancelConnection, wsLogs } = useStreaming()
   const { setErrorMode } = useVortex()
-  const { isServerMode, getUrl } = useConfig()
+  const { isServerMode } = useConfig()
   const [showLogsPanel, setShowLogsPanel] = useState(false)
   const logsPanelHeight = 260
   const [showCancelModal, setShowCancelModal] = useState(false)
-  const [logLines, setLogLines] = useState<string[]>([])
-  const [logCursor, setLogCursor] = useState<number | null>(null)
-  const logCursorRef = useRef<number | null>(null)
-  const [logError, setLogError] = useState<string | null>(null)
-  const [syncSpinSeq, setSyncSpinSeq] = useState(0)
-  const logsFetchInFlightRef = useRef(false)
-  const [fallbackStage, setFallbackStage] = useState<{ id: string; label: string; percent: number } | null>(null)
 
   const errorDetail = engineError || error
+
+  // Extract the first non-empty line from the error for the inline display
+  const errorFirstLine = useMemo(() => {
+    if (!errorDetail) return null
+    const lines = errorDetail.split('\n').filter((l) => l.trim().length > 0)
+    return lines.length > 0 ? lines[0].trim() : errorDetail
+  }, [errorDetail])
+
+  // Append error to logs so it's visible in the logs panel
+  const logsWithError = useMemo(() => {
+    if (!errorDetail) return wsLogs
+    return [...wsLogs, `[ERROR] ${errorDetail}`]
+  }, [wsLogs, errorDetail])
 
   useEffect(() => {
     setErrorMode(!!errorDetail)
     return () => setErrorMode(false)
   }, [errorDetail, setErrorMode])
 
-  const currentStage = statusStage ?? fallbackStage
+  const currentStage = statusStage
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
     if (errorDetail) return 'Error'
@@ -44,80 +49,6 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     if (connectionState === 'connecting') return 'Connecting...'
     return 'Starting...'
   }, [connectionState, currentStage?.label, errorDetail])
-
-  const resolveHostedBaseUrl = useCallback(() => {
-    if (endpointUrl) {
-      if (endpointUrl.startsWith('http://') || endpointUrl.startsWith('https://')) return endpointUrl
-      if (endpointUrl.startsWith('ws://')) return `http://${endpointUrl.slice(5)}`
-      if (endpointUrl.startsWith('wss://')) return `https://${endpointUrl.slice(6)}`
-      return `http://${endpointUrl}`
-    }
-    return getUrl()
-  }, [endpointUrl, getUrl])
-
-  useEffect(() => {
-    if (!showLogsPanel || !isServerMode) return
-    setLogLines([])
-    setLogCursor(null)
-    logCursorRef.current = null
-    setLogError(null)
-    logsFetchInFlightRef.current = false
-  }, [isServerMode, showLogsPanel])
-
-  const syncHostedLogs = useCallback(async () => {
-    if (!showLogsPanel || !isServerMode) return
-    if (logsFetchInFlightRef.current) return
-
-    logsFetchInFlightRef.current = true
-    try {
-      const result = await invoke('fetch-server-admin-logs', resolveHostedBaseUrl(), logCursorRef.current, 200)
-      if (result.lines.length > 0) {
-        setLogLines((prev) => [...prev, ...result.lines].slice(-500))
-      }
-      logCursorRef.current = result.next_cursor
-      setLogCursor(result.next_cursor)
-      setLogError(null)
-    } catch (err) {
-      setLogError(err instanceof Error ? err.message : String(err))
-    } finally {
-      logsFetchInFlightRef.current = false
-    }
-  }, [isServerMode, resolveHostedBaseUrl, showLogsPanel])
-
-  useEffect(() => {
-    if (!showLogsPanel || !isServerMode) return
-
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const pollLogs = async () => {
-      if (cancelled) return
-      await syncHostedLogs()
-      if (!cancelled) {
-        timer = setTimeout(pollLogs, 3000)
-      }
-    }
-
-    void pollLogs()
-
-    return () => {
-      cancelled = true
-      if (timer) clearTimeout(timer)
-    }
-  }, [isServerMode, showLogsPanel, syncHostedLogs])
-
-  useEffect(() => {
-    const unlisten = listen('server-stage', (payload) => {
-      if (typeof payload.id !== 'string' || typeof payload.label !== 'string' || typeof payload.percent !== 'number') {
-        return
-      }
-      setFallbackStage({
-        id: payload.id,
-        label: payload.label,
-        percent: Math.max(0, Math.min(100, Math.round(payload.percent)))
-      })
-    })
-    return () => unlisten()
-  }, [])
 
   return (
     <>
@@ -130,12 +61,12 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             >
               {statusText}
             </div>
-            {errorDetail && errorDetail.length < INLINE_ERROR_MAX_LENGTH && (
-              <div className={`${ERROR_DETAIL_CLASS} whitespace-nowrap`}>{errorDetail}</div>
+            {errorFirstLine && errorFirstLine.length < INLINE_ERROR_MAX_LENGTH && (
+              <div className={`${ERROR_DETAIL_CLASS} whitespace-nowrap`}>{errorFirstLine}</div>
             )}
           </div>
-          {errorDetail && errorDetail.length >= INLINE_ERROR_MAX_LENGTH && (
-            <div className={`w-full text-left ${ERROR_DETAIL_CLASS}`}>{errorDetail}</div>
+          {errorFirstLine && errorFirstLine.length >= INLINE_ERROR_MAX_LENGTH && (
+            <div className={`w-full text-left ${ERROR_DETAIL_CLASS}`}>{errorFirstLine}</div>
           )}
 
           <div className="flex items-center w-[135.11cqh] mx-auto justify-center">
@@ -156,45 +87,12 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               overflow: 'hidden'
             }}
           >
-            {isServerMode ? (
-              <ServerLogDisplay
-                variant="loading-inline"
-                disableLiveIpc={true}
-                externalLogs={logLines}
-                errorMessage={logError}
-                title="HOSTED SERVER OUTPUT"
-                headerAction={
-                  <button
-                    type="button"
-                    className="loading-inline-logs-close grid place-items-center w-[3.4cqh] h-[3.4cqh] p-0"
-                    onClick={() => {
-                      setSyncSpinSeq((seq) => seq + 1)
-                      void syncHostedLogs()
-                    }}
-                    aria-label="Synchronise logs"
-                    title="Synchronise logs"
-                  >
-                    <svg
-                      key={syncSpinSeq}
-                      className={`w-[1.9cqh] h-[1.9cqh] ${syncSpinSeq > 0 ? 'animate-[spin_220ms_linear_1]' : ''}`}
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M19 5v5h-5M5 19v-5h5M7 8l2-2h6l2 2M17 16l-2 2H9l-2-2"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                }
-              />
-            ) : (
-              <ServerLogDisplay variant="loading-inline" />
-            )}
+            <ServerLogDisplay
+              variant="loading-inline"
+              disableLiveIpc={true}
+              externalLogs={logsWithError}
+              title={isServerMode ? 'HOSTED SERVER OUTPUT' : undefined}
+            />
           </div>
           <div className="flex items-center justify-end gap-[1.2cqh] w-full">
             <Button

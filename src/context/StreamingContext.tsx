@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
-import { invoke, listen } from '../bridge'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -63,6 +62,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     hasRealFrame,
     frameId,
     genTime,
+    logs: wsLogs,
     connect,
     disconnect,
     sendControl,
@@ -73,6 +73,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendModel,
     setPlaceholderFrame,
     reset,
+    request: wsRequest,
+    clearLogs: clearWsLogs,
     isConnected,
     isReady,
     isLoading
@@ -170,16 +172,24 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     log.info('Loading connected - bootstrapping session with model+seed:', selectedModel)
     // Use the default seed image as the immediate placeholder frame so transition
     // to streaming never shows a blank frame while waiting for server output.
-    invoke('read-seed-as-base64', 'default.png')
-      .then((seedB64) => {
-        if (!seedB64) return
-        setPlaceholderFrame(`data:image/png;base64,${seedB64}`)
+    wsRequest<{ image_base64: string }>('seeds_image', { filename: 'default.png' })
+      .then((result) => {
+        if (!result?.image_base64) return
+        setPlaceholderFrame(`data:image/png;base64,${result.image_base64}`)
       })
       .catch(() => null)
     sendModel(selectedModel, 'default.png')
     lastAppliedModelRef.current = selectedModel
     warmBootstrapSentRef.current = true
-  }, [state, states.LOADING, isConnected, config?.features?.world_engine_model, sendModel, setPlaceholderFrame])
+  }, [
+    state,
+    states.LOADING,
+    isConnected,
+    config?.features?.world_engine_model,
+    sendModel,
+    setPlaceholderFrame,
+    wsRequest
+  ])
 
   useEffect(() => {
     if (!isConnected) {
@@ -266,7 +276,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     if (loadingConnectionJobSeq === 0) return
 
     let cancelled = false
-    let unlisten: (() => void) | null = null
 
     const handleServerError = (err: unknown) => {
       const errorMsg = err instanceof Error ? err.message : String(err)
@@ -276,6 +285,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const standalonePort = config.gpu_server?.port ?? STANDALONE_PORT
+
+    // Clear WS logs before starting a new connection
+    clearWsLogs()
 
     runWarmConnectionFlow({
       standalonePort,
@@ -289,10 +301,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       checkEngineStatus,
       startServer,
       connect,
-      setUnlisten: (fn: () => void) => {
-        unlisten = fn
-      },
-      listenForServerReady: (onReady) => Promise.resolve(listen('server-ready', () => onReady())),
       onServerError: handleServerError,
       isCancelled: () => cancelled,
       log
@@ -303,7 +311,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       cancelled = true
-      unlisten?.()
     }
   }, [loadingConnectionJobSeq])
 
@@ -427,24 +434,15 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isStandaloneMode, isServerRunning, stopServer])
 
-  const getHostedBaseUrl = useCallback(() => {
-    if (endpointUrl) {
-      if (endpointUrl.startsWith('http://') || endpointUrl.startsWith('https://')) return endpointUrl
-      if (endpointUrl.startsWith('ws://')) return `http://${endpointUrl.slice(5)}`
-      if (endpointUrl.startsWith('wss://')) return `https://${endpointUrl.slice(6)}`
-      return `http://${endpointUrl}`
-    }
-
-    const protocol = config.gpu_server.use_ssl ? 'https' : 'http'
-    return `${protocol}://${config.gpu_server.host}:${config.gpu_server.port}`
-  }, [endpointUrl, config.gpu_server])
-
   const shutdownHostedServer = useCallback(async () => {
     if (isStandaloneMode) return
-    const baseUrl = getHostedBaseUrl()
-    log.info('Requesting hosted server shutdown at', baseUrl)
-    await invoke('shutdown-server-admin', baseUrl)
-  }, [isStandaloneMode, getHostedBaseUrl])
+    log.info('Requesting hosted server shutdown via WS')
+    try {
+      await wsRequest('admin_shutdown')
+    } catch (err) {
+      log.error('Failed to send shutdown request via WS:', err)
+    }
+  }, [isStandaloneMode, wsRequest])
 
   const logout = useCallback(async () => {
     log.info('Logout initiated')
@@ -551,6 +549,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Seeds
     openSeedsDir,
     seedsDir,
+
+    // WS RPC
+    wsRequest,
+    wsLogs,
+    clearWsLogs,
 
     // Settings
     mouseSensitivity,

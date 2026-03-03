@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { listen } from '../bridge'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { INTERACTIVE_TRANSITION } from '../styles'
 
 // Determine log line color class based on content
@@ -28,7 +27,7 @@ const ServerLogDisplay = ({
   headerAction = null,
   variant = 'default',
   externalLogs = null,
-  disableLiveIpc = false,
+  disableLiveIpc: _disableLiveIpc = false,
   title = null
 }: {
   showDismiss?: boolean
@@ -43,31 +42,7 @@ const ServerLogDisplay = ({
   title?: string | null
 }) => {
   const isLoadingInline = variant === 'loading-inline'
-  const [logs, setLogs] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (disableLiveIpc) return
-    let mounted = true
-
-    const unlisten = listen('server-log', (line) => {
-      if (!mounted) return
-      const logLine = String(line ?? '')
-      setLogs((prev) => {
-        // Keep last 100 lines to prevent memory issues
-        const newLogs = [...prev, logLine]
-        if (newLogs.length > 100) {
-          return newLogs.slice(-100)
-        }
-        return newLogs
-      })
-    })
-
-    return () => {
-      mounted = false
-      unlisten()
-    }
-  }, [disableLiveIpc])
 
   const autoScrollRef = useRef(true)
 
@@ -81,7 +56,7 @@ const ServerLogDisplay = ({
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
-  const visibleLogs = externalLogs ?? logs
+  const visibleLogs = externalLogs ?? []
 
   useEffect(() => {
     const el = containerRef.current

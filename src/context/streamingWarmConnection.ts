@@ -14,8 +14,6 @@ type WarmConnectionOptions = {
   } | null>
   startServer: (port: number) => Promise<unknown>
   connect: (wsUrl: string) => void
-  setUnlisten: (fn: () => void) => void
-  listenForServerReady: (onReady: () => void) => Promise<() => void>
   onServerError: (error: unknown) => void
   isCancelled: () => boolean
   log: { info: (...args: unknown[]) => void }
@@ -24,6 +22,9 @@ type WarmConnectionOptions = {
 const CONNECTIVITY_TIMEOUT_MS = 2500
 const CONNECTIVITY_RETRIES = 4
 const CONNECTIVITY_RETRY_DELAY_MS = 450
+
+const STARTUP_HEALTH_POLL_INTERVAL_MS = 500
+const STARTUP_HEALTH_TIMEOUT_MS = 120_000
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -78,6 +79,33 @@ const probeServerHealth = async (
   return false
 }
 
+/**
+ * Poll health endpoint until it responds 200.
+ * Used instead of listening for stdout "SERVER READY" signals.
+ */
+const waitForHealthy = async (
+  wsUrl: string,
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>,
+  isCancelled: () => boolean,
+  log: { info: (...args: unknown[]) => void }
+): Promise<void> => {
+  const healthUrl = toHealthUrl(wsUrl)
+  const deadline = Date.now() + STARTUP_HEALTH_TIMEOUT_MS
+  log.info('Polling health endpoint until server is ready:', healthUrl)
+
+  while (Date.now() < deadline) {
+    if (isCancelled()) return
+    const ok = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
+    if (ok) {
+      log.info('Server health check passed')
+      return
+    }
+    await delay(STARTUP_HEALTH_POLL_INTERVAL_MS)
+  }
+
+  throw new Error('Server startup timeout - check logs for errors')
+}
+
 export const runWarmConnectionFlow = async ({
   standalonePort,
   isStandaloneMode,
@@ -90,8 +118,6 @@ export const runWarmConnectionFlow = async ({
   checkEngineStatus,
   startServer,
   connect,
-  setUnlisten,
-  listenForServerReady,
   onServerError,
   isCancelled,
   log
@@ -100,20 +126,6 @@ export const runWarmConnectionFlow = async ({
   const rawEndpoint = isStandaloneMode ? standaloneUrl : endpointUrl || `${gpuServer.host}:${gpuServer.port}`
   const preferSecureTransport = isStandaloneMode ? false : Boolean(gpuServer.use_ssl)
   const wsUrl = normalizeWsEndpoint(rawEndpoint, preferSecureTransport)
-
-  const waitForServerReady = () => {
-    return new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Server startup timeout - check logs for errors'))
-      }, 120000)
-
-      listenForServerReady(() => {
-        clearTimeout(timeout)
-        log.info('Server ready signal received!')
-        resolve()
-      }).then(setUnlisten)
-    })
-  }
 
   if (isStandaloneMode) {
     log.info('Standalone mode enabled, checking server state...')
@@ -126,9 +138,9 @@ export const runWarmConnectionFlow = async ({
       if (portInUse) {
         log.info(`Port ${standalonePort} already in use - assuming server is ready`)
       } else if (isServerRunning) {
-        log.info('Server running but not ready - waiting...')
+        log.info('Server running but not ready - polling health...')
         try {
-          await waitForServerReady()
+          await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
           if (isCancelled()) return
         } catch (err) {
           if (isCancelled()) return
@@ -149,10 +161,9 @@ export const runWarmConnectionFlow = async ({
         }
 
         try {
-          const readyPromise = waitForServerReady()
           await startServer(standalonePort)
-          log.info('Server started, waiting for ready signal...')
-          await readyPromise
+          log.info('Server started, polling health until ready...')
+          await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
           if (isCancelled()) return
         } catch (err) {
           if (isCancelled()) return

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { invoke } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
 import type { SeedRecord, SeedRecordWithThumbnail } from '../types/app'
 import SocialCtaRow from './SocialCtaRow'
@@ -19,9 +18,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     pointerLockBlockedSeq,
     requestPointerLock,
     reset,
-    sendPromptWithSeed
+    sendPromptWithSeed,
+    wsRequest
   } = useStreaming()
-  const { config, isLoaded, saveConfig, getUrl } = useConfig()
+  const { config, isLoaded, saveConfig } = useConfig()
   const [view, setView] = useState<'main' | 'scenes' | 'settings'>('main')
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
@@ -34,20 +34,47 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const isMountedRef = useRef(true)
   const hasHydratedPinnedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const uploadBaseUrl = getUrl()
+
+  type SeedsWithThumbsResponse = {
+    seeds: Record<string, { filename: string; is_safe: boolean; is_default: boolean; thumbnail_base64: string | null }>
+    count: number
+  }
+
+  type SeedsListResponse = {
+    seeds: Record<string, { filename: string; is_safe: boolean; is_default: boolean }>
+    count: number
+  }
 
   const loadSeedsAndThumbnails = useCallback(async () => {
     let seedList: SeedRecordWithThumbnail[] = []
-    const batchedResult = await invoke('list-seeds-with-thumbnails')
 
-    if (Array.isArray(batchedResult)) {
-      seedList = batchedResult
+    try {
+      const data = await wsRequest<SeedsWithThumbsResponse>('seeds_list_with_thumbnails')
+      const seedsObj = data.seeds ?? {}
+      seedList = Object.entries(seedsObj)
+        .map(([filename, info]) => ({
+          filename,
+          is_safe: Boolean(info.is_safe ?? false),
+          is_default: Boolean(info.is_default ?? true),
+          thumbnail_base64: typeof info.thumbnail_base64 === 'string' ? info.thumbnail_base64 : null
+        }))
+        .sort((a, b) => a.filename.localeCompare(b.filename))
+    } catch {
+      // ignore
     }
 
     // Fallback to metadata-only endpoint if batched endpoint returns no entries.
     if (seedList.length === 0) {
-      const basicSeeds = await invoke('list-seeds')
-      seedList = basicSeeds.map((seed) => ({ ...seed, thumbnail_base64: null }))
+      const data = await wsRequest<SeedsListResponse>('seeds_list')
+      const seedsObj = data.seeds ?? {}
+      seedList = Object.entries(seedsObj)
+        .map(([filename, info]) => ({
+          filename,
+          is_safe: Boolean(info.is_safe ?? false),
+          is_default: Boolean(info.is_default ?? true),
+          thumbnail_base64: null
+        }))
+        .sort((a, b) => a.filename.localeCompare(b.filename))
     }
 
     console.log(`[PauseOverlay] Loaded ${seedList.length} seeds`)
@@ -70,8 +97,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         const fetchedThumbs = await Promise.all(
           missingVisible.map(async (seed) => {
             try {
-              const b64 = await invoke('read-seed-thumbnail', seed.filename, 180)
-              return [seed.filename, `data:image/jpeg;base64,${b64}`] as const
+              const result = await wsRequest<{ thumbnail_base64: string }>('seeds_thumbnail', {
+                filename: seed.filename
+              })
+              return [seed.filename, `data:image/jpeg;base64,${result.thumbnail_base64}`] as const
             } catch {
               return null
             }
@@ -88,7 +117,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     } catch (thumbErr) {
       console.error('[PauseOverlay] Thumbnail hydration failed:', thumbErr)
     }
-  }, [])
+  }, [wsRequest])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -241,7 +270,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const removeScene = async (seed: SeedRecord) => {
     if (seed.is_default) return
     try {
-      await invoke('delete-seed', seed.filename)
+      await wsRequest('seeds_delete', { filename: seed.filename })
       setPinnedSceneIds((prev) => prev.filter((id) => id !== seed.filename))
       await refreshSeeds()
     } catch (err) {
@@ -268,21 +297,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     setUploadingImage(true)
     setUploadError(null)
     try {
-      const response = await fetch(`${uploadBaseUrl}/seeds/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename,
-          data: base64Data
-        })
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Upload failed' }))
-        throw new Error(error.error || 'Upload failed')
-      }
-
+      await wsRequest('seeds_upload', { filename, data: base64Data })
       await refreshSeeds()
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(String(err))
     } finally {
       setUploadingImage(false)
     }

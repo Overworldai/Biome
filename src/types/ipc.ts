@@ -1,13 +1,8 @@
-import type { AppConfig, EngineStatus, SeedRecord, SeedRecordWithThumbnail } from './app'
+import type { AppConfig, EngineStatus } from './app'
 
 export type ModelAvailability = {
   id: string
   is_local: boolean
-}
-
-export type ServerAdminLogsResponse = {
-  lines: string[]
-  next_cursor: number
 }
 
 /**
@@ -44,18 +39,8 @@ export type IpcCommandMap = {
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
   'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
-  'fetch-server-admin-logs': {
-    args: [baseUrl: string, cursor: number | null, limit: number]
-    return: ServerAdminLogsResponse
-  }
-  'shutdown-server-admin': { args: [baseUrl: string]; return: { status: string } }
 
-  // Seeds
-  'list-seeds': { args: []; return: SeedRecord[] }
-  'list-seeds-with-thumbnails': { args: []; return: SeedRecordWithThumbnail[] }
-  'delete-seed': { args: [filename: string]; return: void }
-  'read-seed-as-base64': { args: [filename: string]; return: string }
-  'read-seed-thumbnail': { args: [filename: string, maxSize: number]; return: string }
+  // Seeds (filesystem ops only - seed data now goes over WS)
   'get-seeds-dir-path': { args: []; return: string }
   'open-seeds-dir': { args: []; return: void }
 
@@ -77,8 +62,5 @@ export type IpcCommandMap = {
  * Maps each IPC event channel to the payload type emitted from main to renderer.
  */
 export type IpcEventMap = {
-  'server-log': string
-  'server-ready': boolean
-  'server-stage': { id: string; label: string; percent: number }
   'window-resized': { width: number; height: number }
 }

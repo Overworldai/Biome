@@ -8,7 +8,6 @@ Usage:
     python server.py --host 0.0.0.0 --port 7987
 
 Client connects via WebSocket to ws://localhost:7987/ws
-Safety checks via HTTP POST to http://localhost:7987/safety/check_batch
 """
 
 # Immediate startup logging before any imports that could fail
@@ -87,10 +86,6 @@ _file_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(
 logging.getLogger().addHandler(_file_log_handler)
 
 
-def emit_stage_log(stage_id: str, label: str, percent: int) -> None:
-    payload = {"id": stage_id, "label": label, "percent": max(0, min(100, int(percent)))}
-    logger.info(f"STAGE_JSON:{json.dumps(payload, separators=(',', ':'))}")
-
 print("[BIOME] Basic imports done", flush=True)
 
 # If launched with --parent-pid, ask the OS to kill us when the parent dies (Linux only),
@@ -139,9 +134,8 @@ try:
 
     print("[BIOME] Importing FastAPI...", flush=True)
     import uvicorn
-    from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.responses import JSONResponse
-    from pydantic import BaseModel
 
     print("[BIOME] FastAPI imported", flush=True)
 
@@ -170,6 +164,43 @@ world_engine = None
 safety_checker = None
 safe_seeds_cache = {}  # Maps filename -> {hash, is_safe, path}
 rescan_lock = None  # Prevent concurrent rescans (initialized in lifespan)
+
+# ============================================================================
+# Startup state — shared between lifespan background task and WS clients
+# ============================================================================
+
+startup_complete: bool = False
+startup_error: Optional[str] = None
+startup_stages: list[dict] = []  # accumulated stage messages
+# WS clients waiting for startup progress register a Queue here
+ws_startup_waiters: list[asyncio.Queue] = []
+
+# ============================================================================
+# WebSocket log broadcast
+# ============================================================================
+
+_log_subscribers: set[asyncio.Queue] = set()
+
+
+class _WsBroadcastHandler(logging.Handler):
+    """Push log records to all subscribed WS connections."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        line = self.format(record)
+        level = record.levelname.lower()
+        dead: list[asyncio.Queue] = []
+        for q in list(_log_subscribers):
+            try:
+                q.put_nowait({"type": "log", "line": line, "level": level})
+            except asyncio.QueueFull:
+                dead.append(q)
+        for q in dead:
+            _log_subscribers.discard(q)
+
+
+_ws_log_handler = _WsBroadcastHandler()
+_ws_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+logging.getLogger().addHandler(_ws_log_handler)
 
 # ============================================================================
 # Seed Management Configuration
@@ -458,80 +489,118 @@ async def validate_and_update_cache() -> dict:
 
 
 # ============================================================================
+# Startup broadcast helpers
+# ============================================================================
+
+
+def _broadcast_startup_stage(stage_id: str, label: str, percent: int) -> None:
+    """Store a startup stage and push it to any connected WS clients."""
+    payload = {
+        "type": "status",
+        "code": "startup",
+        "stage": {"id": stage_id, "label": label, "percent": max(0, min(100, int(percent)))},
+    }
+    startup_stages.append(payload)
+    # Also log to stdout so file-based logs capture it
+    logger.info(f"Startup stage: {stage_id} — {label} ({percent}%)")
+    for q in list(ws_startup_waiters):
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            pass
+
+
+# ============================================================================
 # Application Lifecycle
 # ============================================================================
+
+
+async def _heavy_init() -> None:
+    """Run heavy startup work (safety warmup, seed validation) in background."""
+    global world_engine, safety_checker, safe_seeds_cache, startup_complete, startup_error
+
+    try:
+        _broadcast_startup_stage("startup.begin", "Starting server components...", 5)
+
+        # Initialize modules
+        logger.info("Initializing WorldEngine...")
+        _broadcast_startup_stage("startup.world_engine_manager", "Initializing world engine manager...", 10)
+        world_engine = WorldEngineManager()
+
+        logger.info("Initializing Safety Checker...")
+        _broadcast_startup_stage("startup.safety_checker", "Initializing safety checker...", 15)
+        safety_checker = SafetyChecker()
+
+        # Warmup safety checker
+        logger.info("Warming up Safety Checker (first-time model load)...")
+        _broadcast_startup_stage("startup.safety_warmup", "Warming safety checker...", 20)
+        warmup_start = time.perf_counter()
+
+        import tempfile
+        dummy_img = Image.new('RGB', (64, 64), color='gray')
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            dummy_img.save(tmp.name)
+            dummy_path = tmp.name
+
+        await asyncio.to_thread(safety_checker.check_image, dummy_path)
+        os.unlink(dummy_path)
+
+        logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
+        _broadcast_startup_stage("startup.safety_ready", "Safety checker ready.", 25)
+
+        # Initialize seed management
+        logger.info("Initializing server-side seed storage...")
+        _broadcast_startup_stage("startup.seed_storage", "Preparing seed storage...", 30)
+        ensure_seed_directories()
+        await setup_default_seeds()
+
+        async with rescan_lock:
+            _broadcast_startup_stage("startup.seed_validation", "Validating seed cache...", 35)
+            cache = await validate_and_update_cache()
+
+        safe_seeds_cache = cache.get("files", {})
+
+        logger.info("=" * 60)
+        logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
+        logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
+        logger.info("=" * 60)
+        _broadcast_startup_stage("startup.ready", "Server backend ready. Waiting for model selection...", 40)
+
+        startup_complete = True
+
+        # Signal all waiters that startup is done
+        for q in list(ws_startup_waiters):
+            try:
+                q.put_nowait({"type": "_startup_done"})
+            except asyncio.QueueFull:
+                pass
+
+    except Exception as exc:
+        startup_error = str(exc)
+        logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
+        startup_complete = True  # mark done so waiters unblock
+        for q in list(ws_startup_waiters):
+            try:
+                q.put_nowait({"type": "_startup_done"})
+            except asyncio.QueueFull:
+                pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
-    global world_engine, safety_checker, safe_seeds_cache, rescan_lock
+    global rescan_lock
 
     logger.info("=" * 60)
     logger.info("BIOME SERVER STARTUP")
     logger.info("=" * 60)
-    emit_stage_log("startup.begin", "Starting server components...", 5)
 
-    # Initialize lock for rescan operations
     rescan_lock = asyncio.Lock()
 
-    # Initialize modules
-    logger.info("Initializing WorldEngine...")
-    emit_stage_log("startup.world_engine_manager", "Initializing world engine manager...", 10)
-    world_engine = WorldEngineManager()
+    # Start heavy init in background so /health responds immediately
+    init_task = asyncio.create_task(_heavy_init())
 
-    logger.info("Initializing Safety Checker...")
-    emit_stage_log("startup.safety_checker", "Initializing safety checker...", 15)
-    safety_checker = SafetyChecker()
-
-    # Warmup safety checker to trigger first-time transformers initialization
-    # This prevents CUDA state pollution from affecting WorldEngine's first operations
-    # Without this it seems that the first upload of seed image will have a 
-    logger.info("Warming up Safety Checker (first-time model load)...")
-    emit_stage_log("startup.safety_warmup", "Warming safety checker...", 20)
-    warmup_start = time.perf_counter()
-
-    # Create a small dummy image for warmup
-    import tempfile
-    dummy_img = Image.new('RGB', (64, 64), color='gray')
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-        dummy_img.save(tmp.name)
-        dummy_path = tmp.name
-
-    # Run safety check to trigger model loading
-    await asyncio.to_thread(safety_checker.check_image, dummy_path)
-
-    # Cleanup dummy image
-    os.unlink(dummy_path)
-
-    logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
-    emit_stage_log("startup.safety_ready", "Safety checker ready.", 25)
-
-    # WorldEngine is loaded lazily on first client connection.
-    # This allows remote clients to select model per session.
-
-    # Initialize seed management system
-    logger.info("Initializing server-side seed storage...")
-    emit_stage_log("startup.seed_storage", "Preparing seed storage...", 30)
-    ensure_seed_directories()
-    await setup_default_seeds()
-
-    # Validate and update seed cache (checks for stale data, missing files, new files)
-    async with rescan_lock:
-        emit_stage_log("startup.seed_validation", "Validating seed cache...", 35)
-        cache = await validate_and_update_cache()
-
-    # Update global cache (map filename -> metadata)
-    safe_seeds_cache = cache.get("files", {})
-
-    logger.info("=" * 60)
-    logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
-    logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
-    logger.info("=" * 60)
-    emit_stage_log("startup.ready", "Server backend ready. Waiting for model selection...", 40)
-    print("SERVER READY", flush=True)  # Signal for Rust to detect
-
-    # Start parent-process watchdog (exits server if parent dies)
+    # Start parent-process watchdog
     watchdog_task = None
     if _parent_pid is not None:
         watchdog_task = asyncio.create_task(_watch_parent_pid())
@@ -540,8 +609,9 @@ async def lifespan(app: FastAPI):
 
     if watchdog_task is not None:
         watchdog_task.cancel()
+    if not init_task.done():
+        init_task.cancel()
 
-    # Cleanup
     logger.info("[SERVER] Shutting down")
 
 
@@ -574,7 +644,7 @@ def compute_file_hash(file_path: str) -> str:
 
 
 # ============================================================================
-# Health Endpoints
+# Health Endpoint (only REST endpoint kept)
 # ============================================================================
 
 
@@ -584,88 +654,20 @@ async def health():
     return JSONResponse(
         {
             "status": "ok",
+            "startup_complete": startup_complete,
             "world_engine": {
-                "loaded": world_engine.engine is not None,
-                "warmed_up": world_engine.engine_warmed_up,
-                "has_seed": world_engine.seed_frame is not None,
+                "loaded": world_engine is not None and world_engine.engine is not None,
+                "warmed_up": world_engine is not None and world_engine.engine_warmed_up,
+                "has_seed": world_engine is not None and world_engine.seed_frame is not None,
             },
-            "safety": {"loaded": safety_checker.model is not None},
+            "safety": {"loaded": safety_checker is not None and safety_checker.model is not None},
         }
     )
 
 
 # ============================================================================
-# Safety Endpoints
+# Thumbnail helper
 # ============================================================================
-
-
-class CheckImageRequest(BaseModel):
-    path: str
-
-
-class CheckBatchRequest(BaseModel):
-    paths: list[str]
-
-
-@app.post("/safety/check_image")
-async def check_image(request: CheckImageRequest):
-    """Check single image for NSFW content."""
-    try:
-        result = safety_checker.check_image(request.path)
-        return JSONResponse(result)
-    except Exception as e:
-        logger.error(f"Safety check failed: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@app.post("/safety/check_batch")
-async def check_batch(request: CheckBatchRequest):
-    """Check multiple images for NSFW content."""
-    try:
-        results = safety_checker.check_batch(request.paths)
-        return JSONResponse({"results": results})
-    except Exception as e:
-        logger.error(f"Safety batch check failed: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-class SetCacheRequest(BaseModel):
-    seeds: dict[str, dict]  # filename -> {hash, is_safe, path}
-
-
-@app.post("/safety/set_cache")
-async def set_cache(request: SetCacheRequest):
-    """Receive safety cache from Rust on startup."""
-    global safe_seeds_cache
-    safe_seeds_cache = request.seeds
-    logger.info(f"Safety cache updated: {len(safe_seeds_cache)} seeds loaded")
-    return JSONResponse({"status": "ok", "count": len(safe_seeds_cache)})
-
-
-# ============================================================================
-# Seed Management Endpoints
-# ============================================================================
-
-
-@app.get("/seeds/list")
-async def list_seeds():
-    """Return list of all seeds with metadata (including unsafe ones).
-    If a scan is in progress, waits for it to finish before returning."""
-    # Wait for any in-progress scan to complete before reading cache
-    async with rescan_lock:
-        pass
-
-    all_seeds = {
-        filename: {
-            "filename": filename,
-            "hash": data["hash"],
-            "is_safe": data.get("is_safe", False),
-            "is_default": not str(data.get("path", "")).startswith(str(UPLOADS_DIR)),
-            "checked_at": data.get("checked_at", 0),
-        }
-        for filename, data in safe_seeds_cache.items()
-    }
-    return JSONResponse({"seeds": all_seeds, "count": len(all_seeds)})
 
 
 def _generate_thumbnail_jpeg_bytes(file_path: str, size: int = 80) -> bytes:
@@ -690,31 +692,75 @@ def _generate_thumbnail_jpeg_bytes(file_path: str, size: int = 80) -> bytes:
     return buffer.getvalue()
 
 
-@app.get("/seeds/list-with-thumbnails")
-async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge=1, le=200)):
-    """Return all seed metadata plus base64 JPEG thumbnails in one response."""
-    # Wait for any in-progress scan to complete before reading cache
+# ============================================================================
+# WS Request/Response Dispatch
+# ============================================================================
+
+
+async def dispatch_request(msg: dict, websocket: WebSocket) -> dict:
+    """Route a request-type WS message to the appropriate handler.
+
+    Returns a response dict (without type/req_id — caller wraps those).
+    """
+    req_type = msg.get("type", "")
+
+    if req_type == "seeds_list":
+        return await _handle_seeds_list()
+    elif req_type == "seeds_list_with_thumbnails":
+        return await _handle_seeds_list_with_thumbnails(msg)
+    elif req_type == "seeds_image":
+        return await _handle_seeds_image(msg)
+    elif req_type == "seeds_thumbnail":
+        return await _handle_seeds_thumbnail(msg)
+    elif req_type == "seeds_upload":
+        return await _handle_seeds_upload(msg)
+    elif req_type == "seeds_delete":
+        return await _handle_seeds_delete(msg)
+    elif req_type == "seeds_rescan":
+        return await _handle_seeds_rescan(msg)
+    elif req_type == "admin_shutdown":
+        return await _handle_admin_shutdown()
+    elif req_type == "subscribe_logs":
+        return await _handle_subscribe_logs(msg, websocket)
+    else:
+        return {"success": False, "error": f"Unknown request type: {req_type}"}
+
+
+# ---- individual request handlers ----
+
+
+async def _handle_seeds_list() -> dict:
+    async with rescan_lock:
+        pass
+
+    all_seeds = {
+        filename: {
+            "filename": filename,
+            "hash": data["hash"],
+            "is_safe": data.get("is_safe", False),
+            "is_default": not str(data.get("path", "")).startswith(str(UPLOADS_DIR)),
+            "checked_at": data.get("checked_at", 0),
+        }
+        for filename, data in safe_seeds_cache.items()
+    }
+    return {"success": True, "data": {"seeds": all_seeds, "count": len(all_seeds)}}
+
+
+async def _handle_seeds_list_with_thumbnails(msg: dict) -> dict:
+    thumbnail_limit = int(msg.get("thumbnail_limit", 24))
+    thumbnail_limit = max(1, min(200, thumbnail_limit))
+
     async with rescan_lock:
         pass
 
     cache_count = len(safe_seeds_cache)
     safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe", False))
-    sample_filenames = list(safe_seeds_cache.keys())[:5]
     logger.info(
-        "[SEEDS] /seeds/list-with-thumbnails requested: cache=%d safe=%d thumbnail_limit=%d sample=%s",
+        "[SEEDS] seeds_list_with_thumbnails: cache=%d safe=%d thumbnail_limit=%d",
         cache_count,
         safe_count,
         thumbnail_limit,
-        sample_filenames,
     )
-    if cache_count == 0:
-        logger.warning(
-            "[SEEDS] /seeds/list-with-thumbnails returning empty cache. "
-            "default_dir=%s uploads_dir=%s cache_file=%s",
-            DEFAULT_SEEDS_DIR,
-            UPLOADS_DIR,
-            CACHE_FILE,
-        )
 
     async def build_seed_entry(
         filename: str, data: dict, include_thumbnail: bool
@@ -750,143 +796,72 @@ async def list_seeds_with_thumbnails(thumbnail_limit: int = Query(default=24, ge
         )
     )
     seeds_with_thumbnails = dict(entries)
-    return JSONResponse({"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)})
+    return {"success": True, "data": {"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)}}
 
 
-@app.get("/admin/logs")
-async def admin_logs(cursor: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=500)):
-    """Return incremental server logs from file for hosted clients.
-
-    Cursor is a byte offset into HOSTED_LOG_FILE.
-    """
-    try:
-        if not HOSTED_LOG_FILE.exists():
-            return JSONResponse({"lines": [], "next_cursor": 0})
-
-        file_size = HOSTED_LOG_FILE.stat().st_size
-        start_offset = max(0, int(cursor))
-        if start_offset > file_size:
-            # File was likely truncated/rotated; restart from beginning.
-            start_offset = 0
-
-        with _log_file_lock:
-            with open(HOSTED_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
-                f.seek(start_offset)
-                lines: list[str] = []
-                for _ in range(limit):
-                    line = f.readline()
-                    if not line:
-                        break
-                    lines.append(line.rstrip("\r\n"))
-                next_cursor = f.tell()
-    except Exception as exc:
-        logger.error(f"[ADMIN] Failed to read hosted logs: {exc}")
-        return JSONResponse({"lines": [], "next_cursor": max(0, int(cursor))})
-
-    return JSONResponse({"lines": lines, "next_cursor": next_cursor})
-
-
-@app.post("/admin/shutdown")
-async def admin_shutdown():
-    """Shut down this server process."""
-
-    async def _shutdown() -> None:
-        await asyncio.sleep(0.2)
-        os._exit(0)
-
-    asyncio.create_task(_shutdown())
-    logger.warning("[ADMIN] Hosted shutdown requested")
-    return JSONResponse({"status": "shutting_down"})
-
-
-@app.get("/seeds/image/{filename}")
-async def get_seed_image(filename: str):
-    """Serve full PNG seed image."""
-    from fastapi.responses import FileResponse
-
-    # Validate filename is in cache and safe
+async def _handle_seeds_image(msg: dict) -> dict:
+    filename = msg.get("filename", "")
     if filename not in safe_seeds_cache:
-        return JSONResponse({"error": "Seed not found"}, status_code=404)
+        return {"success": False, "error": "Seed not found"}
 
     seed_data = safe_seeds_cache[filename]
     if not seed_data.get("is_safe", False):
-        return JSONResponse({"error": "Seed marked unsafe"}, status_code=403)
+        return {"success": False, "error": "Seed marked unsafe"}
 
     file_path = seed_data.get("path", "")
     if not os.path.exists(file_path):
-        return JSONResponse({"error": "Seed file not found"}, status_code=404)
+        return {"success": False, "error": "Seed file not found"}
 
-    ext = Path(file_path).suffix.lower()
-    media_type = MIME_TYPES.get(ext, "application/octet-stream")
-    return FileResponse(file_path, media_type=media_type)
+    image_bytes = await asyncio.to_thread(Path(file_path).read_bytes)
+    image_base64 = base64.b64encode(image_bytes).decode("ascii")
+    return {"success": True, "data": {"image_base64": image_base64}}
 
 
-@app.get("/seeds/thumbnail/{filename}")
-async def get_seed_thumbnail(filename: str):
-    """Serve 80x80 JPEG thumbnail of seed image."""
-    # Validate filename is in cache
+async def _handle_seeds_thumbnail(msg: dict) -> dict:
+    filename = msg.get("filename", "")
     if filename not in safe_seeds_cache:
-        return JSONResponse({"error": "Seed not found"}, status_code=404)
+        return {"success": False, "error": "Seed not found"}
 
     seed_data = safe_seeds_cache[filename]
     file_path = seed_data.get("path", "")
     if not os.path.exists(file_path):
-        return JSONResponse({"error": "Seed file not found"}, status_code=404)
+        return {"success": False, "error": "Seed file not found"}
 
     try:
-        import io
-
         thumbnail_bytes = await asyncio.to_thread(_generate_thumbnail_jpeg_bytes, file_path, 80)
-        buffer = io.BytesIO(thumbnail_bytes)
-        buffer.seek(0)
-
-        from fastapi.responses import StreamingResponse
-
-        return StreamingResponse(buffer, media_type="image/jpeg")
+        thumbnail_base64 = base64.b64encode(thumbnail_bytes).decode("ascii")
+        return {"success": True, "data": {"thumbnail_base64": thumbnail_base64}}
     except Exception as e:
         logger.error(f"Failed to generate thumbnail for {filename}: {e}")
-        return JSONResponse({"error": "Thumbnail generation failed"}, status_code=500)
+        return {"success": False, "error": "Thumbnail generation failed"}
 
 
-class UploadSeedRequest(BaseModel):
-    filename: str
-    data: str  # base64 encoded image
-
-
-@app.post("/seeds/upload")
-async def upload_seed(request: UploadSeedRequest):
-    """Upload a custom seed image (will be safety checked)."""
+async def _handle_seeds_upload(msg: dict) -> dict:
     global safe_seeds_cache
 
-    filename = request.filename
+    filename = msg.get("filename", "")
+    data_b64 = msg.get("data", "")
+
     if not any(filename.lower().endswith(ext) for ext in SUPPORTED_IMAGE_EXTENSIONS):
-        return JSONResponse(
-            {"error": f"Unsupported format. Accepted: {', '.join(SUPPORTED_IMAGE_EXTENSIONS)}"},
-            status_code=400,
-        )
+        return {"success": False, "error": f"Unsupported format. Accepted: {', '.join(SUPPORTED_IMAGE_EXTENSIONS)}"}
 
-    # Decode base64
     try:
-        image_data = base64.b64decode(request.data)
+        image_data = base64.b64decode(data_b64)
     except Exception as e:
-        return JSONResponse({"error": f"Invalid base64 data: {e}"}, status_code=400)
+        return {"success": False, "error": f"Invalid base64 data: {e}"}
 
-    # Save to uploads directory
     file_path = UPLOADS_DIR / filename
     await asyncio.to_thread(file_path.write_bytes, image_data)
     logger.info(f"Uploaded seed saved to {file_path}")
 
-    # Compute hash
     file_hash = await asyncio.to_thread(compute_file_hash, str(file_path))
 
-    # Run safety check
     try:
         safety_result = await asyncio.to_thread(
             safety_checker.check_image, str(file_path)
         )
         is_safe = safety_result.get("is_safe", False)
 
-        # Update cache
         safe_seeds_cache[filename] = {
             "hash": file_hash,
             "is_safe": is_safe,
@@ -895,51 +870,64 @@ async def upload_seed(request: UploadSeedRequest):
             "checked_at": time.time(),
         }
 
-        # Save to disk
         cache = load_seeds_cache()
         cache["files"] = safe_seeds_cache
         save_seeds_cache(cache)
 
         status_msg = "SAFE" if is_safe else "UNSAFE"
-        logger.info(f"Uploaded seed {filename}: {status_msg}\nScores: {safety_result.get('scores', {})}")
+        logger.info(f"Uploaded seed {filename}: {status_msg}")
 
-        return JSONResponse(
-            {
-                "status": "ok",
+        return {
+            "success": True,
+            "data": {
                 "filename": filename,
                 "hash": file_hash,
                 "is_safe": is_safe,
                 "scores": safety_result.get("scores", {}),
-            }
-        )
+            },
+        }
 
     except Exception as e:
         logger.error(f"Safety check failed for uploaded seed: {e}")
-        # Delete the file if safety check failed
         if file_path.exists():
             file_path.unlink()
-        return JSONResponse(
-            {"error": f"Safety check failed: {e}"}, status_code=500
-        )
+        return {"success": False, "error": f"Safety check failed: {e}"}
 
 
-class RescanRequest(BaseModel):
-    force_full_rescan: bool = False  # Optional: force full rescan instead of smart validation
-
-
-@app.post("/seeds/rescan")
-async def rescan_seeds_endpoint(request: Optional[RescanRequest] = None):
-    """
-    Trigger a rescan of seed directories.
-
-    By default, performs smart validation (incremental updates).
-    Set force_full_rescan=true to force a complete rescan of all files.
-    """
+async def _handle_seeds_delete(msg: dict) -> dict:
     global safe_seeds_cache
 
-    force_full = request.force_full_rescan if request else False
+    filename = msg.get("filename", "")
+    if filename not in safe_seeds_cache:
+        return {"success": False, "error": "Seed not found"}
 
-    # If a scan is already in progress, wait for it to finish
+    seed_data = safe_seeds_cache[filename]
+    file_path = Path(seed_data.get("path", ""))
+
+    if not str(file_path).startswith(str(UPLOADS_DIR)):
+        return {"success": False, "error": "Cannot delete default seeds"}
+
+    try:
+        if file_path.exists():
+            await asyncio.to_thread(file_path.unlink)
+        del safe_seeds_cache[filename]
+
+        cache = load_seeds_cache()
+        cache["files"] = safe_seeds_cache
+        save_seeds_cache(cache)
+
+        logger.info(f"Deleted seed: {filename}")
+        return {"success": True, "data": {}}
+
+    except Exception as e:
+        logger.error(f"Failed to delete seed {filename}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def _handle_seeds_rescan(msg: dict) -> dict:
+    global safe_seeds_cache
+    force_full = bool(msg.get("force_full_rescan", False))
+
     async with rescan_lock:
         if force_full:
             logger.info("Manual full rescan triggered")
@@ -951,49 +939,36 @@ async def rescan_seeds_endpoint(request: Optional[RescanRequest] = None):
         safe_seeds_cache = cache.get("files", {})
 
         safe_count = sum(1 for data in safe_seeds_cache.values() if data.get("is_safe"))
-        return JSONResponse(
-            {
-                "status": "ok",
+        return {
+            "success": True,
+            "data": {
                 "total_seeds": len(safe_seeds_cache),
                 "safe_seeds": safe_count,
-                "method": "full_rescan" if force_full else "smart_validation",
-            }
-        )
+            },
+        }
 
 
-@app.delete("/seeds/{filename}")
-async def delete_seed(filename: str):
-    """Delete a custom seed (only from uploads directory)."""
-    global safe_seeds_cache
+async def _handle_admin_shutdown() -> dict:
+    async def _shutdown() -> None:
+        await asyncio.sleep(0.2)
+        os._exit(0)
 
-    if filename not in safe_seeds_cache:
-        return JSONResponse({"error": "Seed not found"}, status_code=404)
+    asyncio.create_task(_shutdown())
+    logger.warning("[ADMIN] Hosted shutdown requested")
+    return {"success": True, "data": {"status": "shutting_down"}}
 
-    seed_data = safe_seeds_cache[filename]
-    file_path = Path(seed_data.get("path", ""))
 
-    # Only allow deleting from uploads directory
-    if not str(file_path).startswith(str(UPLOADS_DIR)):
-        return JSONResponse(
-            {"error": "Cannot delete default seeds"}, status_code=403
-        )
+# Per-websocket log queues are stored by dispatch; the subscribe handler just
+# registers the queue that was pre-created for this websocket connection.
+_ws_log_queue_map: dict[int, asyncio.Queue] = {}  # id(websocket) -> queue
 
-    try:
-        if file_path.exists():
-            await asyncio.to_thread(file_path.unlink)
-        del safe_seeds_cache[filename]
 
-        # Update cache file
-        cache = load_seeds_cache()
-        cache["files"] = safe_seeds_cache
-        save_seeds_cache(cache)
-
-        logger.info(f"Deleted seed: {filename}")
-        return JSONResponse({"status": "ok", "deleted": filename})
-
-    except Exception as e:
-        logger.error(f"Failed to delete seed {filename}: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+async def _handle_subscribe_logs(msg: dict, websocket: WebSocket) -> dict:
+    ws_id = id(websocket)
+    if ws_id in _ws_log_queue_map:
+        q = _ws_log_queue_map[ws_id]
+        _log_subscribers.add(q)
+    return {"success": True, "data": {}}
 
 
 # ============================================================================
@@ -1024,13 +999,15 @@ STATUS_STAGE = {
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket endpoint for frame streaming.
+    WebSocket endpoint for frame streaming and RPC.
 
     Protocol:
         Server -> Client:
-            {"type": "status", "code": str}
+            {"type": "status", "code": str, "stage": {...}}
             {"type": "frame", "data": base64_jpeg, "frame_id": int, "client_ts": float, "gen_ms": float}
             {"type": "error", "message": str}
+            {"type": "response", "req_id": str, "success": bool, "data": ..., "error": ...}
+            {"type": "log", "line": str, "level": str}
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
@@ -1041,16 +1018,65 @@ async def websocket_endpoint(websocket: WebSocket):
             {"type": "prompt_with_seed", "filename": str}
             {"type": "pause"}
             {"type": "resume"}
+            # Request/response (includes req_id):
+            {"type": "seeds_list", "req_id": "..."}
+            {"type": "subscribe_logs", "req_id": "..."}
+            ...etc
 
-    Status codes: waiting_for_seed, init, loading, ready, reset, warmup
+    Status codes: waiting_for_seed, init, loading, ready, reset, warmup, startup
     """
     client_host = websocket.client.host if websocket.client else "unknown"
     logger.info(f"Client connected: {client_host}")
 
     await websocket.accept()
+
+    # Create a log queue for this connection and auto-subscribe to logs
+    log_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+    ws_id = id(websocket)
+    _ws_log_queue_map[ws_id] = log_queue
+    _log_subscribers.add(log_queue)
+
+    # Background task: drain log queue and send to client (start immediately)
+    async def _drain_log_queue():
+        try:
+            while True:
+                log_msg = await log_queue.get()
+                try:
+                    await websocket.send_text(json.dumps(log_msg))
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    log_drain_task = asyncio.create_task(_drain_log_queue())
+
+    # If startup is not yet complete, replay accumulated stages and stream new ones
+    startup_queue: asyncio.Queue | None = None
+    if not startup_complete:
+        startup_queue = asyncio.Queue(maxsize=200)
+        ws_startup_waiters.append(startup_queue)
+        # Replay accumulated stages
+        for stage_msg in startup_stages:
+            await websocket.send_text(json.dumps(stage_msg))
+        # Stream new stages until startup is done
+        while not startup_complete:
+            try:
+                stage_msg = await asyncio.wait_for(startup_queue.get(), timeout=1.0)
+                if stage_msg.get("type") == "_startup_done":
+                    break
+                await websocket.send_text(json.dumps(stage_msg))
+            except asyncio.TimeoutError:
+                continue
+        ws_startup_waiters.remove(startup_queue)
+
+    if startup_error:
+        await websocket.send_text(json.dumps({"type": "error", "message": f"Server startup failed: {startup_error}"}))
+        _ws_log_queue_map.pop(ws_id, None)
+        await websocket.close()
+        return
+
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
-    # Do not reuse seed state from a previous disconnected client.
     world_engine.seed_frame = None
 
     async def send_json(data: dict):
@@ -1177,6 +1203,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg = json.loads(raw)
                 msg_type = msg.get("type")
 
+                # Handle request/response messages even during seed wait
+                if "req_id" in msg:
+                    result = await dispatch_request(msg, websocket)
+                    req_id = msg["req_id"]
+                    if "success" not in result:
+                        result = {"success": True, "data": result}
+                    await send_json({"type": "response", "req_id": req_id, **result})
+                    continue
+
                 if msg_type == "set_model":
                     await handle_model_request(
                         msg.get("model"),
@@ -1282,6 +1317,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
 
             msg_type = msg.get("type", "control")
+
+            # Handle request/response messages in the game loop too
+            if "req_id" in msg:
+                result = await dispatch_request(msg, websocket)
+                req_id = msg["req_id"]
+                if "success" not in result:
+                    result = {"success": True, "data": result}
+                await send_json({"type": "response", "req_id": req_id, **result})
+                continue
 
             match msg_type:
                 case "set_model":
@@ -1502,6 +1546,9 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
     finally:
+        log_drain_task.cancel()
+        _log_subscribers.discard(log_queue)
+        _ws_log_queue_map.pop(ws_id, None)
         logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")
 
 

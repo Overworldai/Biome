@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import fs from 'node:fs'
@@ -16,43 +16,6 @@ import {
 } from '../lib/serverState.js'
 import { readConfigSync } from './config.js'
 
-function emitToAllWindows(channel: string, ...args: unknown[]): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, ...args)
-  }
-}
-
-function processLogLine(line: string, _isStderr: boolean): void {
-  // Print to console
-  console.log(`[SERVER] ${line}`)
-
-  if (line.startsWith('STAGE_JSON:')) {
-    try {
-      const raw = line.slice('STAGE_JSON:'.length).trim()
-      const parsed = JSON.parse(raw) as { id?: unknown; label?: unknown; percent?: unknown }
-      if (typeof parsed.id === 'string' && typeof parsed.label === 'string' && typeof parsed.percent === 'number') {
-        emitToAllWindows('server-stage', {
-          id: parsed.id,
-          label: parsed.label,
-          percent: Math.max(0, Math.min(100, Math.round(parsed.percent)))
-        })
-      }
-    } catch (err) {
-      console.error('[ENGINE] Failed to parse STAGE_JSON log line:', err)
-    }
-  }
-
-  // Emit event to frontend
-  emitToAllWindows('server-log', line)
-
-  // Check if server is ready
-  if (line.includes('SERVER READY') || line.includes('Uvicorn running on')) {
-    console.log('[ENGINE] Server ready signal detected!')
-    setServerReady()
-    emitToAllWindows('server-ready', true)
-  }
-}
-
 async function runUvSyncWithMirroredLogs(uvBinary: string, cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(uvBinary, ['sync', '--verbose', '--index-strategy', 'unsafe-best-match'], {
@@ -63,19 +26,19 @@ async function runUvSyncWithMirroredLogs(uvBinary: string, cwd: string, env: Nod
     })
 
     const tail: string[] = []
-    const onLine = (line: string, isStderr: boolean) => {
-      processLogLine(`[UV] ${line}`, isStderr)
+    const onLine = (line: string) => {
+      console.log(`[SERVER] [UV] ${line}`)
       tail.push(line)
       if (tail.length > 80) tail.shift()
     }
 
     if (child.stdout) {
       const rl = createInterface({ input: child.stdout })
-      rl.on('line', (line) => onLine(line, false))
+      rl.on('line', (line) => onLine(line))
     }
     if (child.stderr) {
       const rl = createInterface({ input: child.stderr })
-      rl.on('line', (line) => onLine(line, true))
+      rl.on('line', (line) => onLine(line))
     }
 
     child.on('error', (err) => reject(err))
@@ -188,11 +151,11 @@ export function registerServerIpc(): void {
     // Open log file for appending
     const logStream = fs.createWriteStream(logFilePath, { flags: 'a' })
 
-    // Process stdout
+    // Process stdout — write to console and log file only (no IPC events)
     if (child.stdout) {
       const rl = createInterface({ input: child.stdout })
       rl.on('line', (line) => {
-        processLogLine(line, false)
+        console.log(`[SERVER] ${line}`)
         logStream.write(line + '\n')
       })
     }
@@ -201,7 +164,7 @@ export function registerServerIpc(): void {
     if (child.stderr) {
       const rl = createInterface({ input: child.stderr })
       rl.on('line', (line) => {
-        processLogLine(line, true)
+        console.log(`[SERVER] ${line}`)
         logStream.write(line + '\n')
       })
     }
@@ -293,54 +256,15 @@ export function registerServerIpc(): void {
         cache: 'no-store',
         signal: controller.signal
       })
+      if (response.ok) {
+        // Mark server as ready when health probe succeeds
+        setServerReady()
+      }
       return response.ok
     } catch {
       return false
     } finally {
       clearTimeout(timer)
-    }
-  })
-
-  ipcMain.handle('fetch-server-admin-logs', async (_event, baseUrl: string, cursor: number | null, limit: number) => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
-    const safeCursor = Number.isFinite(cursor) ? Math.max(0, Number(cursor)) : 0
-    const safeLimit = Number.isFinite(limit) ? Math.min(500, Math.max(1, Number(limit))) : 200
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/admin/logs?cursor=${encodeURIComponent(String(safeCursor))}&limit=${encodeURIComponent(String(safeLimit))}`,
-        { method: 'GET', signal: controller.signal }
-      )
-      if (!response.ok) {
-        throw new Error(`Hosted logs endpoint returned HTTP ${response.status}`)
-      }
-      const payload = (await response.json()) as { lines?: unknown; next_cursor?: unknown }
-      return {
-        lines: Array.isArray(payload.lines) ? payload.lines.map((line) => String(line ?? '')) : [],
-        next_cursor: typeof payload.next_cursor === 'number' ? payload.next_cursor : safeCursor
-      }
-    } finally {
-      clearTimeout(timeout)
-    }
-  })
-
-  ipcMain.handle('shutdown-server-admin', async (_event, baseUrl: string) => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-
-    try {
-      const response = await fetch(`${baseUrl}/admin/shutdown`, {
-        method: 'POST',
-        signal: controller.signal
-      })
-      if (!response.ok) {
-        throw new Error(`Hosted shutdown endpoint returned HTTP ${response.status}`)
-      }
-      const payload = (await response.json()) as { status?: unknown }
-      return { status: typeof payload.status === 'string' ? payload.status : 'unknown' }
-    } finally {
-      clearTimeout(timeout)
     }
   })
 }

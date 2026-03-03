@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createLogger } from '../utils/logger'
+import { WsRpcClient } from '../lib/wsRpc'
 import type { LoadingStage } from '../types/app'
 
 const log = createLogger('WebSocket')
+
+const MAX_LOG_LINES = 500
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -15,6 +18,7 @@ type WebSocketHook = {
   hasRealFrame: boolean
   frameId: number
   genTime: number | null
+  logs: string[]
   connect: (endpointUrl: string) => void
   disconnect: () => void
   sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
@@ -25,6 +29,8 @@ type WebSocketHook = {
   sendModel: (model: string, seed?: string | null) => void
   setPlaceholderFrame: (dataUrl: string | null) => void
   reset: () => void
+  request: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
+  clearLogs: () => void
   isConnected: boolean
   isReady: boolean
   isLoading: boolean
@@ -40,10 +46,16 @@ export const useWebSocket = (): WebSocketHook => {
   const [statusCode, setStatusCode] = useState<string | null>(null)
   const [statusStage, setStatusStage] = useState<LoadingStage | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
+  const [logs, setLogs] = useState<string[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
   const isReadyRef = useRef(false)
+  const rpcRef = useRef(new WsRpcClient())
+
+  const clearLogs = useCallback(() => {
+    setLogs([])
+  }, [])
 
   const connect = useCallback((endpointUrl: string) => {
     if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
@@ -61,6 +73,7 @@ export const useWebSocket = (): WebSocketHook => {
     setStatusCode(null)
     setStatusStage(null)
     setHasRealFrame(false)
+    setLogs([])
 
     let wsUrl: string
     if (endpointUrl.startsWith('ws://') || endpointUrl.startsWith('wss://')) {
@@ -80,6 +93,9 @@ export const useWebSocket = (): WebSocketHook => {
     }
     wsRef.current = ws
 
+    const rpc = rpcRef.current
+    rpc.attach(ws)
+
     ws.onopen = () => {
       if (wsRef.current !== ws) return
       isConnectingRef.current = false
@@ -90,6 +106,9 @@ export const useWebSocket = (): WebSocketHook => {
       if (wsRef.current !== ws) return
       try {
         const msg = JSON.parse(event.data) as Record<string, unknown>
+
+        // Let RPC client consume response messages first
+        if (rpc.handleMessage(msg)) return
 
         switch (msg.type) {
           case 'status': {
@@ -132,6 +151,14 @@ export const useWebSocket = (): WebSocketHook => {
             }
             break
           }
+          case 'log': {
+            const line = String(msg.line ?? '')
+            setLogs((prev) => {
+              const next = [...prev, line]
+              return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next
+            })
+            break
+          }
           case 'error': {
             setError((msg.message as string) ?? 'Server error')
             setConnectionState('error')
@@ -155,6 +182,7 @@ export const useWebSocket = (): WebSocketHook => {
     ws.onclose = () => {
       if (wsRef.current !== ws) return
       isConnectingRef.current = false
+      rpc.detach()
       wsRef.current = null
       setConnectionState('disconnected')
       setIsReady(false)
@@ -170,6 +198,7 @@ export const useWebSocket = (): WebSocketHook => {
   const disconnect = useCallback(() => {
     isConnectingRef.current = false
     isReadyRef.current = false
+    rpcRef.current.detach()
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
@@ -246,6 +275,13 @@ export const useWebSocket = (): WebSocketHook => {
     }
   }, [])
 
+  const request = useCallback(
+    <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T> => {
+      return rpcRef.current.request<T>(type, params, timeoutMs)
+    },
+    []
+  )
+
   useEffect(() => {
     return () => {
       disconnect()
@@ -261,6 +297,7 @@ export const useWebSocket = (): WebSocketHook => {
     hasRealFrame,
     frameId,
     genTime,
+    logs,
     connect,
     disconnect,
     sendControl,
@@ -271,6 +308,8 @@ export const useWebSocket = (): WebSocketHook => {
     sendModel,
     setPlaceholderFrame,
     reset,
+    request,
+    clearLogs,
     isConnected: connectionState === 'connected',
     isReady,
     isLoading: connectionState === 'connecting' || (connectionState === 'connected' && !isReady)
