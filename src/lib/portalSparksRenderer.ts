@@ -105,13 +105,13 @@ void main() {
   float coreMix = smoothstep(0.4, 0.0, d) * (1.0 - u_colorBoost * 0.6);
   vec3 color = mix(saturated, vec3(1.0), coreMix);
 
-  // Output premultiplied RGB with zero alpha. With premultipliedAlpha: true,
-  // the browser composites as: result = canvas.rgb + page.rgb * (1 - 0),
-  // giving pure additive blending with no dark halo.
+  // Output premultiplied color with non-zero alpha for robust compositing.
+  // Some GPU/browser paths drop rgb when alpha is forced to 0 on a
+  // premultiplied surface, which can make particles invisible.
   // When color-boosted, slightly reduce brightness to preserve color.
   float intensityScale = mix(1.0, 0.7, u_colorBoost);
   float a = alpha * v_brightness * intensityScale;
-  fragColor = vec4(color * a, 0.0);
+  fragColor = vec4(color * a, a);
 }
 `
 
@@ -361,7 +361,8 @@ export class PortalSparksRenderer {
     gl.bindVertexArray(null)
 
     gl.enable(gl.BLEND)
-    gl.blendFunc(gl.ONE, gl.ONE) // pure additive (alpha already baked into RGB)
+    // Additive color accumulation while keeping a sane destination alpha.
+    gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
     gl.disable(gl.DEPTH_TEST)
   }
 
