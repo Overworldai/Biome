@@ -111,29 +111,13 @@ precision highp float;
 in float v_brightness;
 in float v_colorType;
 
+uniform vec3 u_palette[8];
+
 out vec4 fragColor;
 
 void main() {
-  vec3 color;
-  float ct = v_colorType;
-  if (ct < 0.5) {
-    color = vec3(0.08, 0.15, 0.95);
-  } else if (ct < 1.5) {
-    color = vec3(0.2, 0.4, 1.0);
-  } else if (ct < 2.5) {
-    color = vec3(0.1, 0.55, 1.0);
-  } else if (ct < 3.5) {
-    color = vec3(0.55, 0.75, 1.0);
-  } else if (ct < 4.5) {
-    color = vec3(0.95, 0.08, 0.08);
-  } else if (ct < 5.5) {
-    color = vec3(1.0, 0.2, 0.15);
-  } else if (ct < 6.5) {
-    color = vec3(1.0, 0.1, 0.05);
-  } else {
-    color = vec3(1.0, 0.55, 0.45);
-  }
-
+  int idx = clamp(int(v_colorType + 0.5), 0, 7);
+  vec3 color = u_palette[idx];
   fragColor = vec4(color * v_brightness, v_brightness);
 }
 `
@@ -189,6 +173,20 @@ void main() {
   fragColor = vec4(bloom, 1.0);
 }
 `
+
+// --- Palette uploaded to u_palette[8] in the streak fragment shader ---
+// Slots 0-3: normal (blue), slots 4-7: error (red)
+// prettier-ignore
+const PALETTE = new Float32Array([
+  0.08, 0.15, 0.95,   // 0 — deep blue
+  0.2,  0.4,  1.0,    // 1 — medium blue
+  0.1,  0.55, 1.0,    // 2 — cyan-blue
+  0.55, 0.75, 1.0,    // 3 — light blue
+  0.95, 0.08, 0.08,   // 4 — deep red
+  1.0,  0.2,  0.15,   // 5 — medium red
+  1.0,  0.1,  0.05,   // 6 — orange-red
+  1.0,  0.55, 0.45,   // 7 — salmon
+])
 
 // CPU particle fields — indices into the per-particle Float32Array stride
 const P_ANGLE = 0
@@ -246,6 +244,8 @@ export class VortexRenderer {
   private pongTex: WebGLTexture | null = null
   private bloomW = 0
   private bloomH = 0
+
+  private paletteLoc: WebGLUniformLocation | null = null
 
   private blurDirLoc: WebGLUniformLocation | null = null
   private blurTexLoc: WebGLUniformLocation | null = null
@@ -338,6 +338,8 @@ export class VortexRenderer {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.streakIbo)
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.STATIC_DRAW)
     gl.bindVertexArray(null)
+
+    this.paletteLoc = gl.getUniformLocation(this.streakProgram, 'u_palette')
 
     // --- Bloom programs ---
     this.blurProgram = this.buildProgram(BLOOM_VS, BLUR_FS)
@@ -600,6 +602,7 @@ export class VortexRenderer {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
 
     gl.useProgram(this.streakProgram)
+    gl.uniform3fv(this.paletteLoc, PALETTE)
     gl.bindVertexArray(this.streakVao)
     gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0)
     gl.bindVertexArray(null)
