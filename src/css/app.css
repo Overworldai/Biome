@@ -541,7 +541,6 @@
   }
   .loading-inline-logs {
     width: 135.11cqh;
-    margin-top: 0.8cqh;
     transition:
       height 280ms ease,
       opacity 220ms ease,
