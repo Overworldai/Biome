@@ -3,14 +3,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { getEngineDir, getUvDir, getResourcePath } from '../lib/paths.js'
+import { getEngineDir, getUvDir, getResourcePath, SERVER_COMPONENT_FILES } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions, getUvArchiveName, getVenvPythonPath } from '../lib/platform.js'
 import { getServerState } from '../lib/serverState.js'
 
 const UV_VERSION = '0.9.26'
-
-const SERVER_COMPONENT_FILES = ['server.py', 'pyproject.toml', 'engine_manager.py', 'safety.py']
 
 function emitToAllWindows(channel: string, ...args: unknown[]): void {
   for (const win of BrowserWindow.getAllWindows()) {

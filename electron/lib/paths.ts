@@ -3,6 +3,15 @@ import { app } from 'electron'
 
 const WORLD_ENGINE_DIR = 'world_engine'
 
+/** Python files bundled in server-components that must be unpacked to the engine dir. */
+export const SERVER_COMPONENT_FILES = [
+  'server.py',
+  'pyproject.toml',
+  'engine_manager.py',
+  'safety.py',
+  'progress_stages.py'
+]
+
 /** Get the executable's directory (for portable data storage) */
 export function getExeDir(): string {
   return path.dirname(app.getPath('exe'))

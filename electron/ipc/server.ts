@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
-import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
+import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir, SERVER_COMPONENT_FILES } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions } from '../lib/platform.js'
 import {
@@ -74,8 +74,7 @@ export function registerServerIpc(): void {
     // Force-overwrite bundled server components
     const { getResourcePath } = await import('../lib/paths.js')
     const resourceDir = getResourcePath('server-components')
-    const serverFiles = ['server.py', 'pyproject.toml', 'engine_manager.py', 'safety.py']
-    for (const filename of serverFiles) {
+    for (const filename of SERVER_COMPONENT_FILES) {
       const srcPath = path.join(resourceDir, filename)
       const destPath = path.join(engineDir, filename)
       if (fs.existsSync(srcPath)) {

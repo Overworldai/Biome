@@ -144,6 +144,23 @@ try:
 
     print("[BIOME] Engine Manager module imported", flush=True)
 
+    print("[BIOME] Importing progress stages...", flush=True)
+    from progress_stages import (
+        STARTUP_BEGIN,
+        STARTUP_ENGINE_MANAGER,
+        STARTUP_SAFETY_CHECKER,
+        STARTUP_SAFETY_WARMUP,
+        STARTUP_SAFETY_READY,
+        STARTUP_SEED_STORAGE,
+        STARTUP_SEED_VALIDATION,
+        STARTUP_READY,
+        SESSION_WAITING_FOR_SEED,
+        SESSION_READY,
+        Stage,
+    )
+
+    print("[BIOME] Progress stages imported", flush=True)
+
     print("[BIOME] Importing Safety module...", flush=True)
     from safety import SafetyChecker
 
@@ -493,16 +510,16 @@ async def validate_and_update_cache() -> dict:
 # ============================================================================
 
 
-def _broadcast_startup_stage(stage_id: str, label: str, percent: int) -> None:
+def _broadcast_startup_stage(stage: Stage) -> None:
     """Store a startup stage and push it to any connected WS clients."""
     payload = {
         "type": "status",
         "code": "startup",
-        "stage": {"id": stage_id, "label": label, "percent": max(0, min(100, int(percent)))},
+        "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
     }
     startup_stages.append(payload)
     # Also log to stdout so file-based logs capture it
-    logger.info(f"Startup stage: {stage_id} — {label} ({percent}%)")
+    logger.info(f"Startup stage: {stage.id} — {stage.label} ({stage.percent}%)")
     for q in list(ws_startup_waiters):
         try:
             q.put_nowait(payload)
@@ -520,20 +537,20 @@ async def _heavy_init() -> None:
     global world_engine, safety_checker, safe_seeds_cache, startup_complete, startup_error
 
     try:
-        _broadcast_startup_stage("startup.begin", "Starting server components...", 5)
+        _broadcast_startup_stage(STARTUP_BEGIN)
 
         # Initialize modules
         logger.info("Initializing WorldEngine...")
-        _broadcast_startup_stage("startup.world_engine_manager", "Initializing world engine manager...", 10)
+        _broadcast_startup_stage(STARTUP_ENGINE_MANAGER)
         world_engine = WorldEngineManager()
 
         logger.info("Initializing Safety Checker...")
-        _broadcast_startup_stage("startup.safety_checker", "Initializing safety checker...", 15)
+        _broadcast_startup_stage(STARTUP_SAFETY_CHECKER)
         safety_checker = SafetyChecker()
 
         # Warmup safety checker
         logger.info("Warming up Safety Checker (first-time model load)...")
-        _broadcast_startup_stage("startup.safety_warmup", "Warming safety checker...", 20)
+        _broadcast_startup_stage(STARTUP_SAFETY_WARMUP)
         warmup_start = time.perf_counter()
 
         import tempfile
@@ -546,16 +563,16 @@ async def _heavy_init() -> None:
         os.unlink(dummy_path)
 
         logger.info(f"Safety Checker warmed up in {time.perf_counter() - warmup_start:.2f}s")
-        _broadcast_startup_stage("startup.safety_ready", "Safety checker ready.", 25)
+        _broadcast_startup_stage(STARTUP_SAFETY_READY)
 
         # Initialize seed management
         logger.info("Initializing server-side seed storage...")
-        _broadcast_startup_stage("startup.seed_storage", "Preparing seed storage...", 30)
+        _broadcast_startup_stage(STARTUP_SEED_STORAGE)
         ensure_seed_directories()
         await setup_default_seeds()
 
         async with rescan_lock:
-            _broadcast_startup_stage("startup.seed_validation", "Validating seed cache...", 35)
+            _broadcast_startup_stage(STARTUP_SEED_VALIDATION)
             cache = await validate_and_update_cache()
 
         safe_seeds_cache = cache.get("files", {})
@@ -564,7 +581,7 @@ async def _heavy_init() -> None:
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
         logger.info(f"[SERVER] {len(safe_seeds_cache)} seeds available")
         logger.info("=" * 60)
-        _broadcast_startup_stage("startup.ready", "Server backend ready. Waiting for model selection...", 40)
+        _broadcast_startup_stage(STARTUP_READY)
 
         startup_complete = True
 
@@ -960,24 +977,6 @@ async def _handle_subscribe_logs(msg: dict, websocket: WebSocket) -> dict:
 # ============================================================================
 
 
-# Status codes (client maps these to display text)
-class Status:
-    WAITING_FOR_SEED = "waiting_for_seed"
-    INIT = "init"
-    LOADING = "loading"
-    READY = "ready"
-    RESET = "reset"
-    WARMUP = "warmup"
-
-
-STATUS_STAGE = {
-    Status.WAITING_FOR_SEED: ("session.waiting_for_seed", "Waiting for initial seed...", 48),
-    Status.LOADING: ("session.loading_model", "Loading selected world model...", 64),
-    Status.WARMUP: ("session.warmup", "Warming up selected model...", 80),
-    Status.INIT: ("session.init", "Initializing world state...", 92),
-    Status.RESET: ("session.reset", "Resetting world state...", 72),
-    Status.READY: ("session.ready", "Ready.", 100),
-}
 
 
 @app.websocket("/ws")
@@ -1066,20 +1065,49 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_json(data: dict):
         await websocket.send_text(json.dumps(data))
 
-    async def send_status(code: str) -> None:
-        stage_id, label, percent = STATUS_STAGE.get(code, ("session.unknown", "Loading...", 0))
+    async def send_stage(stage: Stage) -> None:
         await send_json(
             {
                 "type": "status",
-                "code": code,
-                "stage": {"id": stage_id, "label": label, "percent": percent},
+                "code": stage.id.split(".")[1] if "." in stage.id else stage.id,
+                "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
             }
         )
 
+    # Progress queue: engine_manager calls progress_callback (sync, from CUDA thread)
+    # which enqueues payloads; the drain task sends them over the WebSocket.
+    progress_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+
+    def progress_callback(stage: Stage) -> None:
+        """Sync callback safe to call from any thread — enqueues for async send."""
+        payload = {
+            "type": "status",
+            "code": stage.id.split(".")[1] if "." in stage.id else stage.id,
+            "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
+        }
+        try:
+            progress_queue.put_nowait(payload)
+        except asyncio.QueueFull:
+            pass
+
+    async def _drain_progress_queue():
+        try:
+            while True:
+                msg = await progress_queue.get()
+                try:
+                    await websocket.send_text(json.dumps(msg))
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    progress_drain_task = asyncio.create_task(_drain_progress_queue())
+
     async def reset_engine():
-        await world_engine.reset_state()
+        world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+        await world_engine.init_session()
+        world_engine.set_progress_callback(None)
         session.frame_count = 0
-        await send_status(Status.RESET)
         logger.info(f"[{client_host}] Engine Reset")
 
     async def load_initial_seed(filename: str | None) -> bool:
@@ -1150,16 +1178,9 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"[{client_host}] Requested model: {model_uri}")
         logger.info(f"[{client_host}] set_model seed payload: {seed_filename!r}")
 
-        # Model switches can take tens of seconds. Keep emitting loading status so
-        # clients don't treat the connection as stalled mid-switch.
-        await send_status(Status.LOADING)
-        load_task = asyncio.create_task(world_engine.load_engine(model_uri))
-        while True:
-            try:
-                await asyncio.wait_for(asyncio.shield(load_task), timeout=5.0)
-                break
-            except asyncio.TimeoutError:
-                await send_status(Status.LOADING)
+        world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+        await world_engine.load_engine(model_uri)
+        world_engine.set_progress_callback(None)
 
         world_engine.seed_frame = None
         session.frame_count = 0
@@ -1172,12 +1193,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 f"[{client_host}] Failed to load explicit seed '{seed_filename}', waiting for client seed"
             )
         if not seed_loaded:
-            await send_status(Status.WAITING_FOR_SEED)
+            await send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
 
     try:
         # Wait for initial seed from client
-        await send_status(Status.WAITING_FOR_SEED)
+        await send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for initial seed from client...")
 
         # Wait for model selection + initial seed message
@@ -1216,35 +1237,26 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 return
 
+        # Wire progress callback so engine_manager reports granular stages
+        world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+
         # If no model was selected by client, load default/current model now.
         if world_engine.engine is None:
-            await send_status(Status.LOADING)
             await world_engine.load_engine()
 
         if world_engine.seed_frame is None:
             logger.info(
                 f"[{client_host}] Seed frame missing before initialization; client likely disconnected/reconnected during model switch"
             )
+            world_engine.set_progress_callback(None)
             return
 
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
-            await send_status(Status.WARMUP)
             await world_engine.warmup()
 
-        await send_status(Status.INIT)
-
-        logger.info(f"[{client_host}] Calling engine.reset()...")
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(world_engine.cuda_executor, world_engine.engine.reset)
-
-        await send_status(Status.LOADING)
-
-        logger.info(f"[{client_host}] Calling append_frame...")
-        await loop.run_in_executor(
-            world_engine.cuda_executor,
-            lambda: world_engine.engine.append_frame(world_engine.seed_frame)
-        )
+        # Init session (reset, seed, prompt) with granular progress
+        await world_engine.init_session()
 
         # Send initial frame so client has something to display
         jpeg = await asyncio.to_thread(
@@ -1260,7 +1272,8 @@ async def websocket_endpoint(websocket: WebSocket):
             }
         )
 
-        await send_status(Status.READY)
+        world_engine.set_progress_callback(None)
+        await send_stage(SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
         paused = False
 
@@ -1500,7 +1513,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             if recovery_success:
                                 await send_json({
                                     "type": "status",
-                                    "code": Status.RESET,
+                                    "code": "reset",
                                     "stage": {"id": "session.reset", "label": "Recovering from CUDA error...", "percent": 58},
                                     "message": "Recovered from CUDA error - engine reset"
                                 })
@@ -1531,6 +1544,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 pass
     finally:
         log_drain_task.cancel()
+        progress_drain_task.cancel()
+        world_engine.set_progress_callback(None)
         _log_subscribers.discard(log_queue)
         _ws_log_queue_map.pop(ws_id, None)
         logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")

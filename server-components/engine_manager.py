@@ -17,7 +17,23 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from progress_stages import (
+    SESSION_INIT_FRAME,
+    SESSION_INIT_RESET,
+    SESSION_INIT_SEED,
+    SESSION_LOADING_DONE,
+    SESSION_LOADING_IMPORT,
+    SESSION_LOADING_MODEL,
+    SESSION_LOADING_WEIGHTS,
+    SESSION_WARMUP_COMPILE,
+    SESSION_WARMUP_PROMPT,
+    SESSION_WARMUP_RESET,
+    SESSION_WARMUP_SEED,
+    Stage,
+)
+
 logger = logging.getLogger(__name__)
+
 
 # ============================================================================
 # Configuration
@@ -92,11 +108,29 @@ class WorldEngineManager:
         self.model_uri = DEFAULT_MODEL_URI
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
+        self._progress_callback = None
+        self._progress_loop = None
         # Prevent concurrent model loads from overlapping across websocket sessions.
         self._model_load_lock = asyncio.Lock()
         # Single-threaded executor for CUDA operations to maintain thread-local storage
         # This is critical for CUDA graphs which must run in the same thread they were compiled in
         self.cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
+
+    def set_progress_callback(self, callback, loop=None):
+        """Set a progress callback and event loop for cross-thread reporting."""
+        self._progress_callback = callback
+        self._progress_loop = loop
+
+    def _report_progress(self, stage: Stage):
+        """Report progress from any thread (including CUDA thread)."""
+        cb = self._progress_callback
+        loop = self._progress_loop
+        if cb is None:
+            return
+        if loop is not None:
+            loop.call_soon_threadsafe(cb, stage)
+        else:
+            cb(stage)
 
     def _log_cuda_memory(self, stage: str):
         """Log CUDA memory usage for model-switch diagnostics."""
@@ -246,6 +280,7 @@ class WorldEngineManager:
             logger.info("BIOME ENGINE STARTUP")
             logger.info("=" * 60)
             logger.info("[1/4] Importing WorldEngine...")
+            self._report_progress(SESSION_LOADING_IMPORT)
             import_start = time.perf_counter()
             from world_engine import CtrlInput as CI
             from world_engine import WorldEngine
@@ -255,6 +290,7 @@ class WorldEngineManager:
                 f"[1/4] WorldEngine imported in {time.perf_counter() - import_start:.2f}s"
             )
 
+            self._report_progress(SESSION_LOADING_MODEL)
             logger.info(f"[2/4] Loading model: {requested_model}")
             logger.info(f"      Quantization: {QUANT}")
             logger.info(f"      Device: {DEVICE}")
@@ -306,12 +342,14 @@ class WorldEngineManager:
             if new_engine is None:
                 raise last_error if last_error is not None else RuntimeError("Failed to initialize WorldEngine")
 
+            self._report_progress(SESSION_LOADING_WEIGHTS)
             self.engine = new_engine
             logger.info(
                 f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s"
             )
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
+            self._report_progress(SESSION_LOADING_DONE)
             self.model_uri = requested_model
 
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
@@ -370,6 +408,35 @@ class WorldEngineManager:
         )
         logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
 
+    async def init_session(self):
+        """Reset engine, load seed, render initial frame and report progress."""
+        if self.engine is None:
+            raise RuntimeError("WorldEngine is not loaded")
+        if self.seed_frame is None:
+            raise RuntimeError("Seed frame is not set")
+
+        self._report_progress(SESSION_INIT_RESET)
+        t0 = time.perf_counter()
+        logger.info("[INIT] Starting engine.reset()...")
+        await self._run_on_cuda_thread(self.engine.reset)
+        logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
+
+        self._report_progress(SESSION_INIT_SEED)
+        t0 = time.perf_counter()
+        logger.info("[INIT] Starting engine.append_frame()...")
+        await self._run_on_cuda_thread(
+            lambda: self.engine.append_frame(self.seed_frame)
+        )
+        logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+
+        self._report_progress(SESSION_INIT_FRAME)
+        t0 = time.perf_counter()
+        logger.info("[INIT] Starting engine.set_prompt()...")
+        await self._run_on_cuda_thread(
+            lambda: self.engine.set_prompt(self.current_prompt)
+        )
+        logger.info(f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+
     async def recover_from_cuda_error(self):
         """
         Recover from CUDA errors by clearing caches and resetting compilation.
@@ -413,6 +480,7 @@ class WorldEngineManager:
         def do_warmup():
             warmup_start = time.perf_counter()
 
+            self._report_progress(SESSION_WARMUP_RESET)
             logger.info("[5/5] Step 1: Resetting engine state...")
             reset_start = time.perf_counter()
             self.engine.reset()
@@ -420,6 +488,7 @@ class WorldEngineManager:
                 f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s"
             )
 
+            self._report_progress(SESSION_WARMUP_SEED)
             logger.info("[5/5] Step 2: Appending seed frame...")
             append_start = time.perf_counter()
             self.engine.append_frame(self.seed_frame)
@@ -427,6 +496,7 @@ class WorldEngineManager:
                 f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s"
             )
 
+            self._report_progress(SESSION_WARMUP_PROMPT)
             logger.info("[5/5] Step 3: Setting prompt...")
             prompt_start = time.perf_counter()
             self.engine.set_prompt(self.current_prompt)
@@ -434,6 +504,7 @@ class WorldEngineManager:
                 f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
             )
 
+            self._report_progress(SESSION_WARMUP_COMPILE)
             logger.info(
                 "[5/5] Step 4: Generating first frame (compiling CUDA graphs)..."
             )
