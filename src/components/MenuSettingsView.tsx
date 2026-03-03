@@ -49,7 +49,6 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
   const [showFixModal, setShowFixModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
-  const [pendingEngineMode, setPendingEngineMode] = useState<'server' | 'standalone' | null>(null)
 
   const configServerUrl = `${config.gpu_server.use_ssl ? 'https' : 'http'}://${config.gpu_server.host}:${config.gpu_server.port}`
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -102,97 +101,98 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
     }
   }, [menuWorldModel])
 
-  // Auto-save engine mode to config
-  const autoSaveEngineMode = useCallback(
-    (mode: 'server' | 'standalone') => {
-      const engineModeValue = mode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
-      const newConfig: AppConfig = {
-        ...config,
-        features: {
-          ...config.features,
-          engine_mode: engineModeValue
-        }
-      }
-      saveConfig(newConfig)
-    },
-    [config, saveConfig]
-  )
-
-  // Auto-save world model to config
-  const autoSaveWorldModel = useCallback(
-    (model: string) => {
-      const newConfig: AppConfig = {
-        ...config,
-        features: {
-          ...config.features,
-          world_engine_model: model
-        }
-      }
-      saveConfig(newConfig)
-    },
-    [config, saveConfig]
-  )
+  useEffect(() => {
+    setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
+    setMenuWorldModel(configWorldModel)
+    setMenuMouseSensitivity(streamingToMenu(config.features?.mouse_sensitivity ?? mouseSensitivity))
+    setMenuServerUrl(configServerUrl)
+  }, [configEngineMode, configWorldModel, config.features?.mouse_sensitivity, mouseSensitivity, configServerUrl])
 
   const handleServerUrlBlur = useCallback(() => {
     try {
       const url = new URL(menuServerUrl)
-      const newConfig: AppConfig = {
-        ...config,
-        gpu_server: {
-          ...config.gpu_server,
-          host: url.hostname,
-          port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
-          use_ssl: url.protocol === 'https:'
-        }
-      }
-      saveConfig(newConfig)
+      const normalizedPort = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
+      const normalizedUrl = `${url.protocol}//${url.hostname}:${normalizedPort}`
+      setMenuServerUrl(normalizedUrl)
     } catch {
       // Invalid URL — revert to config value
       setMenuServerUrl(configServerUrl)
     }
-  }, [menuServerUrl, config, configServerUrl, saveConfig])
+  }, [menuServerUrl, configServerUrl])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
-    if (mode === menuEngineMode) return
-    if (isStreaming) {
-      setPendingEngineMode(mode)
-      setShowModeSwitchModal(true)
-      return
-    }
     setMenuEngineMode(mode)
-    autoSaveEngineMode(mode)
-  }
-
-  const handleConfirmEngineModeSwitch = () => {
-    if (!pendingEngineMode) return
-    setMenuEngineMode(pendingEngineMode)
-    autoSaveEngineMode(pendingEngineMode)
-    setPendingEngineMode(null)
-    setShowModeSwitchModal(false)
-  }
-
-  const handleCancelEngineModeSwitch = () => {
-    setPendingEngineMode(null)
-    setShowModeSwitchModal(false)
   }
 
   const handleWorldModelChange = (model: string) => {
     setMenuWorldModel(model)
-    autoSaveWorldModel(model)
   }
 
   const handleMouseSensitivityChange = (value: number) => {
     setMenuMouseSensitivity(value)
-    // Convert 10-100 integer scale to 0.1-3.0 float scale
-    const streamingValue = 0.1 + ((value - 10) * 2.9) / 90
-    setMouseSensitivity(streamingValue)
-    saveConfig({
+  }
+
+  const applyDraftSettings = useCallback(async () => {
+    let nextGpuServer = config.gpu_server
+    try {
+      const parsed = new URL(menuServerUrl)
+      nextGpuServer = {
+        ...config.gpu_server,
+        host: parsed.hostname,
+        port: Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80),
+        use_ssl: parsed.protocol === 'https:'
+      }
+    } catch {
+      setMenuServerUrl(configServerUrl)
+    }
+
+    const engineModeValue = menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
+    const streamingValue = 0.1 + ((menuMouseSensitivity - 10) * 2.9) / 90
+
+    const nextConfig: AppConfig = {
       ...config,
+      gpu_server: nextGpuServer,
       features: {
         ...config.features,
+        engine_mode: engineModeValue,
+        world_engine_model: menuWorldModel,
         mouse_sensitivity: streamingValue
       }
-    })
+    }
+
+    await saveConfig(nextConfig)
+    setMouseSensitivity(streamingValue)
+  }, [
+    config,
+    configServerUrl,
+    menuEngineMode,
+    menuMouseSensitivity,
+    menuServerUrl,
+    menuWorldModel,
+    saveConfig,
+    setMouseSensitivity
+  ])
+
+  const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
+  const hasWorldModelChanged = menuWorldModel !== configWorldModel
+
+  const handleBackClick = async () => {
+    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged)) {
+      setShowModeSwitchModal(true)
+      return
+    }
+    await applyDraftSettings()
+    onBack()
+  }
+
+  const handleConfirmEngineModeSwitch = async () => {
+    setShowModeSwitchModal(false)
+    await applyDraftSettings()
+    onBack()
+  }
+
+  const handleCancelEngineModeSwitch = () => {
+    setShowModeSwitchModal(false)
   }
 
   const handleConfirmFixEngine = async () => {
@@ -302,7 +302,9 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
       <MenuButton
         variant="primary"
         className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
-        onClick={onBack}
+        onClick={() => {
+          void handleBackClick()
+        }}
       >
         Back
       </MenuButton>
@@ -318,10 +320,12 @@ const MenuSettingsView = ({ onBack, onFixEngine }: MenuSettingsViewProps) => {
 
       {showModeSwitchModal && (
         <ConfirmModal
-          title="Switch Engine Mode?"
-          description="Changing between hosted and standalone will interrupt your current session."
+          title="Apply Engine Changes?"
+          description="Changing engine mode or world model will interrupt your current session and apply all pending settings."
           onCancel={handleCancelEngineModeSwitch}
-          onConfirm={handleConfirmEngineModeSwitch}
+          onConfirm={() => {
+            void handleConfirmEngineModeSwitch()
+          }}
           confirmLabel="Switch Mode"
           cancelLabel="Keep Current"
         />
