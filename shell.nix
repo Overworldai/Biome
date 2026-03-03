@@ -45,4 +45,9 @@ pkgs.mkShell {
   # Triton calls /sbin/ldconfig to find libcuda.so, which doesn't exist on NixOS.
   # Point it directly at the driver library path instead.
   TRITON_LIBCUDA_PATH = "/run/opengl-driver/lib";
+
+  # The UV-managed venv's sysconfig reports /run/current-system/sw/include/python3.13
+  # as the include path, but on NixOS the actual Python.h lives in the nix store.
+  # Triton needs this to compile CUDA utility C extensions with gcc.
+  C_INCLUDE_PATH = "${pkgs.python313}/include/python3.13";
 }
