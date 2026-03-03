@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useStreaming } from '../context/StreamingContext'
 import type { SeedRecord, SeedRecordWithThumbnail } from '../types/app'
-import SocialCtaRow from './SocialCtaRow'
 import MenuSettingsView from './MenuSettingsView'
-import ViewLabel from './ui/ViewLabel'
-import MenuButton from './ui/MenuButton'
+import PauseMainView from './PauseMainView'
+import PauseScenesView from './PauseScenesView'
 import { useConfig } from '../hooks/useConfig'
-import { HEADING_BASE } from '../styles'
-
-const PINNED_SCENES_KEY = 'biome_pinned_scenes'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const {
@@ -33,7 +29,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const loadingRef = useRef(false)
   const isMountedRef = useRef(true)
   const hasHydratedPinnedRef = useRef(false)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   type SeedsWithThumbsResponse = {
     seeds: Record<string, { filename: string; is_safe: boolean; is_default: boolean; thumbnail_base64: string | null }>
@@ -180,7 +175,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     // One-time migration fallback from localStorage to config persistence.
     try {
-      const raw = localStorage.getItem(PINNED_SCENES_KEY)
+      const raw = localStorage.getItem('biome_pinned_scenes')
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
@@ -213,7 +208,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   }, [pinnedSceneIds, isLoaded, config, saveConfig])
 
   const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
-  const sceneList = useMemo(() => seeds, [seeds])
   const pauseLockoutRemainingMs = Math.max(0, unlockDelayMs - pauseElapsedMs)
   const showPauseLockoutTimer = isActive && !canUnpause && pauseLockoutRemainingMs > 0 && showUnlockHint
   const pauseLockoutSecondsText = (pauseLockoutRemainingMs / 1000).toFixed(1)
@@ -348,334 +342,33 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           <MenuSettingsView onBack={() => setView('main')} />
         </div>
       ) : view === 'main' ? (
-        <div className="overlay-darken absolute inset-0 p-[3.8%_4%]">
-          <SocialCtaRow rowClassName="pause-cta-row" />
-
-          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] flex flex-col">
-            <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Pinned Scenes</h2>
-            <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-              Your pinned scenes. Use the Scenes button to pin scenes, or drag/paste an image in to play it.
-            </p>
-            <div className="pause-scene-scroll pause-scene-scroll-pinned mt-[0.7cqh]">
-              <div className="pause-scene-grid">
-                {pinnedScenes.length > 0 ? (
-                  pinnedScenes.map((seed) => (
-                    <button
-                      type="button"
-                      key={`pinned-${seed.filename}`}
-                      className="pause-scene-card group/scene relative"
-                      title={seed.filename}
-                      onClick={() => handleSceneSelect(seed.filename)}
-                    >
-                      <img
-                        className="w-full h-full object-cover block"
-                        src={thumbnails[seed.filename] || ''}
-                        alt={seed.filename}
-                      />
-                      <span className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          className="pause-scene-action is-pinned"
-                          title="Unpin scene"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            togglePinnedScene(seed.filename)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              togglePinnedScene(seed.filename)
-                            }
-                          }}
-                        >
-                          <svg
-                            className="w-[66%] h-[66%]"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <circle cx="12" cy="10.6" r="4.1" />
-                            <circle cx="12" cy="10.6" r="1.55" fill="currentColor" stroke="none" />
-                            <path d="M12 14.7v2.35" />
-                            <path d="M10.98 16.9L12 19.1 13.02 16.95z" fill="currentColor" stroke="none" />
-                          </svg>
-                        </span>
-                        {!seed.is_default && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="pause-scene-action is-delete"
-                            title="Remove scene"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void removeScene(seed)
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                void removeScene(seed)
-                              }
-                            }}
-                          >
-                            <svg
-                              className="w-[66%] h-[66%]"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <path d="M3 6h18" />
-                              <path d="M8 6V4h8v2" />
-                              <rect x="6.5" y="6.5" width="11" height="13" rx="1.5" />
-                              <path d="M10 10v6" />
-                              <path d="M14 10v6" />
-                            </svg>
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <div
-                    className="pause-scene-card pause-scene-card-empty relative grid place-items-center"
-                    aria-hidden="true"
-                  >
-                    <svg
-                      className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                      <circle cx="8.5" cy="8.5" r="1.4" />
-                      <polyline points="21,15 16,10 5,21" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <ViewLabel>
-            <span className="inline-flex items-end gap-[1.42cqh]">
-              <span>Paused</span>
-              <span
-                className={`self-end font-serif text-[2.13cqh] leading-[1.0] tracking-[0.03em] text-[rgba(245,249,255,0.62)] transition-opacity duration-120 ${
-                  showPauseLockoutTimer
-                    ? 'opacity-100 [animation:pauseUnlockHintPulse_1200ms_ease-out_forwards]'
-                    : 'opacity-0'
-                }`}
-              >
-                {showPauseLockoutTimer ? `unlock in ${pauseLockoutSecondsText}s` : ''}
-              </span>
-            </span>
-          </ViewLabel>
-
-          <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
-            <MenuButton variant="secondary" className="w-full px-0" onClick={handleResetAndResume}>
-              Reset
-            </MenuButton>
-            <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('scenes')}>
-              Scenes
-            </MenuButton>
-            <MenuButton variant="secondary" className="w-full px-0" onClick={() => setView('settings')}>
-              Settings
-            </MenuButton>
-            <MenuButton variant="primary" className="w-full px-0" onClick={requestPointerLock}>
-              Resume
-            </MenuButton>
-          </div>
-        </div>
+        <PauseMainView
+          pinnedScenes={pinnedScenes}
+          thumbnails={thumbnails}
+          onSceneSelect={handleSceneSelect}
+          onTogglePin={togglePinnedScene}
+          onRemoveScene={removeScene}
+          onResetAndResume={handleResetAndResume}
+          onNavigate={setView}
+          requestPointerLock={requestPointerLock}
+          showPauseLockoutTimer={showPauseLockoutTimer}
+          pauseLockoutSecondsText={pauseLockoutSecondsText}
+          showUnlockHint={showUnlockHint}
+        />
       ) : (
-        <div className="overlay-darken absolute inset-0 p-[3.8%_4%] z-[2]">
-          <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[70%] z-[3] flex flex-col">
-            <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Scenes</h2>
-            <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-              All of your {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}. Add more by using the +
-              button, or by drag/pasting them in.
-            </p>
-            {uploadError && <p className="!mt-[0.6cqh] !text-[rgba(255,180,180,0.92)]">{uploadError}</p>}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ display: 'none' }}
-            />
-            <div className="pause-scene-scroll pause-scene-scroll-main mt-[1.1cqh] relative z-[4]">
-              <div className="pause-scene-grid w-full">
-                <button
-                  type="button"
-                  className={`pause-scene-add-card grid grid-cols-2 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
-                  onClick={(event) => event.preventDefault()}
-                >
-                  <span
-                    className="grid place-items-center font-serif text-small text-text-secondary cursor-pointer"
-                    onClick={() => void handleClipboardUpload()}
-                    title="Paste image from clipboard"
-                  >
-                    <svg
-                      className="w-[2.67cqh] h-[2.67cqh]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <rect x="9" y="3" width="6" height="4" rx="1" />
-                      <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
-                      <rect x="12" y="10" width="8" height="10" rx="1" />
-                    </svg>
-                  </span>
-                  <span
-                    className="grid place-items-center font-serif text-small text-text-secondary cursor-pointer border-l border-[rgba(245,249,255,0.35)]"
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Browse for image file"
-                  >
-                    <svg
-                      className="w-[2.67cqh] h-[2.67cqh]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                </button>
-                {sceneList.map((seed) => (
-                  <button
-                    type="button"
-                    key={`scene-${seed.filename}`}
-                    className="pause-scene-card group/scene relative z-[5]"
-                    title={seed.filename}
-                    onClick={() => handleSceneSelect(seed.filename)}
-                  >
-                    <img
-                      className="w-full h-full object-cover block"
-                      src={thumbnails[seed.filename] || ''}
-                      alt={seed.filename}
-                    />
-                    <span className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100">
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className={`pause-scene-action ${pinnedSceneIds.includes(seed.filename) ? 'is-pinned' : 'is-default'}`}
-                        title={pinnedSceneIds.includes(seed.filename) ? 'Unpin scene' : 'Pin scene'}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          togglePinnedScene(seed.filename)
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            togglePinnedScene(seed.filename)
-                          }
-                        }}
-                      >
-                        {pinnedSceneIds.includes(seed.filename) ? (
-                          <svg
-                            className="w-[66%] h-[66%]"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <circle cx="12" cy="10.6" r="4.1" />
-                            <circle cx="12" cy="10.6" r="1.55" fill="currentColor" stroke="none" />
-                            <path d="M12 14.7v2.35" />
-                            <path d="M10.98 16.9L12 19.1 13.02 16.95z" fill="currentColor" stroke="none" />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-[66%] h-[66%]"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <g transform="rotate(-36 12 12)">
-                              <rect x="9.25" y="4.1" width="5.5" height="5.6" rx="1.2" />
-                              <path d="M7.5 9.7h9l-4.5 4.55z" />
-                              <path d="M12 14.2v5.1" />
-                              <path d="M10.92 19.1L12 22 13.08 19.15z" fill="currentColor" stroke="none" />
-                            </g>
-                          </svg>
-                        )}
-                      </span>
-                      {!seed.is_default && (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          className="pause-scene-action is-delete"
-                          title="Remove scene"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void removeScene(seed)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              void removeScene(seed)
-                            }
-                          }}
-                        >
-                          <svg
-                            className="w-[66%] h-[66%]"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M3 6h18" />
-                            <path d="M8 6V4h8v2" />
-                            <rect x="6.5" y="6.5" width="11" height="13" rx="1.5" />
-                            <path d="M10 10v6" />
-                            <path d="M14 10v6" />
-                          </svg>
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-          <MenuButton
-            variant="primary"
-            className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
-            onClick={() => setView('main')}
-          >
-            Back
-          </MenuButton>
-        </div>
+        <PauseScenesView
+          seeds={seeds}
+          thumbnails={thumbnails}
+          pinnedSceneIds={pinnedSceneIds}
+          uploadingImage={uploadingImage}
+          uploadError={uploadError}
+          onSceneSelect={handleSceneSelect}
+          onTogglePin={togglePinnedScene}
+          onRemoveScene={removeScene}
+          onImageUpload={handleImageUpload}
+          onClipboardUpload={handleClipboardUpload}
+          onBack={() => setView('main')}
+        />
       )}
     </div>
   )
