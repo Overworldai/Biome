@@ -77,7 +77,7 @@ const PortalPreview = ({
           )}
           {hoverContent && (
             <div
-              className={`absolute inset-0 rounded-[inherit] transition-opacity duration-200 ${isHovered ? 'opacity-70' : 'opacity-0'}`}
+              className={`absolute inset-0 rounded-[inherit] transition-opacity duration-400 ${isHovered ? 'opacity-90' : 'opacity-0'}`}
             >
               {hoverContent}
             </div>
