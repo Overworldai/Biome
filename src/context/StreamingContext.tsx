@@ -65,6 +65,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     frameId,
     genTime,
     logs: wsLogs,
+    allLogs: wsAllLogs,
     connect,
     disconnect,
     sendControl,
@@ -540,6 +541,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // WS RPC
     wsRequest,
     wsLogs,
+    wsAllLogs,
     clearWsLogs,
 
     // Settings

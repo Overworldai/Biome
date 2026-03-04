@@ -4,6 +4,7 @@ import { WsRpcClient } from '../lib/wsRpc'
 import type { LoadingStage } from '../types/app'
 
 const log = createLogger('WebSocket')
+const MAX_VISIBLE_LOG_LINES = 500
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -18,6 +19,7 @@ type WebSocketHook = {
   frameId: number
   genTime: number | null
   logs: string[]
+  allLogs: string[]
   connect: (endpointUrl: string) => void
   disconnect: () => void
   sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
@@ -47,6 +49,7 @@ export const useWebSocket = (): WebSocketHook => {
   const [statusStage, setStatusStage] = useState<LoadingStage | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
+  const allLogsRef = useRef<string[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
@@ -74,6 +77,7 @@ export const useWebSocket = (): WebSocketHook => {
   )
 
   const clearLogs = useCallback(() => {
+    allLogsRef.current = []
     setLogs([])
   }, [])
 
@@ -95,6 +99,7 @@ export const useWebSocket = (): WebSocketHook => {
     setStatusCode(null)
     setStatusStage(null)
     setHasRealFrame(false)
+    allLogsRef.current = []
     setLogs([])
 
     let wsUrl: string
@@ -175,7 +180,11 @@ export const useWebSocket = (): WebSocketHook => {
           }
           case 'log': {
             const line = String(msg.line ?? '')
-            setLogs((prev) => [...prev, line])
+            allLogsRef.current = [...allLogsRef.current, line]
+            setLogs((prev) => {
+              const next = [...prev, line]
+              return next.length > MAX_VISIBLE_LOG_LINES ? next.slice(-MAX_VISIBLE_LOG_LINES) : next
+            })
             break
           }
           case 'error': {
@@ -330,6 +339,7 @@ export const useWebSocket = (): WebSocketHook => {
     frameId,
     genTime,
     logs,
+    allLogs: allLogsRef.current,
     connect,
     disconnect,
     sendControl,

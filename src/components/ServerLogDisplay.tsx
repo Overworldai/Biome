@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { listen } from '../bridge'
 import { INTERACTIVE_TRANSITION } from '../styles'
 
+const MAX_ERROR_MESSAGE_CHARS = 220
+
 // Determine log line color class based on content
 const getLogClass = (line: string): string => {
   if (line.includes('[ERROR]') || line.includes('FATAL') || line.includes('Error:')) {
@@ -29,7 +31,8 @@ const ServerLogDisplay = ({
   variant = 'default',
   externalLogs = null,
   disableLiveIpc = false,
-  title = null
+  title = null,
+  onLogsChange
 }: {
   showDismiss?: boolean
   onDismiss?: () => void
@@ -41,6 +44,7 @@ const ServerLogDisplay = ({
   externalLogs?: string[] | null
   disableLiveIpc?: boolean
   title?: string | null
+  onLogsChange?: (logs: string[]) => void
 }) => {
   const isLoadingInline = variant === 'loading-inline'
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -75,6 +79,14 @@ const ServerLogDisplay = ({
   }, [])
 
   const visibleLogs = externalLogs ?? logs
+  const displayErrorMessage =
+    errorMessage && errorMessage.length > MAX_ERROR_MESSAGE_CHARS
+      ? `${errorMessage.slice(0, MAX_ERROR_MESSAGE_CHARS).trimEnd()}...`
+      : errorMessage
+
+  useEffect(() => {
+    onLogsChange?.(visibleLogs)
+  }, [visibleLogs, onLogsChange])
 
   useEffect(() => {
     const el = containerRef.current
@@ -119,9 +131,9 @@ const ServerLogDisplay = ({
           </span>
         </div>
       )}
-      {errorMessage && (
+      {displayErrorMessage && (
         <div className="flex flex-col gap-[0.4cqh] px-[2.13cqh] py-[0.8cqh] bg-error/10 border-b border-error/30">
-          <div className="font-mono text-[1.96cqh] text-error/90">{errorMessage}</div>
+          <div className="font-mono text-[1.96cqh] text-error/90">{displayErrorMessage}</div>
           <div className="font-mono text-[1.6cqh] text-white/50 italic">Open Settings to reinstall the engine.</div>
         </div>
       )}

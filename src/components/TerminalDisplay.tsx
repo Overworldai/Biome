@@ -14,7 +14,7 @@ type TerminalDisplayProps = {
 }
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
-  const { connectionState, statusStage, engineError, error, cancelConnection, wsLogs } = useStreaming()
+  const { connectionState, statusStage, engineError, error, cancelConnection, wsLogs, wsAllLogs } = useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode } = useConfig()
   const [showLogsPanel, setShowLogsPanel] = useState(false)
@@ -36,6 +36,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     if (!errorDetail) return wsLogs
     return [...wsLogs, `[ERROR] ${errorDetail}`]
   }, [wsLogs, errorDetail])
+
+  const allLogsWithError = useMemo(() => {
+    if (!errorDetail) return wsAllLogs
+    return [...wsAllLogs, `[ERROR] ${errorDetail}`]
+  }, [wsAllLogs, errorDetail])
 
   useEffect(() => {
     setErrorMode(!!errorDetail)
@@ -71,7 +76,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
           websocket_error: error,
           is_server_mode: isServerMode
         },
-        logs: logsWithError
+        logs: allLogsWithError
       }
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))

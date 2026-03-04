@@ -56,6 +56,7 @@ export type StreamingContextValue = {
   seedsDir: string | null
   wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   wsLogs: string[]
+  wsAllLogs: string[]
   clearWsLogs: () => void
 
   mouseSensitivity: number
