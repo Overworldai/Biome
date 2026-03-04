@@ -13,6 +13,9 @@ export const MENU_VIEW = {
 } as const
 export type MenuViewKey = (typeof MENU_VIEW)[keyof typeof MENU_VIEW]
 
+/** Use CRT scanlines (true) or blur (false) for the pause overlay background. */
+export const PAUSE_OVERLAY_CRT = false
+
 /** Enable mouse-driven parallax on the portal and background slideshow. */
 export const PARALLAX_ENABLED = false
 
