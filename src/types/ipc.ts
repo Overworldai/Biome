@@ -6,6 +6,24 @@ export type ModelAvailability = {
   is_local: boolean
 }
 
+export type RuntimeDiagnosticsMeta = {
+  app_name: string
+  app_version: string
+  commit_hash: string
+  platform: string
+  arch: string
+  electron_version: string
+  chrome_version: string
+  node_version: string
+  locale: string
+  is_packaged: boolean
+}
+
+export type ExportDiagnosticsResult = {
+  canceled: boolean
+  file_path: string | null
+}
+
 /**
  * Maps each IPC command channel to its argument tuple and return type.
  * This is the single source of truth for all invoke() calls.
@@ -60,6 +78,8 @@ export type IpcCommandMap = {
 
   // Debug
   'write-spark-tuning': { args: [tuning: PortalSparksTuning]; return: void }
+  'get-runtime-diagnostics-meta': { args: []; return: RuntimeDiagnosticsMeta }
+  'export-loading-diagnostics': { args: [reportText: string]; return: ExportDiagnosticsResult }
 }
 
 /**

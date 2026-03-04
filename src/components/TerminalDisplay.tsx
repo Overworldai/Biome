@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { invoke } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
 import { useConfig } from '../hooks/useConfig'
@@ -17,6 +18,8 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { setErrorMode } = useVortex()
   const { isServerMode } = useConfig()
   const [showLogsPanel, setShowLogsPanel] = useState(false)
+  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false)
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
   const logsPanelHeight = 260
 
   const errorDetail = engineError || error
@@ -47,6 +50,43 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     if (connectionState === 'connecting') return 'Connecting...'
     return 'Starting...'
   }, [connectionState, currentStage?.label, errorDetail])
+
+  const handleExportDiagnostics = async () => {
+    if (isExportingDiagnostics) return
+
+    setIsExportingDiagnostics(true)
+    setExportStatus(null)
+
+    try {
+      const meta = await invoke('get-runtime-diagnostics-meta')
+      const report = {
+        generated_at: new Date().toISOString(),
+        runtime: meta,
+        loading_state: {
+          connection_state: connectionState,
+          status_stage: statusStage,
+          status_text: statusText,
+          progress_percent: progressPercent,
+          engine_error: engineError,
+          websocket_error: error,
+          is_server_mode: isServerMode
+        },
+        logs: logsWithError
+      }
+
+      const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
+      if (result.canceled) {
+        setExportStatus('Export canceled')
+      } else {
+        setExportStatus('Diagnostics exported')
+      }
+    } catch (exportErr) {
+      const message = exportErr instanceof Error ? exportErr.message : 'Export failed'
+      setExportStatus(message)
+    } finally {
+      setIsExportingDiagnostics(false)
+    }
+  }
 
   return (
     <>
@@ -91,6 +131,19 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               disableLiveIpc={true}
               externalLogs={logsWithError}
               title={isServerMode ? 'HOSTED SERVER OUTPUT' : undefined}
+              headerAction={
+                errorDetail ? (
+                  <button
+                    type="button"
+                    className="loading-inline-logs-close"
+                    onClick={() => void handleExportDiagnostics()}
+                    disabled={isExportingDiagnostics}
+                    title="Export loading logs and environment diagnostics"
+                  >
+                    {isExportingDiagnostics ? 'Exporting...' : 'Export Logs'}
+                  </button>
+                ) : null
+              }
             />
           </div>
           <div className="flex items-center justify-end gap-[1.8cqh] mt-[1.35cqh] w-full">
@@ -130,6 +183,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               Cancel
             </Button>
           </div>
+          {exportStatus && (
+            <div className="w-full text-right font-serif text-[2cqh] leading-[1.1] text-[rgba(245,249,255,0.78)] mt-[0.45cqh]">
+              {exportStatus}
+            </div>
+          )}
         </div>
       </div>
     </>

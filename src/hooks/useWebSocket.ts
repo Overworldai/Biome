@@ -5,8 +5,6 @@ import type { LoadingStage } from '../types/app'
 
 const log = createLogger('WebSocket')
 
-const MAX_LOG_LINES = 500
-
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 type WebSocketHook = {
@@ -177,10 +175,7 @@ export const useWebSocket = (): WebSocketHook => {
           }
           case 'log': {
             const line = String(msg.line ?? '')
-            setLogs((prev) => {
-              const next = [...prev, line]
-              return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next
-            })
+            setLogs((prev) => [...prev, line])
             break
           }
           case 'error': {
