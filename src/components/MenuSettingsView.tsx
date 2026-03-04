@@ -253,7 +253,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   }
 
   return (
-    <div className="overlay-darken absolute inset-0 z-[9] pointer-events-auto">
+    <div className="absolute inset-0 z-[9] pointer-events-auto">
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
         <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Settings</h2>
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">

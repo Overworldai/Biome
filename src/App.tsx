@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ConfigProvider } from './hooks/useConfig'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
@@ -19,7 +20,8 @@ import ShutdownOverlay from './components/ShutdownOverlay'
 import WindowControls from './components/WindowControls'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
-import { PORTAL_SPARKS_DEBUG } from './constants'
+import { PORTAL_SPARKS_DEBUG, MENU_VIEW, type MenuViewKey } from './constants'
+import { viewFadeVariants } from './transitions'
 import PortalSparksConfigurator from './components/PortalSparksConfigurator'
 
 const LAUNCH_PRE_SHRINK_MS = 420
@@ -74,6 +76,10 @@ const AppShell = () => {
   const nextSceneGlowRgb = useSceneGlowColor(images, nextIndex)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen
   const showMenuSettings = isMainUi && !isConnected && isSettingsOpen
+  const activeMenuView: MenuViewKey | null = useMemo(
+    () => (showMenuHome ? MENU_VIEW.HOME : showMenuSettings ? MENU_VIEW.SETTINGS : null),
+    [showMenuHome, showMenuSettings]
+  )
   const loadingProgressPercent = Math.max(0, Math.min(100, Math.round(statusStage?.percent ?? 0)))
   const loadingLayerStyle = {
     '--vortex-progress-percent': loadingProgressPercent.toString()
@@ -181,22 +187,42 @@ const AppShell = () => {
             </div>
           </div>
         )}
-        {showMenuHome && (
-          <div className="absolute inset-0 z-[9] pointer-events-none">
-            <SocialCtaRow />
-
-            <ViewLabel>Biome</ViewLabel>
-
-            <MenuButton
-              variant="ghost"
-              className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
-              onClick={toggleSettings}
+        <AnimatePresence mode="wait">
+          {activeMenuView === MENU_VIEW.HOME && (
+            <motion.div
+              key={MENU_VIEW.HOME}
+              className="absolute inset-0 z-[9] pointer-events-none"
+              variants={viewFadeVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
             >
-              Settings
-            </MenuButton>
-          </div>
-        )}
-        {showMenuSettings && <MenuSettingsView onBack={toggleSettings} />}
+              <SocialCtaRow />
+
+              <ViewLabel>Biome</ViewLabel>
+
+              <MenuButton
+                variant="ghost"
+                className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
+                onClick={toggleSettings}
+              >
+                Settings
+              </MenuButton>
+            </motion.div>
+          )}
+          {activeMenuView === MENU_VIEW.SETTINGS && (
+            <motion.div
+              key={MENU_VIEW.SETTINGS}
+              className="absolute inset-0"
+              variants={viewFadeVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <MenuSettingsView onBack={toggleSettings} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {isStreamingUi && (
           <main

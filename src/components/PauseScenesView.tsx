@@ -95,7 +95,7 @@ const PauseScenesView = ({
 
   return (
     <div
-      className="overlay-darken absolute inset-0 p-[3.8%_4%] z-[2]"
+      className="absolute inset-0 p-[3.8%_4%] z-[2]"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

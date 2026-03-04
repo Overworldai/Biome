@@ -32,7 +32,7 @@ const PauseMainView = ({
   pauseLockoutSecondsText,
   showUnlockHint
 }: PauseMainViewProps) => (
-  <div className="overlay-darken absolute inset-0 p-[3.8%_4%]">
+  <div className="absolute inset-0 p-[3.8%_4%]">
     <SocialCtaRow rowClassName="pause-cta-row" />
 
     <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[80%] flex flex-col">

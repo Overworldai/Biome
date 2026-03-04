@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useStreaming } from '../context/StreamingContext'
 import type { SeedRecord, SeedRecordWithThumbnail } from '../types/app'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
 import PauseScenesView from './PauseScenesView'
 import { useConfig } from '../hooks/useConfig'
+import { PAUSE_VIEW, type PauseViewKey } from '../constants'
+import { viewFadeVariants } from '../transitions'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const {
@@ -18,7 +21,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     wsRequest
   } = useStreaming()
   const { config, isLoaded, saveConfig } = useConfig()
-  const [view, setView] = useState<'main' | 'scenes' | 'settings'>('main')
+  const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -160,15 +163,15 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
   useEffect(() => {
     if (!isActive) {
-      setView('main')
+      setView(PAUSE_VIEW.MAIN)
       setShowUnlockHint(false)
       return
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (view === 'scenes' || view === 'settings') {
-        setView('main')
+      if (view === PAUSE_VIEW.SCENES || view === PAUSE_VIEW.SETTINGS) {
+        setView(PAUSE_VIEW.MAIN)
       } else {
         requestPointerLock()
       }
@@ -385,40 +388,68 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       id="pause-overlay"
     >
       <div className="absolute inset-0 pointer-events-none [background:repeating-linear-gradient(0deg,transparent_0px,transparent_2px,rgba(255,255,255,0.04)_2px,rgba(255,255,255,0.04)_4px)]"></div>
-      {view === 'settings' ? (
-        <div className="absolute inset-0">
-          <MenuSettingsView onBack={() => setView('main')} />
-        </div>
-      ) : view === 'main' ? (
-        <PauseMainView
-          pinnedScenes={pinnedScenes}
-          thumbnails={thumbnails}
-          onSceneSelect={handleSceneSelect}
-          onTogglePin={togglePinnedScene}
-          onRemoveScene={removeScene}
-          onResetAndResume={handleResetAndResume}
-          onNavigate={setView}
-          requestPointerLock={requestPointerLock}
-          showPauseLockoutTimer={showPauseLockoutTimer}
-          pauseLockoutSecondsText={pauseLockoutSecondsText}
-          showUnlockHint={showUnlockHint}
-        />
-      ) : (
-        <PauseScenesView
-          seeds={seeds}
-          thumbnails={thumbnails}
-          pinnedSceneIds={pinnedSceneIds}
-          uploadingImage={uploadingImage}
-          uploadError={uploadError}
-          onSceneSelect={handleSceneSelect}
-          onTogglePin={togglePinnedScene}
-          onRemoveScene={removeScene}
-          onImageUpload={handleImageUpload}
-          onImageDrop={handleImageDrop}
-          onClipboardUpload={handleClipboardUpload}
-          onBack={() => setView('main')}
-        />
-      )}
+      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <AnimatePresence mode="wait">
+        {view === PAUSE_VIEW.SETTINGS ? (
+          <motion.div
+            key={PAUSE_VIEW.SETTINGS}
+            className="absolute inset-0"
+            variants={viewFadeVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} />
+          </motion.div>
+        ) : view === PAUSE_VIEW.MAIN ? (
+          <motion.div
+            key={PAUSE_VIEW.MAIN}
+            className="absolute inset-0"
+            variants={viewFadeVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <PauseMainView
+              pinnedScenes={pinnedScenes}
+              thumbnails={thumbnails}
+              onSceneSelect={handleSceneSelect}
+              onTogglePin={togglePinnedScene}
+              onRemoveScene={removeScene}
+              onResetAndResume={handleResetAndResume}
+              onNavigate={(v) => setView(v === 'scenes' ? PAUSE_VIEW.SCENES : PAUSE_VIEW.SETTINGS)}
+              requestPointerLock={requestPointerLock}
+              showPauseLockoutTimer={showPauseLockoutTimer}
+              pauseLockoutSecondsText={pauseLockoutSecondsText}
+              showUnlockHint={showUnlockHint}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key={PAUSE_VIEW.SCENES}
+            className="absolute inset-0"
+            variants={viewFadeVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <PauseScenesView
+              seeds={seeds}
+              thumbnails={thumbnails}
+              pinnedSceneIds={pinnedSceneIds}
+              uploadingImage={uploadingImage}
+              uploadError={uploadError}
+              onSceneSelect={handleSceneSelect}
+              onTogglePin={togglePinnedScene}
+              onRemoveScene={removeScene}
+              onImageUpload={handleImageUpload}
+              onImageDrop={handleImageDrop}
+              onClipboardUpload={handleClipboardUpload}
+              onBack={() => setView(PAUSE_VIEW.MAIN)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
