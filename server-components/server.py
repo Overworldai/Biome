@@ -810,10 +810,55 @@ async def _handle_seeds_list_with_thumbnails(msg: dict) -> dict:
     return {"success": True, "data": {"seeds": seeds_with_thumbnails, "count": len(seeds_with_thumbnails)}}
 
 
+async def _fallback_seed_cache_entry(filename: str, log_prefix: str = "[SEEDS]") -> tuple[bool, str]:
+    """Try to safety-scan and cache a seed that is missing from safety cache."""
+    global safe_seeds_cache
+
+    if filename in safe_seeds_cache:
+        return True, ""
+
+    logger.warning(f"{log_prefix} Seed '{filename}' not in safety cache, running fallback safety check")
+
+    # Build the same filename -> path mapping used by cache validation.
+    all_seed_paths = glob_seeds(DEFAULT_SEEDS_DIR) + glob_seeds(UPLOADS_DIR)
+    file_map = {p.name: str(p) for p in all_seed_paths}
+    file_path = file_map.get(filename)
+
+    if not file_path:
+        return False, f"Seed '{filename}' not in safety cache and not found on disk"
+
+    try:
+        file_hash = await asyncio.to_thread(compute_file_hash, file_path)
+        safety_result = await asyncio.to_thread(safety_checker.check_image, file_path)
+        is_safe = safety_result.get("is_safe", False)
+
+        safe_seeds_cache[filename] = {
+            "hash": file_hash,
+            "is_safe": is_safe,
+            "path": file_path,
+            "scores": safety_result.get("scores", {}),
+            "checked_at": time.time(),
+        }
+
+        cache = load_seeds_cache()
+        cache["files"] = safe_seeds_cache
+        cache["last_scan"] = time.time()
+        save_seeds_cache(cache)
+
+        status = "SAFE" if is_safe else "UNSAFE"
+        logger.info(f"{log_prefix} Fallback safety check complete for '{filename}': {status}")
+        return True, ""
+    except Exception as exc:
+        logger.error(f"{log_prefix} Fallback safety check failed for '{filename}': {exc}")
+        return False, f"Fallback safety check failed for '{filename}': {exc}"
+
+
 async def _handle_seeds_image(msg: dict) -> dict:
     filename = msg.get("filename", "")
     if filename not in safe_seeds_cache:
-        return {"success": False, "error": "Seed not found"}
+        ok, error = await _fallback_seed_cache_entry(filename, log_prefix="[SEEDS_IMAGE]")
+        if not ok:
+            return {"success": False, "error": error}
 
     seed_data = safe_seeds_cache[filename]
     if not seed_data.get("is_safe", False):
@@ -831,7 +876,9 @@ async def _handle_seeds_image(msg: dict) -> dict:
 async def _handle_seeds_thumbnail(msg: dict) -> dict:
     filename = msg.get("filename", "")
     if filename not in safe_seeds_cache:
-        return {"success": False, "error": "Seed not found"}
+        ok, error = await _fallback_seed_cache_entry(filename, log_prefix="[SEEDS_THUMBNAIL]")
+        if not ok:
+            return {"success": False, "error": error}
 
     seed_data = safe_seeds_cache[filename]
     file_path = seed_data.get("path", "")
@@ -910,7 +957,9 @@ async def _handle_seeds_delete(msg: dict) -> dict:
 
     filename = msg.get("filename", "")
     if filename not in safe_seeds_cache:
-        return {"success": False, "error": "Seed not found"}
+        ok, error = await _fallback_seed_cache_entry(filename, log_prefix="[SEEDS_DELETE]")
+        if not ok:
+            return {"success": False, "error": error}
 
     seed_data = safe_seeds_cache[filename]
     file_path = Path(seed_data.get("path", ""))
@@ -1117,11 +1166,13 @@ async def websocket_endpoint(websocket: WebSocket):
             return False
 
         if filename not in safe_seeds_cache:
-            logger.warning(f"[{client_host}] Seed '{filename}' not in safety cache")
-            await send_json(
-                {"type": "error", "message": f"Seed '{filename}' not in safety cache"}
+            ok, error = await _fallback_seed_cache_entry(
+                filename, log_prefix=f"[{client_host}]"
             )
-            return False
+            if not ok:
+                logger.warning(f"[{client_host}] {error}")
+                await send_json({"type": "error", "message": error})
+                return False
 
         cached_entry = safe_seeds_cache[filename]
         if not cached_entry.get("is_safe", False):
@@ -1372,16 +1423,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # Check if seed is in safety cache
                         if filename not in safe_seeds_cache:
-                            logger.warning(
-                                f"[RECV] Seed '{filename}' not in safety cache"
+                            ok, error = await _fallback_seed_cache_entry(
+                                filename, log_prefix="[RECV]"
                             )
-                            await send_json(
-                                {
-                                    "type": "error",
-                                    "message": f"Seed '{filename}' not in safety cache",
-                                }
-                            )
-                            continue
+                            if not ok:
+                                logger.warning(f"[RECV] {error}")
+                                await send_json(
+                                    {
+                                        "type": "error",
+                                        "message": error,
+                                    }
+                                )
+                                continue
 
                         cached_entry = safe_seeds_cache[filename]
 
