@@ -11,8 +11,7 @@ type ButtonProps = {
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'border-border-light outline-border-light bg-surface-btn-primary text-text-inverse',
   secondary: 'border-border-light outline-border-light bg-surface-btn-secondary text-text-primary',
-  danger:
-    'border-[var(--color-danger-dark)] outline-[var(--color-danger-dark)] bg-danger text-[var(--color-error-bright)]',
+  danger: 'border-danger outline-danger bg-danger text-text-primary',
   ghost:
     'border-border-light outline-border-light bg-surface-btn-ghost text-text-primary hover:bg-surface-btn-hover hover:text-text-inverse hover:-translate-y-px'
 }
