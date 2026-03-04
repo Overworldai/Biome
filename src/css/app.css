@@ -81,14 +81,12 @@
   --color-action-pinned-hover-border: rgba(255, 220, 100, 1);
   --color-action-unpin: rgba(200, 210, 225, 0.88);
   --color-action-unpin-border: rgba(200, 210, 225, 0.6);
-  --color-action-unpin-hover-bg: rgba(12, 16, 24, 0.82);
-  --color-action-unpin-hover: rgba(220, 228, 240, 1);
-  --color-action-unpin-hover-border: rgba(220, 228, 240, 0.85);
+  --color-action-unpin-hover: rgba(255, 255, 255, 1);
+  --color-action-unpin-hover-border: rgba(255, 255, 255, 0.9);
   --color-action-delete: rgba(255, 100, 100, 0.95);
   --color-action-delete-border: rgba(255, 110, 110, 0.82);
-  --color-action-delete-hover-bg: rgba(24, 8, 8, 0.82);
-  --color-action-delete-hover: rgba(255, 120, 120, 1);
-  --color-action-delete-hover-border: rgba(255, 130, 130, 1);
+  --color-action-delete-hover: rgba(255, 170, 170, 1);
+  --color-action-delete-hover-border: rgba(255, 180, 180, 1);
 
   /* Font sizes */
   --text-body: 3.73cqh;

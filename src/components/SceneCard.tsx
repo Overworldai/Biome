@@ -7,10 +7,10 @@ const ACTION_PINNED =
   'text-[var(--color-action-pinned)] border-[var(--color-action-pinned-border)] hover:bg-[var(--color-action-pinned-hover-bg)] hover:text-[var(--color-action-pinned-hover)] hover:border-[var(--color-action-pinned-hover-border)]'
 
 const ACTION_UNPINNED =
-  'text-[var(--color-action-unpin)] border-[var(--color-action-unpin-border)] hover:bg-[var(--color-action-unpin-hover-bg)] hover:text-[var(--color-action-unpin-hover)] hover:border-[var(--color-action-unpin-hover-border)]'
+  'text-[var(--color-action-unpin)] border-[var(--color-action-unpin-border)] hover:text-[var(--color-action-unpin-hover)] hover:border-[var(--color-action-unpin-hover-border)]'
 
 const ACTION_DELETE =
-  'text-[var(--color-action-delete)] border-[var(--color-action-delete-border)] hover:bg-[var(--color-action-delete-hover-bg)] hover:text-[var(--color-action-delete-hover)] hover:border-[var(--color-action-delete-hover-border)]'
+  'text-[var(--color-action-delete)] border-[var(--color-action-delete-border)] hover:text-[var(--color-action-delete-hover)] hover:border-[var(--color-action-delete-hover-border)]'
 
 const PinnedIcon = () => (
   <svg
