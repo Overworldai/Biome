@@ -22,20 +22,20 @@ const ConfirmModal = ({
     role="dialog"
     aria-modal="true"
   >
-    <div className="select-none border border-[var(--color-border-modal)] bg-[var(--color-surface-modal)] text-[var(--color-text-modal)] w-[58.33cqh] p-[1.8cqh_2.84cqh]">
+    <div className="select-none border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] w-[58.33cqh] p-[1.8cqh_2.84cqh]">
       <h3 className="m-0 mb-[0.2cqh] font-serif font-medium text-[3.91cqh]">{title}</h3>
       <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh]">{description}</p>
       <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
         <button
           type="button"
-          className={`${CONFIRM_BUTTON_BASE} border border-[var(--color-border-btn-ghost)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-modal)]`}
+          className={`${CONFIRM_BUTTON_BASE} border border-[var(--color-border-medium)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-primary)]`}
           onClick={onCancel}
         >
           {cancelLabel}
         </button>
         <button
           type="button"
-          className={`${CONFIRM_BUTTON_BASE} bg-[var(--color-surface-btn-hover)] text-[var(--color-text-btn-hover)]`}
+          className={`${CONFIRM_BUTTON_BASE} bg-[var(--color-surface-btn-hover)] text-[var(--color-text-inverse)]`}
           onClick={onConfirm}
         >
           {confirmLabel}

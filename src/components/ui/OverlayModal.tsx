@@ -22,14 +22,14 @@ const OverlayModal = ({
   return (
     <div className="absolute inset-0 z-[210] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm">
       <div
-        className={`max-h-[82cqh] ${widthClassName} border border-[var(--color-border-modal)] bg-[var(--color-surface-modal)] text-[var(--color-text-modal)] p-[1.6cqh_2cqh] flex flex-col gap-[1.2cqh]`}
+        className={`max-h-[82cqh] ${widthClassName} border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] p-[1.6cqh_2cqh] flex flex-col gap-[1.2cqh]`}
       >
         <div className="flex items-center justify-between gap-[1cqh]">
           <h3 className="m-0 font-serif font-medium text-[3.56cqh]">{title}</h3>
           {onClose && (
             <button
               type="button"
-              className="cursor-pointer border border-[var(--color-border-btn-ghost)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-modal)] font-serif text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]"
+              className="cursor-pointer border border-[var(--color-border-medium)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-primary)] font-serif text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]"
               onClick={onClose}
             >
               Close

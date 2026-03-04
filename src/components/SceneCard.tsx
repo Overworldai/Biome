@@ -85,7 +85,7 @@ const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onToggl
   return (
     <button
       type="button"
-      className={`w-full aspect-video rounded-[var(--radius-card)] border border-[var(--color-border-medium)] bg-[var(--color-surface-card)] p-0 overflow-hidden group/scene relative ${
+      className={`w-full aspect-video rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-card)] p-0 overflow-hidden group/scene relative ${
         isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'
       }`}
       title={seed.filename}

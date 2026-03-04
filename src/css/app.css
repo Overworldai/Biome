@@ -47,35 +47,30 @@
   --color-close-hover: #dc3232;
 
   /* Text colors */
-  --color-text-primary: rgba(248, 248, 245, 0.95);
-  --color-text-secondary: rgba(245, 249, 255, 0.95);
+  --color-text-primary: rgba(245, 249, 255, 0.95);
   --color-text-muted: rgba(238, 244, 252, 0.68);
   --color-text-dim: rgba(200, 200, 200, 0.7);
-  --color-text-inverse: rgba(18, 22, 30, 0.95);
+  --color-text-inverse: rgba(15, 20, 32, 0.95);
   --color-text-hud: rgba(230, 255, 255, 0.9);
   --color-text-error: rgba(255, 100, 100, 0.9);
 
   /* Surface/background colors */
-  --color-surface-btn-primary: rgba(248, 248, 245, 0.95);
+  --color-surface-btn-primary: rgba(245, 249, 255, 0.95);
+  --color-surface-btn-hover: rgba(245, 249, 255, 0.9);
   --color-surface-btn-secondary: rgba(10, 16, 28, 0.38);
+  --color-surface-btn-ghost: rgba(8, 12, 20, 0.28);
+  --color-surface-modal: rgba(8, 12, 20, 0.92);
   --color-surface-card: rgba(4, 7, 12, 0.5);
   --color-surface-control: rgba(2, 5, 10, 0.54);
 
   /* Border colors */
   --color-border-light: rgba(245, 249, 255, 0.8);
-  --color-border-medium: rgba(245, 249, 255, 0.52);
+  --color-border-medium: rgba(245, 249, 255, 0.68);
+  --color-border-subtle: rgba(245, 249, 255, 0.52);
 
-  /* Interactive surface colors */
-  --color-surface-btn-hover: rgba(245, 251, 255, 0.9);
-  --color-surface-btn-ghost: rgba(8, 12, 20, 0.18);
-  --color-surface-modal: rgba(8, 12, 20, 0.92);
-  --color-text-btn-hover: rgba(15, 20, 32, 0.95);
-  --color-text-modal: rgba(246, 249, 255, 0.95);
-  --color-text-modal-muted: rgba(233, 242, 255, 0.82);
-  --color-border-modal: rgba(245, 251, 255, 0.66);
-  --color-border-btn-ghost: rgba(245, 251, 255, 0.7);
-  --color-border-focus: rgba(245, 251, 255, 0.8);
+  /* Overlay colors */
   --color-overlay-scrim: rgba(2, 6, 16, 0.55);
+  --color-text-modal-muted: rgba(233, 242, 255, 0.82);
 
   /* Scene action colors */
   --color-action-bg: rgba(8, 12, 20, 0.72);

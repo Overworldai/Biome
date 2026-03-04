@@ -52,7 +52,7 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
         onPointerMove={handlePointerMove}
       >
         <div
-          className="absolute inset-0 bg-[rgba(245,251,255,0.95)] pointer-events-none"
+          className="absolute inset-0 bg-surface-btn-primary pointer-events-none"
           style={{ width: `${fraction * 100}%` }}
         />
         <span className="invisible">X</span>

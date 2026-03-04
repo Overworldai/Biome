@@ -128,7 +128,7 @@ const PauseScenesView = ({
               />
               <SettingsButton
                 variant="ghost"
-                className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[rgba(255,255,255,0.92)] active:text-[var(--color-text-btn-hover)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                 onClick={() => void onClipboardUpload()}
                 title="Paste image from clipboard"
               >
@@ -146,7 +146,7 @@ const PauseScenesView = ({
               </SettingsButton>
               <SettingsButton
                 variant="ghost"
-                className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[rgba(255,255,255,0.92)] active:text-[var(--color-text-btn-hover)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                 onClick={() => fileInputRef.current?.click()}
                 title="Browse for image file"
               >

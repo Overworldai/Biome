@@ -377,7 +377,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       )}
 
       {showLocalInstallLog && (
-        <div className="absolute inset-0 z-[12] pointer-events-none flex items-center justify-center bg-[rgba(2,6,16,0.62)] backdrop-blur-sm">
+        <div className="absolute inset-0 z-[12] pointer-events-none flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm">
           <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
             <ServerLogDisplay
               variant="loading-inline"
