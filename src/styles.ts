@@ -15,10 +15,6 @@ export const HEADING_BASE = 'm-0 font-serif leading-[0.95]'
 /** Muted description/label text */
 export const SETTINGS_MUTED_TEXT = 'font-serif text-text-muted text-[2.4cqh]'
 
-/** Shared base for minimize/close window buttons */
-export const WINDOW_CONTROL_BASE =
-  'flex items-center justify-center w-[23px] h-4 m-0 p-0 rounded-sm text-[9px] leading-none cursor-pointer bg-surface-btn-ghost text-text-primary font-serif border border-border-light'
-
 /** Standard hover transition for standalone buttons */
 export const INTERACTIVE_TRANSITION = 'transition-[color,background-color,border-color,outline-width] ease-in-out'
 

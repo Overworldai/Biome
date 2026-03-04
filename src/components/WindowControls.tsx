@@ -1,7 +1,29 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useWindow } from '../hooks/useWindow'
 import { useStreaming } from '../context/StreamingContext'
-import { WINDOW_CONTROL_BASE } from '../styles'
+const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
+
+const WindowControlButton = ({
+  onClick,
+  label,
+  hoverBg = 'hover:bg-surface-btn-hover hover:text-text-inverse',
+  children
+}: {
+  onClick: () => void
+  label: string
+  hoverBg?: string
+  children: ReactNode
+}) => (
+  <button
+    type="button"
+    className={`flex items-center justify-center w-[23px] h-4 m-0 p-0 rounded-sm text-[9px] leading-none cursor-pointer bg-surface-btn-ghost text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
+    onClick={onClick}
+    aria-label={label}
+    style={noDragRegionStyle}
+  >
+    {children}
+  </button>
+)
 
 const WindowControls = () => {
   const { minimize, toggleMaximize, close } = useWindow()
@@ -11,7 +33,6 @@ const WindowControls = () => {
     WebkitUserSelect: 'none',
     userSelect: 'none'
   } as CSSProperties
-  const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
   const hidden = isStreaming && !isPaused
 
@@ -26,26 +47,14 @@ const WindowControls = () => {
       </div>
       <div
         className={`absolute top-1.5 right-1.5 z-[9999] flex flex-row gap-1 transition-opacity duration-300 ${
-          hidden ? 'opacity-0 pointer-events-none' : 'opacity-50 pointer-events-auto'
+          hidden ? 'opacity-0 pointer-events-none' : 'opacity-50 hover:opacity-100 pointer-events-auto'
         }`}
         style={noDragRegionStyle}
       >
-        <button
-          type="button"
-          className={`${WINDOW_CONTROL_BASE} outline-0 outline-border-light transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-surface-btn-hover hover:text-text-inverse hover:outline-2`}
-          onClick={minimize}
-          aria-label="Minimize"
-          style={noDragRegionStyle}
-        >
+        <WindowControlButton onClick={minimize} label="Minimize">
           &#x2014;
-        </button>
-        <button
-          type="button"
-          className={`${WINDOW_CONTROL_BASE} outline-0 outline-border-light transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-surface-btn-hover hover:text-text-inverse hover:outline-2`}
-          onClick={toggleMaximize}
-          aria-label="Maximize"
-          style={noDragRegionStyle}
-        >
+        </WindowControlButton>
+        <WindowControlButton onClick={toggleMaximize} label="Maximize">
           <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true" className="block">
             <rect
               x="2.25"
@@ -58,16 +67,10 @@ const WindowControls = () => {
               rx="0.5"
             />
           </svg>
-        </button>
-        <button
-          type="button"
-          className={`${WINDOW_CONTROL_BASE} outline-0 outline-danger-dark transition-[background-color,color,outline-width] duration-[160ms] ease-in-out hover:bg-danger-dark hover:text-white hover:outline-2`}
-          onClick={close}
-          aria-label="Close"
-          style={noDragRegionStyle}
-        >
+        </WindowControlButton>
+        <WindowControlButton onClick={close} label="Close" hoverBg="hover:bg-danger hover:text-white">
           &#x2715;
-        </button>
+        </WindowControlButton>
       </div>
     </div>
   )
