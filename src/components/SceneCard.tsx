@@ -93,7 +93,7 @@ const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onToggl
           Unsafe
         </span>
       )}
-      <span className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100 group-focus-within/scene:opacity-100">
+      <span className="absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100 group-focus-within/scene:opacity-100">
         {!isUnsafe && (
           <span
             role="button"

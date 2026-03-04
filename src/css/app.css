@@ -408,29 +408,48 @@
   }
 
   .pause-scene-action {
-    width: 2.76cqh;
-    height: 2.76cqh;
+    width: 5cqh;
+    height: 5cqh;
     display: grid;
     place-items: center;
     border: 1px solid rgba(245, 249, 255, 0.7);
-    background: var(--color-surface-control);
+    background: rgba(8, 12, 20, 0.72);
     color: rgba(245, 249, 255, 0.92);
-    font-size: 1.69cqh;
+    font-size: 2.54cqh;
     line-height: 1;
     border-radius: 2px;
     cursor: pointer;
+    transition:
+      background 140ms ease,
+      color 140ms ease,
+      border-color 140ms ease;
   }
   .pause-scene-action.is-pinned {
-    color: rgba(255, 72, 72, 0.98);
-    border-color: rgba(255, 104, 104, 0.94);
+    color: rgba(255, 196, 56, 0.98);
+    border-color: rgba(255, 210, 90, 0.9);
+  }
+  .pause-scene-action.is-pinned:hover {
+    background: rgba(20, 18, 8, 0.82);
+    color: rgba(255, 210, 80, 1);
+    border-color: rgba(255, 220, 100, 1);
   }
   .pause-scene-action.is-default {
-    color: rgba(255, 142, 142, 0.95);
-    border-color: rgba(255, 128, 128, 0.82);
+    color: rgba(200, 210, 225, 0.88);
+    border-color: rgba(200, 210, 225, 0.6);
+  }
+  .pause-scene-action.is-default:hover {
+    background: rgba(12, 16, 24, 0.82);
+    color: rgba(220, 228, 240, 1);
+    border-color: rgba(220, 228, 240, 0.85);
   }
   .pause-scene-action.is-delete {
-    color: rgba(255, 205, 205, 0.95);
-    border-color: rgba(255, 170, 170, 0.82);
+    color: rgba(255, 100, 100, 0.95);
+    border-color: rgba(255, 110, 110, 0.82);
+  }
+  .pause-scene-action.is-delete:hover {
+    background: rgba(24, 8, 8, 0.82);
+    color: rgba(255, 120, 120, 1);
+    border-color: rgba(255, 130, 130, 1);
   }
 
   /* --- MENU CHROME --- */
