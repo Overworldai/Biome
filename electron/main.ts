@@ -59,7 +59,15 @@ declare const MAIN_WINDOW_VITE_NAME: string
 
 let mainWindow: BrowserWindow | null = null
 
+const resolveWindowIcon = (): string | Electron.NativeImage | undefined => {
+  const icoPath = path.join(__dirname, '../../app-icon.ico')
+  const pngPath = path.join(__dirname, '../../app-icon.png')
+  const candidates = process.platform === 'linux' ? [pngPath, icoPath] : [icoPath, pngPath]
+  return candidates.find((iconPath) => fs.existsSync(iconPath))
+}
+
 const createWindow = () => {
+  const icon = resolveWindowIcon()
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
@@ -72,7 +80,7 @@ const createWindow = () => {
     show: false,
     backgroundColor: '#000000',
     title: 'Biome',
-    icon: path.join(__dirname, '../../app-icon.ico'),
+    icon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

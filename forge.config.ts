@@ -8,7 +8,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './app-icon',
-    extraResource: ['./server-components', './seeds', './app-icon.ico']
+    extraResource: ['./server-components', './seeds', './app-icon.ico', './app-icon.png']
   },
   makers: [new MakerSquirrel({ setupIcon: './app-icon.ico' }), new MakerDMG({}), new MakerDeb({})],
   plugins: [
