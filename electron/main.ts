@@ -72,7 +72,7 @@ const createWindow = () => {
     show: false,
     backgroundColor: '#000000',
     title: 'Biome',
-    icon: path.join(__dirname, '../../app-icon.png'),
+    icon: path.join(__dirname, '../../app-icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
