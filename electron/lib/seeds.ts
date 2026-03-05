@@ -1,8 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getSeedsDefaultDir, getResourcePath } from './paths.js'
-
-const SUPPORTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
+import { SUPPORTED_IMAGE_EXTENSIONS } from './constants.js'
 
 /** Copy bundled default seeds to the engine seeds directory on first run */
 export async function setupBundledSeeds(): Promise<void> {

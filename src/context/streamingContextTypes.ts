@@ -1,4 +1,3 @@
-import type { MutableRefObject } from 'react'
 import type { EngineStatus, LoadingStage } from '../types/app'
 
 export type StreamingStats = {
@@ -32,11 +31,6 @@ export type StreamingContextValue = {
   setShowStats: (value: boolean) => void
   stats: StreamingStats
 
-  sessionRemaining: null
-  sessionExpired: boolean
-  sessionTimeDisplay: null
-  gpuAssignment: null
-  setGpuAssignment: () => void
   endpointUrl: string | null
   setEndpointUrl: (url: string | null) => void
 
@@ -80,6 +74,5 @@ export type StreamingContextValue = {
   exitPointerLock: () => void
   registerContainerRef: (element: HTMLDivElement | null) => void
   registerCanvasRef: (element: HTMLCanvasElement | null) => void
-  registerVideoRef: () => void
   handleContainerClick: () => void
 }

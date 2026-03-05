@@ -501,12 +501,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     showStats,
     setShowStats,
 
-    // Local mode - no session management
-    sessionRemaining: null,
-    sessionExpired: false,
-    sessionTimeDisplay: null,
-    gpuAssignment: null,
-    setGpuAssignment: () => {},
     endpointUrl,
     setEndpointUrl,
 
@@ -559,7 +553,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     exitPointerLock,
     registerContainerRef,
     registerCanvasRef,
-    registerVideoRef: () => {},
     handleContainerClick
   }
 

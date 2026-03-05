@@ -135,7 +135,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               variant="loading-inline"
               disableLiveIpc={true}
               externalLogs={logsWithError}
-              title={isServerMode ? 'HOSTED SERVER OUTPUT' : undefined}
+              title={isServerMode ? 'SERVER OUTPUT' : undefined}
               headerAction={
                 errorDetail ? (
                   <button

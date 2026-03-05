@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
-import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir, SERVER_COMPONENT_FILES } from '../lib/paths.js'
+import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions } from '../lib/platform.js'
 import {
@@ -14,42 +14,8 @@ import {
   clearServerState,
   stopServerSync
 } from '../lib/serverState.js'
-
-async function runUvSyncWithMirroredLogs(uvBinary: string, cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(uvBinary, ['sync', '--verbose', '--index-strategy', 'unsafe-best-match'], {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      ...getHiddenWindowOptions()
-    })
-
-    const tail: string[] = []
-    const onLine = (line: string) => {
-      console.log(`[SERVER] [UV] ${line}`)
-      tail.push(line)
-      if (tail.length > 80) tail.shift()
-    }
-
-    if (child.stdout) {
-      const rl = createInterface({ input: child.stdout })
-      rl.on('line', (line) => onLine(line))
-    }
-    if (child.stderr) {
-      const rl = createInterface({ input: child.stderr })
-      rl.on('line', (line) => onLine(line))
-    }
-
-    child.on('error', (err) => reject(err))
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve()
-        return
-      }
-      reject(new Error(`uv sync failed (exit ${code ?? 'unknown'})\n${tail.join('\n')}`))
-    })
-  })
-}
+import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
+import { copyServerComponentFiles } from '../lib/serverFiles.js'
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -71,15 +37,7 @@ export function registerServerIpc(): void {
     }
 
     // Force-overwrite bundled server components
-    const { getResourcePath } = await import('../lib/paths.js')
-    const resourceDir = getResourcePath('server-components')
-    for (const filename of SERVER_COMPONENT_FILES) {
-      const srcPath = path.join(resourceDir, filename)
-      const destPath = path.join(engineDir, filename)
-      if (fs.existsSync(srcPath)) {
-        fs.copyFileSync(srcPath, destPath)
-      }
-    }
+    copyServerComponentFiles(engineDir)
 
     // Verify dependencies
     if (!fs.existsSync(path.join(engineDir, '.venv'))) {
@@ -99,10 +57,14 @@ export function registerServerIpc(): void {
     // Run uv sync before starting
     console.log('[ENGINE] Syncing dependencies...')
     try {
-      await runUvSyncWithMirroredLogs(uvBinary, engineDir, {
-        ...process.env,
-        ...uvEnv
-      })
+      await runUvSyncWithMirroredLogs(
+        uvBinary,
+        engineDir,
+        { ...process.env, ...uvEnv },
+        {
+          logPrefix: '[SERVER] [UV]'
+        }
+      )
       console.log('[ENGINE] Dependencies synced successfully')
     } catch (err) {
       console.log('[ENGINE] Warning: uv sync failed:', err)

@@ -5,14 +5,14 @@ import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import MenuButton from './ui/MenuButton'
-import SettingsButton from './ui/SettingsButton'
 import SettingsSection from './ui/SettingsSection'
 import SettingsToggle from './ui/SettingsToggle'
 import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import ConfirmModal from './ui/ConfirmModal'
-import ServerLogDisplay from './ServerLogDisplay'
+import WorldEngineSection from './WorldEngineSection'
+import EngineInstallModal from './EngineInstallModal'
 
 type MenuModelOption = {
   id: string
@@ -30,8 +30,6 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     checkEngineStatus,
     setupEngine,
     engineSetupInProgress,
-    setupProgress,
-    engineSetupError,
     isStreaming,
     mouseSensitivity,
     setMouseSensitivity
@@ -58,9 +56,6 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const [showFixModal, setShowFixModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
-  const [installLogs, setInstallLogs] = useState<string[]>([])
-  const [isExportingInstallDiagnostics, setIsExportingInstallDiagnostics] = useState(false)
-  const [installExportStatus, setInstallExportStatus] = useState<string | null>(null)
 
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -200,46 +195,12 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
 
   const handleConfirmFixEngine = async () => {
     setShowFixModal(false)
-    setInstallExportStatus(null)
-    setInstallLogs([])
     setShowLocalInstallLog(true)
     try {
       await setupEngine()
       await checkEngineStatus()
     } catch {
       // Error is surfaced by engineSetupError and server logs.
-    }
-  }
-
-  const handleExportInstallDiagnostics = async () => {
-    if (isExportingInstallDiagnostics) return
-
-    setIsExportingInstallDiagnostics(true)
-    setInstallExportStatus(null)
-    try {
-      const meta = await invoke('get-runtime-diagnostics-meta')
-      const report = {
-        generated_at: new Date().toISOString(),
-        runtime: meta,
-        install_state: {
-          engine_setup_in_progress: engineSetupInProgress,
-          setup_progress: setupProgress,
-          engine_setup_error: engineSetupError
-        },
-        logs: installLogs
-      }
-
-      const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
-      if (result.canceled) {
-        setInstallExportStatus('Export canceled')
-      } else {
-        setInstallExportStatus('Diagnostics exported')
-      }
-    } catch (exportErr) {
-      const message = exportErr instanceof Error ? exportErr.message : 'Export failed'
-      setInstallExportStatus(message)
-    } finally {
-      setIsExportingInstallDiagnostics(false)
     }
   }
 
@@ -277,33 +238,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
           )}
 
           {menuEngineMode === 'standalone' && (
-            <SettingsSection
-              title="World Engine"
-              description={
-                <span className="inline-flex items-center gap-[0.71cqh]">
-                  is the local engine healthy?{' '}
-                  {engineReady === null ? (
-                    'checking...'
-                  ) : engineReady ? (
-                    <>
-                      yes
-                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
-                    </>
-                  ) : (
-                    <>
-                      no
-                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
-                    </>
-                  )}
-                </span>
-              }
-            >
-              <div className="flex justify-start">
-                <SettingsButton variant="ghost" onClick={() => setShowFixModal(true)}>
-                  Reinstall
-                </SettingsButton>
-              </div>
-            </SettingsSection>
+            <WorldEngineSection engineReady={engineReady} onReinstallClick={() => setShowFixModal(true)} />
           )}
 
           <SettingsSection title="World Model" description="which Overworld model will simulate your world?">
@@ -369,57 +304,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         />
       )}
 
-      {showLocalInstallLog && (
-        <div className="absolute inset-0 z-[12] pointer-events-none flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm">
-          <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
-            <ServerLogDisplay
-              variant="loading-inline"
-              title="WORLD ENGINE INSTALL"
-              showProgress={engineSetupInProgress}
-              progressMessage={
-                engineSetupInProgress
-                  ? setupProgress || 'Installing World Engine...'
-                  : engineSetupError
-                    ? 'World Engine installation failed.'
-                    : 'World Engine installation complete.'
-              }
-              errorMessage={engineSetupError}
-              showDismiss={false}
-              onLogsChange={setInstallLogs}
-              headerAction={
-                !engineSetupInProgress ? (
-                  <div className="flex items-center gap-[0.8cqh]">
-                    {engineSetupError && (
-                      <button
-                        type="button"
-                        className="loading-inline-logs-close"
-                        onClick={() => void handleExportInstallDiagnostics()}
-                        disabled={isExportingInstallDiagnostics}
-                        title="Export installation logs and environment diagnostics"
-                      >
-                        {isExportingInstallDiagnostics ? 'Exporting...' : 'Export Logs'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="loading-inline-logs-close"
-                      onClick={() => setShowLocalInstallLog(false)}
-                      aria-label="Close install logs"
-                    >
-                      Close
-                    </button>
-                  </div>
-                ) : null
-              }
-            />
-            {installExportStatus && (
-              <div className="mt-[0.45cqh] text-right font-serif text-[2cqh] leading-[1.1] text-[rgba(245,249,255,0.78)]">
-                {installExportStatus}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {showLocalInstallLog && <EngineInstallModal onClose={() => setShowLocalInstallLog(false)} />}
     </div>
   )
 }

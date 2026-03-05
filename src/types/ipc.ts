@@ -39,7 +39,6 @@ export type IpcCommandMap = {
 
   // Models
   'list-waypoint-models': { args: []; return: string[] }
-  'list-local-waypoint-models': { args: []; return: string[] }
   'list-model-availability': { args: [modelIds: string[]]; return: ModelAvailability[] }
 
   // Engine
@@ -47,10 +46,7 @@ export type IpcCommandMap = {
   'install-uv': { args: []; return: string }
   'setup-server-components': { args: []; return: string }
   'sync-engine-dependencies': { args: []; return: string }
-  'setup-engine': { args: []; return: string }
   'unpack-server-files': { args: [force: boolean]; return: string }
-  'get-engine-dir-path': { args: []; return: string }
-  'open-engine-dir': { args: []; return: void }
 
   // Server
   'start-engine-server': { args: [port: number]; return: string }

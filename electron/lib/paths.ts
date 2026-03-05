@@ -28,7 +28,7 @@ export function getUvDir(): string {
 }
 
 /** Get the base seeds directory (inside engine dir) */
-export function getSeedsBaseDir(): string {
+function getSeedsBaseDir(): string {
   return path.join(getEngineDir(), 'seeds')
 }
 

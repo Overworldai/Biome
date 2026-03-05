@@ -82,7 +82,7 @@ function validateDefaultPinnedScenes(): void {
   }
 }
 
-export function readSettingsSync(): Settings {
+function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
 
   if (!fs.existsSync(settingsPath)) {

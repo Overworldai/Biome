@@ -2,8 +2,7 @@ import { ipcMain, app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getExeDir, getResourcePath } from '../lib/paths.js'
-
-const SUPPORTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
+import { SUPPORTED_IMAGE_EXTENSIONS } from '../lib/constants.js'
 
 /**
  * Resolve the backgrounds directory used by the UI slideshow.

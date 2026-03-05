@@ -56,17 +56,6 @@ export function registerModelsIpc(): void {
     return listWaypointModels()
   })
 
-  ipcMain.handle('list-local-waypoint-models', async () => {
-    const models = await listWaypointModels()
-    const hubDir = getHfHubCacheDir()
-
-    if (!fs.existsSync(hubDir)) {
-      return []
-    }
-
-    return models.filter((id) => isModelCachedInHfHub(id, hubDir))
-  })
-
   ipcMain.handle('list-model-availability', async (_event, modelIds: string[]) => {
     const hubDir = getHfHubCacheDir()
 
