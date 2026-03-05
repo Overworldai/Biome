@@ -5,6 +5,8 @@ import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
 import { VortexProvider } from './context/VortexContext'
 import { useAppStartup } from './hooks/useAppStartup'
+import { invoke } from './bridge'
+import type { AppUpdateInfo } from './types/ipc'
 import VideoContainer from './components/VideoContainer'
 import MenuSettingsView from './components/MenuSettingsView'
 import BackgroundSlideshow from './components/BackgroundSlideshow'
@@ -18,6 +20,7 @@ import PauseOverlay from './components/PauseOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import ShutdownOverlay from './components/ShutdownOverlay'
 import WindowControls from './components/WindowControls'
+import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 import { PORTAL_SPARKS_DEBUG, MENU_VIEW, type MenuViewKey } from './constants'
@@ -32,6 +35,7 @@ const AppShell = () => {
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
   const [isStreamingReveal, setIsStreamingReveal] = useState(false)
+  const [availableUpdate, setAvailableUpdate] = useState<AppUpdateInfo | null>(null)
   const prevStreamingUiRef = useRef(false)
   const {
     state: portalState,
@@ -84,6 +88,28 @@ const AppShell = () => {
   const loadingLayerStyle = {
     '--vortex-progress-percent': loadingProgressPercent.toString()
   } as CSSProperties
+
+  useEffect(() => {
+    let cancelled = false
+
+    const checkForUpdate = async () => {
+      try {
+        const result = await invoke('check-for-app-update')
+        if (cancelled) return
+        if (result.update_available) {
+          setAvailableUpdate(result)
+        }
+      } catch (error) {
+        console.warn('[UPDATES] Failed to check for update:', error)
+      }
+    }
+
+    void checkForUpdate()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (isStreamingUi && !prevStreamingUiRef.current) {
@@ -281,6 +307,22 @@ const AppShell = () => {
         <ShutdownOverlay />
       </div>
       {PORTAL_SPARKS_DEBUG && <PortalSparksConfigurator />}
+      {availableUpdate && (
+        <ConfirmModal
+          title="Update Available"
+          description={`A new Biome release is available (${availableUpdate.latest_version}). You are on ${availableUpdate.current_version}.`}
+          onCancel={() => setAvailableUpdate(null)}
+          onConfirm={() => {
+            const releaseUrl = availableUpdate.release_url
+            if (releaseUrl) {
+              window.open(releaseUrl, '_blank', 'noopener,noreferrer')
+            }
+            setAvailableUpdate(null)
+          }}
+          confirmLabel="Upgrade"
+          cancelLabel="Later"
+        />
+      )}
     </div>
   )
 }
