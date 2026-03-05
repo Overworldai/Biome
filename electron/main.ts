@@ -128,18 +128,24 @@ const createWindow = () => {
   })
 }
 
-app.whenReady().then(async () => {
-  registerAllIpc()
+app
+  .whenReady()
+  .then(async () => {
+    // Setup bundled seeds before IPC registration.
+    // registerSettingsIpc validates default pinned scenes during registration.
+    try {
+      await setupBundledSeeds()
+    } catch (err) {
+      console.error('[SEEDS] Warning: Failed to setup bundled seeds:', err)
+    }
 
-  // Setup bundled seeds on first run
-  try {
-    await setupBundledSeeds()
-  } catch (err) {
-    console.error('[SEEDS] Warning: Failed to setup bundled seeds:', err)
-  }
-
-  createWindow()
-})
+    registerAllIpc()
+    createWindow()
+  })
+  .catch((err) => {
+    console.error('[APP] Failed during startup:', err)
+    app.quit()
+  })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
