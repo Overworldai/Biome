@@ -45,6 +45,10 @@ N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
 
+# Seed frame resolutions (H, W) per model type
+WP1_SEED_SIZE = (360, 640)
+WP15_SEED_SIZE = (512, 1024)
+
 BUTTON_CODES = {}
 # A-Z keys
 for i in range(65, 91):
@@ -108,6 +112,8 @@ class WorldEngineManager:
         self.model_uri = DEFAULT_MODEL_URI
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
+        self.is_multiframe = False
+        self.seed_target_size = WP1_SEED_SIZE
         self._progress_callback = None
         self._progress_loop = None
         # Prevent concurrent model loads from overlapping across websocket sessions.
@@ -189,11 +195,11 @@ class WorldEngineManager:
         self.engine = None
         self.seed_frame = None
         self.engine_warmed_up = False
+        self.is_multiframe = False
+        self.seed_target_size = WP1_SEED_SIZE
         self._free_cuda_memory_sync()
 
-    def _load_seed_from_file_sync(
-        self, file_path: str, target_size: tuple[int, int] = (360, 640)
-    ) -> torch.Tensor:
+    def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
         """Synchronous helper to load a seed frame from a file path."""
         try:
             img = Image.open(file_path).convert("RGB")
@@ -203,28 +209,27 @@ class WorldEngineManager:
                 torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             )
             frame = F.interpolate(
-                img_tensor, size=target_size, mode="bilinear", align_corners=False
+                img_tensor, size=self.seed_target_size, mode="bilinear", align_corners=False
             )[0]
-            return (
+            frame = (
                 frame.to(dtype=torch.uint8, device=DEVICE)
                 .permute(1, 2, 0)
                 .contiguous()
             )
+            if self.is_multiframe:
+                frame = frame.unsqueeze(0).expand(4, -1, -1, -1).contiguous()
+            return frame
         except Exception as e:
             logger.error(f"Failed to load seed from file {file_path}: {e}")
             return None
 
-    async def load_seed_from_file(
-        self, file_path: str, target_size: tuple[int, int] = (360, 640)
-    ) -> torch.Tensor:
+    async def load_seed_from_file(self, file_path: str) -> torch.Tensor:
         """Load a seed frame from a file path (async wrapper)."""
         return await self._run_on_cuda_thread(
-            lambda: self._load_seed_from_file_sync(file_path, target_size)
+            lambda: self._load_seed_from_file_sync(file_path)
         )
 
-    def _load_seed_from_base64_sync(
-        self, base64_data: str, target_size: tuple[int, int] = (360, 640)
-    ) -> torch.Tensor:
+    def _load_seed_from_base64_sync(self, base64_data: str) -> torch.Tensor:
         """Synchronous helper to load a seed frame from base64 encoded data."""
         try:
             img_data = base64.b64decode(base64_data)
@@ -235,23 +240,24 @@ class WorldEngineManager:
                 torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             )
             frame = F.interpolate(
-                img_tensor, size=target_size, mode="bilinear", align_corners=False
+                img_tensor, size=self.seed_target_size, mode="bilinear", align_corners=False
             )[0]
-            return (
+            frame = (
                 frame.to(dtype=torch.uint8, device=DEVICE)
                 .permute(1, 2, 0)
                 .contiguous()
             )
+            if self.is_multiframe:
+                frame = frame.unsqueeze(0).expand(4, -1, -1, -1).contiguous()
+            return frame
         except Exception as e:
             logger.error(f"Failed to load seed from base64: {e}")
             return None
 
-    async def load_seed_from_base64(
-        self, base64_data: str, target_size: tuple[int, int] = (360, 640)
-    ) -> torch.Tensor:
+    async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor:
         """Load a seed frame from base64 encoded data (async wrapper)."""
         return await self._run_on_cuda_thread(
-            lambda: self._load_seed_from_base64_sync(base64_data, target_size)
+            lambda: self._load_seed_from_base64_sync(base64_data)
         )
 
     async def load_engine(self, model_uri: str | None = None):
@@ -297,9 +303,6 @@ class WorldEngineManager:
             logger.info(f"      N_FRAMES: {N_FRAMES}")
             logger.info(f"      Prompt: {self.current_prompt[:60]}...")
 
-            # Model config overrides
-            # scheduler_sigmas: diffusion denoising schedule (MUST end with 0.0)
-            # ae_uri: VAE model for encoding/decoding frames
             model_start = time.perf_counter()
             dtype_attempts = [torch.bfloat16, torch.float16]
             new_engine = None
@@ -313,11 +316,6 @@ class WorldEngineManager:
                         return WorldEngine(
                             requested_model,
                             device=DEVICE,
-                            model_config_overrides={
-                                "n_frames": N_FRAMES,
-                                "ae_uri": "OpenWorldLabs/owl_vae_f16_c16_distill_v0_nogan",
-                                "scheduler_sigmas": [1.0, 0.8, 0.2, 0.0],
-                            },
                             quant=QUANT,
                             dtype=dtype,
                         )
@@ -349,6 +347,20 @@ class WorldEngineManager:
             )
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
+
+            # Detect model type from engine config
+            model_type = getattr(self.engine.model_cfg, "model_type", None)
+            if model_type is not None and model_type != "waypoint-1.5":
+                raise RuntimeError(
+                    f"Unsupported model_type '{model_type}'. Only 'waypoint-1.5' and legacy (no model_type) are supported."
+                )
+            self.is_multiframe = model_type == "waypoint-1.5"
+            self.seed_target_size = WP15_SEED_SIZE if self.is_multiframe else WP1_SEED_SIZE
+            logger.info(
+                f"[2/4] Model type: {'waypoint-1.5 (multi-frame)' if self.is_multiframe else 'legacy (single-frame)'}"
+            )
+            logger.info(f"[2/4] Seed target size: {self.seed_target_size}")
+
             self._report_progress(SESSION_LOADING_DONE)
             self.model_uri = requested_model
 

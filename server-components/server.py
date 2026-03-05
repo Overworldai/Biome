@@ -1382,8 +1382,11 @@ async def websocket_endpoint(websocket: WebSocket):
         await world_engine.init_session()
 
         # Send initial frame so client has something to display
+        initial_display_frame = (
+            world_engine.seed_frame[0] if world_engine.is_multiframe else world_engine.seed_frame
+        )
         jpeg = await asyncio.to_thread(
-            world_engine.frame_to_jpeg, world_engine.seed_frame
+            world_engine.frame_to_jpeg, initial_display_frame
         )
         await send_json(
             {
@@ -1567,22 +1570,65 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     t0 = time.perf_counter()
                     try:
-                        frame = await world_engine.generate_frame(ctrl)
+                        result = await world_engine.generate_frame(ctrl)
                         gen_time = (time.perf_counter() - t0) * 1000
 
-                        session.frame_count += 1
+                        if world_engine.is_multiframe:
+                            # wp-1.5: result is [4,H,W,3], send each frame individually
+                            frame_interval = gen_time / 4 / 1000  # seconds
+                            for i in range(4):
+                                session.frame_count += 1
+                                frame = result[i]
+                                jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
+                                await send_json(
+                                    {
+                                        "type": "frame",
+                                        "data": base64.b64encode(jpeg).decode("ascii"),
+                                        "frame_id": session.frame_count,
+                                        "client_ts": client_ts,
+                                        "gen_ms": gen_time / 4,
+                                    }
+                                )
 
-                        # Encode and send frame with timing info
-                        jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
-                        await send_json(
-                            {
-                                "type": "frame",
-                                "data": base64.b64encode(jpeg).decode("ascii"),
-                                "frame_id": session.frame_count,
-                                "client_ts": client_ts,
-                                "gen_ms": gen_time,
-                            }
-                        )
+                                if i < 3:
+                                    await asyncio.sleep(frame_interval)
+                                    # Drain control messages during wait to stay responsive
+                                    try:
+                                        drained = await get_latest_control()
+                                        if drained is not None:
+                                            drained_type = drained.get("type", "control")
+                                            if drained_type == "control":
+                                                # Update control for next batch
+                                                buttons = {
+                                                    BUTTON_CODES[b.upper()]
+                                                    for b in drained.get("buttons", [])
+                                                    if b.upper() in BUTTON_CODES
+                                                }
+                                                mouse_dx = float(drained.get("mouse_dx", 0))
+                                                mouse_dy = float(drained.get("mouse_dy", 0))
+                                                client_ts = drained.get("ts", 0)
+                                                ctrl = world_engine.CtrlInput(
+                                                    button=buttons, mouse=(mouse_dx, mouse_dy)
+                                                )
+                                            elif drained_type == "pause":
+                                                paused = True
+                                                logger.info("[RECV] Paused (during multi-frame send)")
+                                                break
+                                    except WebSocketDisconnect:
+                                        raise
+                        else:
+                            # Legacy single-frame mode
+                            session.frame_count += 1
+                            jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, result)
+                            await send_json(
+                                {
+                                    "type": "frame",
+                                    "data": base64.b64encode(jpeg).decode("ascii"),
+                                    "frame_id": session.frame_count,
+                                    "client_ts": client_ts,
+                                    "gen_ms": gen_time,
+                                }
+                            )
 
                         # Logging
                         if session.frame_count % 60 == 0:
