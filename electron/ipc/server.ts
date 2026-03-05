@@ -93,17 +93,6 @@ export function registerServerIpc(): void {
       BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
     }
 
-    // Pass through HuggingFace token from environment
-    const hfToken = process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || ''
-
-    if (hfToken) {
-      console.log(`[ENGINE] HuggingFace token configured (${Math.min(hfToken.length, 4)}... chars)`)
-      serverEnv.HF_TOKEN = hfToken
-      serverEnv.HUGGING_FACE_HUB_TOKEN = hfToken
-    } else {
-      console.log('[ENGINE] Warning: No HuggingFace token configured')
-    }
-
     // Create log file path
     const logFilePath = path.join(engineDir, 'server.log')
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself

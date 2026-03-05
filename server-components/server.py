@@ -33,6 +33,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+# Resolve HuggingFace token: env var > CLI-cached token file.
+# Biome overrides HF_HOME to keep model cache inside world_engine/, which means
+# the huggingface_hub library won't find the user's default token at
+# ~/.cache/huggingface/token. Read it manually as a fallback.
+if not os.environ.get("HF_TOKEN") and not os.environ.get("HUGGING_FACE_HUB_TOKEN"):
+    _hf_token_path = Path.home() / ".cache" / "huggingface" / "token"
+    if _hf_token_path.is_file():
+        _token = _hf_token_path.read_text().strip()
+        if _token:
+            os.environ["HF_TOKEN"] = _token
+            print(f"[BIOME] HF token loaded from {_hf_token_path}", flush=True)
+    else:
+        print("[BIOME] Warning: No HuggingFace token found (set HF_TOKEN or run `huggingface-cli login`)", flush=True)
+
 # Reduce CUDA allocator fragmentation during repeated model loads/switches.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
