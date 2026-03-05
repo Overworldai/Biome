@@ -107,6 +107,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const lastAppliedModelRef = useRef<string | null>(null)
   const warmBootstrapSentRef = useRef(false)
   const warmFlowCancelledRef = useRef(false)
+  const loadingFailureStopHandledRef = useRef(false)
 
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
@@ -313,6 +314,37 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       warmFlowCancelledRef.current = true
     }
   }, [loadingConnectionJobSeq])
+
+  useEffect(() => {
+    const loadingFailed =
+      state === states.LOADING && (connectionState === 'error' || connectionState === 'disconnected')
+
+    if (!loadingFailed || !engineError) {
+      loadingFailureStopHandledRef.current = false
+      return
+    }
+    if (!isStandaloneMode || !isServerRunning) return
+    if (loadingFailureStopHandledRef.current) return
+
+    loadingFailureStopHandledRef.current = true
+    ;(async () => {
+      log.info('Loading failure detected - stopping standalone server')
+      try {
+        await stopServer()
+      } catch (stopErr) {
+        log.error('Failed to stop standalone server after loading failure:', stopErr)
+      }
+    })()
+  }, [
+    state,
+    states.LOADING,
+    connectionState,
+    engineError,
+    isStandaloneMode,
+    isServerRunning,
+    stopServer,
+    checkEngineStatus
+  ])
 
   useEffect(() => {
     const { effects } = lifecycleState

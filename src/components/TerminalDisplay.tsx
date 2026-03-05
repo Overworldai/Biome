@@ -14,12 +14,13 @@ type TerminalDisplayProps = {
 }
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
-  const { connectionState, statusStage, engineError, error, cancelConnection, wsLogs, wsAllLogs } = useStreaming()
+  const { connectionState, statusStage, engineError, error, cancelConnection, wsLogs } = useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode } = useSettings()
   const [showLogsPanel, setShowLogsPanel] = useState(false)
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [displayedLogs, setDisplayedLogs] = useState<string[]>([])
   const logsPanelHeight = 260
 
   const errorDetail = engineError || error
@@ -30,17 +31,6 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     const lines = errorDetail.split('\n').filter((l) => l.trim().length > 0)
     return lines.length > 0 ? lines[0].trim() : errorDetail
   }, [errorDetail])
-
-  // Append error to logs so it's visible in the logs panel
-  const logsWithError = useMemo(() => {
-    if (!errorDetail) return wsLogs
-    return [...wsLogs, `[ERROR] ${errorDetail}`]
-  }, [wsLogs, errorDetail])
-
-  const allLogsWithError = useMemo(() => {
-    if (!errorDetail) return wsAllLogs
-    return [...wsAllLogs, `[ERROR] ${errorDetail}`]
-  }, [wsAllLogs, errorDetail])
 
   useEffect(() => {
     setErrorMode(!!errorDetail)
@@ -80,8 +70,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   }
 
   const buildDiagnosticsPayload = useCallback(async () => {
+    const activeError = errorDetail
+    const logs = activeError ? [...displayedLogs, `[ERROR] ${activeError}`] : displayedLogs
     const meta = await invoke('get-runtime-diagnostics-meta')
     const system = await invoke('get-system-diagnostics')
+    const serverProcessLogTail = isServerMode ? null : await invoke('read-server-log-tail', 260)
     return {
       generated_at: new Date().toISOString(),
       runtime: meta,
@@ -91,13 +84,25 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
         status_stage: statusStage,
         status_text: statusText,
         progress_percent: progressPercent,
+        active_error: activeError,
         engine_error: engineError,
         websocket_error: error,
         is_server_mode: isServerMode
       },
-      logs: allLogsWithError
+      logs,
+      server_process_log_tail: serverProcessLogTail
     }
-  }, [allLogsWithError, connectionState, engineError, error, isServerMode, progressPercent, statusStage, statusText])
+  }, [
+    connectionState,
+    displayedLogs,
+    engineError,
+    error,
+    errorDetail,
+    isServerMode,
+    progressPercent,
+    statusStage,
+    statusText
+  ])
 
   return (
     <>
@@ -139,10 +144,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
           >
             <ServerLogDisplay
               variant="loading-inline"
-              disableLiveIpc={true}
-              externalLogs={logsWithError}
               errorMessage={errorDetail}
               title={isServerMode ? 'SERVER OUTPUT' : undefined}
+              externalLogs={isServerMode ? wsLogs : null}
+              pollLogFileTail={!isServerMode}
+              onLogsChange={setDisplayedLogs}
               reportContext={{
                 flow: 'loading',
                 connection_state: connectionState,

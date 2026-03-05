@@ -18,14 +18,17 @@ print(f"[BIOME] Starting server...", flush=True)
 
 import asyncio
 import base64
+import faulthandler
 import hashlib
 import json
 import logging
 import os
 import pickle
 import shutil
+import signal
 import threading
 import time
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -41,7 +44,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("biome_server")
 
-HOSTED_LOG_FILE = Path(__file__).with_name("server-hosted.log")
+SERVER_LOG_FILE = Path(
+    os.environ.get("BIOME_SERVER_LOG_PATH", str(Path(__file__).with_name("server.log")))
+)
 _log_file_lock = threading.Lock()
 
 
@@ -76,14 +81,61 @@ class TeeStream:
         return getattr(self._stream, "encoding", "utf-8")
 
 
-# Hosted logs file receives both logger output and direct stdout/stderr writes.
-_hosted_log_fp = open(HOSTED_LOG_FILE, "a", encoding="utf-8", buffering=1)
+# Log file receives both logger output and direct stdout/stderr writes.
+SERVER_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+_hosted_log_fp = open(SERVER_LOG_FILE, "a", encoding="utf-8", buffering=1)
 sys.stdout = TeeStream(sys.stdout, _hosted_log_fp)
 sys.stderr = TeeStream(sys.stderr, _hosted_log_fp)
 
-_file_log_handler = logging.FileHandler(HOSTED_LOG_FILE, mode="a", encoding="utf-8")
+_file_log_handler = logging.FileHandler(SERVER_LOG_FILE, mode="a", encoding="utf-8")
 _file_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
 logging.getLogger().addHandler(_file_log_handler)
+
+
+def _install_crash_logging_hooks() -> None:
+    """Force uncaught exceptions and fatal interpreter crashes into server.log."""
+    try:
+        faulthandler.enable(file=_hosted_log_fp, all_threads=True)
+    except Exception as e:
+        print(f"[BIOME] Failed to enable faulthandler: {e}", file=sys.stderr, flush=True)
+
+    try:
+        if hasattr(signal, "SIGTERM") and hasattr(faulthandler, "register"):
+            faulthandler.register(signal.SIGTERM, file=_hosted_log_fp, all_threads=True, chain=True)
+    except Exception as e:
+        print(f"[BIOME] Failed to register SIGTERM faulthandler hook: {e}", file=sys.stderr, flush=True)
+
+    def _log_uncaught_exception(exc_type, exc_value, exc_tb):
+        print("[BIOME] Uncaught exception:", file=sys.stderr, flush=True)
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stderr)
+        sys.stderr.flush()
+        _hosted_log_fp.flush()
+
+    def _log_thread_exception(args):
+        print(f"[BIOME] Uncaught thread exception in {args.thread.name}:", file=sys.stderr, flush=True)
+        traceback.print_exception(args.exc_type, args.exc_value, args.exc_traceback, file=sys.stderr)
+        sys.stderr.flush()
+        _hosted_log_fp.flush()
+
+    def _log_unraisable(unraisable):
+        print("[BIOME] Unraisable exception:", file=sys.stderr, flush=True)
+        traceback.print_exception(
+            unraisable.exc_type,
+            unraisable.exc_value,
+            unraisable.exc_traceback,
+            file=sys.stderr,
+        )
+        if unraisable.err_msg:
+            print(f"[BIOME] Unraisable context: {unraisable.err_msg}", file=sys.stderr, flush=True)
+        sys.stderr.flush()
+        _hosted_log_fp.flush()
+
+    sys.excepthook = _log_uncaught_exception
+    threading.excepthook = _log_thread_exception
+    sys.unraisablehook = _log_unraisable
+
+
+_install_crash_logging_hooks()
 
 
 print("[BIOME] Basic imports done", flush=True)
@@ -192,32 +244,20 @@ startup_stages: list[dict] = []  # accumulated stage messages
 # WS clients waiting for startup progress register a Queue here
 ws_startup_waiters: list[asyncio.Queue] = []
 
-# ============================================================================
-# WebSocket log broadcast
-# ============================================================================
-
-_log_subscribers: set[asyncio.Queue] = set()
+LOG_TAIL_INITIAL_LINES = 220
+LOG_TAIL_POLL_INTERVAL_SECONDS = 0.25
 
 
-class _WsBroadcastHandler(logging.Handler):
-    """Push log records to all subscribed WS connections."""
-
-    def emit(self, record: logging.LogRecord) -> None:
-        line = self.format(record)
-        level = record.levelname.lower()
-        dead: list[asyncio.Queue] = []
-        for q in list(_log_subscribers):
-            try:
-                q.put_nowait({"type": "log", "line": line, "level": level})
-            except asyncio.QueueFull:
-                dead.append(q)
-        for q in dead:
-            _log_subscribers.discard(q)
-
-
-_ws_log_handler = _WsBroadcastHandler()
-_ws_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
-logging.getLogger().addHandler(_ws_log_handler)
+def _read_log_tail_lines(max_lines: int) -> list[str]:
+    """Read last non-empty lines from the canonical server log file."""
+    if max_lines <= 0:
+        return []
+    try:
+        with open(SERVER_LOG_FILE, "r", encoding="utf-8", errors="replace") as fp:
+            lines = [line.rstrip("\r\n") for line in fp if line.strip()]
+        return lines[-max_lines:]
+    except Exception:
+        return []
 
 # ============================================================================
 # Seed Management Configuration
@@ -735,8 +775,6 @@ async def dispatch_request(msg: dict, websocket: WebSocket) -> dict:
         return await _handle_seeds_delete(msg)
     elif req_type == "seeds_rescan":
         return await _handle_seeds_rescan(msg)
-    elif req_type == "subscribe_logs":
-        return await _handle_subscribe_logs(msg, websocket)
     else:
         return {"success": False, "error": f"Unknown request type: {req_type}"}
 
@@ -1031,19 +1069,6 @@ async def _handle_seeds_rescan(msg: dict) -> dict:
         }
 
 
-# Per-websocket log queues are stored by dispatch; the subscribe handler just
-# registers the queue that was pre-created for this websocket connection.
-_ws_log_queue_map: dict[int, asyncio.Queue] = {}  # id(websocket) -> queue
-
-
-async def _handle_subscribe_logs(msg: dict, websocket: WebSocket) -> dict:
-    ws_id = id(websocket)
-    if ws_id in _ws_log_queue_map:
-        q = _ws_log_queue_map[ws_id]
-        _log_subscribers.add(q)
-    return {"success": True, "data": {}}
-
-
 # ============================================================================
 # WorldEngine WebSocket
 # ============================================================================
@@ -1075,7 +1100,6 @@ async def websocket_endpoint(websocket: WebSocket):
             {"type": "resume"}
             # Request/response (includes req_id):
             {"type": "seeds_list", "req_id": "..."}
-            {"type": "subscribe_logs", "req_id": "..."}
             ...etc
 
     Status codes: waiting_for_seed, init, loading, ready, reset, warmup, startup
@@ -1085,25 +1109,45 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
 
-    # Create a log queue for this connection and auto-subscribe to logs
-    log_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
-    ws_id = id(websocket)
-    _ws_log_queue_map[ws_id] = log_queue
-    _log_subscribers.add(log_queue)
-
-    # Background task: drain log queue and send to client (start immediately)
-    async def _drain_log_queue():
+    # Background task: stream canonical server.log content to the client.
+    async def _stream_server_log_file():
+        cursor = 0
         try:
+            initial_lines = _read_log_tail_lines(LOG_TAIL_INITIAL_LINES)
+            for line in initial_lines:
+                await websocket.send_text(json.dumps({"type": "log", "line": line, "level": "info"}))
+
+            if SERVER_LOG_FILE.exists():
+                cursor = SERVER_LOG_FILE.stat().st_size
+
             while True:
-                log_msg = await log_queue.get()
-                try:
-                    await websocket.send_text(json.dumps(log_msg))
-                except Exception:
-                    break
+                await asyncio.sleep(LOG_TAIL_POLL_INTERVAL_SECONDS)
+                if not SERVER_LOG_FILE.exists():
+                    continue
+
+                file_size = SERVER_LOG_FILE.stat().st_size
+                if file_size < cursor:
+                    cursor = 0
+
+                chunk = ""
+                with open(SERVER_LOG_FILE, "r", encoding="utf-8", errors="replace") as fp:
+                    fp.seek(cursor)
+                    chunk = fp.read()
+                    cursor = fp.tell()
+
+                if not chunk:
+                    continue
+
+                for line in chunk.splitlines():
+                    if not line.strip():
+                        continue
+                    await websocket.send_text(json.dumps({"type": "log", "line": line, "level": "info"}))
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            logger.warning(f"[{client_host}] Log tail stream stopped: {e}")
 
-    log_drain_task = asyncio.create_task(_drain_log_queue())
+    log_tail_task = asyncio.create_task(_stream_server_log_file())
 
     # If startup is not yet complete, replay accumulated stages and stream new ones
     startup_queue: asyncio.Queue | None = None
@@ -1126,7 +1170,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     if startup_error:
         await websocket.send_text(json.dumps({"type": "error", "message": f"Server startup failed: {startup_error}"}))
-        _ws_log_queue_map.pop(ws_id, None)
+        log_tail_task.cancel()
         await websocket.close()
         return
 
@@ -1578,11 +1622,9 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
     finally:
-        log_drain_task.cancel()
+        log_tail_task.cancel()
         progress_drain_task.cancel()
         world_engine.set_progress_callback(None)
-        _log_subscribers.discard(log_queue)
-        _ws_log_queue_map.pop(ws_id, None)
         logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")
 
 
@@ -1604,10 +1646,17 @@ if __name__ == "__main__":
         print(f"[BIOME] Monitoring parent process PID {_parent_pid}", flush=True)
         _check_parent_alive()
 
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        ws_ping_interval=300,
-        ws_ping_timeout=300,
-    )
+    try:
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            ws_ping_interval=300,
+            ws_ping_timeout=300,
+        )
+    except BaseException:
+        print("[BIOME] Fatal exception at server entrypoint", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        _hosted_log_fp.flush()
+        raise

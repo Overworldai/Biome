@@ -75,6 +75,7 @@ export type IpcCommandMap = {
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
   'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'read-server-log-tail': { args: [maxLines?: number]; return: string[] }
 
   // Seeds (filesystem ops only - seed data now goes over WS)
   'get-seeds-dir-path': { args: []; return: string }

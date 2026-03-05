@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { invoke, listen } from '../bridge'
+import { invoke } from '../bridge'
 import { INTERACTIVE_TRANSITION } from '../styles'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
@@ -72,7 +72,9 @@ const ServerLogDisplay = ({
   headerAction = null,
   variant = 'default',
   externalLogs = null,
-  disableLiveIpc = false,
+  pollLogFileTail = false,
+  logTailLines = 300,
+  logTailIntervalMs = 700,
   title = null,
   onLogsChange,
   reportContext,
@@ -90,7 +92,9 @@ const ServerLogDisplay = ({
   headerAction?: ReactNode
   variant?: 'default' | 'loading-inline'
   externalLogs?: string[] | null
-  disableLiveIpc?: boolean
+  pollLogFileTail?: boolean
+  logTailLines?: number
+  logTailIntervalMs?: number
   title?: string | null
   onLogsChange?: (logs: string[]) => void
   reportContext?: ReportContext
@@ -108,20 +112,34 @@ const ServerLogDisplay = ({
   const [isOpeningIssue, setIsOpeningIssue] = useState(false)
 
   useEffect(() => {
-    if (disableLiveIpc || externalLogs !== null) return
+    if (externalLogs !== null) return
 
-    const unlisten = listen('server-log', (line) => {
-      const logLine = String(line ?? '')
-      setLogs((prev) => {
-        const next = [...prev, logLine]
-        return next.length > 300 ? next.slice(-300) : next
-      })
-    })
+    if (!pollLogFileTail) {
+      setLogs([])
+      return
+    }
+
+    let mounted = true
+    const poll = async () => {
+      try {
+        const lines = await invoke('read-server-log-tail', logTailLines)
+        if (!mounted) return
+        setLogs(lines.map((line) => String(line ?? '')))
+      } catch {
+        // Ignore poll failures; next interval may recover.
+      }
+    }
+
+    void poll()
+    const intervalId = window.setInterval(() => {
+      void poll()
+    }, logTailIntervalMs)
 
     return () => {
-      unlisten()
+      mounted = false
+      window.clearInterval(intervalId)
     }
-  }, [disableLiveIpc, externalLogs])
+  }, [externalLogs, pollLogFileTail, logTailLines, logTailIntervalMs])
 
   const autoScrollRef = useRef(true)
 

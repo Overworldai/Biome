@@ -21,6 +21,16 @@ function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
 
+function readLogTail(logFilePath: string, maxLines: number): string[] {
+  if (!fs.existsSync(logFilePath)) return []
+  const content = fs.readFileSync(logFilePath, 'utf-8')
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .slice(-Math.max(1, maxLines))
+}
+
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
     const engineDir = getEngineDir()
@@ -78,7 +88,9 @@ export function registerServerIpc(): void {
       HF_HOME: hfHomeDir,
       HF_HUB_CACHE: hfHubCacheDir,
       HUGGINGFACE_HUB_CACHE: hfHubCacheDir,
-      PYTHONUNBUFFERED: '1'
+      PYTHONUNBUFFERED: '1',
+      PYTHONFAULTHANDLER: '1',
+      BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
     }
 
     // Pass through HuggingFace token from environment
@@ -94,32 +106,30 @@ export function registerServerIpc(): void {
 
     // Create log file path
     const logFilePath = path.join(engineDir, 'server.log')
+    // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
+    const serverArgs =
+      process.platform === 'win32'
+        ? ['run', 'python', '-u', 'server.py', '--port', String(port)]
+        : ['run', 'python', '-u', 'server.py', '--port', String(port), '--parent-pid', String(process.pid)]
 
     // Spawn the server
-    const child = spawn(
-      uvBinary,
-      ['run', 'python', '-u', 'server.py', '--port', String(port), '--parent-pid', String(process.pid)],
-      {
-        cwd: engineDir,
-        env: serverEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        ...(process.platform !== 'win32' ? { detached: true } : {}), // Unix: new process group for clean kill
-        ...getHiddenWindowOptions()
-      }
-    )
+    const child = spawn(uvBinary, serverArgs, {
+      cwd: engineDir,
+      env: serverEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(process.platform !== 'win32' ? { detached: true } : {}), // Unix: new process group for clean kill
+      ...getHiddenWindowOptions()
+    })
 
     const pid = child.pid
     console.log(`[ENGINE] Server process spawned with PID: ${pid}`)
-
-    // Open log file for appending
-    const logStream = fs.createWriteStream(logFilePath, { flags: 'a' })
+    fs.writeFileSync(logFilePath, '', 'utf-8')
 
     // Process stdout — write to console and log file only (no IPC events)
     if (child.stdout) {
       const rl = createInterface({ input: child.stdout })
       rl.on('line', (line) => {
         console.log(`[SERVER] ${line}`)
-        logStream.write(line + '\n')
       })
     }
 
@@ -128,14 +138,12 @@ export function registerServerIpc(): void {
       const rl = createInterface({ input: child.stderr })
       rl.on('line', (line) => {
         console.log(`[SERVER] ${line}`)
-        logStream.write(line + '\n')
       })
     }
 
     // Handle process exit
     child.on('exit', (code, signal) => {
       console.log(`[ENGINE] Server process exited (code: ${code}, signal: ${signal})`)
-      logStream.end()
       clearServerState()
     })
 
@@ -169,9 +177,17 @@ export function registerServerIpc(): void {
   ipcMain.handle('stop-engine-server', () => {
     const result = stopServerSync()
     if (!result) {
-      throw new Error('No server is currently running')
+      return 'Server already stopped'
     }
     return result
+  })
+
+  ipcMain.handle('read-server-log-tail', (_event, maxLines?: number) => {
+    const engineDir = getEngineDir()
+    const logFilePath = path.join(engineDir, 'server.log')
+    const parsedMaxLines = Number(maxLines)
+    const safeMaxLines = Number.isFinite(parsedMaxLines) ? parsedMaxLines : 200
+    return readLogTail(logFilePath, safeMaxLines)
   })
 
   ipcMain.handle('is-server-running', () => {
