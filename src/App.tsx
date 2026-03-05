@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { resolveStage } from './stages'
 import { SettingsProvider } from './hooks/useSettings'
 import { PortalProvider, usePortal } from './context/PortalContext'
 import { StreamingProvider, useStreaming } from './context/StreamingContext'
@@ -84,7 +85,8 @@ const AppShell = () => {
     () => (showMenuHome ? MENU_VIEW.HOME : showMenuSettings ? MENU_VIEW.SETTINGS : null),
     [showMenuHome, showMenuSettings]
   )
-  const loadingProgressPercent = Math.max(0, Math.min(100, Math.round(statusStage?.percent ?? 0)))
+  const resolvedStage = statusStage ? resolveStage(statusStage) : null
+  const loadingProgressPercent = Math.max(0, Math.min(100, Math.round(resolvedStage?.percent ?? 0)))
   const loadingLayerStyle = {
     '--vortex-progress-percent': loadingProgressPercent.toString()
   } as CSSProperties

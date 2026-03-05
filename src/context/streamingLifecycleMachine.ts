@@ -80,7 +80,6 @@ export type StreamingLifecycleSyncPayload = {
   selectedModel: string
   lastAppliedModel: string | null
   engineError: string | null
-  statusCode: string | null
   hasReceivedFrame: boolean
   socketReady: boolean
   isPointerLocked: boolean
@@ -106,7 +105,6 @@ export const streamingLifecycleReducer = (
     selectedModel,
     lastAppliedModel,
     engineError,
-    statusCode,
     hasReceivedFrame,
     socketReady,
     isPointerLocked,
@@ -168,8 +166,7 @@ export const streamingLifecycleReducer = (
     next.lastTeardownPortalState = portalState
   }
 
-  const canTransitionToStreaming =
-    inLoadingState && connectionState === 'connected' && statusCode === 'ready' && socketReady && hasReceivedFrame
+  const canTransitionToStreaming = inLoadingState && connectionState === 'connected' && socketReady && hasReceivedFrame
 
   if (canTransitionToStreaming && !next.streamingTransitionRequested) {
     next.effects.transitionToStreaming = true

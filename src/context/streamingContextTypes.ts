@@ -1,4 +1,5 @@
-import type { EngineStatus, LoadingStage } from '../types/app'
+import type { EngineStatus } from '../types/app'
+import type { StageId } from '../stages'
 
 export type StreamingStats = {
   gentime: number
@@ -21,8 +22,7 @@ export type StreamingContextValue = {
   unlockDelayMs: number
   pauseElapsedMs: number
   settingsOpen: boolean
-  statusCode: string | null
-  statusStage: LoadingStage | null
+  statusStage: StageId | null
 
   genTime: number | null
   frameId: number
@@ -41,7 +41,7 @@ export type StreamingContextValue = {
   serverLogPath: string | null
   engineStatus: EngineStatus | null
   checkEngineStatus: () => Promise<EngineStatus | null>
-  setupEngine: () => Promise<EngineStatus>
+  setupEngine: (onStage?: (stageId: StageId) => void) => Promise<EngineStatus>
   engineSetupInProgress: boolean
   setupProgress: string | null
   engineSetupError: string | null

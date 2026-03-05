@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { invoke } from '../bridge'
 import type { EngineStatus } from '../types/app'
+import type { StageId } from '../stages'
 
 export type UseEngineResult = {
   status: EngineStatus | null
@@ -12,7 +13,7 @@ export type UseEngineResult = {
   installUv: () => Promise<string>
   setupServerComponents: () => Promise<string>
   syncDependencies: () => Promise<string>
-  setupEngine: () => Promise<EngineStatus>
+  setupEngine: (onStage?: (stageId: StageId) => void) => Promise<EngineStatus>
   startServer: (port: number) => Promise<string>
   stopServer: () => Promise<string>
   checkServerRunning: () => Promise<boolean>
@@ -98,26 +99,31 @@ export const useEngine = (): UseEngineResult => {
     }
   }, [])
 
-  const setupEngine = useCallback(async () => {
+  const setupEngine = useCallback(async (onStage?: (stageId: StageId) => void) => {
     try {
       setIsLoading(true)
       setError(null)
 
       setSetupProgress('Checking uv installation...')
+      onStage?.('setup.uv_check')
       const currentStatus = await invoke('check-engine-status', 'useEngine.setupEngine.pre')
 
       if (!currentStatus.uv_installed) {
         setSetupProgress('Installing uv...')
+        onStage?.('setup.uv_download')
         await invoke('install-uv')
       }
 
       setSetupProgress('Setting up server components...')
+      onStage?.('setup.server_components')
       await invoke('setup-server-components')
 
       setSetupProgress('Syncing dependencies (this may take a while)...')
+      onStage?.('setup.sync_deps')
       await invoke('sync-engine-dependencies')
 
       setSetupProgress('Verifying setup...')
+      onStage?.('setup.verify')
       const finalStatus = await invoke('check-engine-status', 'useEngine.setupEngine.post')
       setStatus(finalStatus)
 

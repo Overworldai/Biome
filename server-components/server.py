@@ -554,12 +554,11 @@ def _broadcast_startup_stage(stage: Stage) -> None:
     """Store a startup stage and push it to any connected WS clients."""
     payload = {
         "type": "status",
-        "code": "startup",
-        "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
+        "stage": stage.id,
     }
     startup_stages.append(payload)
     # Also log to stdout so file-based logs capture it
-    logger.info(f"Startup stage: {stage.id} — {stage.label} ({stage.percent}%)")
+    logger.info(f"Startup stage: {stage.id}")
     for q in list(ws_startup_waiters):
         try:
             q.put_nowait(payload)
@@ -1188,8 +1187,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_json(
             {
                 "type": "status",
-                "code": stage.id.split(".")[1] if "." in stage.id else stage.id,
-                "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
+                "stage": stage.id,
             }
         )
 
@@ -1201,8 +1199,7 @@ async def websocket_endpoint(websocket: WebSocket):
         """Sync callback safe to call from any thread — enqueues for async send."""
         payload = {
             "type": "status",
-            "code": stage.id.split(".")[1] if "." in stage.id else stage.id,
-            "stage": {"id": stage.id, "label": stage.label, "percent": max(0, min(100, stage.percent))},
+            "stage": stage.id,
         }
         try:
             progress_queue.put_nowait(payload)
@@ -1592,8 +1589,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             if recovery_success:
                                 await send_json({
                                     "type": "status",
-                                    "code": "reset",
-                                    "stage": {"id": "session.reset", "label": "Recovering from CUDA error...", "percent": 58},
+                                    "stage": "session.reset",
                                     "message": "Recovered from CUDA error - engine reset"
                                 })
                                 logger.info(f"[{client_host}] Successfully recovered from CUDA error")

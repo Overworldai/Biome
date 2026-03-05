@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '../bridge'
+import { resolveStage } from '../stages'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
 import { useSettings } from '../hooks/useSettings'
@@ -37,7 +38,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     return () => setErrorMode(false)
   }, [errorDetail, setErrorMode])
 
-  const currentStage = statusStage
+  const currentStage = statusStage ? resolveStage(statusStage) : null
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
     if (errorDetail) return 'Error'

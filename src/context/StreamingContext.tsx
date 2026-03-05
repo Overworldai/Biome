@@ -1,6 +1,17 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useReducer, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useReducer,
+  useMemo,
+  type ReactNode
+} from 'react'
 import { usePortal } from './PortalContext'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
+import type { StageId } from '../stages'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
 import { createStreamingLifecycleEffectHandlers, runStreamingLifecycleEffects } from './streamingLifecycleEffects'
 import {
@@ -57,7 +68,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   } = useEngine()
   const {
     connectionState,
-    statusCode,
     statusStage,
     error,
     warning,
@@ -98,6 +108,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [canvasReady, setCanvasReady] = useState(false)
   const [loadingConnectionJobSeq, setLoadingConnectionJobSeq] = useState(0)
   const [pointerLockBlockedSeq, setPointerLockBlockedSeq] = useState(0)
+  const [preConnectionStage, setPreConnectionStage] = useState<StageId | null>(null)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
   const prevEngineModeRef = useRef(engineMode)
@@ -108,6 +119,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const warmBootstrapSentRef = useRef(false)
   const warmFlowCancelledRef = useRef(false)
   const loadingFailureStopHandledRef = useRef(false)
+
+  // Once the WebSocket starts reporting its own stages, clear the pre-connection stage
+  const effectiveStatusStage = useMemo(() => statusStage ?? preConnectionStage, [statusStage, preConnectionStage])
+  useEffect(() => {
+    if (statusStage) setPreConnectionStage(null)
+  }, [statusStage])
 
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
@@ -252,7 +269,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineModel: settings?.engine_model,
         lastAppliedModel: lastAppliedModelRef.current,
         engineError,
-        statusCode,
         hasReceivedFrame,
         socketReady: isReady,
         isPointerLocked,
@@ -266,7 +282,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     error,
     settings?.engine_model,
     engineError,
-    statusCode,
     hasReceivedFrame,
     isReady,
     isPointerLocked,
@@ -301,8 +316,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       probeServerHealthViaMain: probeServerHealth,
       checkEngineStatus,
       startServer,
+      setupEngine,
       connect,
       onServerError: handleServerError,
+      onStage: (stageId) => {
+        if (!warmFlowCancelledRef.current) setPreConnectionStage(stageId)
+      },
       isCancelled: () => warmFlowCancelledRef.current,
       log
     }).catch((err) => {
@@ -312,6 +331,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       warmFlowCancelledRef.current = true
+      setPreConnectionStage(null)
     }
   }, [loadingConnectionJobSeq])
 
@@ -519,8 +539,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     unlockDelayMs: UNLOCK_DELAY_MS,
     pauseElapsedMs,
     settingsOpen,
-    statusCode,
-    statusStage,
+    statusStage: effectiveStatusStage,
 
     // Stats
     genTime,

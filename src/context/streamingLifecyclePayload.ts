@@ -9,7 +9,6 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   engineModel?: string | null
   lastAppliedModel: string | null
   engineError: string | null
-  statusCode: string | null
   hasReceivedFrame: boolean
   socketReady: boolean
   isPointerLocked: boolean
@@ -29,7 +28,6 @@ export const buildStreamingLifecycleSyncPayload = (
     selectedModel,
     lastAppliedModel: args.lastAppliedModel,
     engineError: args.engineError,
-    statusCode: args.statusCode,
     hasReceivedFrame: args.hasReceivedFrame,
     socketReady: args.socketReady,
     isPointerLocked: args.isPointerLocked,

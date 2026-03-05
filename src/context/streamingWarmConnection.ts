@@ -1,4 +1,5 @@
 import { STANDALONE_PORT, localhostUrl } from '../types/settings'
+import type { StageId } from '../stages'
 
 type WarmConnectionOptions = {
   currentServerPort: number | null
@@ -16,8 +17,10 @@ type WarmConnectionOptions = {
     server_port?: number | null
   } | null>
   startServer: (port: number) => Promise<unknown>
+  setupEngine: (onStage?: (stageId: StageId) => void) => Promise<unknown>
   connect: (wsUrl: string) => void
   onServerError: (error: unknown) => void
+  onStage: (stageId: StageId) => void
   isCancelled: () => boolean
   log: { info: (...args: unknown[]) => void }
 }
@@ -136,8 +139,10 @@ export const runWarmConnectionFlow = async ({
   probeServerHealthViaMain,
   checkEngineStatus,
   startServer,
+  setupEngine,
   connect,
   onServerError,
+  onStage,
   isCancelled,
   log
 }: WarmConnectionOptions): Promise<void> => {
@@ -147,6 +152,7 @@ export const runWarmConnectionFlow = async ({
   let wsUrl = normalizeWsEndpoint(endpointUrl || serverUrl, preferSecureTransport)
 
   if (isStandaloneMode) {
+    onStage('setup.checking')
     log.info('Standalone mode enabled, checking server state...')
     let selectedPort = STANDALONE_PORT
 
@@ -163,6 +169,7 @@ export const runWarmConnectionFlow = async ({
       if (serverAlreadyReady) {
         log.info('Managed standalone server already running and ready on port', selectedPort)
       } else {
+        onStage('setup.health_poll')
         log.info('Managed standalone server running but not ready; polling health on port', selectedPort)
         try {
           await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
@@ -174,6 +181,7 @@ export const runWarmConnectionFlow = async ({
         }
       }
     } else {
+      onStage('setup.port_scan')
       const openPort = await findFirstOpenStandalonePort(STANDALONE_PORT, checkPortInUse, log)
       if (openPort === null) {
         onServerError(
@@ -188,18 +196,23 @@ export const runWarmConnectionFlow = async ({
 
       const status = await checkEngineStatus()
       if (!status?.uv_installed || !status?.repo_cloned || !status?.dependencies_synced) {
-        const missing: string[] = []
-        if (!status?.uv_installed) missing.push('uv package manager')
-        if (!status?.repo_cloned) missing.push('engine files')
-        if (!status?.dependencies_synced) missing.push('dependencies')
-        const missingStr = missing.join(', ')
-        onServerError(new Error(`Engine not ready: missing ${missingStr}. Please reinstall in Settings.`))
-        return
+        onStage('setup.engine')
+        log.info('Engine not fully set up, running auto-setup...')
+        try {
+          await setupEngine(onStage)
+          if (isCancelled()) return
+        } catch (err) {
+          if (isCancelled()) return
+          onServerError(err)
+          return
+        }
       }
 
       try {
+        onStage('setup.server_start')
         log.info('Starting standalone server on port', selectedPort)
         await startServer(selectedPort)
+        onStage('setup.health_poll')
         log.info('Server started, polling health until ready...')
         await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
         if (isCancelled()) return
@@ -210,6 +223,8 @@ export const runWarmConnectionFlow = async ({
       }
     }
   }
+
+  onStage('setup.connecting')
 
   const responsive = await probeServerHealth(wsUrl, probeServerHealthViaMain)
   if (!responsive) {

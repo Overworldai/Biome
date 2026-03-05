@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createLogger } from '../utils/logger'
 import { WsRpcClient } from '../lib/wsRpc'
-import type { LoadingStage } from '../types/app'
+import type { StageId } from '../stages'
 
 const log = createLogger('WebSocket')
 const MAX_VISIBLE_LOG_LINES = 500
@@ -10,8 +10,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 type WebSocketHook = {
   connectionState: ConnectionState
-  statusCode: string | null
-  statusStage: LoadingStage | null
+  statusStage: StageId | null
   error: string | null
   warning: string | null
   frame: string | null
@@ -45,8 +44,7 @@ export const useWebSocket = (): WebSocketHook => {
   const [warning, setWarning] = useState<string | null>(null)
   const [genTime, setGenTime] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
-  const [statusCode, setStatusCode] = useState<string | null>(null)
-  const [statusStage, setStatusStage] = useState<LoadingStage | null>(null)
+  const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
   const allLogsRef = useRef<string[]>([])
@@ -96,7 +94,6 @@ export const useWebSocket = (): WebSocketHook => {
     setError(null)
     setWarning(null)
     clearWarningTimer()
-    setStatusCode(null)
     setStatusStage(null)
     setHasRealFrame(false)
     allLogsRef.current = []
@@ -139,22 +136,11 @@ export const useWebSocket = (): WebSocketHook => {
 
         switch (msg.type) {
           case 'status': {
-            const code = (typeof msg.code === 'string' ? msg.code : null) as string | null
-            setStatusCode(code)
-            const rawStage = msg.stage as Partial<LoadingStage> | undefined
-            if (
-              rawStage &&
-              typeof rawStage.id === 'string' &&
-              typeof rawStage.label === 'string' &&
-              typeof rawStage.percent === 'number'
-            ) {
-              setStatusStage({
-                id: rawStage.id,
-                label: rawStage.label,
-                percent: Math.max(0, Math.min(100, Math.round(rawStage.percent)))
-              })
+            const stageId = typeof msg.stage === 'string' ? msg.stage : null
+            if (stageId) {
+              setStatusStage(stageId as StageId)
             }
-            if (code === 'ready') {
+            if (stageId === 'session.ready') {
               setIsReady(true)
               isReadyRef.current = true
             }
@@ -223,7 +209,6 @@ export const useWebSocket = (): WebSocketHook => {
       setIsReady(false)
       setWarning(null)
       clearWarningTimer()
-      setStatusCode(null)
       setStatusStage(null)
       setFrame(null)
       setHasRealFrame(false)
@@ -248,7 +233,6 @@ export const useWebSocket = (): WebSocketHook => {
     setFrameId(0)
     setError(null)
     setGenTime(null)
-    setStatusCode(null)
     setStatusStage(null)
     setHasRealFrame(false)
   }, [clearWarningTimer])
@@ -330,7 +314,6 @@ export const useWebSocket = (): WebSocketHook => {
 
   return {
     connectionState,
-    statusCode,
     statusStage,
     error,
     warning,
