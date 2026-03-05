@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = "==3.13.*"
 dependencies = [
   "world-engine @ https://github.com/Overworldai/world_engine/archive/a30a00c302380c0f657347e8456bb6837ff37c22.zip",
+  "torch",
+  "torchvision",
   "pillow",
   "fastapi>=0.128.0",
   "uvicorn>=0.40.0",
@@ -19,3 +21,12 @@ dev = []
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
