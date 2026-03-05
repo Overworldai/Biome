@@ -168,3 +168,6 @@ export function registerSettingsIpc(): void {
     shell.showItemInFolder(settingsPath)
   })
 }
+
+/** Read settings from main process (for use by other IPC handlers) */
+export { readSettingsSync }
