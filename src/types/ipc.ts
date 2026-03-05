@@ -25,6 +25,13 @@ export type ExportDiagnosticsResult = {
   file_path: string | null
 }
 
+export type AppUpdateInfo = {
+  current_version: string
+  latest_version: string
+  release_url: string | null
+  update_available: boolean
+}
+
 /**
  * Maps each IPC command channel to its argument tuple and return type.
  * This is the single source of truth for all invoke() calls.
@@ -77,6 +84,9 @@ export type IpcCommandMap = {
   'write-spark-tuning': { args: [tuning: PortalSparksTuning]; return: void }
   'get-runtime-diagnostics-meta': { args: []; return: RuntimeDiagnosticsMeta }
   'export-loading-diagnostics': { args: [reportText: string]; return: ExportDiagnosticsResult }
+
+  // Updates
+  'check-for-app-update': { args: []; return: AppUpdateInfo }
 }
 
 /**
