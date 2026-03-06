@@ -76,7 +76,7 @@ const AppShell = () => {
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
-  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 2) : 0
+  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 1) : 0
   const portalGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
   const nextSceneGlowRgb = useSceneGlowColor(getVideoElement, nextIndex)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen

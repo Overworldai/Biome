@@ -249,8 +249,8 @@
     z-index: 2;
     opacity: 1;
     background:
-      radial-gradient(circle at center, rgba(2, 6, 23, 0.05) 0%, rgba(2, 6, 23, 0.65) 100%),
-      linear-gradient(to bottom, rgba(2, 6, 23, 0.2) 0%, rgba(2, 6, 23, 0.55) 100%);
+      radial-gradient(circle at center, rgba(2, 6, 23, 0.025) 0%, rgba(2, 6, 23, 0.325) 100%),
+      linear-gradient(to bottom, rgba(2, 6, 23, 0.1) 0%, rgba(2, 6, 23, 0.275) 100%);
   }
 
   /* --- PORTAL PREVIEW --- */
