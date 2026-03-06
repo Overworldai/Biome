@@ -34,10 +34,11 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
 
   const selectedOption = options.find((o) => o.value === value)
 
-  // Sync isCustom when options or value change
+  // Sync isCustom when options or value change — only promote to custom,
+  // never demote, so that clicking "Custom..." isn't immediately undone.
   useEffect(() => {
-    if (allowCustom) {
-      setIsCustom(!options.some((o) => o.value === value))
+    if (allowCustom && !options.some((o) => o.value === value)) {
+      setIsCustom(true)
     }
   }, [allowCustom, options, value])
 
@@ -76,10 +77,6 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
     const trimmed = customValue.trim()
     if (trimmed) {
       onChange(trimmed)
-    } else {
-      setIsCustom(false)
-      setCustomValue(options[0]?.value ?? '')
-      onChange(options[0]?.value ?? '')
     }
   }
 
@@ -118,7 +115,6 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
                 className="w-full font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] pr-[4.98cqh] text-[2.67cqh] bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]"
                 onClick={() => {
                   setIsCustom(true)
-                  setCustomValue('')
                   setIsOpen(false)
                 }}
               >
