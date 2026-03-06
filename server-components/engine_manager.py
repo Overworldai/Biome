@@ -45,9 +45,21 @@ N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
 
-# Seed frame resolutions (H, W) per model type
-WP1_SEED_SIZE = (360, 640)
-WP15_SEED_SIZE = (512, 1024)
+# Model-specific runtime configuration
+MODEL_CFG = {
+    "legacy": {
+        "label": "legacy (single-frame)",
+        "is_multiframe": False,
+        "seed_target_size": (360, 640),
+        "has_prompt_conditioning": False,
+    },
+    "waypoint-1.5": {
+        "label": "waypoint-1.5 (multi-frame)",
+        "is_multiframe": True,
+        "seed_target_size": (512, 1024),
+        "has_prompt_conditioning": False,
+    },
+}
 
 BUTTON_CODES = {}
 # A-Z keys
@@ -112,8 +124,10 @@ class WorldEngineManager:
         self.model_uri = DEFAULT_MODEL_URI
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
-        self.is_multiframe = False
-        self.seed_target_size = WP1_SEED_SIZE
+        self.cfg = MODEL_CFG["legacy"].copy()
+        self.is_multiframe = self.cfg["is_multiframe"]
+        self.seed_target_size = self.cfg["seed_target_size"]
+        self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._progress_callback = None
         self._progress_loop = None
         # Prevent concurrent model loads from overlapping across websocket sessions.
@@ -158,6 +172,22 @@ class WorldEngineManager:
             or DEFAULT_MODEL_URI
         )
 
+    def _resolve_runtime_cfg(self, model_cfg) -> dict:
+        """Resolve runtime config from defaults and override certain values from model_cfg (just prompt_conditioning for now)."""
+        model_type = getattr(model_cfg, "model_type", None)
+        if model_type is not None and model_type not in MODEL_CFG:
+            raise RuntimeError(
+                f"Unsupported model_type '{model_type}'. Only 'waypoint-1.5' and legacy (no model_type) are supported."
+            )
+
+        cfg_key = model_type or "legacy"
+        cfg = MODEL_CFG[cfg_key].copy()
+        cfg["has_prompt_conditioning"] = (
+            getattr(model_cfg, "prompt_conditioning", None) is not None
+        )
+
+        return cfg
+
     async def _run_on_cuda_thread(self, fn):
         """Run callable on the dedicated CUDA thread."""
         loop = asyncio.get_running_loop()
@@ -195,8 +225,10 @@ class WorldEngineManager:
         self.engine = None
         self.seed_frame = None
         self.engine_warmed_up = False
-        self.is_multiframe = False
-        self.seed_target_size = WP1_SEED_SIZE
+        self.cfg = MODEL_CFG["legacy"].copy()
+        self.is_multiframe = self.cfg["is_multiframe"]
+        self.seed_target_size = self.cfg["seed_target_size"]
+        self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._free_cuda_memory_sync()
 
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
@@ -348,18 +380,14 @@ class WorldEngineManager:
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
 
-            # Detect model type from engine config
-            model_type = getattr(self.engine.model_cfg, "model_type", None)
-            if model_type is not None and model_type != "waypoint-1.5":
-                raise RuntimeError(
-                    f"Unsupported model_type '{model_type}'. Only 'waypoint-1.5' and legacy (no model_type) are supported."
-                )
-            self.is_multiframe = model_type == "waypoint-1.5"
-            self.seed_target_size = WP15_SEED_SIZE if self.is_multiframe else WP1_SEED_SIZE
-            logger.info(
-                f"[2/4] Model type: {'waypoint-1.5 (multi-frame)' if self.is_multiframe else 'legacy (single-frame)'}"
-            )
+            # Resolve runtime config from defaults overridden by model config.
+            self.cfg = self._resolve_runtime_cfg(self.engine.model_cfg)
+            self.is_multiframe = self.cfg["is_multiframe"]
+            self.seed_target_size = self.cfg["seed_target_size"]
+            self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
+            logger.info(f"[2/4] Model type: {self.cfg['label']}")
             logger.info(f"[2/4] Seed target size: {self.seed_target_size}")
+            logger.info(f"[2/4] Prompt conditioning: {self.has_prompt_conditioning}")
 
             self._report_progress(SESSION_LOADING_DONE)
             self.model_uri = requested_model
@@ -442,12 +470,15 @@ class WorldEngineManager:
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(SESSION_INIT_FRAME)
-        t0 = time.perf_counter()
-        logger.info("[INIT] Starting engine.set_prompt()...")
-        await self._run_on_cuda_thread(
-            lambda: self.engine.set_prompt(self.current_prompt)
-        )
-        logger.info(f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+        if self.has_prompt_conditioning:
+            t0 = time.perf_counter()
+            logger.info("[INIT] Starting engine.set_prompt()...")
+            await self._run_on_cuda_thread(
+                lambda: self.engine.set_prompt(self.current_prompt)
+            )
+            logger.info(f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+        else:
+            logger.info(f"[INIT] No prompt conditioning enabled, skipping engine.set_prompt()")
 
     async def recover_from_cuda_error(self):
         """
@@ -509,12 +540,16 @@ class WorldEngineManager:
             )
 
             self._report_progress(SESSION_WARMUP_PROMPT)
-            logger.info("[5/5] Step 3: Setting prompt...")
-            prompt_start = time.perf_counter()
-            self.engine.set_prompt(self.current_prompt)
-            logger.info(
-                f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
-            )
+            
+            if self.has_prompt_conditioning:
+                logger.info("[5/5] Step 3: Setting prompt...")
+                prompt_start = time.perf_counter()
+                self.engine.set_prompt(self.current_prompt)
+                logger.info(
+                    f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s"
+                )
+            else:
+                logger.info("[5/5] Step 3: Skipping prompt conditioning...")
 
             self._report_progress(SESSION_WARMUP_COMPILE)
             logger.info(
