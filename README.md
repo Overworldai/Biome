@@ -58,6 +58,12 @@ npm run build
 npm run package
 ```
 
+## Hosting Remote Server
+
+Interested in setting up World Engine for the "Server" option under settings? To run `server.py` on another device and connect Biome to it, see:
+
+- [Remote Server Setup](server-components/README.md)
+
 ## Releases
 
 Releases are automated via GitHub Actions. To trigger a new release:
