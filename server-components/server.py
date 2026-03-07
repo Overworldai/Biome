@@ -1382,8 +1382,11 @@ async def websocket_endpoint(websocket: WebSocket):
         await world_engine.init_session()
 
         # Send initial frame so client has something to display
+        initial_display_frame = (
+            world_engine.seed_frame[0] if world_engine.is_multiframe else world_engine.seed_frame
+        )
         jpeg = await asyncio.to_thread(
-            world_engine.frame_to_jpeg, world_engine.seed_frame
+            world_engine.frame_to_jpeg, initial_display_frame
         )
         await send_json(
             {
@@ -1399,6 +1402,8 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_stage(SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
         paused = False
+        pending_msg = None
+        pending_control_msg = None
 
         # Helper to drain all pending messages and return only the latest control input
         async def get_latest_control():
@@ -1426,10 +1431,75 @@ async def websocket_endpoint(websocket: WebSocket):
                 except WebSocketDisconnect:
                     raise
 
+        async def drain_pending_messages():
+            """Drain pending websocket messages into control + non-control buckets."""
+            control_msgs = []
+            special_msg = None
+
+            while True:
+                try:
+                    raw = await asyncio.wait_for(
+                        websocket.receive_text(), timeout=0.001
+                    )
+                    msg = json.loads(raw)
+                    msg_type = msg.get("type", "control")
+                    if msg_type == "control":
+                        control_msgs.append(msg)
+                    else:
+                        special_msg = msg
+                        return control_msgs, special_msg
+                except asyncio.TimeoutError:
+                    return control_msgs, special_msg
+                except WebSocketDisconnect:
+                    raise
+
+        def merge_controls(existing_msg, control_msgs):
+            """Merge control messages for one future generation step."""
+            if existing_msg is not None:
+                buttons = set(existing_msg.get("button_codes", []))
+                mouse_dx = float(existing_msg.get("mouse_dx", 0.0))
+                mouse_dy = float(existing_msg.get("mouse_dy", 0.0))
+                ts = existing_msg.get("ts", 0)
+            else:
+                buttons = set()
+                mouse_dx = 0.0
+                mouse_dy = 0.0
+                ts = 0
+
+            for control_msg in control_msgs:
+                buttons.update(
+                    BUTTON_CODES[b.upper()]
+                    for b in control_msg.get("buttons", [])
+                    if b.upper() in BUTTON_CODES
+                )
+                mouse_dx += float(control_msg.get("mouse_dx", 0.0))
+                mouse_dy += float(control_msg.get("mouse_dy", 0.0))
+                if "ts" in control_msg:
+                    ts = control_msg.get("ts", ts)
+
+            if not buttons and mouse_dx == 0.0 and mouse_dy == 0.0:
+                return existing_msg
+
+            return {
+                "type": "control",
+                "button_codes": list(buttons),
+                "mouse_dx": mouse_dx,
+                "mouse_dy": mouse_dy,
+                "ts": ts,
+            }
+
         # Main game loop
         while True:
             try:
-                msg = await get_latest_control()
+                # set messages based on what was received during sending of multiframe generation (if applicable)
+                if pending_msg is not None:
+                    msg = pending_msg
+                    pending_msg = None
+                elif pending_control_msg is not None:
+                    msg = pending_control_msg
+                    pending_control_msg = None
+                else:
+                    msg = await get_latest_control()
                 if msg is None:
                     continue
             except WebSocketDisconnect:
@@ -1548,11 +1618,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     if paused:
                         continue
 
-                    buttons = {
-                        BUTTON_CODES[b.upper()]
-                        for b in msg.get("buttons", [])
-                        if b.upper() in BUTTON_CODES
-                    }
+                    if "button_codes" in msg:
+                        buttons = set(msg.get("button_codes", []))
+                    else:
+                        buttons = {
+                            BUTTON_CODES[b.upper()]
+                            for b in msg.get("buttons", [])
+                            if b.upper() in BUTTON_CODES
+                        }
                     mouse_dx = float(msg.get("mouse_dx", 0))
                     mouse_dy = float(msg.get("mouse_dy", 0))
                     client_ts = msg.get("ts", 0)
@@ -1567,22 +1640,58 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     t0 = time.perf_counter()
                     try:
-                        frame = await world_engine.generate_frame(ctrl)
+                        result = await world_engine.generate_frame(ctrl)
                         gen_time = (time.perf_counter() - t0) * 1000
 
-                        session.frame_count += 1
+                        if world_engine.is_multiframe:
+                            # wp-1.5: result is [4,H,W,3], send each frame individually
+                            frame_interval = gen_time / 4 / 1000  # seconds
+                            for i in range(4):
+                                session.frame_count += 1
+                                frame = result[i]
+                                jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
+                                await send_json(
+                                    {
+                                        "type": "frame",
+                                        "data": base64.b64encode(jpeg).decode("ascii"),
+                                        "frame_id": session.frame_count,
+                                        "client_ts": client_ts,
+                                        "gen_ms": gen_time / 4,
+                                    }
+                                )
 
-                        # Encode and send frame with timing info
-                        jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
-                        await send_json(
-                            {
-                                "type": "frame",
-                                "data": base64.b64encode(jpeg).decode("ascii"),
-                                "frame_id": session.frame_count,
-                                "client_ts": client_ts,
-                                "gen_ms": gen_time,
-                            }
-                        )
+                                if i < 3:
+                                    await asyncio.sleep(frame_interval)
+                                    # Drain control messages while queueing the remaining frames and combine them for next generation frame
+                                    try:
+                                        drained_controls, drained_special = await drain_pending_messages()
+                                        if drained_controls:
+                                            pending_control_msg = merge_controls(
+                                                pending_control_msg, drained_controls
+                                            )
+                                        if drained_special is not None:
+                                            drained_type = drained_special.get("type", "control")
+                                            if drained_type == "pause":
+                                                paused = True
+                                                logger.info("[RECV] Paused (during multi-frame send)")
+                                                break
+                                            if pending_msg is None:
+                                                pending_msg = drained_special
+                                    except WebSocketDisconnect:
+                                        raise
+                        else:
+                            # Legacy single-frame mode
+                            session.frame_count += 1
+                            jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, result)
+                            await send_json(
+                                {
+                                    "type": "frame",
+                                    "data": base64.b64encode(jpeg).decode("ascii"),
+                                    "frame_id": session.frame_count,
+                                    "client_ts": client_ts,
+                                    "gen_ms": gen_time,
+                                }
+                            )
 
                         # Logging
                         if session.frame_count % 60 == 0:
