@@ -4,6 +4,10 @@ export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as co
 
 export const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1-Small'
 
+// The EULA version string should be updated whenever the EULA text changes in a way that requires users to re-accept it.
+// Follows YYYY-MM-DD format.
+export const CURRENT_EULA_VERSION = '2026-02-03'
+
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 export const STANDALONE_PORT = 7987
 
@@ -26,7 +30,8 @@ export const settingsSchema = z.object({
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.0),
-  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES)
+  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
+  eula_version: z.string().nullable().default(null)
 })
 
 export type Settings = z.infer<typeof settingsSchema>

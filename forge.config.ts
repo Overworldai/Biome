@@ -1,6 +1,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types'
 import { VitePlugin } from '@electron-forge/plugin-vite'
-import { MakerSquirrel } from '@electron-forge/maker-squirrel'
+import MakerNSIS from '@felixrieseberg/electron-forge-maker-nsis'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerDeb } from '@electron-forge/maker-deb'
 
@@ -8,9 +8,33 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './app-icon',
-    extraResource: ['./server-components', './seeds', './backgrounds', './app-icon.ico', './app-icon.png']
+    extraResource: [
+      './server-components',
+      './seeds',
+      './licensing',
+      './backgrounds',
+      './app-icon.ico',
+      './app-icon.png'
+    ]
   },
-  makers: [new MakerSquirrel({ setupIcon: './app-icon.ico' }), new MakerDMG({}), new MakerDeb({})],
+  makers: [
+    new MakerNSIS({
+      getAppBuilderConfig: async () => ({
+        win: {
+          icon: 'app-icon.ico'
+        },
+        nsis: {
+          oneClick: false,
+          allowToChangeInstallationDirectory: true,
+          license: 'licensing/EULA.txt',
+          installerIcon: 'app-icon.ico',
+          uninstallerIcon: 'app-icon.ico'
+        }
+      })
+    }),
+    new MakerDMG({}),
+    new MakerDeb({})
+  ],
   plugins: [
     new VitePlugin({
       build: [
