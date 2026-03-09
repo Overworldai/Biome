@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { invoke } from '../bridge'
 import type { SeedRecord, SeedRecordWithThumbnail } from '../types/app'
 
 type SeedsWithThumbsResponse = {
@@ -59,6 +60,44 @@ function readBlobAsBase64(blob: Blob): Promise<string> {
 
 function isImageFile(file: File) {
   return file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|tiff?|avif|heic|heif)$/i.test(file.name)
+}
+
+/** Extract file paths from clipboard items (handles text/uri-list and text/plain with file paths). */
+async function parseClipboardFilePaths(items: ClipboardItems): Promise<string[]> {
+  for (const item of items) {
+    // Prefer text/uri-list (standard for copied files on Linux)
+    if (item.types.includes('text/uri-list')) {
+      const blob = await item.getType('text/uri-list')
+      const text = await blob.text()
+      return text
+        .split(/[\r\n]+/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'))
+        .map((uri) => {
+          try {
+            return new URL(uri).pathname
+          } catch {
+            return ''
+          }
+        })
+        .filter(Boolean)
+        .map((p) => decodeURIComponent(p))
+    }
+
+    // Fallback: text/plain with one path per line (Windows Explorer, some Linux DEs)
+    if (item.types.includes('text/plain')) {
+      const blob = await item.getType('text/plain')
+      const text = await blob.text()
+      const lines = text
+        .split(/[\r\n]+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+      // Only treat as paths if every line looks like an absolute path
+      const allPaths = lines.every((line) => /^[A-Za-z]:[\\/]/.test(line) || line.startsWith('/'))
+      if (allPaths && lines.length > 0) return lines
+    }
+  }
+  return []
 }
 
 type UseSeedManagerOptions = {
@@ -173,24 +212,26 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
     }
   }
 
-  const uploadImageFiles = async (files: File[]) => {
-    if (uploadingImage) return
+  const uploadImageFiles = async (files: File[]): Promise<string[]> => {
+    if (uploadingImage) return []
 
     const imageFiles = files.filter(isImageFile)
     if (imageFiles.length === 0) {
       setUploadError('Please drop image files only')
-      return
+      return []
     }
 
     setUploadingImage(true)
     setUploadError(null)
 
+    const succeeded: string[] = []
     const failed: string[] = []
     try {
       for (const file of imageFiles) {
         try {
           const base64Data = await readBlobAsBase64(file)
           await wsRequest('seeds_upload', { filename: file.name, data: base64Data })
+          succeeded.push(file.name)
         } catch {
           failed.push(file.name)
         }
@@ -202,6 +243,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
     } finally {
       setUploadingImage(false)
     }
+    return succeeded
   }
 
   const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -214,39 +256,53 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
     void uploadImageFiles(files)
   }
 
-  const handleClipboardUpload = async () => {
-    if (uploadingImage) return
+  const handleClipboardUpload = async (): Promise<string[]> => {
+    if (uploadingImage) return []
     if (!navigator.clipboard?.read) {
       setUploadError('Clipboard image upload is not supported')
-      return
+      return []
     }
 
     try {
       const clipboardItems = await navigator.clipboard.read()
-      let imageBlob: Blob | null = null
-      let imageType = ''
-
-      for (const item of clipboardItems) {
-        const matchingType = item.types.find((type) => type.startsWith('image/'))
-        if (matchingType) {
-          imageBlob = await item.getType(matchingType)
-          imageType = matchingType
-          break
-        }
-      }
-
-      if (!imageBlob) throw new Error('No image found in clipboard')
-
       const extensionMap: Record<string, string> = {
         'image/png': 'png',
         'image/jpeg': 'jpg',
         'image/webp': 'webp'
       }
-      const extension = extensionMap[imageType] || 'png'
-      const filename = `clipboard-${Date.now()}.${extension}`
-      await uploadImageFiles([new File([imageBlob], filename, { type: imageType || 'image/png' })])
+
+      // Try to find image blobs directly
+      const files: File[] = []
+      for (const item of clipboardItems) {
+        const matchingType = item.types.find((type) => type.startsWith('image/'))
+        if (matchingType) {
+          const blob = await item.getType(matchingType)
+          const extension = extensionMap[matchingType] || 'png'
+          const filename = `clipboard-${Date.now()}-${files.length}.${extension}`
+          files.push(new File([blob], filename, { type: matchingType || 'image/png' }))
+        }
+      }
+
+      // Fallback: check for file paths (e.g. Linux file manager copies)
+      if (files.length === 0) {
+        const paths = await parseClipboardFilePaths(clipboardItems)
+        if (paths.length > 0) {
+          const imageFiles = await invoke('read-image-files', paths)
+          for (const { name, base64, mimeType } of imageFiles) {
+            const binary = atob(base64)
+            const bytes = new Uint8Array(binary.length)
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+            files.push(new File([bytes], name, { type: mimeType }))
+          }
+        }
+      }
+
+      if (files.length === 0) throw new Error('No image found in clipboard')
+
+      return await uploadImageFiles(files)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to read image from clipboard')
+      return []
     }
   }
 

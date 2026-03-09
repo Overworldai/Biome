@@ -81,6 +81,7 @@ export type IpcCommandMap = {
   // Seeds (filesystem ops only - seed data now goes over WS)
   'get-seeds-dir-path': { args: []; return: string }
   'open-seeds-dir': { args: []; return: void }
+  'read-image-files': { args: [paths: string[]]; return: { name: string; base64: string; mimeType: string }[] }
 
   // Backgrounds
   'list-background-videos': { args: []; return: string[] }

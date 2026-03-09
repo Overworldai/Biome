@@ -93,6 +93,13 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     requestPointerLock()
   }
 
+  const handleClipboardUploadAndSelect = async () => {
+    const uploaded = await handleClipboardUpload()
+    if (uploaded.length === 1) {
+      handleSceneSelect(uploaded[0])
+    }
+  }
+
   const handleResetAndResume = () => {
     reset()
     requestPointerLock()
@@ -162,7 +169,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               onRemoveScene={removeScene}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={handleClipboardUpload}
+              onClipboardUpload={handleClipboardUploadAndSelect}
               onBack={() => setView(PAUSE_VIEW.MAIN)}
             />
           </motion.div>
