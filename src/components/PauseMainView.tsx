@@ -33,7 +33,7 @@ const PauseMainView = ({
   showUnlockHint
 }: PauseMainViewProps) => (
   <div className="absolute inset-0 p-[3.8%_4%]">
-    <SocialCtaRow rowClassName="pause-cta-row" />
+    <SocialCtaRow />
 
     <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col">
       <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Pinned Scenes</h2>

@@ -31,16 +31,12 @@ const SOCIAL_CTAS = [
   }
 ] as const
 
-const ROW_CLASSES: Record<string, string> = {
-  'menu-cta-row':
-    'menu-cta-row absolute bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 flex items-end gap-[1.24cqh] pointer-events-auto',
-  'pause-cta-row':
-    'pause-cta-row absolute bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 flex items-end gap-[1.07cqh]'
-}
+const CTA_ROW_CLASS =
+  'absolute bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 flex items-end gap-[1.24cqh] pointer-events-auto'
 
-const SocialCtaRow = ({ rowClassName = 'menu-cta-row', buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
+const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
   return (
-    <div className={ROW_CLASSES[rowClassName] ?? rowClassName}>
+    <div className={rowClassName ? `${CTA_ROW_CLASS} ${rowClassName}` : CTA_ROW_CLASS}>
       {SOCIAL_CTAS.map((cta) => (
         <a
           key={cta.href}

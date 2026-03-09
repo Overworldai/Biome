@@ -6,6 +6,7 @@ import { useVortex } from '../context/VortexContext'
 import { useSettings } from '../hooks/useSettings'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
+import SocialCtaRow from './SocialCtaRow'
 
 const INLINE_ERROR_MAX_LENGTH = 80
 const ERROR_DETAIL_CLASS = 'font-serif text-[3.2cqh] leading-[1.15] text-[var(--color-error-bright)]'
@@ -107,7 +108,8 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
 
   return (
     <>
-      <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[135.11cqh]">
+      <SocialCtaRow rowClassName="z-55" />
+      <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[calc(var(--edge-bottom)+7.2cqh)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[135.11cqh]">
         <div className="flex flex-col items-center gap-[0.55cqh] w-[135.11cqh]">
           <div className="w-full flex items-baseline justify-between">
             <div
