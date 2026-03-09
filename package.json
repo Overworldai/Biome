@@ -1,5 +1,6 @@
 {
   "name": "biome",
+  "productName": "Biome",
   "private": true,
   "version": "0.1.0",
   "main": ".vite/build/main.js",
@@ -24,8 +25,8 @@
     "@electron-forge/cli": "^7",
     "@electron-forge/maker-deb": "^7",
     "@electron-forge/maker-dmg": "^7",
-    "@electron-forge/maker-squirrel": "^7",
     "@electron-forge/plugin-vite": "^7",
+    "@felixrieseberg/electron-forge-maker-nsis": "^7.2.0",
     "@types/adm-zip": "^0.5",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
