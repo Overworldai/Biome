@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT } from '../../styles'
+import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import type { FixedControl } from '../../hooks/useGameInput'
 
 export const keyCodeToLabel = (code: string): string => {
@@ -76,7 +76,7 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
     <button
       ref={buttonRef}
       type="button"
-      className={`w-full text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} outline-none appearance-none ${listening ? 'border-text-primary' : ''}`}
+      className={`w-full text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none ${listening ? 'border-text-primary' : ''}`}
       onClick={handleClick}
       onBlur={handleBlur}
       disabled={disabled}

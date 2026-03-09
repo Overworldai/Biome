@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '../bridge'
-import { HEADING_BASE, SETTINGS_MUTED_TEXT } from '../styles'
+import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES, type Keybindings } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
@@ -29,7 +29,7 @@ const KeybindRow = (props: KeybindRowProps) => {
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-[2cqh]">
-        <span className={`${SETTINGS_MUTED_TEXT} w-[25cqh] text-right shrink-0`}>{props.label}</span>
+        <span className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] text-right shrink-0`}>{props.label}</span>
         <div className="flex-1">
           {props.fixedLabel !== undefined ? (
             <SettingsKeybind value={props.fixedLabel} disabled />
@@ -261,7 +261,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
           Tweak your world to your liking.
         </p>
-        <div className="pause-scene-scroll overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] w-[60%]">
+        <div className="pause-scene-scroll overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] w-[63%]">
           <SettingsSection
             title="Engine Mode"
             description="how will you run the model? as part of Biome, or elsewhere?"
@@ -321,7 +321,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
             />
           </SettingsSection>
 
-          <SettingsSection title="Keybindings" description="customize your keyboard shortcuts">
+          <SettingsSection title="Keybindings" description="what keys do you want to use?">
             <KeybindRow
               label="Reset Scene"
               value={menuKeybindings.reset_scene}
@@ -330,7 +330,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
             />
           </SettingsSection>
 
-          <SettingsSection title="Fixed Controls" description="these controls cannot be changed">
+          <SettingsSection title="Fixed Controls" description="what are the built-in controls?">
             {FIXED_CONTROLS.map((ctrl) => (
               <KeybindRow key={ctrl.label} label={ctrl.label} fixedLabel={fixedControlDisplay(ctrl)} />
             ))}

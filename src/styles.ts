@@ -12,8 +12,11 @@ export const SETTINGS_OUTLINE_HOVER =
 /** Shared heading base: tight leading so subtitles sit close */
 export const HEADING_BASE = 'm-0 font-serif leading-[0.95]'
 
+/** Shared font base for settings labels and descriptions */
+export const SETTINGS_LABEL_BASE = 'font-serif text-[2.4cqh]'
+
 /** Muted description/label text */
-export const SETTINGS_MUTED_TEXT = 'font-serif text-text-muted text-[2.4cqh]'
+export const SETTINGS_MUTED_TEXT = `${SETTINGS_LABEL_BASE} text-text-muted`
 
 /** Standard hover transition for standalone buttons */
 export const INTERACTIVE_TRANSITION = 'transition-[color,background-color,border-color,outline-width] ease-in-out'
