@@ -3,7 +3,7 @@ import { PARALLAX_ENABLED } from '../constants'
 import PortalSparks from './PortalSparks'
 
 type PortalPreviewProps = {
-  image: string | null
+  videoElement: HTMLVideoElement | null
   hoverContent?: ReactNode
   isHovered?: boolean
   visible: boolean
@@ -16,7 +16,7 @@ type PortalPreviewProps = {
 }
 
 const PortalPreview = ({
-  image,
+  videoElement,
   hoverContent = null,
   isHovered = false,
   visible,
@@ -28,6 +28,7 @@ const PortalPreview = ({
   onShrinkComplete
 }: PortalPreviewProps) => {
   const coreRef = useRef<HTMLDivElement>(null)
+  const portalVideoRef = useRef<HTMLDivElement>(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
@@ -45,7 +46,15 @@ const PortalPreview = ({
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
-  if (!visible || (!image && !hoverContent)) return null
+  // Mount the shared video element into the portal container
+  useEffect(() => {
+    const container = portalVideoRef.current
+    if (!container || !videoElement) return
+    container.replaceChildren(videoElement)
+    videoElement.play().catch(() => {})
+  }, [videoElement])
+
+  if (!visible || (!videoElement && !hoverContent)) return null
 
   const portalStyle: CSSProperties = {
     ['--portal-offset-x' as string]: `${offset.x}px`,
@@ -69,10 +78,10 @@ const PortalPreview = ({
             }
           }}
         >
-          {image && (
+          {videoElement && (
             <div
+              ref={portalVideoRef}
               className="portal-preview-image absolute rounded-[inherit] origin-center opacity-100"
-              style={{ backgroundImage: `url("${image}")` }}
             />
           )}
           {hoverContent && (

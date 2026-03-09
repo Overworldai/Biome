@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 
 const DEFAULT_GLOW_RGB: [number, number, number] = [140, 206, 244]
 
-const useSceneGlowColor = (images: string[], currentIndex: number): [number, number, number] => {
+const useSceneGlowColor = (
+  getVideoElement: (index: number) => HTMLVideoElement | null,
+  index: number
+): [number, number, number] => {
   const [glowRgb, setGlowRgb] = useState<[number, number, number]>(DEFAULT_GLOW_RGB)
 
   useEffect(() => {
-    const src = images[currentIndex]
-    if (!src) return
+    const video = getVideoElement(index)
+    if (!video) return
 
     let cancelled = false
-    const image = new Image()
 
-    image.onload = () => {
+    const sampleColor = () => {
       if (cancelled) return
 
       const canvas = document.createElement('canvas')
@@ -21,7 +23,7 @@ const useSceneGlowColor = (images: string[], currentIndex: number): [number, num
       const context = canvas.getContext('2d', { willReadFrequently: true })
       if (!context) return
 
-      context.drawImage(image, 0, 0, canvas.width, canvas.height)
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
       const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
 
       let weightedR = 0
@@ -62,12 +64,20 @@ const useSceneGlowColor = (images: string[], currentIndex: number): [number, num
       setGlowRgb([glowR, glowG, glowB])
     }
 
-    image.src = src
+    if (video.readyState >= 2) {
+      sampleColor()
+    } else {
+      video.addEventListener('loadeddata', sampleColor, { once: true })
+      return () => {
+        cancelled = true
+        video.removeEventListener('loadeddata', sampleColor)
+      }
+    }
 
     return () => {
       cancelled = true
     }
-  }, [images, currentIndex])
+  }, [getVideoElement, index])
 
   return glowRgb
 }

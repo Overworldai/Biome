@@ -83,8 +83,7 @@ export type IpcCommandMap = {
   'open-seeds-dir': { args: []; return: void }
 
   // Backgrounds
-  'list-background-images': { args: []; return: string[] }
-  'read-background-image-as-base64': { args: [filename: string]; return: string }
+  'list-background-videos': { args: []; return: string[] }
   // Window
   'window-set-size': { args: [width: number, height: number]; return: void }
   'window-get-size': { args: []; return: { width: number; height: number } }

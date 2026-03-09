@@ -95,11 +95,15 @@ export function registerServerIpc(): void {
 
     // Create log file path
     const logFilePath = path.join(engineDir, 'server.log')
+
+    // Base args for the server. Note that we use localhost for the host to prevent
+    // the Windows firewall for asking for permissions to expose the server to
+    // the world
+    const baseServerArgs = ['run', 'python', '-u', 'server.py', '--host', '127.0.0.1', '--port', String(port)]
+
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
     const serverArgs =
-      process.platform === 'win32'
-        ? ['run', 'python', '-u', 'server.py', '--port', String(port)]
-        : ['run', 'python', '-u', 'server.py', '--port', String(port), '--parent-pid', String(process.pid)]
+      process.platform === 'win32' ? baseServerArgs : [...baseServerArgs, '--parent-pid', String(process.pid)]
 
     // Spawn the server
     const child = spawn(uvBinary, serverArgs, {

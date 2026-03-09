@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { PARALLAX_ENABLED } from '../constants'
 
 type BackgroundSlideshowProps = {
-  images: string[]
+  getVideoElement: (index: number) => HTMLVideoElement | null
   currentIndex: number
   nextIndex: number
   blurPx: number
@@ -12,7 +12,7 @@ type BackgroundSlideshowProps = {
 }
 
 const BackgroundSlideshow = ({
-  images,
+  getVideoElement,
   currentIndex,
   nextIndex,
   blurPx,
@@ -21,6 +21,8 @@ const BackgroundSlideshow = ({
   onTransitionComplete
 }: BackgroundSlideshowProps) => {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const currentContainerRef = useRef<HTMLDivElement>(null)
+  const transitionContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!PARALLAX_ENABLED) return
@@ -38,29 +40,39 @@ const BackgroundSlideshow = ({
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
+  // Mount current video element
+  useEffect(() => {
+    const container = currentContainerRef.current
+    const el = getVideoElement(currentIndex)
+    if (!container || !el) return
+    container.replaceChildren(el)
+    el.play().catch(() => {})
+  }, [currentIndex, getVideoElement])
+
+  // Mount transition video element
+  useEffect(() => {
+    if (!isTransitioning) return
+    const container = transitionContainerRef.current
+    const el = getVideoElement(nextIndex)
+    if (!container || !el) return
+    container.replaceChildren(el)
+    el.play().catch(() => {})
+  }, [isTransitioning, transitionKey, nextIndex, getVideoElement])
+
   const backgroundStyle: CSSProperties = {
     ['--app-background-blur' as string]: `${blurPx}px`,
     ['--bg-parallax-x' as string]: `${offset.x}px`,
     ['--bg-parallax-y' as string]: `${offset.y}px`
   }
 
-  const currentImage = images[currentIndex]
-  const nextImage = images[nextIndex]
-
   return (
     <div className="absolute inset-0 overflow-hidden -z-10 bg-darkest" style={backgroundStyle} aria-hidden="true">
-      {currentImage && (
+      <div ref={currentContainerRef} className="app-background-slide active" />
+      {isTransitioning && (
         <div
-          key={`current-${currentIndex}`}
-          className="app-background-slide active"
-          style={{ backgroundImage: `url("${currentImage}")` }}
-        />
-      )}
-      {isTransitioning && nextImage && (
-        <div
+          ref={transitionContainerRef}
           key={`transition-${transitionKey}`}
           className="app-background-transition-slide"
-          style={{ backgroundImage: `url("${nextImage}")` }}
           onAnimationEnd={(event) => {
             if (event.target !== event.currentTarget) return
             if (event.animationName === 'portalBgReveal') {

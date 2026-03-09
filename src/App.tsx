@@ -57,7 +57,7 @@ const AppShell = () => {
   const { isStreaming, isPaused, connectionState, warning, connectionLost, statusStage, prepareReturnToMainMenu } =
     useStreaming()
   const {
-    images,
+    getVideoElement,
     currentIndex,
     nextIndex,
     isTransitioning,
@@ -78,15 +78,15 @@ const AppShell = () => {
       portalState === portalStates.STREAMING
   )
 
-  const nextScenePreview = images[nextIndex] ?? null
+  const nextVideoElement = getVideoElement(nextIndex)
   const isLaunchTransition = isEnteringLoading
   const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
-  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 2) : 0
-  const portalGlowRgb = useSceneGlowColor(images, currentIndex)
-  const nextSceneGlowRgb = useSceneGlowColor(images, nextIndex)
+  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 1) : 0
+  const portalGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
+  const nextSceneGlowRgb = useSceneGlowColor(getVideoElement, nextIndex)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen
   const showMenuSettings = isMainUi && !isConnected && isSettingsOpen
   const activeMenuView: MenuViewKey | null = useMemo(
@@ -232,7 +232,7 @@ const AppShell = () => {
       >
         {useMainBackground && (
           <BackgroundSlideshow
-            images={images}
+            getVideoElement={getVideoElement}
             currentIndex={currentIndex}
             nextIndex={nextIndex}
             blurPx={backgroundBlurPx}
@@ -259,8 +259,8 @@ const AppShell = () => {
           >
             <div className="relative w-full" style={{ paddingBottom: '123%' }}>
               <PortalPreview
-                image={nextScenePreview}
-                hoverContent={nextScenePreview ? <VortexHost mode="portal" /> : undefined}
+                videoElement={nextVideoElement}
+                hoverContent={nextVideoElement ? <VortexHost mode="portal" /> : undefined}
                 isHovered={isPortalHovered}
                 visible={portalVisible}
                 isShrinking={isPortalShrinking || isLaunchShrinking}

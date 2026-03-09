@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '../bridge'
 
 const CYCLE_INTERVAL_MS = 5000
@@ -7,16 +7,9 @@ const PORTAL_PRE_SHRINK_FAILSAFE_MS = 700
 const TRANSITION_VISIBLE_MS = 100
 const TRANSITION_FAILSAFE_MS = 1400
 
-const getMimeType = (filename: string): string => {
-  const lower = filename.toLowerCase()
-  if (lower.endsWith('.png')) return 'image/png'
-  if (lower.endsWith('.webp')) return 'image/webp'
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
-  return 'application/octet-stream'
-}
-
 type BackgroundCycleState = {
-  images: string[]
+  videos: string[]
+  getVideoElement: (index: number) => HTMLVideoElement | null
   currentIndex: number
   nextIndex: number
   isTransitioning: boolean
@@ -30,13 +23,22 @@ type BackgroundCycleState = {
 }
 
 export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleState => {
-  const [images, setImages] = useState<string[]>([])
+  const [videos, setVideos] = useState<string[]>([])
+  const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map())
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [isPortalShrinking, setIsPortalShrinking] = useState(false)
   const [transitionKey, setTransitionKey] = useState(0)
   const [portalVisible, setPortalVisible] = useState(true)
   const [isPortalEntering, setIsPortalEntering] = useState(false)
+
+  const getVideoElement = useCallback(
+    (index: number): HTMLVideoElement | null => {
+      const url = videos[index]
+      return url ? (videoElementsRef.current.get(url) ?? null) : null
+    },
+    [videos]
+  )
 
   const completePortalShrink = useCallback(() => {
     if (!isPortalShrinking || isTransitioning) return
@@ -47,11 +49,11 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
 
   const completeTransition = useCallback(() => {
     if (!isTransitioning) return
-    setCurrentIndex((prev) => (prev + 1) % (images.length || 1))
+    setCurrentIndex((prev) => (prev + 1) % (videos.length || 1))
     setIsTransitioning(false)
     setPortalVisible(true)
     setIsPortalEntering(true)
-  }, [images.length, isTransitioning])
+  }, [videos.length, isTransitioning])
 
   const triggerPortalEnter = useCallback(() => {
     setPortalVisible(true)
@@ -63,25 +65,37 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
 
     const load = async () => {
       try {
-        const filenames = await invoke('list-background-images')
+        const filenames = await invoke('list-background-videos')
         if (filenames.length === 0 || cancelled) return
 
-        const loaded = await Promise.all(
-          filenames.map(async (filename) => {
-            const base64 = await invoke('read-background-image-as-base64', filename)
-            const mime = getMimeType(filename)
-            return `data:${mime};base64,${base64}`
-          })
-        )
+        const urls = filenames.map((filename) => `biome-bg://serve/${filename}`)
+        const elements = new Map<string, HTMLVideoElement>()
+
+        for (const url of urls) {
+          const el = document.createElement('video')
+          el.src = url
+          el.autoplay = true
+          el.loop = true
+          el.muted = true
+          el.playsInline = true
+          el.preload = 'auto'
+          el.style.width = '100%'
+          el.style.height = '100%'
+          el.style.objectFit = 'cover'
+          el.load()
+          elements.set(url, el)
+        }
+
+        videoElementsRef.current = elements
 
         if (!cancelled) {
-          setImages(loaded)
+          setVideos(urls)
           setCurrentIndex(0)
           setPortalVisible(true)
           setIsPortalEntering(true)
         }
       } catch (err) {
-        console.error('Failed to load background images:', err)
+        console.error('Failed to load background videos:', err)
       }
     }
 
@@ -89,6 +103,11 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
 
     return () => {
       cancelled = true
+      for (const el of videoElementsRef.current.values()) {
+        el.pause()
+        el.src = ''
+      }
+      videoElementsRef.current.clear()
     }
   }, [])
 
@@ -104,7 +123,7 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
 
   useEffect(() => {
     if (
-      images.length < 2 ||
+      videos.length < 2 ||
       isTransitioning ||
       isPortalShrinking ||
       isPortalEntering ||
@@ -119,7 +138,7 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
     }, CYCLE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [images, isTransitioning, isPortalShrinking, isPortalEntering, portalVisible, pauseTransitions])
+  }, [videos, isTransitioning, isPortalShrinking, isPortalEntering, portalVisible, pauseTransitions])
 
   useEffect(() => {
     if (!isPortalShrinking) return
@@ -133,7 +152,7 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
   }, [isPortalShrinking, completePortalShrink])
 
   useEffect(() => {
-    if (!isTransitioning || images.length < 2) return
+    if (!isTransitioning || videos.length < 2) return
 
     // Complete once the reveal is visually complete.
     const visibleTimer = window.setTimeout(() => {
@@ -149,12 +168,13 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
       window.clearTimeout(visibleTimer)
       window.clearTimeout(failsafeTimer)
     }
-  }, [isTransitioning, images, completeTransition])
+  }, [isTransitioning, videos, completeTransition])
 
-  const nextIndex = images.length > 1 ? (currentIndex + 1) % images.length : 0
+  const nextIndex = videos.length > 1 ? (currentIndex + 1) % videos.length : 0
 
   return {
-    images,
+    videos,
+    getVideoElement,
     currentIndex,
     nextIndex,
     isTransitioning,

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, net, protocol, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { registerAllIpc } from './ipc/index.js'
 import { stopServerSync } from './lib/serverState.js'
 import { setupBundledSeeds } from './lib/seeds.js'
+import { getBackgroundsDir } from './ipc/backgrounds.js'
 // Handle Squirrel.Windows events (install/update/uninstall)
 if (process.platform === 'win32') {
   const squirrelArg = process.argv[1]
@@ -53,6 +54,15 @@ if (process.platform === 'win32') {
     process.exit(0)
   }
 }
+
+// Register biome-bg as a privileged scheme so <video> elements can stream from it.
+// Must be called before app.whenReady().
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'biome-bg',
+    privileges: { standard: true, supportFetchAPI: true, stream: true, bypassCSP: true }
+  }
+])
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined
 declare const MAIN_WINDOW_VITE_NAME: string
@@ -146,6 +156,24 @@ app
     } catch (err) {
       console.error('[SEEDS] Warning: Failed to setup bundled seeds:', err)
     }
+
+    protocol.handle('biome-bg', (request) => {
+      const url = new URL(request.url)
+      // With standard scheme, biome-bg://serve/autumn.mp4 → hostname=serve, pathname=/autumn.mp4
+      const filename = path.basename(url.pathname)
+      if (!filename) {
+        return new Response('Not found', { status: 404 })
+      }
+
+      const backgroundsDir = getBackgroundsDir()
+      const filePath = path.join(backgroundsDir, filename)
+
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        return new Response('Not found', { status: 404 })
+      }
+
+      return net.fetch(`file://${filePath}`)
+    })
 
     registerAllIpc()
     createWindow()
