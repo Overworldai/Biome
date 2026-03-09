@@ -13,6 +13,7 @@ export type UseEngineResult = {
   installUv: () => Promise<string>
   setupServerComponents: () => Promise<string>
   syncDependencies: () => Promise<string>
+  abortSyncDependencies: () => Promise<string>
   setupEngine: (onStage?: (stageId: StageId) => void) => Promise<EngineStatus>
   startServer: (port: number) => Promise<string>
   stopServer: () => Promise<string>
@@ -96,6 +97,15 @@ export const useEngine = (): UseEngineResult => {
     } finally {
       setIsLoading(false)
       setSetupProgress(null)
+    }
+  }, [])
+
+  const abortSyncDependencies = useCallback(async () => {
+    try {
+      return await invoke('abort-sync-engine-dependencies')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
     }
   }, [])
 
@@ -214,6 +224,7 @@ export const useEngine = (): UseEngineResult => {
     installUv,
     setupServerComponents,
     syncDependencies,
+    abortSyncDependencies,
     setupEngine,
     startServer,
     stopServer,

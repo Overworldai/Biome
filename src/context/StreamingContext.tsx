@@ -62,6 +62,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     probeServerHealth,
     serverLogPath,
     setupEngine,
+    abortSyncDependencies,
     setupProgress,
     isLoading: engineSetupInProgress,
     error: engineSetupError
@@ -565,6 +566,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineStatus,
     checkEngineStatus,
     setupEngine,
+    abortEngineSetup: abortSyncDependencies,
     engineSetupInProgress,
     setupProgress,
     engineSetupError,

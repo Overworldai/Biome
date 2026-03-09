@@ -42,6 +42,7 @@ export type StreamingContextValue = {
   engineStatus: EngineStatus | null
   checkEngineStatus: () => Promise<EngineStatus | null>
   setupEngine: (onStage?: (stageId: StageId) => void) => Promise<EngineStatus>
+  abortEngineSetup: () => Promise<string>
   engineSetupInProgress: boolean
   setupProgress: string | null
   engineSetupError: string | null

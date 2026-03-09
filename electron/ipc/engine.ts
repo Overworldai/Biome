@@ -8,8 +8,10 @@ import { getHiddenWindowOptions, getUvArchiveName, getVenvPythonPath } from '../
 import { getServerState } from '../lib/serverState.js'
 import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
+import { emitToAllWindows } from '../lib/ipcUtils.js'
 
 const UV_VERSION = '0.9.26'
+let syncDependenciesAbortController: AbortController | null = null
 
 function execFileAsync(file: string, args: string[], options?: Parameters<typeof execFile>[2]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -206,12 +208,18 @@ export function registerEngineIpc(): void {
   })
 
   ipcMain.handle('sync-engine-dependencies', async () => {
+    if (syncDependenciesAbortController) {
+      throw new Error('Engine dependency sync is already running')
+    }
+
     const engineDir = getEngineDir()
     const uvDir = getUvDir()
     const uvBinary = getUvBinaryPath()
     const uvEnv = getUvEnvVars()
+    syncDependenciesAbortController = new AbortController()
 
     if (!fs.existsSync(engineDir)) {
+      syncDependenciesAbortController = null
       throw new Error('Engine repository not found. Please clone it first.')
     }
 
@@ -221,25 +229,44 @@ export function registerEngineIpc(): void {
     }
 
     if (!fs.existsSync(uvBinary)) {
+      syncDependenciesAbortController = null
       throw new Error('uv is not installed. Please install it first.')
     }
 
-    logEngineToConsoleAndUi('[ENGINE] Running uv sync for engine dependencies...')
-    await runUvSyncWithMirroredLogs(
-      uvBinary,
-      engineDir,
-      {
-        ...process.env,
-        ...uvEnv,
-        UV_LINK_MODE: 'copy',
-        UV_NO_EDITABLE: '1',
-        UV_MANAGED_PYTHON: '1'
-      },
-      { logPrefix: '[ENGINE]' }
-    )
-    logEngineToConsoleAndUi('[ENGINE] uv sync finished for engine dependencies')
+    try {
+      logEngineToConsoleAndUi('[ENGINE] Running uv sync for engine dependencies...')
+      await runUvSyncWithMirroredLogs(
+        uvBinary,
+        engineDir,
+        {
+          ...process.env,
+          ...uvEnv,
+          UV_LINK_MODE: 'copy',
+          UV_NO_EDITABLE: '1',
+          UV_MANAGED_PYTHON: '1'
+        },
+        {
+          logPrefix: '[ENGINE]',
+          signal: syncDependenciesAbortController.signal,
+          onLine: (line, isStderr) => {
+            emitToAllWindows('engine-install-log', { line, is_stderr: isStderr })
+          }
+        }
+      )
+      logEngineToConsoleAndUi('[ENGINE] uv sync finished for engine dependencies')
+    } finally {
+      syncDependenciesAbortController = null
+    }
 
     return 'Dependencies synced successfully'
+  })
+
+  ipcMain.handle('abort-sync-engine-dependencies', () => {
+    if (!syncDependenciesAbortController) {
+      return 'No dependency sync is currently running'
+    }
+    syncDependenciesAbortController.abort()
+    return 'Dependency sync abort requested'
   })
 
   ipcMain.handle('unpack-server-files', (_event, force: boolean) => {

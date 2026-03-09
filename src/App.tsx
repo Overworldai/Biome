@@ -8,7 +8,6 @@ import { VortexProvider } from './context/VortexContext'
 import { useAppStartup } from './hooks/useAppStartup'
 import { invoke } from './bridge'
 import type { AppUpdateInfo } from './types/ipc'
-import { CURRENT_EULA_VERSION } from './types/settings'
 import VideoContainer from './components/VideoContainer'
 import MenuSettingsView from './components/MenuSettingsView'
 import BackgroundSlideshow from './components/BackgroundSlideshow'
@@ -23,28 +22,21 @@ import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import ShutdownOverlay from './components/ShutdownOverlay'
 import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
-import EulaModal from './components/EulaModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 import { PORTAL_SPARKS_DEBUG, MENU_VIEW, type MenuViewKey } from './constants'
 import { viewFadeVariants } from './transitions'
 import PortalSparksConfigurator from './components/PortalSparksConfigurator'
-import { useSettings } from './hooks/useSettings'
 
 const LAUNCH_PRE_SHRINK_MS = 420
 
 const AppShell = () => {
-  const { settings, saveSettings } = useSettings()
   const [isPortalHovered, setIsPortalHovered] = useState(false)
   const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
   const [isStreamingReveal, setIsStreamingReveal] = useState(false)
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdateInfo | null>(null)
-  const [eulaText, setEulaText] = useState('')
-  const [isEulaLoading, setIsEulaLoading] = useState(true)
-  const [eulaSaveError, setEulaSaveError] = useState<string | null>(null)
-  const [isSavingEula, setIsSavingEula] = useState(false)
   const prevStreamingUiRef = useRef(false)
   const {
     state: portalState,
@@ -98,36 +90,6 @@ const AppShell = () => {
   const loadingLayerStyle = {
     '--vortex-progress-percent': loadingProgressPercent.toString()
   } as CSSProperties
-  const hasAcceptedCurrentEula = settings.eula_version === CURRENT_EULA_VERSION
-  const shouldShowEula = !hasAcceptedCurrentEula
-
-  useEffect(() => {
-    let cancelled = false
-
-    const loadEulaText = async () => {
-      try {
-        const text = await invoke('read-eula-text')
-        if (!cancelled) {
-          setEulaText(text)
-        }
-      } catch (err) {
-        console.error('[EULA] Failed to load Terms text:', err)
-        if (!cancelled) {
-          setEulaText('Failed to load Terms of Service text.')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsEulaLoading(false)
-        }
-      }
-    }
-
-    void loadEulaText()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -182,26 +144,6 @@ const AppShell = () => {
 
     return () => window.clearTimeout(timer)
   }, [isLaunchShrinking])
-
-  const handleAcceptEula = async () => {
-    setIsSavingEula(true)
-    setEulaSaveError(null)
-
-    const updatedSettings = {
-      ...settings,
-      eula_version: CURRENT_EULA_VERSION
-    }
-
-    const saved = await saveSettings(updatedSettings)
-    if (!saved) {
-      setEulaSaveError('Failed to save acceptance. Please try again.')
-    }
-    setIsSavingEula(false)
-  }
-
-  const handleDeclineEula = () => {
-    void invoke('quit-app')
-  }
 
   const handleLaunch = () => {
     if (
@@ -381,18 +323,6 @@ const AppShell = () => {
           }}
           confirmLabel="Upgrade"
           cancelLabel="Later"
-        />
-      )}
-      {shouldShowEula && (
-        <EulaModal
-          eulaText={eulaText}
-          isLoadingText={isEulaLoading}
-          isSaving={isSavingEula}
-          saveError={eulaSaveError}
-          onAccept={() => {
-            void handleAcceptEula()
-          }}
-          onDecline={handleDeclineEula}
         />
       )}
     </div>

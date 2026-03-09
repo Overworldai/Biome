@@ -1,13 +1,12 @@
 import { ipcMain, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { getConfigDir, getResourcePath, getSeedsDefaultDir, getSeedsUploadsDir } from '../lib/paths.js'
+import { getConfigDir, getSeedsDefaultDir, getSeedsUploadsDir } from '../lib/paths.js'
 import { settingsSchema, DEFAULT_PINNED_SCENES } from '../../src/types/settings.js'
 import type { Settings } from '../../src/types/settings.js'
 
 const SETTINGS_FILENAME = 'settings.json'
 const LEGACY_CONFIG_FILENAME = 'config.json'
-const EULA_PATH = path.join('licensing', 'EULA.txt')
 
 function getSettingsPath(): string {
   const configDir = getConfigDir()
@@ -167,10 +166,5 @@ export function registerSettingsIpc(): void {
       fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
     }
     shell.showItemInFolder(settingsPath)
-  })
-
-  ipcMain.handle('read-eula-text', () => {
-    const eulaPath = getResourcePath(EULA_PATH)
-    return fs.readFileSync(eulaPath, 'utf-8')
   })
 }

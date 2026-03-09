@@ -56,7 +56,6 @@ export type IpcCommandMap = {
   'write-settings': { args: [settings: Settings]; return: void }
   'get-settings-path-str': { args: []; return: string }
   'open-settings': { args: []; return: void }
-  'read-eula-text': { args: []; return: string }
 
   // Models
   'list-waypoint-models': { args: []; return: string[] }
@@ -67,6 +66,7 @@ export type IpcCommandMap = {
   'install-uv': { args: []; return: string }
   'setup-server-components': { args: []; return: string }
   'sync-engine-dependencies': { args: []; return: string }
+  'abort-sync-engine-dependencies': { args: []; return: string }
   'unpack-server-files': { args: [force: boolean]; return: string }
 
   // Server
@@ -110,5 +110,6 @@ export type IpcCommandMap = {
 export type IpcEventMap = {
   'server-ready': boolean
   'server-stage': { id: string; label: string; percent: number }
+  'engine-install-log': { line: string; is_stderr: boolean }
   'window-resized': { width: number; height: number }
 }

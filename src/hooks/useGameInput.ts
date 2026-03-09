@@ -29,6 +29,11 @@ const MOUSE_BUTTONS: Record<number, string> = {
   2: 'MOUSE_RIGHT'
 }
 
+const isEditableTarget = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  (target as HTMLElement)?.isContentEditable
+
 type UseGameInputResult = {
   pressedKeys: Set<string>
   mouseButtons: Set<string>
@@ -54,6 +59,11 @@ export const useGameInput = (
     (e: KeyboardEvent) => {
       if (e.code === 'Escape') return
 
+      // on one hand we can check if !enabled, but the issue when we do that is that in the pause menu
+      // the backquote and reset keys no longer work to unpause the game, so we check if the target is
+      // editable instead to skip handling of ~ and reset key
+      if (isEditableTarget(e.target)) return
+
       if (e.code === 'Backquote') {
         onToggleMenu?.()
         e.preventDefault()
@@ -65,8 +75,6 @@ export const useGameInput = (
         e.preventDefault()
         return
       }
-
-      if (!enabled) return
       if (e.code === 'Tab' && e.altKey) return
 
       const button = KEY_MAP[e.code]
@@ -80,6 +88,7 @@ export const useGameInput = (
 
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return
       if (!enabled) return
       const button = KEY_MAP[e.code]
       if (button) {
