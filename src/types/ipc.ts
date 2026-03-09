@@ -56,7 +56,6 @@ export type IpcCommandMap = {
   'write-settings': { args: [settings: Settings]; return: void }
   'get-settings-path-str': { args: []; return: string }
   'open-settings': { args: []; return: void }
-  'read-eula-text': { args: []; return: string }
 
   // Models
   'list-waypoint-models': { args: []; return: string[] }
