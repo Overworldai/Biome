@@ -31,6 +31,7 @@ import time
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
+from queue import Empty, Queue
 from typing import Optional
 
 # Resolve HuggingFace token: env var > CLI-cached token file.
@@ -1401,331 +1402,264 @@ async def websocket_endpoint(websocket: WebSocket):
         world_engine.set_progress_callback(None)
         await send_stage(SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
+        running = True
         paused = False
-        pending_msg = None
-        pending_control_msg = None
+        reset_flag = False
+        prompt_pending: str | None = None
+        ctrl_state = {
+            "buttons": set(),
+            "mouse_dx": 0.0,
+            "mouse_dy": 0.0,
+            "client_ts": 0,
+            "dirty": False,
+        }
+        ctrl_lock = threading.Lock()
+        frame_queue: Queue = Queue(maxsize=16)
+        main_loop = asyncio.get_running_loop()
 
-        # Helper to drain all pending messages and return only the latest control input
-        async def get_latest_control():
-            """Drain the message queue and return only the most recent control input."""
-            latest_control_msg = None
-
-            while True:
-                try:
-                    raw = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=0.001
-                    )
-                    msg = json.loads(raw)
-
-                    # Handle non-control messages immediately
-                    msg_type = msg.get("type", "control")
-                    if msg_type != "control":
-                        return msg  # Return special messages immediately
-
-                    # For control messages, keep only the latest
-                    latest_control_msg = msg
-
-                except asyncio.TimeoutError:
-                    # No more messages in queue
-                    return latest_control_msg
-                except WebSocketDisconnect:
-                    raise
-
-        async def drain_pending_messages():
-            """Drain pending websocket messages into control + non-control buckets."""
-            control_msgs = []
-            special_msg = None
-
-            while True:
-                try:
-                    raw = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=0.001
-                    )
-                    msg = json.loads(raw)
-                    msg_type = msg.get("type", "control")
-                    if msg_type == "control":
-                        control_msgs.append(msg)
-                    else:
-                        special_msg = msg
-                        return control_msgs, special_msg
-                except asyncio.TimeoutError:
-                    return control_msgs, special_msg
-                except WebSocketDisconnect:
-                    raise
-
-        def merge_controls(existing_msg, control_msgs):
-            """Merge control messages for one future generation step."""
-            if existing_msg is not None:
-                buttons = set(existing_msg.get("button_codes", []))
-                mouse_dx = float(existing_msg.get("mouse_dx", 0.0))
-                mouse_dy = float(existing_msg.get("mouse_dy", 0.0))
-                ts = existing_msg.get("ts", 0)
-            else:
-                buttons = set()
-                mouse_dx = 0.0
-                mouse_dy = 0.0
-                ts = 0
-
-            for control_msg in control_msgs:
-                buttons.update(
-                    BUTTON_CODES[b.upper()]
-                    for b in control_msg.get("buttons", [])
-                    if b.upper() in BUTTON_CODES
-                )
-                mouse_dx += float(control_msg.get("mouse_dx", 0.0))
-                mouse_dy += float(control_msg.get("mouse_dy", 0.0))
-                if "ts" in control_msg:
-                    ts = control_msg.get("ts", ts)
-
-            if not buttons and mouse_dx == 0.0 and mouse_dy == 0.0:
-                return existing_msg
-
-            return {
-                "type": "control",
-                "button_codes": list(buttons),
-                "mouse_dx": mouse_dx,
-                "mouse_dy": mouse_dy,
-                "ts": ts,
-            }
-
-        # Main game loop
-        while True:
+        def queue_send(payload: dict) -> None:
             try:
-                # set messages based on what was received during sending of multiframe generation (if applicable)
-                if pending_msg is not None:
-                    msg = pending_msg
-                    pending_msg = None
-                elif pending_control_msg is not None:
-                    msg = pending_control_msg
-                    pending_control_msg = None
-                else:
-                    msg = await get_latest_control()
-                if msg is None:
-                    continue
-            except WebSocketDisconnect:
-                logger.info(f"[{client_host}] Client disconnected")
-                break
+                frame_queue.put_nowait(payload)
+            except Exception:
+                pass
 
-            msg_type = msg.get("type", "control")
+        async def receiver() -> None:
+            nonlocal running, paused, reset_flag, prompt_pending
+            while running:
+                try:
+                    raw = await websocket.receive_text()
+                    msg = json.loads(raw)
+                    msg_type = msg.get("type", "control")
 
-            # Handle request/response messages in the game loop too
-            if "req_id" in msg:
-                result = await dispatch_request(msg, websocket)
-                req_id = msg["req_id"]
-                if "success" not in result:
-                    result = {"success": True, "data": result}
-                await send_json({"type": "response", "req_id": req_id, **result})
-                continue
-
-            match msg_type:
-                case "set_model":
-                    await handle_model_request(msg.get("model"), live_switch=True)
-                    continue
-
-                case "reset":
-                    logger.info(f"[{client_host}] Reset requested")
-                    await reset_engine()
-                    continue
-
-                case "pause":
-                    paused = True
-                    logger.info("[RECV] Paused")
-
-                case "resume":
-                    paused = False
-                    logger.info("[RECV] Resumed")
-
-                case "prompt":
-                    new_prompt = msg.get("prompt", "").strip()
-                    logger.info(f"[RECV] Prompt received: '{new_prompt[:50]}...'")
-                    try:
-                        from engine_manager import DEFAULT_PROMPT
-
-                        world_engine.current_prompt = (
-                            new_prompt if new_prompt else DEFAULT_PROMPT
-                        )
-                        await reset_engine()
-                    except Exception as e:
-                        logger.error(f"[GEN] Failed to set prompt: {e}")
-
-                case "prompt_with_seed":
-                    # Load new seed mid-session (server verifies against cache)
-                    filename = msg.get("filename")
-                    logger.info(f"[RECV] prompt_with_seed: filename={filename}")
-
-                    try:
-                        if not filename:
-                            await send_warning("Missing filename")
-                            continue
-
-                        # Check if seed is in safety cache
-                        if filename not in safe_seeds_cache:
-                            ok, error = await _fallback_seed_cache_entry(
-                                filename, log_prefix="[RECV]"
-                            )
-                            if not ok:
-                                logger.warning(f"[RECV] {error}")
-                                await send_warning(error)
-                                continue
-
-                        cached_entry = safe_seeds_cache[filename]
-
-                        # Verify is_safe flag
-                        if not cached_entry.get("is_safe", False):
-                            logger.warning(
-                                f"[RECV] Seed '{filename}' marked as unsafe in cache"
-                            )
-                            await send_warning(f"Seed '{filename}' marked as unsafe")
-                            continue
-
-                        # Get cached hash and file path
-                        cached_hash = cached_entry.get("hash", "")
-                        file_path = cached_entry.get("path", "")
-
-                        # Verify file exists
-                        if not os.path.exists(file_path):
-                            logger.error(f"[RECV] Seed file not found: {file_path}")
-                            await send_warning(f"Seed file not found: {filename}")
-                            continue
-
-                        # Verify file integrity (check if file on disk matches cached hash)
-                        actual_hash = await asyncio.to_thread(
-                            compute_file_hash, file_path
-                        )
-                        if actual_hash != cached_hash:
-                            logger.warning(
-                                f"[RECV] File integrity check failed for '{filename}' - file may have been modified"
-                            )
-                            await send_warning("File integrity verification failed - please rescan seeds")
-                            continue
-
-                        # All checks passed - load the seed
-                        logger.info(f"[RECV] Loading seed '{filename}' from {file_path}")
-                        loaded_frame = await world_engine.load_seed_from_file(file_path)
-
-                        if loaded_frame is not None:
-                            world_engine.seed_frame = loaded_frame
-                            logger.info(f"[RECV] Seed '{filename}' loaded successfully")
-                            await reset_engine()
-                        else:
-                            await send_warning(f"Failed to load seed image: {filename}")
-
-                    except Exception as e:
-                        logger.error(f"[GEN] Failed to set seed: {e}")
-                        await send_warning(f"Failed to set seed: {str(e)}")
-
-                case "control":
-                    if paused:
+                    if "req_id" in msg:
+                        result = await dispatch_request(msg, websocket)
+                        req_id = msg["req_id"]
+                        if "success" not in result:
+                            result = {"success": True, "data": result}
+                        queue_send({"type": "response", "req_id": req_id, **result})
                         continue
 
-                    if "button_codes" in msg:
-                        buttons = set(msg.get("button_codes", []))
-                    else:
-                        buttons = {
-                            BUTTON_CODES[b.upper()]
-                            for b in msg.get("buttons", [])
-                            if b.upper() in BUTTON_CODES
-                        }
-                    mouse_dx = float(msg.get("mouse_dx", 0))
-                    mouse_dy = float(msg.get("mouse_dy", 0))
-                    client_ts = msg.get("ts", 0)
+                    match msg_type:
+                        case "set_model":
+                            await handle_model_request(msg.get("model"), live_switch=True)
+                            if world_engine.seed_frame is not None:
+                                reset_flag = True
+                            continue
 
-                    if session.frame_count >= session.max_frames:
-                        logger.info(f"[{client_host}] Auto-reset at frame limit")
-                        await reset_engine()
+                        case "set_initial_seed":
+                            if await load_initial_seed(msg.get("filename")):
+                                reset_flag = True
+                            continue
 
-                    ctrl = world_engine.CtrlInput(
-                        button=buttons, mouse=(mouse_dx, mouse_dy)
-                    )
+                        case "reset":
+                            logger.info(f"[{client_host}] Reset requested")
+                            reset_flag = True
+                            continue
+
+                        case "pause":
+                            paused = True
+                            logger.info("[RECV] Paused")
+                            continue
+
+                        case "resume":
+                            paused = False
+                            logger.info("[RECV] Resumed")
+                            continue
+
+                        case "prompt":
+                            from engine_manager import DEFAULT_PROMPT
+
+                            new_prompt = msg.get("prompt", "").strip()
+                            prompt_pending = new_prompt if new_prompt else DEFAULT_PROMPT
+                            continue
+
+                        case "prompt_with_seed":
+                            filename = msg.get("filename")
+                            logger.info(f"[RECV] prompt_with_seed: filename={filename}")
+                            if not filename:
+                                queue_send({"type": "warning", "message": "Missing filename"})
+                                continue
+                            if await load_initial_seed(filename):
+                                reset_flag = True
+                            continue
+
+                        case "control":
+                            if paused:
+                                continue
+
+                            if "button_codes" in msg:
+                                buttons = set(msg.get("button_codes", []))
+                            else:
+                                buttons = {
+                                    BUTTON_CODES[b.upper()]
+                                    for b in msg.get("buttons", [])
+                                    if b.upper() in BUTTON_CODES
+                                }
+
+                            with ctrl_lock:
+                                ctrl_state["buttons"] = buttons
+                                ctrl_state["mouse_dx"] += float(msg.get("mouse_dx", 0.0))
+                                ctrl_state["mouse_dy"] += float(msg.get("mouse_dy", 0.0))
+                                ctrl_state["client_ts"] = msg.get("ts", ctrl_state["client_ts"])
+                                ctrl_state["dirty"] = True
+                            continue
+
+                except WebSocketDisconnect:
+                    logger.info(f"[{client_host}] Client disconnected")
+                    running = False
+                    break
+                except Exception as e:
+                    logger.error(f"[{client_host}] Receiver error: {e}", exc_info=True)
+                    running = False
+                    break
+
+        async def sender() -> None:
+            nonlocal running
+            while running:
+                try:
+                    try:
+                        payload = frame_queue.get_nowait()
+                    except Empty:
+                        await asyncio.sleep(0.001)
+                        continue
+                    await websocket.send_text(json.dumps(payload))
+                except Exception as e:
+                    logger.error(f"[{client_host}] Sender error: {e}", exc_info=True)
+                    running = False
+                    break
+
+        def generator() -> None:
+            nonlocal running, paused, reset_flag, prompt_pending
+
+            def run_coro(coro):
+                return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
+
+            while running:
+                if paused:
+                    time.sleep(0.01)
+                    continue
+
+                try:
+                    if prompt_pending is not None:
+                        world_engine.current_prompt = prompt_pending
+                        prompt_pending = None
+                        run_coro(reset_engine())
+
+                    if reset_flag or session.frame_count >= session.max_frames:
+                        if session.frame_count >= session.max_frames:
+                            logger.info(f"[{client_host}] Auto-reset at frame limit")
+                        run_coro(reset_engine())
+                        reset_flag = False
+
+                    with ctrl_lock:
+                        if not ctrl_state["dirty"]:
+                            buttons = None
+                        else:
+                            buttons = set(ctrl_state["buttons"])
+                            mouse_dx = float(ctrl_state["mouse_dx"])
+                            mouse_dy = float(ctrl_state["mouse_dy"])
+                            client_ts = ctrl_state["client_ts"]
+                            ctrl_state["mouse_dx"] = 0.0
+                            ctrl_state["mouse_dy"] = 0.0
+                            ctrl_state["dirty"] = False
+
+                    if buttons is None:
+                        time.sleep(0.001)
+                        continue
+
+                    ctrl = world_engine.CtrlInput(button=buttons, mouse=(mouse_dx, mouse_dy))
 
                     t0 = time.perf_counter()
-                    try:
-                        result = await world_engine.generate_frame(ctrl)
-                        gen_time = (time.perf_counter() - t0) * 1000
+                    result = run_coro(world_engine.generate_frame(ctrl))
+                    gen_time = (time.perf_counter() - t0) * 1000
 
-                        if world_engine.is_multiframe:
-                            # wp-1.5: result is [4,H,W,3], send each frame individually
-                            frame_interval = gen_time / 4 / 1000  # seconds
-                            for i in range(4):
-                                session.frame_count += 1
-                                frame = result[i]
-                                jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, frame)
-                                await send_json(
-                                    {
-                                        "type": "frame",
-                                        "data": base64.b64encode(jpeg).decode("ascii"),
-                                        "frame_id": session.frame_count,
-                                        "client_ts": client_ts,
-                                        "gen_ms": gen_time / 4,
-                                    }
-                                )
-
-                                if i < 3:
-                                    await asyncio.sleep(frame_interval)
-                                    # Drain control messages while queueing the remaining frames and combine them for next generation frame
-                                    try:
-                                        drained_controls, drained_special = await drain_pending_messages()
-                                        if drained_controls:
-                                            pending_control_msg = merge_controls(
-                                                pending_control_msg, drained_controls
-                                            )
-                                        if drained_special is not None:
-                                            drained_type = drained_special.get("type", "control")
-                                            if drained_type == "pause":
-                                                paused = True
-                                                logger.info("[RECV] Paused (during multi-frame send)")
-                                                break
-                                            if pending_msg is None:
-                                                pending_msg = drained_special
-                                    except WebSocketDisconnect:
-                                        raise
-                        else:
-                            # Legacy single-frame mode
+                    if world_engine.is_multiframe:
+                        per_frame_ms = gen_time / 4.0
+                        for i in range(4):
                             session.frame_count += 1
-                            jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, result)
-                            await send_json(
+                            frame = result[i]
+                            jpeg = world_engine.frame_to_jpeg(frame)
+                            queue_send(
                                 {
                                     "type": "frame",
                                     "data": base64.b64encode(jpeg).decode("ascii"),
                                     "frame_id": session.frame_count,
                                     "client_ts": client_ts,
-                                    "gen_ms": gen_time,
+                                    "gen_ms": per_frame_ms,
                                 }
                             )
+                    else:
+                        session.frame_count += 1
+                        jpeg = world_engine.frame_to_jpeg(result)
+                        queue_send(
+                            {
+                                "type": "frame",
+                                "data": base64.b64encode(jpeg).decode("ascii"),
+                                "frame_id": session.frame_count,
+                                "client_ts": client_ts,
+                                "gen_ms": gen_time,
+                            }
+                        )
 
-                        # Logging
-                        if session.frame_count % 60 == 0:
-                            logger.info(
-                                f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
-                            )
-                    except Exception as cuda_err:
-                        # Check if it's a CUDA-related error (RuntimeError or torch.AcceleratorError)
-                        error_msg = str(cuda_err)
-                        is_cuda_error = any(keyword in error_msg.lower() for keyword in ['cuda', 'cublas', 'graph capture', 'offset increment'])
+                    if session.frame_count % 60 == 0:
+                        logger.info(
+                            f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
+                        )
 
-                        if is_cuda_error:
-                            logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
+                except Exception as cuda_err:
+                    error_msg = str(cuda_err)
+                    is_cuda_error = any(
+                        keyword in error_msg.lower()
+                        for keyword in ["cuda", "cublas", "graph capture", "offset increment"]
+                    )
 
-                            # Attempt recovery
-                            recovery_success = await world_engine.recover_from_cuda_error()
+                    if is_cuda_error:
+                        logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
+                        try:
+                            recovery_success = run_coro(world_engine.recover_from_cuda_error())
+                        except Exception:
+                            recovery_success = False
 
-                            if recovery_success:
-                                await send_json({
+                        if recovery_success:
+                            queue_send(
+                                {
                                     "type": "status",
                                     "stage": "session.reset",
-                                    "message": "Recovered from CUDA error - engine reset"
-                                })
-                                logger.info(f"[{client_host}] Successfully recovered from CUDA error")
-                            else:
-                                await send_json({
-                                    "type": "error",
-                                    "message": "CUDA error - recovery failed. Please reconnect."
-                                })
-                                logger.error(f"[{client_host}] Failed to recover from CUDA error")
-                                break
+                                    "message": "Recovered from CUDA error - engine reset",
+                                }
+                            )
+                            logger.info(f"[{client_host}] Successfully recovered from CUDA error")
                         else:
-                            # Re-raise if not a CUDA error
-                            raise
+                            queue_send(
+                                {
+                                    "type": "error",
+                                    "message": "CUDA error - recovery failed. Please reconnect.",
+                                }
+                            )
+                            logger.error(f"[{client_host}] Failed to recover from CUDA error")
+                            running = False
+                            break
+                    else:
+                        logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
+                        queue_send({"type": "error", "message": str(cuda_err)})
+                        running = False
+                        break
+
+        gen_thread = threading.Thread(target=generator, daemon=True, name=f"gen-{client_host}")
+        gen_thread.start()
+
+        recv_task = asyncio.create_task(receiver())
+        send_task = asyncio.create_task(sender())
+        done, pending = await asyncio.wait(
+            [recv_task, send_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        running = False
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     except WebSocketDisconnect:
         logger.info(f"[{client_host}] WebSocket disconnected")
