@@ -94,8 +94,8 @@ export class AudioEngine {
     }
   }
 
-  /** Start a looping sound at an optional volume (0-1, default 1). Returns true if started. */
-  startLoop(id: SoundId, volume = 1): boolean {
+  /** Start a looping sound. Optionally fade in over `fadeInSeconds`. */
+  startLoop(id: SoundId, volume = 1, fadeInSeconds = 0): boolean {
     if (this.activeLoops.has(id)) return false
     const ctx = this.ensureContext()
     const cat = SOUND_CATEGORIES[id]
@@ -103,7 +103,12 @@ export class AudioEngine {
 
     // Per-loop gain node for individual volume control
     const loopGain = ctx.createGain()
-    loopGain.gain.setValueAtTime(volume, ctx.currentTime)
+    if (fadeInSeconds > 0) {
+      loopGain.gain.setValueAtTime(0, ctx.currentTime)
+      loopGain.gain.linearRampToValueAtTime(volume, ctx.currentTime + fadeInSeconds)
+    } else {
+      loopGain.gain.setValueAtTime(volume, ctx.currentTime)
+    }
     loopGain.connect(dest)
 
     // Try asset buffer first
@@ -155,13 +160,38 @@ export class AudioEngine {
     return this.activeLoops.has(id)
   }
 
-  /** Stop a looping sound. */
+  /** Stop a looping sound immediately. */
   stopLoop(id: SoundId) {
     const loop = this.activeLoops.get(id)
     if (loop) {
       loop.stop()
       this.activeLoops.delete(id)
     }
+  }
+
+  /** Crossfade from one loop to another over `seconds`. */
+  crossfadeLoop(from: SoundId, to: SoundId, seconds: number) {
+    this.fadeOutLoop(from, seconds)
+    this.startLoop(to, 1, seconds)
+  }
+
+  /** Fade out a looping sound over `seconds`, then clean up. */
+  fadeOutLoop(id: SoundId, seconds: number) {
+    const loop = this.activeLoops.get(id)
+    if (!loop || !this.ctx) return
+    // Ramp gain to zero
+    loop.gain.gain.cancelScheduledValues(this.ctx.currentTime)
+    loop.gain.gain.setValueAtTime(loop.gain.gain.value, this.ctx.currentTime)
+    loop.gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + seconds)
+    // Remove from active immediately so a new loop with the same ID can start
+    this.activeLoops.delete(id)
+    // Clean up after fade completes
+    setTimeout(
+      () => {
+        loop.stop()
+      },
+      seconds * 1000 + 100
+    )
   }
 
   /** Stop all active loops. */

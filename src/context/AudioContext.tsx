@@ -4,8 +4,10 @@ import { useSettings } from '../hooks/useSettings'
 
 type AudioContextValue = {
   play: (id: SoundId) => void
-  startLoop: (id: SoundId, volume?: number) => void
+  startLoop: (id: SoundId, volume?: number, fadeInSeconds?: number) => void
   stopLoop: (id: SoundId) => void
+  fadeOutLoop: (id: SoundId, seconds: number) => void
+  crossfadeLoop: (from: SoundId, to: SoundId, seconds: number) => void
   stopAllLoops: () => void
   setLoopVolume: (id: SoundId, volume: number, rampSeconds?: number) => void
   isLoopActive: (id: SoundId) => boolean
@@ -36,12 +38,20 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
     engineRef.current?.play(id)
   }, [])
 
-  const startLoop = useCallback((id: SoundId, volume?: number) => {
-    engineRef.current?.startLoop(id, volume)
+  const startLoop = useCallback((id: SoundId, volume?: number, fadeInSeconds?: number) => {
+    engineRef.current?.startLoop(id, volume, fadeInSeconds)
   }, [])
 
   const stopLoop = useCallback((id: SoundId) => {
     engineRef.current?.stopLoop(id)
+  }, [])
+
+  const fadeOutLoop = useCallback((id: SoundId, seconds: number) => {
+    engineRef.current?.fadeOutLoop(id, seconds)
+  }, [])
+
+  const crossfadeLoop = useCallback((from: SoundId, to: SoundId, seconds: number) => {
+    engineRef.current?.crossfadeLoop(from, to, seconds)
   }, [])
 
   const stopAllLoops = useCallback(() => {
@@ -57,7 +67,9 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   return (
-    <Ctx.Provider value={{ play, startLoop, stopLoop, stopAllLoops, setLoopVolume, isLoopActive }}>
+    <Ctx.Provider
+      value={{ play, startLoop, stopLoop, fadeOutLoop, crossfadeLoop, stopAllLoops, setLoopVolume, isLoopActive }}
+    >
       {children}
     </Ctx.Provider>
   )
