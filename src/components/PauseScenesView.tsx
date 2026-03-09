@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneCard from './SceneCard'
 import MenuButton from './ui/MenuButton'
@@ -37,6 +37,27 @@ const PauseScenesView = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
   const [isDragActive, setIsDragActive] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isPasteShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v'
+      if (!isPasteShortcut) return
+
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      void onClipboardUpload()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClipboardUpload])
 
   const hasImagePayload = (event: DragEvent<HTMLDivElement>): boolean => {
     const dt = event.dataTransfer
