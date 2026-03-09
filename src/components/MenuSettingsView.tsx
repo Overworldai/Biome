@@ -316,21 +316,6 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
             )}
           </SettingsSection>
 
-          <SettingsSection
-            title="Mouse Sensitivity"
-            description="how much should the camera move when you move your mouse?"
-          >
-            <div className="flex flex-col gap-[1.5cqh]">
-              <SettingsSlider
-                min={10}
-                max={100}
-                value={menuMouseSensitivity}
-                onChange={handleMouseSensitivityChange}
-                suffix={`${menuMouseSensitivity}%`}
-              />
-            </div>
-          </SettingsSection>
-
           <SettingsSection title="Volume" description="how loud should things be?">
             <div className="flex flex-col gap-[1.5cqh]">
               <SettingsSlider
@@ -358,6 +343,20 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
                 suffix={`${volume.music}%`}
               />
             </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Mouse Sensitivity"
+            description="how much should the camera move when you move your mouse?"
+          >
+            <SettingsSlider
+              min={10}
+              max={100}
+              value={menuMouseSensitivity}
+              onChange={handleMouseSensitivityChange}
+              label="sensitivity"
+              suffix={`${menuMouseSensitivity}%`}
+            />
           </SettingsSection>
 
           <SettingsSection title="Keybindings" description="what keys do you want to use?">
