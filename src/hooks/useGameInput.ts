@@ -1,13 +1,45 @@
-import { useState, useEffect, useCallback, useRef, type RefObject } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, type RefObject } from 'react'
+import { DEFAULT_KEYBINDINGS, type Keybindings } from '../types/settings'
 
-export const RESET_KEY = 'KeyU'
+/** Fixed game controls — the single source of truth for non-rebindable bindings.
+ *  Entries with `code` are real keyboard keys (used for conflict detection).
+ *  Entries with `displayValue` are display-only (mouse, clicks). */
+export type FixedControl = { label: string } & (
+  | { code: string; displayValue?: never }
+  | { code?: never; displayValue: string }
+)
 
-const KEY_MAP: Record<string, string> = {}
+export const FIXED_CONTROLS: readonly FixedControl[] = [
+  { label: 'Move Forward', code: 'KeyW' },
+  { label: 'Move Left', code: 'KeyA' },
+  { label: 'Move Back', code: 'KeyS' },
+  { label: 'Move Right', code: 'KeyD' },
+  { label: 'Jump', code: 'Space' },
+  { label: 'Sprint', code: 'ShiftLeft' },
+  { label: 'Look', displayValue: 'Mouse' },
+  { label: 'Interact', code: 'KeyE' },
+  { label: 'Primary Fire', displayValue: 'Left Click' },
+  { label: 'Secondary Fire', displayValue: 'Right Click' },
+  { label: 'Pause Menu', code: 'Escape' }
+]
+
+const FIXED_CODE_TO_LABEL = new Map(
+  FIXED_CONTROLS.flatMap((ctrl) => (ctrl.code ? [[ctrl.code, ctrl.label] as const] : []))
+)
+
+/** Returns a warning if `code` conflicts with any code in `otherCodes`, or with a fixed game control. */
+export const getKeybindConflict = (code: string, otherCodes: string[]): string | null => {
+  if (otherCodes.includes(code)) return 'Conflicts with another keybinding'
+  const fixedLabel = FIXED_CODE_TO_LABEL.get(code)
+  if (fixedLabel) return `Conflicts with fixed control: ${fixedLabel}`
+  return null
+}
+
+export const KEY_MAP: Record<string, string> = {}
 for (let i = 65; i <= 90; i++) {
   const letter = String.fromCharCode(i)
   KEY_MAP[`Key${letter}`] = letter
 }
-delete KEY_MAP[RESET_KEY]
 for (let i = 0; i <= 9; i++) {
   KEY_MAP[`Digit${i}`] = `${i}`
 }
@@ -46,7 +78,7 @@ export const useGameInput = (
   enabled = false,
   containerRef: RefObject<HTMLElement | null> | null = null,
   onReset: (() => void) | null = null,
-  onToggleMenu: (() => void) | null = null
+  keybindings: Keybindings = DEFAULT_KEYBINDINGS
 ): UseGameInputResult => {
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set())
   const [mouseButtons, setMouseButtons] = useState<Set<string>>(new Set())
@@ -55,42 +87,40 @@ export const useGameInput = (
 
   const mouseDeltaAccum = useRef({ dx: 0, dy: 0 })
 
+  const effectiveKeyMap = useMemo(() => {
+    const map = { ...KEY_MAP }
+    delete map[keybindings.reset_scene]
+    return map
+  }, [keybindings.reset_scene])
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.code === 'Escape') return
 
-      // on one hand we can check if !enabled, but the issue when we do that is that in the pause menu
-      // the backquote and reset keys no longer work to unpause the game, so we check if the target is
-      // editable instead to skip handling of ~ and reset key
+      // Check if the target is editable to skip handling of the reset key in text inputs
       if (isEditableTarget(e.target)) return
 
-      if (e.code === 'Backquote') {
-        onToggleMenu?.()
-        e.preventDefault()
-        return
-      }
-
-      if (e.code === RESET_KEY) {
+      if (e.code === keybindings.reset_scene) {
         onReset?.()
         e.preventDefault()
         return
       }
       if (e.code === 'Tab' && e.altKey) return
 
-      const button = KEY_MAP[e.code]
+      const button = effectiveKeyMap[e.code]
       if (button) {
         e.preventDefault()
         setPressedKeys((prev) => new Set([...prev, button]))
       }
     },
-    [enabled, onReset, onToggleMenu]
+    [enabled, onReset, keybindings.reset_scene, effectiveKeyMap]
   )
 
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
       if (!enabled) return
-      const button = KEY_MAP[e.code]
+      const button = effectiveKeyMap[e.code]
       if (button) {
         e.preventDefault()
         setPressedKeys((prev) => {
@@ -100,7 +130,7 @@ export const useGameInput = (
         })
       }
     },
-    [enabled]
+    [enabled, effectiveKeyMap]
   )
 
   const handleMouseDown = useCallback(

@@ -21,13 +21,23 @@ export const DEFAULT_PINNED_SCENES = [
   'sample_00046.png'
 ]
 
+export const DEFAULT_KEYBINDINGS = {
+  reset_scene: 'KeyU'
+} as const
+
 export const settingsSchema = z.object({
   server_url: z.string().default(DEFAULT_STANDALONE_URL),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.0),
-  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES)
+  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
+  keybindings: z
+    .object({
+      reset_scene: z.string().default('KeyU')
+    })
+    .default(DEFAULT_KEYBINDINGS)
 })
 
 export type Settings = z.infer<typeof settingsSchema>
 export type EngineMode = Settings['engine_mode']
+export type Keybindings = Settings['keybindings']

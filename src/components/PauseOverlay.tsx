@@ -50,7 +50,9 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (view === PAUSE_VIEW.SCENES || view === PAUSE_VIEW.SETTINGS) {
+      // Settings view handles its own Escape (to save draft settings before navigating)
+      if (view === PAUSE_VIEW.SETTINGS) return
+      if (view === PAUSE_VIEW.SCENES) {
         setView(PAUSE_VIEW.MAIN)
       } else {
         requestPointerLock()

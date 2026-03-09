@@ -239,15 +239,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  const togglePointerLock = useCallback(() => {
-    if (!isStreaming || !isReady || connectionLost) return
-    if (document.pointerLockElement) {
-      document.exitPointerLock()
-      return
-    }
-    requestPointerLock()
-  }, [isStreaming, isReady, connectionLost, requestPointerLock])
-
   const handleReset = useCallback(() => {
     reset()
     requestPointerLock()
@@ -257,7 +248,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     inputEnabled,
     containerRef,
     handleReset,
-    togglePointerLock
+    settings.keybindings
   )
 
   useEffect(() => {

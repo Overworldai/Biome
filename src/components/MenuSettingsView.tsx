@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '../bridge'
 import { HEADING_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES } from '../types/settings'
+import { ENGINE_MODES, type Keybindings } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import MenuButton from './ui/MenuButton'
 import SettingsSection from './ui/SettingsSection'
@@ -10,6 +10,8 @@ import SettingsToggle from './ui/SettingsToggle'
 import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
+import SettingsKeybind, { fixedControlDisplay } from './ui/SettingsKeybind'
+import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
 import ConfirmModal from './ui/ConfirmModal'
 import WorldEngineSection from './WorldEngineSection'
 import EngineInstallModal from './EngineInstallModal'
@@ -17,6 +19,32 @@ import EngineInstallModal from './EngineInstallModal'
 type MenuModelOption = {
   id: string
   isLocal: boolean
+}
+
+type KeybindRowProps =
+  | { label: string; value: string; onChange: (code: string) => void; warning?: string | null; fixedLabel?: never }
+  | { label: string; fixedLabel: string; value?: never; onChange?: never; warning?: never }
+
+const KeybindRow = (props: KeybindRowProps) => {
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-[2cqh]">
+        <span className={`${SETTINGS_MUTED_TEXT} w-[25cqh] text-right shrink-0`}>{props.label}</span>
+        <div className="flex-1">
+          {props.fixedLabel !== undefined ? (
+            <SettingsKeybind value={props.fixedLabel} disabled />
+          ) : (
+            <SettingsKeybind value={props.value} onChange={props.onChange} />
+          )}
+        </div>
+      </div>
+      {props.warning && (
+        <p className={`${SETTINGS_MUTED_TEXT} text-left m-0 mt-[0.4cqh] text-[1.8cqh] opacity-70 pl-[27cqh]`}>
+          {props.warning}
+        </p>
+      )}
+    </div>
+  )
 }
 
 type MenuSettingsViewProps = {
@@ -56,6 +84,8 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const [showFixModal, setShowFixModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
+
+  const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
 
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -113,7 +143,15 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     setMenuWorldModel(configWorldModel)
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
     setMenuServerUrl(configServerUrl)
-  }, [configEngineMode, configWorldModel, settings.mouse_sensitivity, mouseSensitivity, configServerUrl])
+    setMenuKeybindings({ ...settings.keybindings })
+  }, [
+    configEngineMode,
+    configWorldModel,
+    settings.mouse_sensitivity,
+    mouseSensitivity,
+    configServerUrl,
+    settings.keybindings
+  ])
 
   const handleServerUrlBlur = useCallback(() => {
     try {
@@ -157,7 +195,8 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       server_url: nextServerUrl,
       engine_mode: engineModeValue,
       engine_model: menuWorldModel,
-      mouse_sensitivity: streamingValue
+      mouse_sensitivity: streamingValue,
+      keybindings: menuKeybindings
     })
     setMouseSensitivity(streamingValue)
   }, [
@@ -167,6 +206,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     menuMouseSensitivity,
     menuServerUrl,
     menuWorldModel,
+    menuKeybindings,
     saveSettings,
     setMouseSensitivity
   ])
@@ -174,14 +214,24 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
 
-  const handleBackClick = async () => {
+  const handleBackClick = useCallback(async () => {
     if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }
+  }, [isStreaming, hasEngineModeChanged, hasWorldModelChanged, applyDraftSettings, onBack])
+
+  useEffect(() => {
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        void handleBackClick()
+      }
+    }
+    window.addEventListener('keyup', handleKeyUp)
+    return () => window.removeEventListener('keyup', handleKeyUp)
+  }, [handleBackClick])
 
   const handleConfirmEngineModeSwitch = async () => {
     setShowModeSwitchModal(false)
@@ -269,6 +319,21 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
               onChange={handleMouseSensitivityChange}
               label={`${menuMouseSensitivity}%`}
             />
+          </SettingsSection>
+
+          <SettingsSection title="Keybindings" description="customize your keyboard shortcuts">
+            <KeybindRow
+              label="Reset Scene"
+              value={menuKeybindings.reset_scene}
+              onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
+              warning={getKeybindConflict(menuKeybindings.reset_scene, [])}
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Fixed Controls" description="these controls cannot be changed">
+            {FIXED_CONTROLS.map((ctrl) => (
+              <KeybindRow key={ctrl.label} label={ctrl.label} fixedLabel={fixedControlDisplay(ctrl)} />
+            ))}
           </SettingsSection>
         </div>
       </section>
