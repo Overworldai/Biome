@@ -4,6 +4,7 @@ import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../style
 import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES, type Keybindings } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
+import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
 import SettingsSection from './ui/SettingsSection'
 import SettingsToggle from './ui/SettingsToggle'
@@ -12,9 +13,12 @@ import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsKeybind, { fixedControlDisplay } from './ui/SettingsKeybind'
 import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
+import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
+import Button from './ui/Button'
 import WorldEngineSection from './WorldEngineSection'
 import EngineInstallModal from './EngineInstallModal'
+import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
 
 type MenuModelOption = {
   id: string
@@ -62,6 +66,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     mouseSensitivity,
     setMouseSensitivity
   } = useStreaming()
+  const volume = useVolumeControls()
 
   // Convert streaming scale (0.1-3.0) to menu scale (10-100)
   const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
@@ -84,6 +89,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const [showFixModal, setShowFixModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
+  const [showCredits, setShowCredits] = useState(false)
 
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
 
@@ -196,7 +202,8 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       engine_mode: engineModeValue,
       engine_model: menuWorldModel,
       mouse_sensitivity: streamingValue,
-      keybindings: menuKeybindings
+      keybindings: menuKeybindings,
+      audio: volume.getAudioSettings()
     })
     setMouseSensitivity(streamingValue)
   }, [
@@ -207,6 +214,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     menuServerUrl,
     menuWorldModel,
     menuKeybindings,
+    volume.getAudioSettings,
     saveSettings,
     setMouseSensitivity
   ])
@@ -308,6 +316,35 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
             )}
           </SettingsSection>
 
+          <SettingsSection title="Volume" description="how loud should things be?">
+            <div className="flex flex-col gap-[1.5cqh]">
+              <SettingsSlider
+                min={0}
+                max={100}
+                value={volume.master}
+                onChange={volume.setMaster}
+                label="master"
+                suffix={`${volume.master}%`}
+              />
+              <SettingsSlider
+                min={0}
+                max={100}
+                value={volume.sfx}
+                onChange={volume.setSfx}
+                label="sound effects"
+                suffix={`${volume.sfx}%`}
+              />
+              <SettingsSlider
+                min={0}
+                max={100}
+                value={volume.music}
+                onChange={volume.setMusic}
+                label="music"
+                suffix={`${volume.music}%`}
+              />
+            </div>
+          </SettingsSection>
+
           <SettingsSection
             title="Mouse Sensitivity"
             description="how much should the camera move when you move your mouse?"
@@ -317,7 +354,8 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
               max={100}
               value={menuMouseSensitivity}
               onChange={handleMouseSensitivityChange}
-              label={`${menuMouseSensitivity}%`}
+              label="sensitivity"
+              suffix={`${menuMouseSensitivity}%`}
             />
           </SettingsSection>
 
@@ -338,15 +376,20 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         </div>
       </section>
 
-      <MenuButton
-        variant="primary"
-        className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
-        onClick={() => {
-          void handleBackClick()
-        }}
-      >
-        Back
-      </MenuButton>
+      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+        <MenuButton variant="ghost" className="w-full px-0" onClick={() => setShowCredits(true)}>
+          Credits
+        </MenuButton>
+        <MenuButton
+          variant="primary"
+          className="w-full px-0"
+          onClick={() => {
+            void handleBackClick()
+          }}
+        >
+          Back
+        </MenuButton>
+      </div>
 
       {showFixModal && (
         <ConfirmModal
@@ -371,6 +414,23 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       )}
 
       {showLocalInstallLog && <EngineInstallModal onClose={() => setShowLocalInstallLog(false)} />}
+
+      {showCredits && (
+        <Modal title="Credits" onBackdropClick={() => setShowCredits(false)}>
+          <pre className="m-0 mt-[0.8cqh] font-mono text-[1.8cqh] text-text-modal-muted whitespace-pre-wrap border border-border-subtle bg-white/5 p-[1.2cqh] rounded-[0.4cqh]">
+            {attributionText.trim()}
+          </pre>
+          <div className="flex justify-end mt-[1.4cqh]">
+            <Button
+              variant="primary"
+              className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
+              onClick={() => setShowCredits(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

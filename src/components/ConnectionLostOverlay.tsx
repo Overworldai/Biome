@@ -1,5 +1,5 @@
 import { useStreaming } from '../context/StreamingContext'
-import { CONFIRM_BUTTON_BASE } from '../styles'
+import Button from './ui/Button'
 
 const ConnectionLostOverlay = () => {
   const { connectionLost, reconnectAfterConnectionLost } = useStreaming()
@@ -37,13 +37,9 @@ const ConnectionLostOverlay = () => {
           The connection to World Engine was interrupted
         </p>
         <div className="flex justify-end mt-[1.2cqh] w-full">
-          <button
-            type="button"
-            className={`${CONFIRM_BUTTON_BASE} bg-[var(--color-surface-btn-hover)] text-[var(--color-text-inverse)]`}
-            onClick={handleDismiss}
-          >
+          <Button variant="primary" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleDismiss}>
             Reconnect
-          </button>
+          </Button>
         </div>
       </div>
     </div>

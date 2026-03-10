@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
+import { useUISound } from '../../hooks/useUISound'
 
 type SettingsSelectOption = {
   value: string
@@ -24,6 +25,7 @@ const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
 )
 
 const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: SettingsSelectProps) => {
+  const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
   const [isCustom, setIsCustom] = useState(() => allowCustom && !options.some((o) => o.value === value))
   const [customValue, setCustomValue] = useState(value)
@@ -104,7 +106,9 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
                     ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
                     : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
                 }`}
+                onMouseEnter={playHover}
                 onClick={() => {
+                  playClick()
                   onChange(option.value)
                   setIsOpen(false)
                 }}
@@ -175,7 +179,11 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
       <button
         type="button"
         className={`w-full flex items-stretch cursor-pointer rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${SETTINGS_OUTLINE_HOVER}`}
-        onClick={() => !disabled && (isOpen ? setIsOpen(false) : openDropdown())}
+        onMouseEnter={playHover}
+        onClick={() => {
+          playClick()
+          if (!disabled) isOpen ? setIsOpen(false) : openDropdown()
+        }}
         disabled={disabled}
       >
         <span className={`flex-1 ${SETTINGS_CONTROL_TEXT}`}>

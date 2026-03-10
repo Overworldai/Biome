@@ -1,3 +1,5 @@
+import { useUISound } from '../hooks/useUISound'
+
 type SocialCtaRowProps = {
   rowClassName?: string
   buttonClassName?: string
@@ -35,6 +37,8 @@ const CTA_ROW_CLASS =
   'absolute bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 flex items-end gap-[1.24cqh] pointer-events-auto'
 
 const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
+  const { playHover, playClick } = useUISound()
+
   return (
     <div className={rowClassName ? `${CTA_ROW_CLASS} ${rowClassName}` : CTA_ROW_CLASS}>
       {SOCIAL_CTAS.map((cta) => (
@@ -45,6 +49,8 @@ const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: Social
           rel="noopener noreferrer"
           className={`${buttonClassName} w-[4.62cqh] h-[4.62cqh] m-0 grid place-items-center box-border text-[rgba(238,248,255,0.88)] bg-[rgba(7,13,24,0.24)] border border-[rgba(236,247,255,0.34)] rounded-[0.8cqh] no-underline cursor-pointer outline-0 outline-white/60 transition-[transform,border-color,background-color,outline-width] duration-150 ease-in-out hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] hover:outline-2 [&>svg]:w-[62%] [&>svg]:h-[62%]`}
           aria-label={cta.ariaLabel}
+          onMouseEnter={playHover}
+          onMouseDown={playClick}
         >
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d={cta.path} />

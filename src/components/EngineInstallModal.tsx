@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke, listen } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
-import { LOG_ACTION_BUTTON } from '../styles'
+import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
 
 type EngineInstallModalProps = {
@@ -119,21 +119,26 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
           headerAction={
             engineSetupInProgress ? (
               <div className="flex items-center gap-[0.8cqh]">
-                <button
-                  type="button"
-                  className={LOG_ACTION_BUTTON}
+                <Button
+                  variant="ghost"
+                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={() => void handleAbortInstall()}
                   disabled={isAbortingInstall}
                   aria-label="Abort engine install"
                 >
                   {isAbortingInstall ? 'Aborting...' : 'Abort'}
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="flex items-center gap-[0.8cqh]">
-                <button type="button" className={LOG_ACTION_BUTTON} onClick={onClose} aria-label="Close install logs">
+                <Button
+                  variant="ghost"
+                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
+                  onClick={onClose}
+                  aria-label="Close install logs"
+                >
                   Close
-                </button>
+                </Button>
               </div>
             )
           }

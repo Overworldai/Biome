@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Button from './Button'
 
 type OverlayModalProps = {
   open: boolean
@@ -27,13 +28,9 @@ const OverlayModal = ({
         <div className="flex items-center justify-between gap-[1cqh]">
           <h3 className="m-0 font-serif font-medium text-[3.56cqh]">{title}</h3>
           {onClose && (
-            <button
-              type="button"
-              className="cursor-pointer border border-[var(--color-border-medium)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-primary)] font-serif text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]"
-              onClick={onClose}
-            >
+            <Button variant="ghost" className="text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]" onClick={onClose}>
               Close
-            </button>
+            </Button>
           )}
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

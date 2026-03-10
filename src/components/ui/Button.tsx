@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useUISound } from '../../hooks/useUISound'
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
@@ -16,15 +17,21 @@ const variantClasses: Record<ButtonVariant, string> = {
     'border-border-light outline-border-light bg-surface-btn-ghost text-text-primary hover:bg-surface-btn-hover hover:text-text-inverse hover:-translate-y-px'
 }
 
-const Button = ({ variant, children, className = '', ...rest }: ButtonProps) => (
-  <button
-    type="button"
-    className={`font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150 ${variantClasses[variant]} ${className}`}
-    {...rest}
-  >
-    {children}
-  </button>
-)
+const Button = ({ variant, children, className = '', ...rest }: ButtonProps) => {
+  const { playHover, playClick } = useUISound()
+
+  return (
+    <button
+      type="button"
+      className={`font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150 ${variantClasses[variant]} ${className}`}
+      onMouseEnter={playHover}
+      onMouseDown={playClick}
+      {...rest}
+    >
+      {children}
+    </button>
+  )
+}
 
 export default Button
 export type { ButtonProps, ButtonVariant }

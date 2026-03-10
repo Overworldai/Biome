@@ -10,7 +10,7 @@ type SettingsSectionProps = {
 const SettingsSection = ({ title, description, children }: SettingsSectionProps) => (
   <div>
     <h2 className={`${HEADING_BASE} text-left text-text-primary text-[4.5cqh]`}>{title}</h2>
-    {description != null && <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0cqh_0_0.45cqh]`}>{description}</p>}
+    {description != null && <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0cqh_0_0.9cqh]`}>{description}</p>}
     {children}
   </div>
 )

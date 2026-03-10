@@ -138,6 +138,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             <PauseMainView
               pinnedScenes={pinnedScenes}
               thumbnails={thumbnails}
+              selectCooldown={!canUnpause}
               onSceneSelect={handleSceneSelect}
               onTogglePin={togglePinnedScene}
               onRemoveScene={removeScene}
@@ -162,6 +163,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               seeds={seeds}
               thumbnails={thumbnails}
               pinnedSceneIds={pinnedSceneIds}
+              selectCooldown={!canUnpause}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
               onSceneSelect={handleSceneSelect}

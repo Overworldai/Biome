@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
+import { useUISound } from '../../hooks/useUISound'
 import type { FixedControl } from '../../hooks/useGameInput'
 
 export const keyCodeToLabel = (code: string): string => {
@@ -41,12 +42,16 @@ type SettingsKeybindProps = {
 }
 
 const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) => {
+  const { playHover, playClick } = useUISound()
   const [listening, setListening] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const handleClick = useCallback(() => {
-    if (!disabled) setListening(true)
-  }, [disabled])
+    if (!disabled) {
+      playClick()
+      setListening(true)
+    }
+  }, [disabled, playClick])
 
   const handleBlur = useCallback(() => {
     setListening(false)
@@ -77,6 +82,7 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
       ref={buttonRef}
       type="button"
       className={`w-full text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none ${listening ? 'border-text-primary' : ''}`}
+      onMouseEnter={disabled ? undefined : playHover}
       onClick={handleClick}
       onBlur={handleBlur}
       disabled={disabled}

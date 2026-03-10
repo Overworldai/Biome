@@ -25,6 +25,12 @@ export const DEFAULT_KEYBINDINGS = {
   reset_scene: 'KeyU'
 } as const
 
+export const DEFAULT_AUDIO = {
+  master_volume: 1.0,
+  sfx_volume: 0.5,
+  music_volume: 0.3
+} as const
+
 export const settingsSchema = z.object({
   server_url: z.string().default(DEFAULT_STANDALONE_URL),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
@@ -35,7 +41,14 @@ export const settingsSchema = z.object({
     .object({
       reset_scene: z.string().default('KeyU')
     })
-    .default(DEFAULT_KEYBINDINGS)
+    .default(DEFAULT_KEYBINDINGS),
+  audio: z
+    .object({
+      master_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.master_volume),
+      sfx_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.sfx_volume),
+      music_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.music_volume)
+    })
+    .default(DEFAULT_AUDIO)
 })
 
 export type Settings = z.infer<typeof settingsSchema>

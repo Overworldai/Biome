@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { invoke } from '../bridge'
-import { INTERACTIVE_TRANSITION, LOG_ACTION_BUTTON } from '../styles'
+import Button from './ui/Button'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
 const MAX_REPORT_LOG_LINES = 220
@@ -338,42 +338,42 @@ const ServerLogDisplay = ({
           </div>
           <div className="flex items-center gap-[0.8cqh] pt-[0.25cqh]">
             {showExportAction && onExportAction && (
-              <button
-                type="button"
-                className={LOG_ACTION_BUTTON}
+              <Button
+                variant="ghost"
+                className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                 onClick={onExportAction}
                 disabled={isExportingAction}
                 title="Export diagnostics JSON"
               >
                 {isExportingAction ? 'Exporting...' : exportActionLabel}
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              className={LOG_ACTION_BUTTON}
+            <Button
+              variant="ghost"
+              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
               onClick={() => void handleCopyBugReport()}
               disabled={isCopyingReport}
               title="Copy diagnostics JSON for bug reports"
             >
               {isCopyingReport ? 'Copying...' : 'Copy Report'}
-            </button>
-            <button
-              type="button"
-              className={LOG_ACTION_BUTTON}
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
               onClick={() => void handleOpenGithubIssue()}
               disabled={isOpeningIssue}
               title="Open prefilled issue on GitHub"
             >
               {isOpeningIssue ? 'Opening...' : 'Report on GitHub'}
-            </button>
-            <button
-              type="button"
-              className={LOG_ACTION_BUTTON}
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
               onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
               title="Ask for help in Discord"
             >
               Ask on Discord
-            </button>
+            </Button>
           </div>
           {reportActionStatus && <div className="font-serif text-[1.7cqh] text-text-muted">{reportActionStatus}</div>}
         </div>
@@ -413,12 +413,13 @@ const ServerLogDisplay = ({
         </div>
       )}
       {showDismiss && (
-        <button
-          className={`mx-[2.13cqh] my-[1cqh] px-[2.67cqh] py-[0.6cqh] bg-error/15 border border-error/40 rounded-panel text-text-error font-mono text-[1.78cqh] tracking-wider cursor-pointer outline-0 outline-error/60 ${INTERACTIVE_TRANSITION} duration-200 hover:bg-error/25 hover:border-error/60 hover:outline-2`}
+        <Button
+          variant="danger"
+          className="mx-[2.13cqh] my-[1cqh] px-[2.67cqh] py-[0.6cqh] text-[1.78cqh] tracking-wider"
           onClick={onDismiss}
         >
           DISMISS
-        </button>
+        </Button>
       )}
     </div>
   )

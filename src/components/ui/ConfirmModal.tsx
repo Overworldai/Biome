@@ -1,4 +1,5 @@
-import { CONFIRM_BUTTON_BASE } from '../../styles'
+import Modal from './Modal'
+import Button from './Button'
 
 type ConfirmModalProps = {
   title: string
@@ -9,6 +10,8 @@ type ConfirmModalProps = {
   cancelLabel?: string
 }
 
+const MODAL_BUTTON = 'p-[0.5cqh_1.78cqh] text-[2.49cqh]'
+
 const ConfirmModal = ({
   title,
   description,
@@ -17,32 +20,17 @@ const ConfirmModal = ({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel'
 }: ConfirmModalProps) => (
-  <div
-    className="absolute inset-0 z-[3] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm"
-    role="dialog"
-    aria-modal="true"
-  >
-    <div className="select-none border border-[var(--color-border-medium)] backdrop-blur-xl text-[var(--color-text-primary)] w-[58.33cqh] p-[1.8cqh_2.84cqh]">
-      <h3 className="m-0 mb-[0.2cqh] font-serif font-medium text-[3.91cqh]">{title}</h3>
-      <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh]">{description}</p>
-      <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
-        <button
-          type="button"
-          className={`${CONFIRM_BUTTON_BASE} border border-[var(--color-border-medium)] bg-[var(--color-surface-btn-ghost)] text-[var(--color-text-primary)]`}
-          onClick={onCancel}
-        >
-          {cancelLabel}
-        </button>
-        <button
-          type="button"
-          className={`${CONFIRM_BUTTON_BASE} bg-[var(--color-surface-btn-hover)] text-[var(--color-text-inverse)]`}
-          onClick={onConfirm}
-        >
-          {confirmLabel}
-        </button>
-      </div>
+  <Modal title={title}>
+    <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh]">{description}</p>
+    <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
+      <Button variant="ghost" className={MODAL_BUTTON} onClick={onCancel}>
+        {cancelLabel}
+      </Button>
+      <Button variant="primary" className={MODAL_BUTTON} onClick={onConfirm}>
+        {confirmLabel}
+      </Button>
     </div>
-  </div>
+  </Modal>
 )
 
 export default ConfirmModal

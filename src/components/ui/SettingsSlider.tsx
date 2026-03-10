@@ -1,5 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_OUTLINE_HOVER, SETTINGS_MUTED_TEXT } from '../../styles'
+import { useUISound } from '../../hooks/useUISound'
 
 type SettingsSliderProps = {
   value: number
@@ -7,9 +8,11 @@ type SettingsSliderProps = {
   min: number
   max: number
   label?: string
+  suffix?: string
 }
 
-const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProps) => {
+const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSliderProps) => {
+  const { playHover, playClick } = useUISound()
   const trackRef = useRef<HTMLDivElement>(null)
 
   const fraction = (value - min) / (max - min)
@@ -28,11 +31,12 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
   const handlePointerDown = useCallback(
     (event: React.PointerEvent) => {
       event.preventDefault()
+      playClick()
       const target = event.currentTarget as HTMLElement
       target.setPointerCapture(event.pointerId)
       onChange(valueFromEvent(event.clientX))
     },
-    [onChange, valueFromEvent]
+    [onChange, valueFromEvent, playClick]
   )
 
   const handlePointerMove = useCallback(
@@ -44,10 +48,11 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
   )
 
   return (
-    <div className="flex flex-col items-start gap-[0.4cqh]">
+    <div className="flex flex-col items-start">
       <div
         ref={trackRef}
         className={`relative w-full ${SETTINGS_CONTROL_BASE} cursor-pointer leading-[1.2] p-[0.275cqh_1.42cqh] text-[1.33cqh] ${SETTINGS_OUTLINE_HOVER}`}
+        onMouseEnter={playHover}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
       >
@@ -57,7 +62,12 @@ const SettingsSlider = ({ value, onChange, min, max, label }: SettingsSliderProp
         />
         <span className="invisible">X</span>
       </div>
-      {label && <span className={SETTINGS_MUTED_TEXT}>{label}</span>}
+      {(label || suffix) && (
+        <span className={`${SETTINGS_MUTED_TEXT} flex w-full justify-between`}>
+          {label && <span className="lowercase">{label}</span>}
+          {suffix && <span className="ml-auto">{suffix}</span>}
+        </span>
+      )}
     </div>
   )
 }
