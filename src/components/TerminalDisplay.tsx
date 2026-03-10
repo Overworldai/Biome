@@ -145,9 +145,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             }}
           >
             <ServerLogDisplay
-              variant="loading-inline"
               errorMessage={errorDetail}
-              title={isServerMode ? 'SERVER OUTPUT' : undefined}
               externalLogs={isServerMode ? wsLogs : null}
               pollLogFileTail={!isServerMode}
               onLogsChange={setDisplayedLogs}

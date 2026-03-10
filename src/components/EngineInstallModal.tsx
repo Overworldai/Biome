@@ -96,7 +96,6 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     >
       <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
         <ServerLogDisplay
-          variant="loading-inline"
           title="Installation"
           externalLogs={installLogs}
           showProgress={engineSetupInProgress}
@@ -115,7 +114,6 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
           onExportAction={() => void handleExportInstallDiagnostics()}
           isExportingAction={isExportingInstallDiagnostics}
           exportActionLabel="Export Logs"
-          showDismiss={false}
           headerAction={
             engineSetupInProgress ? (
               <div className="flex items-center gap-[0.8cqh]">

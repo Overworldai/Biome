@@ -12,23 +12,6 @@ const GITHUB_NEW_ISSUE_URL = 'https://github.com/Overworldai/Biome/issues/new'
 
 type ReportContext = Record<string, unknown>
 
-// Determine log line color class based on content
-const getLogClass = (line: string): string => {
-  if (line.includes('[ERROR]') || line.includes('FATAL') || line.includes('Error:')) {
-    return 'text-text-error'
-  }
-  if (line.includes('[WARNING]') || line.includes('Warning:')) {
-    return 'text-warm/90'
-  }
-  if (line.includes('[INFO]')) {
-    return 'text-hud/90'
-  }
-  if (line.includes('100%') || line.includes('SERVER READY') || line.includes('complete')) {
-    return 'text-hot/90'
-  }
-  return ''
-}
-
 function sanitizeText(text: string): string {
   return text
     .replace(/[A-Za-z]:\\Users\\[^\\\r\n]+/g, 'C:\\Users\\<redacted>')
@@ -64,13 +47,10 @@ function copyToClipboard(text: string): Promise<void> {
 }
 
 const ServerLogDisplay = ({
-  showDismiss = false,
-  onDismiss,
   errorMessage = null,
   showProgress = false,
   progressMessage = null,
   headerAction = null,
-  variant = 'default',
   externalLogs = null,
   pollLogFileTail = false,
   logTailLines = 300,
@@ -84,13 +64,10 @@ const ServerLogDisplay = ({
   isExportingAction = false,
   exportActionLabel = 'Export Logs'
 }: {
-  showDismiss?: boolean
-  onDismiss?: () => void
   errorMessage?: string | null
   showProgress?: boolean
   progressMessage?: string | null
   headerAction?: ReactNode
-  variant?: 'default' | 'loading-inline'
   externalLogs?: string[] | null
   pollLogFileTail?: boolean
   logTailLines?: number
@@ -104,7 +81,6 @@ const ServerLogDisplay = ({
   isExportingAction?: boolean
   exportActionLabel?: string
 }) => {
-  const isLoadingInline = variant === 'loading-inline'
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [reportActionStatus, setReportActionStatus] = useState<string | null>(null)
@@ -184,7 +160,6 @@ const ServerLogDisplay = ({
       context: reportContext ?? {},
       ui_state: {
         title,
-        variant,
         show_progress: showProgress,
         progress_message: safeProgress
       },
@@ -291,113 +266,30 @@ const ServerLogDisplay = ({
   }
 
   return (
-    <div
-      className={`select-text flex flex-col overflow-hidden ${isLoadingInline ? 'static w-full h-full max-h-[70vh] border border-border-subtle bg-surface-modal opacity-100 !animate-none' : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-h-[50%] z-100 bg-[rgba(8,12,16,0.95)] border border-warm/30 rounded-[1.42cqh] opacity-0 animate-[serverLogFadeIn_0.3s_ease_forwards] shadow-[0_0_30px_rgba(0,0,0,0.6),0_0_15px_rgba(255,200,100,0.1)]'}`}
-    >
-      {(!isLoadingInline || title || headerAction) && (
-        <div
-          className={`flex items-center gap-[1.42cqh] px-[2.13cqh] py-[0.8cqh] ${isLoadingInline ? 'bg-white/8 border-b border-white/20 justify-between' : 'bg-warm/8 border-b border-warm/20'}`}
-        >
+    <div className="select-text flex flex-col overflow-hidden static w-full h-full max-h-[70vh] border border-border-subtle bg-surface-modal opacity-100 !animate-none">
+      {(title || headerAction) && (
+        <div className="flex items-center gap-[1.42cqh] px-[2.13cqh] py-[0.8cqh] bg-white/8 border-b border-white/20 justify-between">
           <div className="flex items-center gap-[1.42cqh]">
-            <span
-              className={`font-mono text-[2.13cqh] tracking-wider ${isLoadingInline ? 'font-serif tracking-[0.02em] text-text-primary' : 'uppercase text-warm/90'}`}
-            >
-              {title ?? (showProgress ? 'INSTALLING WORLD ENGINE' : 'ENGINE OUTPUT')}
-            </span>
-            {!isLoadingInline && (
-              <span
-                className={`w-[1.07cqh] h-[1.07cqh] rounded-full bg-warm/90 ${showDismiss ? 'bg-error-muted !animate-none' : 'animate-[indicatorPulse_1s_ease-in-out_infinite]'}`}
-              />
-            )}
+            <span className="font-serif text-[2.13cqh] tracking-[0.02em] text-text-primary">{title}</span>
           </div>
           {headerAction}
         </div>
       )}
-      {progressMessage && !isLoadingInline && (
-        <div className="flex items-center gap-[1.78cqh] px-[2.13cqh] py-[0.8cqh] bg-hud/8 border-b border-hud/20">
-          {showProgress ? (
-            <div className="animate-spin w-[2.13cqh] h-[2.13cqh] border-2 border-hud/30 border-t-hud/90 rounded-full" />
-          ) : (
-            <div
-              className={`w-[1.42cqh] h-[1.42cqh] rounded-full ${errorMessage ? 'bg-error/90' : 'bg-hot/90'}`}
-              aria-hidden="true"
-            />
-          )}
-          <span className={`font-mono text-[1.96cqh] ${errorMessage ? 'text-error/90' : 'text-hud/90'}`}>
-            {progressMessage}
-          </span>
-        </div>
-      )}
-      {displayErrorMessage && (
-        <div className="flex flex-col gap-[0.4cqh] px-[2.13cqh] py-[0.8cqh] bg-error/10 border-b border-error/30">
-          <div className={`${isLoadingInline ? 'font-serif' : 'font-mono'} text-[1.96cqh] text-error/90`}>
-            {displayErrorMessage}
-          </div>
-          <div className={`${isLoadingInline ? 'font-serif' : 'font-mono'} text-[1.6cqh] text-white/50 italic`}>
-            Open Settings to reinstall the engine.
-          </div>
-          <div className="flex items-center gap-[0.8cqh] pt-[0.25cqh]">
-            {showExportAction && onExportAction && (
-              <Button
-                variant="ghost"
-                className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
-                onClick={onExportAction}
-                disabled={isExportingAction}
-                title="Export diagnostics JSON"
-              >
-                {isExportingAction ? 'Exporting...' : exportActionLabel}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
-              onClick={() => void handleCopyBugReport()}
-              disabled={isCopyingReport}
-              title="Copy diagnostics JSON for bug reports"
-            >
-              {isCopyingReport ? 'Copying...' : 'Copy Report'}
-            </Button>
-            <Button
-              variant="ghost"
-              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
-              onClick={() => void handleOpenGithubIssue()}
-              disabled={isOpeningIssue}
-              title="Open prefilled issue on GitHub"
-            >
-              {isOpeningIssue ? 'Opening...' : 'Report on GitHub'}
-            </Button>
-            <Button
-              variant="ghost"
-              className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
-              onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
-              title="Ask for help in Discord"
-            >
-              Ask on Discord
-            </Button>
-          </div>
-          {reportActionStatus && <div className="font-serif text-[1.7cqh] text-text-muted">{reportActionStatus}</div>}
-        </div>
-      )}
       <div
-        className={`server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed ${isLoadingInline ? '[scrollbar-color:rgba(255,255,255,0.34)_transparent]' : ''}`}
+        className="server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed [scrollbar-color:rgba(255,255,255,0.34)_transparent]"
         ref={containerRef}
       >
         {visibleLogs.length === 0 ? (
-          <div className={`italic ${isLoadingInline ? 'text-text-muted' : 'text-warm/50'}`}>
-            Waiting for server output...
-          </div>
+          <div className="italic text-text-muted">Waiting for server output...</div>
         ) : (
           visibleLogs.map((line, index) => (
-            <div
-              key={index}
-              className={`whitespace-pre-wrap break-all ${isLoadingInline ? 'text-text-modal-muted' : `text-[rgba(200,200,200,0.9)] ${getLogClass(line)}`}`}
-            >
+            <div key={index} className="whitespace-pre-wrap break-all text-text-modal-muted">
               {line}
             </div>
           ))
         )}
       </div>
-      {progressMessage && isLoadingInline && (
+      {progressMessage && (
         <div className="flex items-center gap-[1.78cqh] px-[2.13cqh] py-[0.8cqh] bg-white/5 border-t border-white/10">
           {showProgress ? (
             <div className="animate-spin w-[2.13cqh] h-[2.13cqh] border-2 border-white/20 border-t-white/80 rounded-full" />
@@ -412,14 +304,53 @@ const ServerLogDisplay = ({
           </span>
         </div>
       )}
-      {showDismiss && (
-        <Button
-          variant="danger"
-          className="mx-[2.13cqh] my-[1cqh] px-[2.67cqh] py-[0.6cqh] text-[1.78cqh] tracking-wider"
-          onClick={onDismiss}
-        >
-          DISMISS
-        </Button>
+      {displayErrorMessage && (
+        <div className="flex flex-col gap-[0.4cqh] px-[2.13cqh] py-[0.8cqh] bg-white/5 border-t border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-[0.8cqh]">
+              {showExportAction && onExportAction && (
+                <Button
+                  variant="secondary"
+                  className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
+                  onClick={onExportAction}
+                  disabled={isExportingAction}
+                  title="Export diagnostics JSON"
+                >
+                  {isExportingAction ? 'Exporting...' : exportActionLabel}
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
+                onClick={() => void handleCopyBugReport()}
+                disabled={isCopyingReport}
+                title="Copy diagnostics JSON for bug reports"
+              >
+                {isCopyingReport ? 'Copying...' : 'Copy Report'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-[0.8cqh]">
+              <Button
+                variant="primary"
+                className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
+                onClick={() => void handleOpenGithubIssue()}
+                disabled={isOpeningIssue}
+                title="Open prefilled issue on GitHub"
+              >
+                {isOpeningIssue ? 'Opening...' : 'Report on GitHub'}
+              </Button>
+              <Button
+                variant="primary"
+                className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
+                onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
+                title="Ask for help in Discord"
+              >
+                Ask on Discord
+              </Button>
+            </div>
+          </div>
+          {reportActionStatus && <div className="font-serif text-[1.7cqh] text-text-muted">{reportActionStatus}</div>}
+        </div>
       )}
     </div>
   )
