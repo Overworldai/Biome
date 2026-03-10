@@ -108,7 +108,6 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
 
   return (
     <>
-      <SocialCtaRow rowClassName="z-55" />
       <div className="terminal-display absolute z-55 flex flex-col items-center top-auto bottom-[calc(var(--edge-bottom)+7.2cqh)] left-1/2 -translate-x-1/2 gap-[1.6cqh] opacity-100 !animate-none w-[135.11cqh]">
         <div className="flex flex-col items-center gap-[0.55cqh] w-[135.11cqh]">
           <div className="w-full flex items-baseline justify-between">
@@ -169,49 +168,50 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               exportActionLabel="Export Logs"
             />
           </div>
-          <div className="flex items-center justify-end gap-[1.8cqh] mt-[1.35cqh] w-full">
-            <Button
-              variant="ghost"
-              className="flex items-center justify-center gap-[0.8cqh] w-[19.2cqh] h-[4.9cqh] px-[1.4cqh] text-[2.45cqh] leading-none"
-              aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
-              title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
-              onClick={() => setShowLogsPanel((prev) => !prev)}
-            >
-              <span className="inline-block text-left w-[13cqh] whitespace-nowrap">
-                {showLogsPanel ? 'Hide Logs' : 'Show Logs'}
-              </span>
-              <span className="inline-flex w-[2.2cqh] justify-center">
-                {showLogsPanel ? (
-                  <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
-                    <path d="M2 3h20L12 10z" fill="currentColor" />
-                  </svg>
-                ) : (
-                  <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
-                    <path d="M2 9h20L12 2z" fill="currentColor" />
-                  </svg>
-                )}
-              </span>
-            </Button>
-            <Button
-              variant="danger"
-              className="!animate-none flex items-center justify-center h-[4.9cqh] min-w-[12.5cqh] px-[1.8cqh] text-[2.45cqh] leading-none"
-              onClick={() => {
-                if (onCancel) {
-                  onCancel()
-                  return
-                }
-                void cancelConnection()
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
           {exportStatus && (
             <div className="w-full text-right font-serif text-[2cqh] leading-[1.1] text-[rgba(245,249,255,0.78)] mt-[0.45cqh]">
               {exportStatus}
             </div>
           )}
         </div>
+      </div>
+      <SocialCtaRow rowClassName="z-55" />
+      <div className="absolute z-55 bottom-[var(--edge-bottom)] right-[calc((100cqw-135.11cqh)/2)] flex items-end gap-[1.8cqh] pointer-events-auto">
+        <Button
+          variant="ghost"
+          className="flex items-center justify-center gap-[0.8cqh] w-[19.2cqh] h-[4.9cqh] px-[1.4cqh] text-[2.45cqh] leading-none"
+          aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
+          title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
+          onClick={() => setShowLogsPanel((prev) => !prev)}
+        >
+          <span className="inline-block text-left w-[13cqh] whitespace-nowrap">
+            {showLogsPanel ? 'Hide Logs' : 'Show Logs'}
+          </span>
+          <span className="inline-flex w-[2.2cqh] justify-center">
+            {showLogsPanel ? (
+              <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                <path d="M2 3h20L12 10z" fill="currentColor" />
+              </svg>
+            ) : (
+              <svg className="w-[2.2cqh] h-[1.1cqh]" viewBox="0 0 24 12" aria-hidden="true">
+                <path d="M2 9h20L12 2z" fill="currentColor" />
+              </svg>
+            )}
+          </span>
+        </Button>
+        <Button
+          variant="danger"
+          className="!animate-none flex items-center justify-center h-[4.9cqh] min-w-[12.5cqh] px-[1.8cqh] text-[2.45cqh] leading-none"
+          onClick={() => {
+            if (onCancel) {
+              onCancel()
+              return
+            }
+            void cancelConnection()
+          }}
+        >
+          Cancel
+        </Button>
       </div>
     </>
   )
