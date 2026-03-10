@@ -373,22 +373,23 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
               <KeybindRow key={ctrl.label} label={ctrl.label} fixedLabel={fixedControlDisplay(ctrl)} />
             ))}
           </SettingsSection>
-
-          <MenuButton variant="ghost" className="w-full" onClick={() => setShowCredits(true)}>
-            Credits
-          </MenuButton>
         </div>
       </section>
 
-      <MenuButton
-        variant="primary"
-        className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
-        onClick={() => {
-          void handleBackClick()
-        }}
-      >
-        Back
-      </MenuButton>
+      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+        <MenuButton variant="ghost" className="w-full px-0" onClick={() => setShowCredits(true)}>
+          Credits
+        </MenuButton>
+        <MenuButton
+          variant="primary"
+          className="w-full px-0"
+          onClick={() => {
+            void handleBackClick()
+          }}
+        >
+          Back
+        </MenuButton>
+      </div>
 
       {showFixModal && (
         <ConfirmModal
