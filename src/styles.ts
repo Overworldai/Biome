@@ -1,5 +1,5 @@
 /** Border + background shared by all settings form controls */
-export const SETTINGS_CONTROL_BASE = 'border border-border-medium bg-surface-btn-ghost'
+export const SETTINGS_CONTROL_BASE = 'border border-border-medium bg-surface-btn-secondary'
 
 /** Font + layout + padding for settings inputs */
 export const SETTINGS_CONTROL_TEXT =

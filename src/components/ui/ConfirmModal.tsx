@@ -23,7 +23,7 @@ const ConfirmModal = ({
   <Modal title={title}>
     <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh]">{description}</p>
     <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
-      <Button variant="ghost" className={MODAL_BUTTON} onClick={onCancel}>
+      <Button variant="secondary" className={MODAL_BUTTON} onClick={onCancel}>
         {cancelLabel}
       </Button>
       <Button variant="primary" className={MODAL_BUTTON} onClick={onConfirm}>

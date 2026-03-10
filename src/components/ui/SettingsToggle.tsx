@@ -11,7 +11,7 @@ const SettingsToggle = ({ options, value, onChange }: SettingsToggleProps) => (
     {options.map((option) => (
       <SettingsButton
         key={option.value}
-        variant={value === option.value ? 'primary' : 'ghost'}
+        variant={value === option.value ? 'primary' : 'secondary'}
         className="flex-1"
         onClick={() => onChange(option.value)}
       >

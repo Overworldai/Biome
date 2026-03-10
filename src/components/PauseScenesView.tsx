@@ -152,7 +152,7 @@ const PauseScenesView = ({
                 aria-hidden="true"
               />
               <SettingsButton
-                variant="ghost"
+                variant="secondary"
                 className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                 onClick={() => void onClipboardUpload()}
                 title="Paste image from clipboard"
@@ -170,7 +170,7 @@ const PauseScenesView = ({
                 </svg>
               </SettingsButton>
               <SettingsButton
-                variant="ghost"
+                variant="secondary"
                 className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                 onClick={() => fileInputRef.current?.click()}
                 title="Browse for image file"

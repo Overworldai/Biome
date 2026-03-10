@@ -28,7 +28,7 @@ const OverlayModal = ({
         <div className="flex items-center justify-between gap-[1cqh]">
           <h3 className="m-0 font-serif font-medium text-[3.56cqh]">{title}</h3>
           {onClose && (
-            <Button variant="ghost" className="text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]" onClick={onClose}>
+            <Button variant="secondary" className="text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]" onClick={onClose}>
               Close
             </Button>
           )}

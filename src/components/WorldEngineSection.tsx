@@ -30,7 +30,7 @@ const WorldEngineSection = ({ engineReady, onReinstallClick }: WorldEngineSectio
       }
     >
       <div className="flex justify-start">
-        <SettingsButton variant="ghost" onClick={onReinstallClick}>
+        <SettingsButton variant="secondary" onClick={onReinstallClick}>
           Reinstall
         </SettingsButton>
       </div>

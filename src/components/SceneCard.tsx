@@ -3,7 +3,7 @@ import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/AudioContext'
 
 const ACTION_BASE =
-  'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-ghost)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
+  'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-secondary)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
 
 const ACTION_PINNED = 'text-warm border-warm/70 hover:text-[var(--color-warm-bright)] hover:border-warm'
 

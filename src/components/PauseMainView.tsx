@@ -60,7 +60,7 @@ const PauseMainView = ({
             ))
           ) : (
             <div
-              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-ghost)] p-0 cursor-default overflow-hidden relative grid place-items-center"
+              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
               aria-hidden="true"
             >
               <svg

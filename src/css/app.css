@@ -61,8 +61,7 @@
   /* Surface/background colors */
   --color-surface-btn-primary: rgba(245, 249, 255, 0.95);
   --color-surface-btn-hover: rgba(245, 249, 255, 0.9);
-  --color-surface-btn-secondary: rgba(10, 16, 28, 0.38);
-  --color-surface-btn-ghost: rgba(8, 12, 20, 0.28);
+  --color-surface-btn-secondary: rgba(8, 12, 20, 0.28);
   --color-surface-modal: rgba(8, 12, 20, 0.92);
   --color-surface-card: rgba(4, 7, 12, 0.5);
   --color-surface-control: rgba(2, 5, 10, 0.54);

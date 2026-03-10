@@ -178,7 +178,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       <SocialCtaRow rowClassName="z-55" />
       <div className="absolute z-55 bottom-[var(--edge-bottom)] right-[calc((100cqw-135.11cqh)/2)] flex items-end gap-[1.8cqh] pointer-events-auto">
         <Button
-          variant="ghost"
+          variant="secondary"
           className="flex items-center justify-center gap-[0.8cqh] w-[19.2cqh] h-[4.9cqh] px-[1.4cqh] text-[2.45cqh] leading-none"
           aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
           title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}

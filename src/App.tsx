@@ -255,7 +255,7 @@ const AppShell = () => {
               <ViewLabel>Biome</ViewLabel>
 
               <MenuButton
-                variant="ghost"
+                variant="secondary"
                 className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
                 onClick={toggleSettings}
               >

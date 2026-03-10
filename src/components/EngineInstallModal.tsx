@@ -120,7 +120,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
             engineSetupInProgress ? (
               <div className="flex items-center gap-[0.8cqh]">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={() => void handleAbortInstall()}
                   disabled={isAbortingInstall}
@@ -132,7 +132,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
             ) : (
               <div className="flex items-center gap-[0.8cqh]">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={onClose}
                   aria-label="Close install logs"

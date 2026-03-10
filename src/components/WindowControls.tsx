@@ -16,7 +16,7 @@ const WindowControlButton = ({
 }) => (
   <button
     type="button"
-    className={`flex items-center justify-center w-[35px] h-6 m-0 p-0 rounded-sm text-[14px] leading-none cursor-pointer bg-surface-btn-ghost text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
+    className={`flex items-center justify-center w-[35px] h-6 m-0 p-0 rounded-sm text-[14px] leading-none cursor-pointer bg-surface-btn-secondary text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
     onClick={onClick}
     aria-label={label}
     style={noDragRegionStyle}

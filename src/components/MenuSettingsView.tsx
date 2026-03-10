@@ -377,7 +377,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       </section>
 
       <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
-        <MenuButton variant="ghost" className="w-full px-0" onClick={() => setShowCredits(true)}>
+        <MenuButton variant="secondary" className="w-full px-0" onClick={() => setShowCredits(true)}>
           Credits
         </MenuButton>
         <MenuButton
