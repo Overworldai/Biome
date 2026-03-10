@@ -97,7 +97,8 @@ export const useGameInput = (
     (e: KeyboardEvent) => {
       if (e.code === 'Escape') return
 
-      // Check if the target is editable to skip handling of the reset key in text inputs
+      // Allow system shortcuts (Ctrl+C, Ctrl+V, Cmd+A, etc.) and skip editable targets
+      if (e.ctrlKey || e.metaKey) return
       if (isEditableTarget(e.target)) return
 
       if (e.code === keybindings.reset_scene) {
