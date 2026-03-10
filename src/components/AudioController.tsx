@@ -11,7 +11,7 @@ const MUSIC_FADE_S = 0.5
  * Renders nothing — pure side-effect component.
  */
 const AudioController = () => {
-  const { play, startLoop, stopLoop, crossfadeLoop, stopAllLoops, setLoopVolume, isLoopActive } = useAudio()
+  const { play, startLoop, stopLoop, crossfadeLoop, stopAllLoops } = useAudio()
   const { state, states } = usePortal()
   const { error, engineError, isPaused } = useStreaming()
   const prevErrorRef = useRef<string | null>(null)
@@ -26,13 +26,8 @@ const AudioController = () => {
       stopLoop('music_menu')
       stopLoop('music_pause')
       stopLoop('music_gameplay')
-      // The portal hover may have already started the vortex loop at low volume;
-      // ramp it to full rather than restarting.
-      if (isLoopActive('vortex_loop')) {
-        setLoopVolume('vortex_loop', 1, 0.3)
-      } else {
-        startLoop('vortex_loop')
-      }
+      stopLoop('portal_hum')
+      startLoop('vortex_loop')
     } else if (state === states.STREAMING) {
       stopLoop('vortex_loop')
       stopLoop('vortex_error')
@@ -49,7 +44,7 @@ const AudioController = () => {
     } else {
       stopAllLoops()
     }
-  }, [state, states, startLoop, stopLoop, crossfadeLoop, stopAllLoops, setLoopVolume, isLoopActive])
+  }, [state, states, startLoop, stopLoop, crossfadeLoop, stopAllLoops])
 
   // Swap between gameplay and pause music with crossfade
   useEffect(() => {

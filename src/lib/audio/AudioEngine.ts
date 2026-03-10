@@ -66,7 +66,6 @@ export class AudioEngine {
   /** Preload an asset file into a decoded AudioBuffer. */
   async preloadAsset(id: string, url: string): Promise<void> {
     try {
-      console.log(`[AudioEngine] Preloading asset "${id}" from ${url}`)
       const ctx = this.ensureContext()
       const resp = await fetch(url)
       if (!resp.ok) {
@@ -74,12 +73,8 @@ export class AudioEngine {
         return
       }
       const arrayBuf = await resp.arrayBuffer()
-      console.log(`[AudioEngine] Fetched "${id}": ${arrayBuf.byteLength} bytes, decoding...`)
       const audioBuf = await ctx.decodeAudioData(arrayBuf)
       this.assetBuffers.set(id, audioBuf)
-      console.log(
-        `[AudioEngine] Asset "${id}" loaded: ${audioBuf.duration.toFixed(1)}s, ${audioBuf.numberOfChannels}ch`
-      )
     } catch (err) {
       console.warn(`[AudioEngine] Failed to preload asset "${id}":`, err)
     }
@@ -127,9 +122,6 @@ export class AudioEngine {
 
     // Try asset buffer first
     const buffer = this.assetBuffers.get(id)
-    console.log(
-      `[AudioEngine] startLoop("${id}"): asset buffer ${buffer ? `found (${buffer.duration.toFixed(1)}s)` : 'not found'}, synth ${SYNTH_LOOPS[id] ? 'available' : 'unavailable'}`
-    )
     if (buffer) {
       const source = ctx.createBufferSource()
       source.buffer = buffer
@@ -160,7 +152,6 @@ export class AudioEngine {
     // If there's a registered asset that hasn't loaded yet, remember this request
     if (SOUND_ASSETS[id]) {
       this.pendingLoops.set(id, { volume })
-      console.log(`[AudioEngine] Loop "${id}" deferred — asset not yet loaded`)
     }
 
     return false
@@ -239,7 +230,6 @@ export class AudioEngine {
   private startPendingLoops() {
     for (const [id, { volume }] of this.pendingLoops) {
       if (this.assetBuffers.has(id)) {
-        console.log(`[AudioEngine] Starting deferred loop "${id}"`)
         this.pendingLoops.delete(id)
         this.startLoop(id, volume, 0.5)
       }

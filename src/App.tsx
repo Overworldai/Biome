@@ -33,11 +33,9 @@ import PortalSparksConfigurator from './components/PortalSparksConfigurator'
 
 const LAUNCH_PRE_SHRINK_MS = 420
 
-const VORTEX_HOVER_VOLUME = 0.4
-
 const AppShell = () => {
   const [isPortalHovered, setIsPortalHovered] = useState(false)
-  const { play, startLoop, stopLoop, setLoopVolume, isLoopActive } = useAudio()
+  const { play, startLoop, stopLoop } = useAudio()
   const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
@@ -168,6 +166,8 @@ const AppShell = () => {
       !isLaunchShrinking
     ) {
       play('portal_swoosh_long')
+      stopLoop('portal_hum')
+      startLoop('vortex_loop')
       setIsLaunchShrinking(true)
     }
   }
@@ -205,18 +205,14 @@ const AppShell = () => {
             style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
             onMouseEnter={() => {
               setIsPortalHovered(true)
-              if (!isLoopActive('vortex_loop')) {
-                startLoop('vortex_loop', VORTEX_HOVER_VOLUME)
-              } else {
-                setLoopVolume('vortex_loop', VORTEX_HOVER_VOLUME, 0.15)
-              }
+              startLoop('portal_hum')
             }}
             onMouseLeave={() => {
               setIsPortalHovered(false)
-              stopLoop('vortex_loop')
+              stopLoop('portal_hum')
             }}
             onClick={() => {
-              setLoopVolume('vortex_loop', 1, 0.3)
+              stopLoop('portal_hum')
               handleLaunch()
             }}
             role="button"

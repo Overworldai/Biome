@@ -7,6 +7,7 @@ export type SoundId =
   | 'error'
   | 'portal_swoosh'
   | 'portal_swoosh_long'
+  | 'portal_hum'
   | 'vortex_loop'
   | 'vortex_error'
   | 'music_menu'
