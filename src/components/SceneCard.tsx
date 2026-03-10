@@ -1,4 +1,6 @@
 import type { SeedRecord } from '../types/app'
+import { useUISound } from '../hooks/useUISound'
+import { useAudio } from '../context/AudioContext'
 
 const ACTION_BASE =
   'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-ghost)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
@@ -72,12 +74,24 @@ interface SceneCardProps {
   thumbnailSrc?: string
   isPinned: boolean
   pinVariant: 'pinned-only' | 'toggle'
+  selectCooldown?: boolean
   onSelect: (filename: string) => void
   onTogglePin: (filename: string) => void
   onRemove?: (seed: SeedRecord) => void
 }
 
-const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onTogglePin, onRemove }: SceneCardProps) => {
+const SceneCard = ({
+  seed,
+  thumbnailSrc,
+  isPinned,
+  pinVariant,
+  selectCooldown,
+  onSelect,
+  onTogglePin,
+  onRemove
+}: SceneCardProps) => {
+  const { playHover, playClick } = useUISound()
+  const { play } = useAudio()
   const isUnsafe = !seed.is_safe
 
   return (
@@ -88,8 +102,10 @@ const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onToggl
       }`}
       title={seed.filename}
       aria-disabled={isUnsafe}
+      onMouseEnter={() => !isUnsafe && playHover()}
       onClick={() => {
         if (isUnsafe) return
+        play(selectCooldown ? 'error' : 'portal_swoosh')
         onSelect(seed.filename)
       }}
     >
@@ -110,8 +126,10 @@ const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onToggl
             tabIndex={0}
             className={`${ACTION_BASE} ${isPinned ? ACTION_PINNED : ACTION_UNPINNED}`}
             title={isPinned ? 'Unpin scene' : 'Pin scene'}
+            onMouseEnter={playHover}
             onClick={(event) => {
               event.stopPropagation()
+              playClick()
               onTogglePin(seed.filename)
             }}
             onKeyDown={(event) => {
@@ -131,8 +149,10 @@ const SceneCard = ({ seed, thumbnailSrc, isPinned, pinVariant, onSelect, onToggl
             tabIndex={0}
             className={`${ACTION_BASE} ${ACTION_DELETE}`}
             title="Remove scene"
+            onMouseEnter={playHover}
             onClick={(event) => {
               event.stopPropagation()
+              playClick()
               void onRemove(seed)
             }}
             onKeyDown={(event) => {

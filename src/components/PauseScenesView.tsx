@@ -11,6 +11,7 @@ interface PauseScenesViewProps {
   pinnedSceneIds: string[]
   uploadingImage: boolean
   uploadError: string | null
+  selectCooldown: boolean
   onSceneSelect: (filename: string) => void
   onTogglePin: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
@@ -26,6 +27,7 @@ const PauseScenesView = ({
   pinnedSceneIds,
   uploadingImage,
   uploadError,
+  selectCooldown,
   onSceneSelect,
   onTogglePin,
   onRemoveScene,
@@ -193,6 +195,7 @@ const PauseScenesView = ({
                 thumbnailSrc={thumbnails[seed.filename]}
                 isPinned={pinnedSceneIds.includes(seed.filename)}
                 pinVariant="toggle"
+                selectCooldown={selectCooldown}
                 onSelect={onSceneSelect}
                 onTogglePin={onTogglePin}
                 onRemove={onRemoveScene}

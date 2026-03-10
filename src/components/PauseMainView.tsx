@@ -8,6 +8,7 @@ import { HEADING_BASE } from '../styles'
 interface PauseMainViewProps {
   pinnedScenes: SeedRecord[]
   thumbnails: Record<string, string>
+  selectCooldown: boolean
   onSceneSelect: (filename: string) => void
   onTogglePin: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
@@ -22,6 +23,7 @@ interface PauseMainViewProps {
 const PauseMainView = ({
   pinnedScenes,
   thumbnails,
+  selectCooldown,
   onSceneSelect,
   onTogglePin,
   onRemoveScene,
@@ -50,6 +52,7 @@ const PauseMainView = ({
                 thumbnailSrc={thumbnails[seed.filename]}
                 isPinned={true}
                 pinVariant="pinned-only"
+                selectCooldown={selectCooldown}
                 onSelect={onSceneSelect}
                 onTogglePin={onTogglePin}
                 onRemove={onRemoveScene}
