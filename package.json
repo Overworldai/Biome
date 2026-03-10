@@ -33,12 +33,19 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "adm-zip": "^0.5",
-    "electron": "~35.0.0",
+    "electron": "~35.7.5",
     "husky": "^9.1.7",
     "prettier": "^3",
-    "tar": "^7",
+    "tar": "^7.5.11",
     "typescript": "^5.9.3",
     "vite": "^6.0.5"
+  },
+  "overrides": {
+    "tar": "^7.5.11",
+    "http-proxy-agent": "^7.0.2",
+    "@tootallnate/once": "^3.0.1",
+    "tmp": "^0.2.4",
+    "@electron/rebuild": "^4.0.3"
   },
   "description": "Biome desktop app",
   "author": "Overworld"
