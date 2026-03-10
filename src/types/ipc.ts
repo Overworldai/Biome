@@ -112,5 +112,6 @@ export type IpcEventMap = {
   'server-ready': boolean
   'server-stage': { id: string; label: string; percent: number }
   'engine-install-log': { line: string; is_stderr: boolean }
+  'server-log': { line: string; is_stderr: boolean }
   'window-resized': { width: number; height: number }
 }

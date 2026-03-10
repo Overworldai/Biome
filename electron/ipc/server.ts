@@ -14,8 +14,8 @@ import {
   clearServerState,
   stopServerSync
 } from '../lib/serverState.js'
-import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
+import { emitToAllWindows } from '../lib/ipcUtils.js'
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -64,23 +64,6 @@ export function registerServerIpc(): void {
     console.log(`[ENGINE] Engine dir: ${engineDir}`)
     console.log(`[ENGINE] UV binary: ${uvBinary}`)
 
-    // Run uv sync before starting
-    console.log('[ENGINE] Syncing dependencies...')
-    try {
-      await runUvSyncWithMirroredLogs(
-        uvBinary,
-        engineDir,
-        { ...process.env, ...uvEnv },
-        {
-          logPrefix: '[SERVER] [UV]'
-        }
-      )
-      console.log('[ENGINE] Dependencies synced successfully')
-    } catch (err) {
-      console.log('[ENGINE] Warning: uv sync failed:', err)
-      // Don't fail - deps might already be synced
-    }
-
     // Build env for server process
     const serverEnv: Record<string, string> = {
       ...(process.env as Record<string, string>),
@@ -118,19 +101,23 @@ export function registerServerIpc(): void {
     console.log(`[ENGINE] Server process spawned with PID: ${pid}`)
     fs.writeFileSync(logFilePath, '', 'utf-8')
 
-    // Process stdout — write to console and log file only (no IPC events)
+    // Process stdout — write to console, log file, and forward to renderer
     if (child.stdout) {
       const rl = createInterface({ input: child.stdout })
       rl.on('line', (line) => {
         console.log(`[SERVER] ${line}`)
+        fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
+        emitToAllWindows('server-log', { line, is_stderr: false })
       })
     }
 
-    // Process stderr
+    // Process stderr — write to console, log file, and forward to renderer
     if (child.stderr) {
       const rl = createInterface({ input: child.stderr })
       rl.on('line', (line) => {
         console.log(`[SERVER] ${line}`)
+        fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
+        emitToAllWindows('server-log', { line, is_stderr: true })
       })
     }
 

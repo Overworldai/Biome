@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { invoke } from '../bridge'
+import { invoke, listen } from '../bridge'
 import { resolveStage } from '../stages'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
@@ -23,7 +23,29 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [displayedLogs, setDisplayedLogs] = useState<string[]>([])
+  const [standaloneLogs, setStandaloneLogs] = useState<string[]>([])
   const logsPanelHeight = 260
+
+  // In standalone mode, accumulate logs from IPC events (engine install + server process)
+  useEffect(() => {
+    if (isServerMode) return
+
+    const MAX_LINES = 500
+    const appendLine = (line: string) => {
+      setStandaloneLogs((prev) => {
+        const next = [...prev, line]
+        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
+      })
+    }
+
+    const unlistenInstall = listen('engine-install-log', (payload) => appendLine(payload.line))
+    const unlistenServer = listen('server-log', (payload) => appendLine(payload.line))
+
+    return () => {
+      unlistenInstall()
+      unlistenServer()
+    }
+  }, [isServerMode])
 
   const errorDetail = engineError || error
 
@@ -146,8 +168,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
           >
             <ServerLogDisplay
               errorMessage={errorDetail}
-              externalLogs={isServerMode ? wsLogs : null}
-              pollLogFileTail={!isServerMode}
+              externalLogs={isServerMode ? wsLogs : standaloneLogs}
               onLogsChange={setDisplayedLogs}
               reportContext={{
                 flow: 'loading',
