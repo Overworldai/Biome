@@ -115,6 +115,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [preConnectionStage, setPreConnectionStage] = useState<StageId | null>(null)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
+  const [scrollActive, setScrollActive] = useState({ up: false, down: false })
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const prevEngineModeRef = useRef(engineMode)
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
@@ -247,7 +250,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     requestPointerLock()
   }, [reset, requestPointerLock])
 
-  const { pressedKeys, getInputState, isPointerLocked } = useGameInput(
+  const { pressedKeys, mouseButtons, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
     containerRef,
     handleReset,
@@ -434,6 +437,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     inputLoopRef.current = setInterval(() => {
       const { buttons, mouseDx, mouseDy } = getInputState()
+      const scrollUp = buttons.includes('SCROLL_UP')
+      const scrollDown = buttons.includes('SCROLL_DOWN')
+      if (scrollUp || scrollDown) {
+        setScrollActive({ up: scrollUp, down: scrollDown })
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = setTimeout(() => setScrollActive({ up: false, down: false }), 150)
+      }
       sendControl(buttons, Math.round(mouseDx * mouseSensitivity), Math.round(mouseDy * mouseSensitivity))
     }, 16)
 
@@ -441,6 +451,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       if (inputLoopRef.current) {
         clearInterval(inputLoopRef.current)
         inputLoopRef.current = null
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = null
       }
     }
   }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
@@ -583,6 +597,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     // Input state
     pressedKeys,
+    mouseButtons,
+    scrollActive,
     isPointerLocked,
     pointerLockBlockedSeq,
 

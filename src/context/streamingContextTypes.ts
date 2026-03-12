@@ -62,6 +62,8 @@ export type StreamingContextValue = {
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
   pressedKeys: Set<string>
+  mouseButtons: Set<string>
+  scrollActive: { up: boolean; down: boolean }
   isPointerLocked: boolean
   pointerLockBlockedSeq: number
 

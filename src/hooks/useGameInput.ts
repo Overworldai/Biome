@@ -58,7 +58,9 @@ KEY_MAP.Enter = 'ENTER'
 const MOUSE_BUTTONS: Record<number, string> = {
   0: 'MOUSE_LEFT',
   1: 'MOUSE_MIDDLE',
-  2: 'MOUSE_RIGHT'
+  2: 'MOUSE_RIGHT',
+  3: 'MOUSE_X1',
+  4: 'MOUSE_X2'
 }
 
 const isEditableTarget = (target: EventTarget | null) =>
@@ -86,6 +88,7 @@ export const useGameInput = (
   const [isPointerLocked, setIsPointerLocked] = useState(false)
 
   const mouseDeltaAccum = useRef({ dx: 0, dy: 0 })
+  const scrollAccum = useRef(0)
 
   const effectiveKeyMap = useMemo(() => {
     const map = { ...KEY_MAP }
@@ -169,6 +172,14 @@ export const useGameInput = (
     [enabled, isPointerLocked]
   )
 
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      if (!enabled) return
+      scrollAccum.current += e.deltaY
+    },
+    [enabled]
+  )
+
   const handlePointerLockChange = useCallback(() => {
     const locked = document.pointerLockElement === containerRef?.current
     setIsPointerLocked(locked)
@@ -188,6 +199,9 @@ export const useGameInput = (
 
   const getInputState = useCallback(() => {
     const buttons = [...pressedKeys, ...mouseButtons]
+    if (scrollAccum.current < 0) buttons.push('SCROLL_UP')
+    else if (scrollAccum.current > 0) buttons.push('SCROLL_DOWN')
+    scrollAccum.current = 0
     const dx = mouseDeltaAccum.current.dx
     const dy = mouseDeltaAccum.current.dy
     mouseDeltaAccum.current = { dx: 0, dy: 0 }
@@ -220,15 +234,17 @@ export const useGameInput = (
     window.addEventListener('mousedown', handleMouseDown)
     window.addEventListener('mouseup', handleMouseUp)
     window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('wheel', handleWheel, { passive: true })
     window.addEventListener('blur', handleBlur)
 
     return () => {
       window.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('wheel', handleWheel)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [enabled, handleMouseDown, handleMouseUp, handleMouseMove, handleBlur])
+  }, [enabled, handleMouseDown, handleMouseUp, handleMouseMove, handleWheel, handleBlur])
 
   return {
     pressedKeys,
