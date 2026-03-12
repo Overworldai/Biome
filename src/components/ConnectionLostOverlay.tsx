@@ -1,18 +1,23 @@
+import { invoke } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
 import Button from './ui/Button'
 
 const ConnectionLostOverlay = () => {
   const { connectionLost, reconnectAfterConnectionLost } = useStreaming()
 
-  const handleDismiss = () => {
+  const handleReconnect = () => {
     void reconnectAfterConnectionLost()
+  }
+
+  const handleQuit = () => {
+    void invoke('quit-app')
   }
 
   return (
     <div
       className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[4px] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
     >
-      <div className="border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] w-[58.33cqh] p-[1.8cqh_2.84cqh] flex flex-col items-center gap-[1.2cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
+      <div className="border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] w-[58.33cqh] p-[3cqh_2.84cqh] flex flex-col items-center gap-[3cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
         <div className="w-[8.5cqh] h-[8.5cqh] text-error-muted animate-[connectionLostPulse_2s_ease-in-out_infinite]">
           <svg
             viewBox="0 0 24 24"
@@ -32,12 +37,17 @@ const ConnectionLostOverlay = () => {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <h3 className="m-0 mb-[0.2cqh] font-serif font-medium text-[3.91cqh]">Connection Lost</h3>
-        <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] text-center">
-          The connection to World Engine was interrupted
-        </p>
-        <div className="flex justify-end mt-[1.2cqh] w-full">
-          <Button variant="primary" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleDismiss}>
+        <div className="flex flex-col items-center">
+          <h3 className="m-0 font-serif font-medium text-[3.91cqh]">Connection Lost</h3>
+          <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] text-center">
+            The connection to the World Engine was lost. Would you like to try reconnecting?
+          </p>
+        </div>
+        <div className="flex justify-end gap-[1.5cqh] w-full">
+          <Button variant="danger" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleQuit}>
+            Quit
+          </Button>
+          <Button variant="primary" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleReconnect}>
             Reconnect
           </Button>
         </div>
