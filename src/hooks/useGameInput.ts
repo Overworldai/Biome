@@ -51,6 +51,8 @@ KEY_MAP.ShiftLeft = 'SHIFT'
 KEY_MAP.ShiftRight = 'SHIFT'
 KEY_MAP.ControlLeft = 'CTRL'
 KEY_MAP.ControlRight = 'CTRL'
+KEY_MAP.AltLeft = 'ALT'
+KEY_MAP.AltRight = 'ALT'
 KEY_MAP.Space = 'SPACE'
 KEY_MAP.Tab = 'TAB'
 KEY_MAP.Enter = 'ENTER'
@@ -100,8 +102,11 @@ export const useGameInput = (
     (e: KeyboardEvent) => {
       if (e.code === 'Escape') return
 
-      // Allow system shortcuts (Ctrl+C, Ctrl+V, Cmd+A, etc.) and skip editable targets
-      if (e.ctrlKey || e.metaKey) return
+      // When game input is active, capture Ctrl/Alt as game buttons.
+      // When inactive, allow system shortcuts (Ctrl+C, Ctrl+V, etc.) through.
+      if (!enabled && (e.ctrlKey || e.metaKey)) return
+      // Always let Cmd (Meta) shortcuts through — they're OS-level on macOS.
+      if (e.metaKey) return
       if (isEditableTarget(e.target)) return
 
       if (e.code === keybindings.reset_scene) {

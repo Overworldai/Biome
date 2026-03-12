@@ -68,12 +68,25 @@ const createWindow = () => {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
   }
 
-  // Enable DevTools shortcuts only in development builds.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown') return
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
 
-      const key = input.key.toLowerCase()
+    const key = input.key.toLowerCase()
+
+    // Block Ctrl+W from closing the window — the app has its own close button.
+    if (input.control && key === 'w') {
+      event.preventDefault()
+      return
+    }
+
+    // Block bare Alt from activating the system menu — Alt is a game input.
+    if (input.alt && !input.control && !input.meta && key === 'alt') {
+      event.preventDefault()
+      return
+    }
+
+    // Enable DevTools shortcuts only in development builds.
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       const isF12 = key === 'f12'
       const isCtrlShiftI = input.control && input.shift && key === 'i'
 
@@ -81,8 +94,8 @@ const createWindow = () => {
         event.preventDefault()
         mainWindow?.webContents.toggleDevTools()
       }
-    })
-  }
+    }
+  })
 
   // Make links to external websites opened in default OS browser (instead of electron app)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
