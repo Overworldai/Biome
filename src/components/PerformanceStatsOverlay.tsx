@@ -37,9 +37,10 @@ const colorForPercent = (pct: number) => {
 const formatValue = (v: number, unavailable = -1) => (v === unavailable ? 'N/A' : v.toString())
 
 const PerformanceStatsOverlay = () => {
-  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency } = useStreaming()
+  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, fps } = useStreaming()
   const [, setTick] = useState(0)
 
+  const pfpsBuf = useRingBuffer()
   const fpsBuf = useRingBuffer()
   const lfpsBuf = useRingBuffer()
   const genBuf = useRingBuffer()
@@ -56,6 +57,13 @@ const PerformanceStatsOverlay = () => {
     genBuf.push(serverMetrics.avgGenMs)
     if (serverMetrics.vramPercent >= 0) vramBuf.push(serverMetrics.vramPercent)
     if (serverMetrics.gpuUtilPercent >= 0) gpuBuf.push(serverMetrics.gpuUtilPercent)
+  }
+
+  // Push client-side perceived FPS on each update
+  const prevFpsRef = useRef(fps)
+  if (fps !== prevFpsRef.current) {
+    prevFpsRef.current = fps
+    if (fps > 0) pfpsBuf.push(fps)
   }
 
   // Push latency on each update
@@ -83,6 +91,13 @@ const PerformanceStatsOverlay = () => {
       <Row label="CPU" value={m?.cpuName ?? '[Unknown CPU]'} color={COLOR_HUD} />
       <Row label="GPU" value={m?.gpuName ?? '[Unknown GPU]'} color={COLOR_HUD} />
       <Row label="MDL" value={m?.model || '\u2014'} color={COLOR_WARM} className="mb-[0.4cqh]" />
+      <Row
+        label="PFPS"
+        value={fps > 0 ? `${fps} fps` : '--'}
+        color={COLOR_HUD}
+        sparkValues={pfpsBuf.values}
+        sparkColor={COLOR_HUD}
+      />
       <Row
         label="FPS"
         value={m ? `${m.perceivedFps.toFixed(2)} fps` : '--'}
