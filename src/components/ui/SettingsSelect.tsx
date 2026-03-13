@@ -77,6 +77,7 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
 
   const commitCustomValue = () => {
     const trimmed = customValue.trim()
+    setCustomValue(trimmed)
     if (trimmed) {
       onChange(trimmed)
     }
@@ -142,6 +143,11 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
             className={`flex-1 bg-transparent border-none outline-none ${SETTINGS_CONTROL_TEXT}`}
             value={customValue}
             onChange={(e) => setCustomValue(e.target.value)}
+            onPaste={(e) => {
+              e.preventDefault()
+              const pasted = e.clipboardData.getData('text').trim()
+              setCustomValue(pasted)
+            }}
             onBlur={commitCustomValue}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

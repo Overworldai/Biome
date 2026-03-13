@@ -185,7 +185,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   }
 
   const handleWorldModelChange = (model: string) => {
-    setMenuWorldModel(model)
+    setMenuWorldModel(model.trim())
   }
 
   const handleMouseSensitivityChange = (value: number) => {
