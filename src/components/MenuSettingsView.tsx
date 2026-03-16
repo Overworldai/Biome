@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '../bridge'
 import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
@@ -23,7 +23,13 @@ import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
 
 type MenuModelOption = {
   id: string
-  isLocal: boolean
+  isLocal: boolean | null
+  sizeBytes: number | null
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
 type KeybindRowProps =
@@ -84,7 +90,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
   )
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
-    { id: configWorldModel, isLocal: false }
+    { id: configWorldModel, isLocal: false, sizeBytes: null }
   ])
   const [menuModelsLoading, setMenuModelsLoading] = useState(false)
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
@@ -101,6 +107,15 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
 
+  const [serverUrlStatus, setServerUrlStatus] = useState<'idle' | 'loading' | 'valid' | 'error'>('idle')
+  const [lastValidatedServerUrl, setLastValidatedServerUrl] = useState('')
+  const [showServerErrorModal, setShowServerErrorModal] = useState(false)
+
+  const [customModelStatus, setCustomModelStatus] = useState<{
+    state: 'idle' | 'loading' | 'error'
+    error: string | null
+  }>({ state: 'idle', error: null })
+
   const engineReady = engineStatus
     ? engineStatus.uv_installed && engineStatus.repo_cloned && engineStatus.dependencies_synced
     : null
@@ -112,8 +127,47 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     }
   }, [menuEngineMode, checkEngineStatus])
 
-  // Load model list
+  // Auto-validate server URL when entering server mode or opening settings with a saved URL.
+  // Uses a ref to avoid including serverUrlStatus in deps (which would cancel the in-flight probe).
+  const serverUrlStatusRef = useRef(serverUrlStatus)
+  serverUrlStatusRef.current = serverUrlStatus
   useEffect(() => {
+    if (menuEngineMode !== 'server') return
+    if (!menuServerUrl.trim()) return
+    if (serverUrlStatusRef.current !== 'idle') return
+
+    let cancelled = false
+    const validate = async () => {
+      setServerUrlStatus('loading')
+      try {
+        const ok = await invoke('probe-server-health', `${menuServerUrl}/health`, 5000)
+        if (cancelled) return
+        if (ok) {
+          setServerUrlStatus('valid')
+          setLastValidatedServerUrl(menuServerUrl)
+        } else {
+          setServerUrlStatus('error')
+        }
+      } catch {
+        if (!cancelled) setServerUrlStatus('error')
+      }
+    }
+    validate()
+    return () => {
+      cancelled = true
+    }
+  }, [menuEngineMode, menuServerUrl])
+
+  // Load model list — refetch when mode, server URL, or selected model changes
+  const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
+  useEffect(() => {
+    // In server mode, don't fetch until server is validated
+    if (menuEngineMode === 'server' && serverUrlStatus !== 'valid') {
+      setMenuModelOptions([{ id: menuWorldModel, isLocal: false, sizeBytes: null }])
+      setMenuModelsLoading(false)
+      return
+    }
+
     let cancelled = false
 
     const loadMenuModels = async () => {
@@ -127,11 +181,21 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
           .map((id) => id.trim())
           .filter((id) => id.length > 0)
 
-        const availability = await invoke('list-model-availability', ids)
+        const [availability, modelsInfo] = await Promise.all([
+          invoke('list-model-availability', ids),
+          invoke('get-models-info', ids, serverUrlForModels)
+        ])
         if (cancelled) return
 
         const availabilityMap = new Map((availability || []).map((entry) => [entry.id, !!entry.is_local]))
-        setMenuModelOptions(ids.map((id) => ({ id, isLocal: availabilityMap.get(id) ?? false })))
+        const infoMap = new Map((modelsInfo || []).map((entry) => [entry.id, entry]))
+        setMenuModelOptions(
+          ids.map((id) => ({
+            id,
+            isLocal: availabilityMap.get(id) ?? false,
+            sizeBytes: infoMap.get(id)?.size_bytes ?? null
+          }))
+        )
       } catch {
         if (cancelled) return
         setMenuModelsError('Could not load model list')
@@ -147,7 +211,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel])
+  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus])
 
   useEffect(() => {
     setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
@@ -168,25 +232,73 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     settings.debug_overlays.input
   ])
 
-  const handleServerUrlBlur = useCallback(() => {
+  const handleServerUrlBlur = useCallback(async () => {
+    if (!menuServerUrl.trim()) {
+      setServerUrlStatus('idle')
+      return
+    }
+
+    let normalizedUrl: string
     try {
       const url = new URL(menuServerUrl)
       const normalizedPort = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
-      const normalizedUrl = `${url.protocol}//${url.hostname}:${normalizedPort}`
+      normalizedUrl = `${url.protocol}//${url.hostname}:${normalizedPort}`
       setMenuServerUrl(normalizedUrl)
     } catch {
-      // Invalid URL — revert to config value
       setMenuServerUrl(configServerUrl)
+      return
     }
-  }, [menuServerUrl, configServerUrl])
+
+    if (normalizedUrl === lastValidatedServerUrl && serverUrlStatus === 'valid') return
+
+    setServerUrlStatus('loading')
+    try {
+      const ok = await invoke('probe-server-health', `${normalizedUrl}/health`, 5000)
+      if (ok) {
+        setServerUrlStatus('valid')
+        setLastValidatedServerUrl(normalizedUrl)
+      } else {
+        setServerUrlStatus('error')
+        setShowServerErrorModal(true)
+      }
+    } catch {
+      setServerUrlStatus('error')
+      setShowServerErrorModal(true)
+    }
+  }, [menuServerUrl, configServerUrl, lastValidatedServerUrl, serverUrlStatus])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
+    setServerUrlStatus('idle')
+    setLastValidatedServerUrl('')
   }
 
   const handleWorldModelChange = (model: string) => {
     setMenuWorldModel(model.trim())
+    setCustomModelStatus({ state: 'idle', error: null })
   }
+
+  const handleCustomModelBlur = useCallback(
+    async (modelId: string) => {
+      if (menuModelOptions.some((m) => m.id === modelId)) return
+      setCustomModelStatus({ state: 'loading', error: null })
+      try {
+        const results = await invoke('get-models-info', [modelId], serverUrlForModels)
+        const info = results?.[0]
+        if (info && !info.exists) {
+          setCustomModelStatus({ state: 'error', error: info.error ?? 'Model not found' })
+        } else if (info?.error) {
+          setCustomModelStatus({ state: 'error', error: info.error })
+        } else {
+          setCustomModelStatus({ state: 'idle', error: null })
+          setMenuModelOptions((prev) => [...prev, { id: modelId, isLocal: null, sizeBytes: info?.size_bytes ?? null }])
+        }
+      } catch {
+        setCustomModelStatus({ state: 'error', error: 'Could not check model' })
+      }
+    },
+    [menuModelOptions, serverUrlForModels]
+  )
 
   const handleMouseSensitivityChange = (value: number) => {
     setMenuMouseSensitivity(value)
@@ -194,12 +306,13 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
 
   const applyDraftSettings = useCallback(async () => {
     let nextServerUrl = menuServerUrl
-    try {
-      // Validate the URL
-      new URL(nextServerUrl)
-    } catch {
-      nextServerUrl = configServerUrl
-      setMenuServerUrl(configServerUrl)
+    if (nextServerUrl.trim()) {
+      try {
+        new URL(nextServerUrl)
+      } catch {
+        nextServerUrl = configServerUrl
+        setMenuServerUrl(configServerUrl)
+      }
     }
 
     const engineModeValue = menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
@@ -235,13 +348,26 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
 
   const handleBackClick = useCallback(async () => {
+    if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
+      setShowServerErrorModal(true)
+      return
+    }
     if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }, [isStreaming, hasEngineModeChanged, hasWorldModelChanged, applyDraftSettings, onBack])
+  }, [
+    menuEngineMode,
+    menuServerUrl,
+    serverUrlStatus,
+    isStreaming,
+    hasEngineModeChanged,
+    hasWorldModelChanged,
+    applyDraftSettings,
+    onBack
+  ])
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -254,6 +380,11 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   }, [handleBackClick])
 
   const handleConfirmEngineModeSwitch = async () => {
+    if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
+      setShowModeSwitchModal(false)
+      setShowServerErrorModal(true)
+      return
+    }
     setShowModeSwitchModal(false)
     await applyDraftSettings()
     onBack()
@@ -308,11 +439,31 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           {menuEngineMode === 'server' && (
-            <SettingsSection title="Server URL" description="the address of the GPU server running the model">
+            <SettingsSection
+              title="Server URL"
+              description={
+                <span className="inline-flex items-center gap-[0.71cqh]">
+                  the address of the GPU server running the model
+                  {serverUrlStatus === 'loading' && ' · checking...'}
+                  {serverUrlStatus === 'valid' && (
+                    <>
+                      {' · connected'}
+                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+                    </>
+                  )}
+                  {serverUrlStatus === 'error' && (
+                    <>
+                      {' · unreachable'}
+                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+                    </>
+                  )}
+                </span>
+              }
+            >
               <SettingsTextInput
                 value={menuServerUrl}
                 onChange={setMenuServerUrl}
-                onBlur={handleServerUrlBlur}
+                onBlur={() => void handleServerUrlBlur()}
                 placeholder="http://localhost:8000"
               />
             </SettingsSection>
@@ -331,12 +482,25 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
               options={menuModelOptions.map((model) => ({
                 value: model.id,
                 label: model.id.replace(/^Overworld\//, ''),
-                prefix: model.isLocal ? 'local' : 'download'
+                prefix: [
+                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+                  model.isLocal === true ? 'local' : model.isLocal === false ? 'download' : null
+                ]
+                  .filter(Boolean)
+                  .join(' \u00B7 ')
               }))}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
-              disabled={menuModelsLoading}
+              disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
+              onCustomBlur={handleCustomModelBlur}
+              customPrefix={
+                customModelStatus.state === 'loading'
+                  ? 'checking...'
+                  : customModelStatus.state === 'error'
+                    ? (customModelStatus.error ?? 'Model not found')
+                    : undefined
+              }
             />
             {menuModelsError && (
               <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0.35cqh_0_0.8cqh]`}>{menuModelsError}</p>
@@ -459,6 +623,25 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
           }}
           confirmLabel="Switch Mode"
           cancelLabel="Keep Current"
+        />
+      )}
+
+      {showServerErrorModal && (
+        <ConfirmModal
+          title="Server Unreachable"
+          description={
+            menuServerUrl.trim()
+              ? `Could not connect to ${menuServerUrl}. The server may be down, the URL may be wrong, or a firewall may be blocking the connection.`
+              : 'Please enter a server URL before leaving settings.'
+          }
+          onConfirm={() => setShowServerErrorModal(false)}
+          onCancel={() => {
+            setShowServerErrorModal(false)
+            setMenuServerUrl(configServerUrl)
+            setServerUrlStatus('idle')
+          }}
+          confirmLabel="Edit URL"
+          cancelLabel="Revert"
         />
       )}
 

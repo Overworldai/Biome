@@ -7,6 +7,13 @@ export type ModelAvailability = {
   is_local: boolean
 }
 
+export type ModelInfo = {
+  id: string
+  size_bytes: number | null
+  exists: boolean
+  error: string | null
+}
+
 export type RuntimeDiagnosticsMeta = {
   app_name: string
   app_version: string
@@ -60,6 +67,7 @@ export type IpcCommandMap = {
   // Models
   'list-waypoint-models': { args: []; return: string[] }
   'list-model-availability': { args: [modelIds: string[]]; return: ModelAvailability[] }
+  'get-models-info': { args: [modelIds: string[], serverUrl?: string]; return: ModelInfo[] }
 
   // Engine
   'check-engine-status': { args: [source?: string]; return: EngineStatus }

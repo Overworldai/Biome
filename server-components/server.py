@@ -35,19 +35,62 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Optional
 
+from huggingface_hub import model_info as hf_model_info
+from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+
 # Resolve HuggingFace token: env var > CLI-cached token file.
 # Biome overrides HF_HOME to keep model cache inside world_engine/, which means
 # the huggingface_hub library won't find the user's default token at
-# ~/.cache/huggingface/token. Read it manually as a fallback.
-if not os.environ.get("HF_TOKEN") and not os.environ.get("HUGGING_FACE_HUB_TOKEN"):
-    _hf_token_path = Path.home() / ".cache" / "huggingface" / "token"
-    if _hf_token_path.is_file():
-        _token = _hf_token_path.read_text().strip()
-        if _token:
-            os.environ["HF_TOKEN"] = _token
-            print(f"[BIOME] HF token loaded from {_hf_token_path}", flush=True)
-    else:
-        print("[BIOME] Warning: No HuggingFace token found (set HF_TOKEN or run `huggingface-cli login`)", flush=True)
+# ~/.cache/huggingface/token. We check multiple locations to match the Electron
+# side's resolution order.
+
+
+def resolve_hf_token() -> Optional[str]:
+    """Resolve HuggingFace token from env vars and well-known file locations.
+
+    Mirrors the Electron-side getHfToken() resolution order so both paths
+    find the same token regardless of HF_HOME overrides.
+    """
+    # 1. HF_TOKEN env var
+    token = os.environ.get("HF_TOKEN")
+    if token:
+        return token
+    # 2. Deprecated HUGGING_FACE_HUB_TOKEN env var
+    token = os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if token:
+        return token
+    # 3. File at HF_TOKEN_PATH env var
+    token_path_env = os.environ.get("HF_TOKEN_PATH")
+    if token_path_env:
+        p = Path(token_path_env)
+        if p.is_file():
+            t = p.read_text().strip()
+            if t:
+                return t
+    # 4. File at real user HF_HOME/token (use XDG_CACHE_HOME or ~/.cache,
+    #    NOT the overridden HF_HOME which points into world_engine/)
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        p = Path(xdg) / "huggingface" / "token"
+        if p.is_file():
+            t = p.read_text().strip()
+            if t:
+                return t
+    # 5. Default fallback: ~/.cache/huggingface/token
+    p = Path.home() / ".cache" / "huggingface" / "token"
+    if p.is_file():
+        t = p.read_text().strip()
+        if t:
+            return t
+    return None
+
+
+_resolved_token = resolve_hf_token()
+if _resolved_token:
+    os.environ["HF_TOKEN"] = _resolved_token
+    print(f"[BIOME] HF token resolved and set", flush=True)
+else:
+    print("[BIOME] Warning: No HuggingFace token found (set HF_TOKEN or run `huggingface-cli login`)", flush=True)
 
 # Reduce CUDA allocator fragmentation during repeated model loads/switches.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -716,7 +759,7 @@ def compute_file_hash(file_path: str) -> str:
 
 
 # ============================================================================
-# Health Endpoint (only REST endpoint kept)
+# HTTP Endpoints
 # ============================================================================
 
 
@@ -735,6 +778,31 @@ async def health():
             "safety": {"loaded": safety_checker is not None and safety_checker.model is not None},
         }
     )
+
+
+@app.get("/api/model-info/{model_id:path}")
+async def get_model_info(model_id: str):
+    """Fetch model metadata from HuggingFace Hub."""
+    try:
+        info = hf_model_info(model_id, files_metadata=True)
+        size_bytes = None
+        if hasattr(info, "siblings") and info.siblings:
+            st_files = [s for s in info.siblings if s.rfilename.endswith(".safetensors") and s.size is not None]
+            # Deduplicate by blob hash to avoid counting symlinked files twice
+            seen_blobs = set()
+            for s in st_files:
+                blob_key = getattr(s, "blob_id", None) or s.rfilename
+                if blob_key not in seen_blobs:
+                    seen_blobs.add(blob_key)
+                    size_bytes = (size_bytes or 0) + s.size
+        return JSONResponse({"id": model_id, "size_bytes": size_bytes, "exists": True, "error": None})
+    except RepositoryNotFoundError:
+        return JSONResponse({"id": model_id, "size_bytes": None, "exists": False, "error": "Model not found"})
+    except GatedRepoError:
+        return JSONResponse({"id": model_id, "size_bytes": None, "exists": True, "error": "Private or gated model"})
+    except Exception as e:
+        logger.warning(f"model-info error for {model_id}: {e}")
+        return JSONResponse({"id": model_id, "size_bytes": None, "exists": True, "error": "Could not check model"})
 
 
 # ============================================================================
@@ -799,6 +867,8 @@ async def dispatch_request(msg: dict, websocket: WebSocket) -> dict | BinaryResp
         return await _handle_seeds_delete(msg)
     elif req_type == "seeds_rescan":
         return await _handle_seeds_rescan(msg)
+    elif req_type == "model_info":
+        return await _handle_model_info(msg)
     else:
         return {"success": False, "error": f"Unknown request type: {req_type}"}
 
@@ -1089,6 +1159,34 @@ async def _handle_seeds_rescan(msg: dict) -> dict:
                 "safe_seeds": safe_count,
             },
         }
+
+
+async def _handle_model_info(msg: dict) -> dict:
+    """Fetch model info from HuggingFace Hub via WS RPC."""
+    model_id = msg.get("model_id", "")
+    if not model_id:
+        return {"success": False, "error": "model_id is required"}
+
+    try:
+        info = hf_model_info(model_id, files_metadata=True)
+        size_bytes = None
+        if hasattr(info, "siblings") and info.siblings:
+            st_files = [s for s in info.siblings if s.rfilename.endswith(".safetensors") and s.size is not None]
+            # Deduplicate by blob hash to avoid counting symlinked files twice
+            seen_blobs = set()
+            for s in st_files:
+                blob_key = getattr(s, "blob_id", None) or s.rfilename
+                if blob_key not in seen_blobs:
+                    seen_blobs.add(blob_key)
+                    size_bytes = (size_bytes or 0) + s.size
+        return {"success": True, "data": {"id": model_id, "size_bytes": size_bytes, "exists": True, "error": None}}
+    except RepositoryNotFoundError:
+        return {"success": True, "data": {"id": model_id, "size_bytes": None, "exists": False, "error": "Model not found"}}
+    except GatedRepoError:
+        return {"success": True, "data": {"id": model_id, "size_bytes": None, "exists": True, "error": "Private or gated model"}}
+    except Exception as e:
+        logger.warning(f"model_info WS error for {model_id}: {e}")
+        return {"success": True, "data": {"id": model_id, "size_bytes": None, "exists": True, "error": "Could not check model"}}
 
 
 # ============================================================================

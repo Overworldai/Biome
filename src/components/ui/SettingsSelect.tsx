@@ -15,6 +15,8 @@ type SettingsSelectProps = {
   onChange: (value: string) => void
   disabled?: boolean
   allowCustom?: boolean
+  onCustomBlur?: (value: string) => void
+  customPrefix?: string
 }
 
 const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
@@ -24,7 +26,15 @@ const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
   </span>
 )
 
-const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: SettingsSelectProps) => {
+const SettingsSelect = ({
+  options,
+  value,
+  onChange,
+  disabled,
+  allowCustom,
+  onCustomBlur,
+  customPrefix
+}: SettingsSelectProps) => {
   const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
   const [isCustom, setIsCustom] = useState(() => allowCustom && !options.some((o) => o.value === value))
@@ -36,10 +46,22 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
 
   const selectedOption = options.find((o) => o.value === value)
 
-  // Sync isCustom when options or value change — only promote to custom,
-  // never demote, so that clicking "Custom..." isn't immediately undone.
+  // Track option values to detect when the options list actually changes
+  // content (not just reference identity, which changes every render due to .map()).
+  // Demote from custom back to dropdown when a new option appears matching the
+  // current value (e.g. after validation adds it). Promote to custom when value
+  // changes to something not in options.
+  const prevOptionValuesRef = useRef(new Set(options.map((o) => o.value)))
   useEffect(() => {
-    if (allowCustom && !options.some((o) => o.value === value)) {
+    if (!allowCustom) return
+    const currentValues = new Set(options.map((o) => o.value))
+    const prevValues = prevOptionValuesRef.current
+    const inOptions = currentValues.has(value)
+    const isNewOption = inOptions && !prevValues.has(value)
+    prevOptionValuesRef.current = currentValues
+    if (isNewOption) {
+      setIsCustom(false)
+    } else if (!inOptions) {
       setIsCustom(true)
     }
   }, [allowCustom, options, value])
@@ -148,7 +170,11 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
               const pasted = e.clipboardData.getData('text').trim()
               setCustomValue(pasted)
             }}
-            onBlur={commitCustomValue}
+            onBlur={() => {
+              commitCustomValue()
+              const trimmed = customValue.trim()
+              if (trimmed) onCustomBlur?.(trimmed)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.currentTarget.blur()
@@ -156,6 +182,11 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
             }}
             autoFocus
           />
+          {customPrefix && (
+            <span className="flex items-center pr-[1cqh] text-[rgba(238,244,252,0.45)] lowercase text-[2.67cqh] font-serif whitespace-nowrap">
+              {customPrefix}
+            </span>
+          )}
           <button
             type="button"
             className="flex items-center justify-center w-[3.56cqh] bg-surface-btn-primary cursor-pointer border-none"
@@ -180,11 +211,12 @@ const SettingsSelect = ({ options, value, onChange, disabled, allowCustom }: Set
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        className={`w-full flex items-stretch cursor-pointer rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${SETTINGS_OUTLINE_HOVER}`}
-        onMouseEnter={playHover}
+        className={`w-full flex items-stretch rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${disabled ? 'opacity-40 cursor-not-allowed' : `cursor-pointer ${SETTINGS_OUTLINE_HOVER}`}`}
+        onMouseEnter={disabled ? undefined : playHover}
         onClick={() => {
+          if (disabled) return
           playClick()
-          if (!disabled) isOpen ? setIsOpen(false) : openDropdown()
+          isOpen ? setIsOpen(false) : openDropdown()
         }}
         disabled={disabled}
       >

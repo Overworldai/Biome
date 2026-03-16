@@ -32,7 +32,7 @@ export const DEFAULT_AUDIO = {
 } as const
 
 export const settingsSchema = z.object({
-  server_url: z.string().default(DEFAULT_STANDALONE_URL),
+  server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.0),
