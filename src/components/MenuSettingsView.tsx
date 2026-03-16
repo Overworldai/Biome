@@ -464,7 +464,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
                 value={menuServerUrl}
                 onChange={setMenuServerUrl}
                 onBlur={() => void handleServerUrlBlur()}
-                placeholder="http://localhost:8000"
+                placeholder="http://localhost:7987"
               />
             </SettingsSection>
           )}
