@@ -8,6 +8,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './app-icon',
+    appCopyright: 'Copyright © 2026 Overworld',
     extraResource: [
       './server-components',
       './seeds',
@@ -21,11 +22,13 @@ const config: ForgeConfig = {
     new MakerNSIS({
       getAppBuilderConfig: async () => ({
         win: {
-          icon: 'app-icon.ico'
+          icon: 'app-icon.ico',
+          publisherName: 'Overworld'
         },
         nsis: {
           oneClick: false,
           allowToChangeInstallationDirectory: true,
+          uninstallDisplayName: 'Biome',
           license: 'licensing/EULA.txt',
           include: 'build/installer.nsh',
           installerIcon: 'app-icon.ico',

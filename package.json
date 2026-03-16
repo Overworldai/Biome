@@ -49,5 +49,8 @@
     "@electron/rebuild": "^4.0.3"
   },
   "description": "Biome desktop app",
-  "author": "Overworld"
+  "author": {
+    "name": "Overworld",
+    "url": "https://overworld.ai"
+  }
 }
