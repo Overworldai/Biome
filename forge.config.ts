@@ -2,11 +2,12 @@ import type { ForgeConfig } from '@electron-forge/shared-types'
 import { VitePlugin } from '@electron-forge/plugin-vite'
 import MakerNSIS from '@felixrieseberg/electron-forge-maker-nsis'
 import { MakerDMG } from '@electron-forge/maker-dmg'
-import { MakerDeb } from '@electron-forge/maker-deb'
+import { MakerAppImage } from '@reforged/maker-appimage'
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    executableName: 'biome',
     icon: './app-icon',
     appCopyright: 'Copyright © 2026 Overworld',
     extraResource: [
@@ -37,7 +38,7 @@ const config: ForgeConfig = {
       })
     }),
     new MakerDMG({}),
-    new MakerDeb({})
+    new MakerAppImage({})
   ],
   plugins: [
     new VitePlugin({

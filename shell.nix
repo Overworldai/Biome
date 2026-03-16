@@ -35,7 +35,7 @@ pkgs.mkShell {
     pkg-config
   ];
 
-  buildInputs = electronDeps;
+  buildInputs = electronDeps ++ [ pkgs.squashfsTools ];
 
   LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (electronDeps ++ [
     pkgs.stdenv.cc.cc.lib    # libstdc++.so.6 (needed by PyTorch native extensions)

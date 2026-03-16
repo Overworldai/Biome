@@ -30,6 +30,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Install squashfs-tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y squashfs-tools
+
       - name: Install dependencies
         run: npm ci
 

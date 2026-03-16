@@ -108,6 +108,8 @@ Electron Forge with Vite plugin. Three separate Vite configs and tsconfigs:
 
 **Local builds**: `npm run build` copies `server-components/` and other extra resource directories verbatim into the installer. Make sure your workspace is clean before building — any untracked files (`.venv`, `__pycache__`, `uv.lock`, `server.log`, etc.) will be included and can bloat the installer by gigabytes. Production releases should be cut via CI from a clean checkout.
 
+**Linux builds**: The AppImage maker requires `mksquashfs` (from squashfs-tools) to be on `PATH`. On NixOS, this is provided by `shell.nix`. On Ubuntu/Debian, install `squashfs-tools`.
+
 ## Code Style
 
 Prettier with: no semicolons, single quotes, arrow parens always, 120 char width. Configured in `.prettierrc`.

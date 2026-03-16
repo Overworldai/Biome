@@ -12,8 +12,13 @@ export const SERVER_COMPONENT_FILES = [
   'progress_stages.py'
 ]
 
-/** Get the executable's directory (for portable data storage) */
+/** Get the portable data directory.
+ * AppImages are read-only squashfs mounts, so we use the directory
+ * containing the .AppImage file itself instead. */
 export function getExeDir(): string {
+  if (process.env.APPIMAGE) {
+    return path.dirname(process.env.APPIMAGE)
+  }
   return path.dirname(app.getPath('exe'))
 }
 
