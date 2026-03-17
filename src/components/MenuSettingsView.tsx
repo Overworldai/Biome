@@ -442,8 +442,20 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
             <SettingsSection
               title="Server URL"
               description={
-                <span className="inline-flex items-center gap-[0.71cqh]">
-                  the address of the GPU server running the model
+                <span className="inline-flex items-center gap-[0.71cqh] flex-wrap">
+                  the address of the GPU server running the model ·{' '}
+                  <a
+                    className="underline cursor-pointer text-inherit"
+                    onClick={() =>
+                      window.open(
+                        'https://github.com/Overworldai/Biome/blob/main/server-components/README.md',
+                        '_blank',
+                        'noopener,noreferrer'
+                      )
+                    }
+                  >
+                    setup instructions
+                  </a>
                   {serverUrlStatus === 'loading' && ' · checking...'}
                   {serverUrlStatus === 'valid' && (
                     <>
