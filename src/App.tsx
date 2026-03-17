@@ -81,7 +81,7 @@ const AppShell = () => {
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
-  const backgroundBlurPx = isMainUi ? (isSettingsOpen ? 14 : 1) : 0
+  const backgroundBlurCqh = isMainUi ? (isSettingsOpen ? 1.94 : 0.14) : 0
   const portalGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
   const nextSceneGlowRgb = useSceneGlowColor(getVideoElement, nextIndex)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen
@@ -194,7 +194,7 @@ const AppShell = () => {
             getVideoElement={getVideoElement}
             currentIndex={currentIndex}
             nextIndex={nextIndex}
-            blurPx={backgroundBlurPx}
+            blurCqh={backgroundBlurCqh}
             isTransitioning={isTransitioning}
             transitionKey={transitionKey}
             onTransitionComplete={completeTransition}

@@ -9,7 +9,7 @@ type ModalProps = {
 
 const Modal = ({ title, children, onBackdropClick }: ModalProps) => (
   <div
-    className="absolute inset-0 z-[3] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm"
+    className="absolute inset-0 z-[3] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-[0.56cqh]"
     role="dialog"
     aria-modal="true"
     onClick={onBackdropClick}

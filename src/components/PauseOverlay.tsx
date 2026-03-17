@@ -75,7 +75,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
   return (
     <div
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[14px] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
       id="pause-overlay"
     >
       <div className="overlay-darken absolute inset-0 pointer-events-none" />

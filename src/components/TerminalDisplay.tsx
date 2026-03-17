@@ -115,10 +115,10 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             transform: `translate(-50%, ${showLogsPanel ? 'calc(-50% - 22cqh)' : '-50%'})`
           }}
         >
-          <div className="font-serif text-[5.2cqh] font-normal text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.5)]">
+          <div className="font-serif text-[5.2cqh] font-normal text-white [text-shadow:0_0.14cqh_0.83cqh_rgba(0,0,0,0.5)]">
             First-time setup
           </div>
-          <div className="font-serif text-[3.2cqh] font-normal text-text-modal-muted [text-shadow:0_1px_4px_rgba(0,0,0,0.4)] text-center leading-[1.4] max-w-[80cqh]">
+          <div className="font-serif text-[3.2cqh] font-normal text-text-modal-muted [text-shadow:0_0.14cqh_0.56cqh_rgba(0,0,0,0.4)] text-center leading-[1.4] max-w-[80cqh]">
             This will take 10-30 minutes while components are
             <br />
             downloaded and optimized for your system.
@@ -130,7 +130,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
         <div className="flex flex-col items-center gap-[0.55cqh] w-[135.11cqh]">
           <div className="w-full flex items-baseline justify-between">
             <div
-              className="font-serif text-[4.62cqh] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.45)] text-left"
+              className="font-serif text-[4.62cqh] font-normal tracking-[0.01em] normal-case text-white [text-shadow:0_0.14cqh_0.56cqh_rgba(0,0,0,0.45)] text-left"
               id="terminal-status"
             >
               {statusText}
@@ -154,7 +154,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
           <div
             className="loading-inline-logs"
             style={{
-              marginTop: showLogsPanel ? '0.8cqh' : '0px',
+              marginTop: showLogsPanel ? '0.8cqh' : '0cqh',
               height: showLogsPanel ? logsPanelHeight : '0cqh',
               opacity: showLogsPanel ? 1 : 0,
               transform: showLogsPanel ? 'translateY(0)' : 'translateY(0.83cqh)',

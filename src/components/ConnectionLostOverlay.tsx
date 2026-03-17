@@ -15,7 +15,7 @@ const ConnectionLostOverlay = () => {
 
   return (
     <div
-      className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[4px] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
+      className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[0.56cqh] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
     >
       <div className="border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] w-[58.33cqh] p-[3cqh_2.84cqh] flex flex-col items-center gap-[3cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
         <div className="w-[8.5cqh] h-[8.5cqh] text-error-muted animate-[connectionLostPulse_2s_ease-in-out_infinite]">

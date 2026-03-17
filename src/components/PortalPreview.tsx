@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { PARALLAX_ENABLED } from '../constants'
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import PortalSparks from './PortalSparks'
 
 type PortalPreviewProps = {
@@ -29,22 +28,6 @@ const PortalPreview = ({
 }: PortalPreviewProps) => {
   const coreRef = useRef<HTMLDivElement>(null)
   const portalVideoRef = useRef<HTMLDivElement>(null)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    if (!PARALLAX_ENABLED) return
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const centerX = window.innerWidth * 0.5
-      const centerY = window.innerHeight * 0.5
-      const x = ((event.clientX - centerX) / centerX) * 7
-      const y = ((event.clientY - centerY) / centerY) * 6
-      setOffset({ x, y })
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
 
   // Mount the shared video element into the portal container
   useEffect(() => {
@@ -57,14 +40,12 @@ const PortalPreview = ({
   if (!visible || (!videoElement && !hoverContent)) return null
 
   const portalStyle: CSSProperties = {
-    ['--portal-offset-x' as string]: `${offset.x}px`,
-    ['--portal-offset-y' as string]: `${offset.y}px`,
     ['--portal-glow-rgb' as string]: glowRgb.join(', ')
   }
 
   return (
     <div
-      className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[4px] saturate-[0.86]' : ''}`}
+      className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[0.56cqh] saturate-[0.86]' : ''}`}
       style={portalStyle}
     >
       <div className="portal-preview-shell absolute inset-0 isolate z-[2] p-[9%] pb-[2%]">

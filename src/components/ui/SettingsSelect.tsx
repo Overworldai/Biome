@@ -110,7 +110,7 @@ const SettingsSelect = ({
       ? createPortal(
           <div
             ref={dropdownRef}
-            className="fixed z-[9999] border border-border-medium border-t-0 bg-[var(--color-surface-modal)] backdrop-blur-md"
+            className="fixed z-[9999] border border-border-medium border-t-0 bg-[var(--color-surface-modal)] backdrop-blur-[1.67cqh]"
             style={{
               top: dropdownRect.bottom,
               left: dropdownRect.left,
