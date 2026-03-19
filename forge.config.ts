@@ -4,6 +4,23 @@ import MakerNSIS from '@felixrieseberg/electron-forge-maker-nsis'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerAppImage } from '@reforged/maker-appimage'
 
+const shouldSignMac =
+  process.platform === 'darwin' && (Boolean(process.env.CSC_LINK) || Boolean(process.env.MAC_CODESIGN_IDENTITY))
+
+const shouldNotarizeMac =
+  shouldSignMac &&
+  Boolean(process.env.APPLE_ID) &&
+  Boolean(process.env.APPLE_APP_SPECIFIC_PASSWORD) &&
+  Boolean(process.env.APPLE_TEAM_ID)
+
+const macNotarizeCredentials = shouldNotarizeMac
+  ? {
+      appleId: process.env.APPLE_ID as string,
+      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD as string,
+      teamId: process.env.APPLE_TEAM_ID as string
+    }
+  : undefined
+
 const extraResources = [
   ...(process.platform === 'darwin' ? [] : ['./server-components']),
   './seeds',
@@ -17,9 +34,21 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'biome',
+    appBundleId: 'ai.overworld.biome',
+    appCategoryType: 'public.app-category.games',
     icon: './app-icon',
-    appCopyright: 'Copyright © 2026 Overworld',
-    extraResource: extraResources
+    appCopyright: 'Copyright (c) 2026 Overworld',
+    extraResource: extraResources,
+    osxSign: shouldSignMac
+      ? {
+          identity: process.env.MAC_CODESIGN_IDENTITY || undefined,
+          optionsForFile: () => ({
+            hardenedRuntime: true,
+            entitlements: 'build/entitlements.mac.plist'
+          })
+        }
+      : undefined,
+    osxNotarize: macNotarizeCredentials
   },
   makers: [
     new MakerNSIS({
