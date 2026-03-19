@@ -4,20 +4,22 @@ import MakerNSIS from '@felixrieseberg/electron-forge-maker-nsis'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerAppImage } from '@reforged/maker-appimage'
 
+const extraResources = [
+  ...(process.platform === 'darwin' ? [] : ['./server-components']),
+  './seeds',
+  './licensing',
+  './backgrounds',
+  './app-icon.ico',
+  './app-icon.png'
+]
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'biome',
     icon: './app-icon',
     appCopyright: 'Copyright © 2026 Overworld',
-    extraResource: [
-      './server-components',
-      './seeds',
-      './licensing',
-      './backgrounds',
-      './app-icon.ico',
-      './app-icon.png'
-    ]
+    extraResource: extraResources
   },
   makers: [
     new MakerNSIS({

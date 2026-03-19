@@ -17,6 +17,7 @@ jobs:
         include:
           - platform: windows-latest
           - platform: ubuntu-22.04
+          - platform: macos-latest
 
     runs-on: ${{ matrix.platform }}
 
@@ -64,5 +65,6 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.AppImage
+            artifacts/**/*.dmg
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           generate_release_notes: true
