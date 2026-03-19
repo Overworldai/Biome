@@ -295,6 +295,7 @@
     clip-path: inset(0% round 43% 54% 46% 57% / 48% 55% 45% 52%);
     -webkit-clip-path: inset(0% round 43% 54% 46% 57% / 48% 55% 45% 52%);
     transform: rotate(var(--portal-tilt));
+    background-color: #ffffff00;
   }
   .portal-preview-core::before {
     content: '';
