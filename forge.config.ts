@@ -9,10 +9,29 @@ import { dirname, resolve } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+const shouldSignMac =
+  process.platform === 'darwin' && (Boolean(process.env.CSC_LINK) || Boolean(process.env.MAC_CODESIGN_IDENTITY))
+
+const shouldNotarizeMac =
+  shouldSignMac &&
+  Boolean(process.env.APPLE_ID) &&
+  Boolean(process.env.APPLE_APP_SPECIFIC_PASSWORD) &&
+  Boolean(process.env.APPLE_TEAM_ID)
+
+const macNotarizeCredentials = shouldNotarizeMac
+  ? {
+      appleId: process.env.APPLE_ID as string,
+      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD as string,
+      teamId: process.env.APPLE_TEAM_ID as string
+    }
+  : undefined
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'biome',
+    appBundleId: 'ai.overworld.biome',
+    appCategoryType: 'public.app-category.games',
     icon: './app-icon',
     appCopyright: 'Copyright © 2026 Overworld',
     extraResource: [
@@ -23,7 +42,17 @@ const config: ForgeConfig = {
       './assets/9SALERNO.TTF',
       './app-icon.ico',
       './app-icon.png'
-    ]
+    ],
+    osxSign: shouldSignMac
+      ? {
+          identity: process.env.MAC_CODESIGN_IDENTITY || undefined,
+          optionsForFile: () => ({
+            hardenedRuntime: true,
+            entitlements: 'build/entitlements.mac.plist'
+          })
+        }
+      : undefined,
+    osxNotarize: macNotarizeCredentials
   },
   makers: [
     new MakerNSIS({
