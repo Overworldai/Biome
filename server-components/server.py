@@ -1527,10 +1527,6 @@ async def websocket_endpoint(websocket: WebSocket):
         frame_queue: Queue = Queue(maxsize=16)
         main_loop = asyncio.get_running_loop()
 
-        # Metrics tracking — one timestamp per latent generation pass
-        _metrics_frame_timestamps = []
-        _metrics_window = 120  # keep last 120 samples (~10s at 12 LFPS)
-
         # Cache device names — queried once per session (both can be slow)
         try:
             import cpuinfo
@@ -1542,17 +1538,10 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception:
             _metrics_gpu_name = None
 
-        def _build_metrics_payload() -> dict:
+        def _build_initial_metrics() -> dict:
+            """Static session info sent once at connection start."""
             return {
                 "type": "metrics",
-                "is_multiframe": getattr(world_engine, 'is_multiframe', False),
-                "perceived_fps": 0.0,
-                "latent_fps": 0.0,
-                "avg_gen_ms": 0.0,
-                "vram_used_mb": round(torch.cuda.memory_allocated() / (1024 * 1024), 0) if torch.cuda.is_available() else -1,
-                "vram_total_mb": round(torch.cuda.get_device_properties(0).total_memory / (1024 * 1024), 0) if torch.cuda.is_available() else -1,
-                "vram_percent": round(torch.cuda.memory_allocated() / torch.cuda.get_device_properties(0).total_memory * 100, 1) if torch.cuda.is_available() else -1,
-                "gpu_util_percent": -1,
                 "gpu_name": _metrics_gpu_name,
                 "cpu_name": _metrics_cpu_name,
                 "model": getattr(world_engine, 'model_uri', "") or "",
@@ -1564,14 +1553,42 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
 
-        def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float) -> bytes:
-            header = json.dumps(
-                {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms},
-                separators=(",", ":"),
-            ).encode("utf-8")
+        # Cached GPU metrics, updated each latent pass and embedded in frame headers
+        _cached_gpu_metrics = {
+            "vram_used_mb": -1.0,
+            "vram_total_mb": -1.0,
+            "vram_percent": -1.0,
+            "gpu_util_percent": -1.0,
+        }
+
+        def _update_gpu_metrics() -> None:
+            try:
+                if torch.cuda.is_available():
+                    vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
+                    vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+                    vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
+                else:
+                    vram_used = vram_total = vram_pct = -1
+                try:
+                    gpu_util = torch.cuda.utilization()
+                except Exception:
+                    gpu_util = -1
+                _cached_gpu_metrics.update({
+                    "vram_used_mb": round(vram_used, 0),
+                    "vram_total_mb": round(vram_total, 0),
+                    "vram_percent": round(vram_pct, 1),
+                    "gpu_util_percent": gpu_util,
+                })
+            except Exception:
+                pass  # metrics are best-effort
+
+        def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float, n_frames: int = 1) -> bytes:
+            header_data = {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms, "n_frames": n_frames}
+            header_data.update(_cached_gpu_metrics)
+            header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
             return struct.pack("<I", len(header)) + header + jpeg
 
-        queue_send(_build_metrics_payload())
+        queue_send(_build_initial_metrics())
 
         async def receiver() -> None:
             nonlocal running, paused, reset_flag, prompt_pending
@@ -1731,84 +1748,28 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     t0 = time.perf_counter()
                     result = run_coro(world_engine.generate_frame(ctrl))
+                    if torch.cuda.is_available():
+                        torch.cuda.synchronize()
                     gen_time = (time.perf_counter() - t0) * 1000
 
+                    # Update GPU metrics cache before sending frames
+                    _update_gpu_metrics()
+
                     if world_engine.is_multiframe:
-                        per_frame_ms = gen_time / 4.0
                         for i in range(4):
                             session.frame_count += 1
                             frame = result[i]
                             jpeg = world_engine.frame_to_jpeg(frame)
-                            queue_send(build_binary_frame(jpeg, session.frame_count, client_ts, per_frame_ms))
+                            queue_send(build_binary_frame(jpeg, session.frame_count, client_ts, gen_time, n_frames=4))
                     else:
                         session.frame_count += 1
                         jpeg = world_engine.frame_to_jpeg(result)
-                        queue_send(build_binary_frame(jpeg, session.frame_count, client_ts, gen_time))
-
-                    now = time.perf_counter()
-                    if _metrics_frame_timestamps and (now - _metrics_frame_timestamps[-1]) > 1.5:
-                        # Gap since last frame (pause, seed/model change, etc.) — reset to avoid stale data
-                        _metrics_frame_timestamps.clear()
-                    _metrics_frame_timestamps.append(now)
-                    if len(_metrics_frame_timestamps) > _metrics_window:
-                        del _metrics_frame_timestamps[:-_metrics_window]
+                        queue_send(build_binary_frame(jpeg, session.frame_count, client_ts, gen_time, n_frames=1))
 
                     if session.frame_count % 60 == 0:
                         logger.info(
                             f"[{client_host}] Received control (buttons={buttons}, mouse=({mouse_dx},{mouse_dy})) -> Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
                         )
-
-                    if session.frame_count % 30 == 0:
-                        # Compute and broadcast metrics
-                        try:
-                            # Compute FPS and gen time from frame timestamps (one per generation pass)
-                            if len(_metrics_frame_timestamps) >= 2:
-                                time_span = _metrics_frame_timestamps[-1] - _metrics_frame_timestamps[0]
-                                if time_span > 0:
-                                    latent_fps = (len(_metrics_frame_timestamps) - 1) / time_span
-                                    avg_gen_ms = time_span / (len(_metrics_frame_timestamps) - 1) * 1000
-                                else:
-                                    latent_fps = 0
-                                    avg_gen_ms = 0
-                            else:
-                                latent_fps = 0
-                                avg_gen_ms = 0
-
-                            is_mf = getattr(world_engine, 'is_multiframe', False)
-                            if is_mf:
-                                perceived_fps = latent_fps * 4.0
-                            else:
-                                perceived_fps = latent_fps
-
-                            # VRAM info
-                            if torch.cuda.is_available():
-                                vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
-                                vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
-                                vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
-                            else:
-                                vram_used = -1
-                                vram_total = -1
-                                vram_pct = -1
-
-                            # GPU utilization
-                            try:
-                                gpu_util = torch.cuda.utilization()
-                            except Exception:
-                                gpu_util = -1
-
-                            payload = _build_metrics_payload()
-                            payload.update({
-                                "perceived_fps": round(perceived_fps, 2),
-                                "latent_fps": round(latent_fps, 2),
-                                "avg_gen_ms": round(avg_gen_ms, 1),
-                                "vram_used_mb": round(vram_used, 0),
-                                "vram_total_mb": round(vram_total, 0),
-                                "vram_percent": round(vram_pct, 1),
-                                "gpu_util_percent": gpu_util,
-                            })
-                            queue_send(payload)
-                        except Exception:
-                            pass  # metrics are best-effort
 
                 except Exception as cuda_err:
                     error_msg = str(cuda_err)

@@ -52,9 +52,10 @@ export const settingsSchema = z.object({
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),
-      input: z.boolean().default(false)
+      input: z.boolean().default(false),
+      frame_timeline: z.boolean().default(false)
     })
-    .default({ performance_stats: false, input: false })
+    .default({ performance_stats: false, input: false, frame_timeline: false })
 })
 
 export type Settings = z.infer<typeof settingsSchema>

@@ -103,6 +103,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
   const [menuPerformanceStats, setMenuPerformanceStats] = useState(() => settings.debug_overlays.performance_stats)
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
+  const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
 
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -221,6 +222,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     setMenuKeybindings({ ...settings.keybindings })
     setMenuPerformanceStats(settings.debug_overlays.performance_stats)
     setMenuInputOverlay(settings.debug_overlays.input)
+    setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
   }, [
     configEngineMode,
     configWorldModel,
@@ -229,7 +231,8 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     configServerUrl,
     settings.keybindings,
     settings.debug_overlays.performance_stats,
-    settings.debug_overlays.input
+    settings.debug_overlays.input,
+    settings.debug_overlays.frame_timeline
   ])
 
   const handleServerUrlBlur = useCallback(async () => {
@@ -326,7 +329,11 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       mouse_sensitivity: streamingValue,
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
-      debug_overlays: { performance_stats: menuPerformanceStats, input: menuInputOverlay }
+      debug_overlays: {
+        performance_stats: menuPerformanceStats,
+        input: menuInputOverlay,
+        frame_timeline: menuFrameTimeline
+      }
     })
     setMouseSensitivity(streamingValue)
   }, [
@@ -339,6 +346,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     menuKeybindings,
     menuPerformanceStats,
     menuInputOverlay,
+    menuFrameTimeline,
     volume.getAudioSettings,
     saveSettings,
     setMouseSensitivity
@@ -585,6 +593,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
                 onChange={setMenuPerformanceStats}
               />
               <SettingsCheckbox label="Input Overlay" checked={menuInputOverlay} onChange={setMenuInputOverlay} />
+              <SettingsCheckbox label="Frame Timeline" checked={menuFrameTimeline} onChange={setMenuFrameTimeline} />
             </div>
           </SettingsSection>
         </div>

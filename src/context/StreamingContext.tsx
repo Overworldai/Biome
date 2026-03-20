@@ -77,6 +77,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     hasRealFrame,
     frameId,
     genTime,
+    latentGenMs,
+    frameGenMsRef,
+    frameNFramesRef,
+    frameIdRef,
     serverMetrics,
     inputLatency,
     logs: wsLogs,
@@ -405,12 +409,22 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   ])
 
   // Render frames to canvas using createImageBitmap for off-main-thread decoding.
-  // Decoded bitmaps are queued and drawn one-per-rAF so multiframe batches are
-  // paced to the display refresh rather than all flushing in a single tick.
-  const bitmapQueueRef = useRef<ImageBitmap[]>([])
+  // Decoded bitmaps are queued with a target displayAt timestamp so multiframe
+  // bundles are spread evenly across the generation interval regardless of display
+  // refresh rate (avoids front-loading 4 frames at 144 Hz then stalling).
+  const bitmapQueueRef = useRef<{ bitmap: ImageBitmap; displayAt: number; frameId: number; genMs: number }[]>([])
+  const lastScheduledAtRef = useRef<number>(0)
+  // Batch-relative timeline for the frame timeline overlay.
+  // slotDisplayAts[i] holds the actual scheduled displayAt for each frame in the
+  // current 4-frame bundle. Updated when bitmaps are ready (not at effect time),
+  // so values are always based on real decode completion times.
+  const frameTimelineRef = useRef<{ currentIndex: number; slotDisplayAts: (number | null)[] }>({
+    currentIndex: 0,
+    slotDisplayAts: [null, null, null, null]
+  })
   const drawRafRef = useRef<number | null>(null)
 
-  // rAF draw loop: pulls one bitmap per frame from the queue
+  // rAF draw loop: draws the next bitmap only once its scheduled time has arrived
   useEffect(() => {
     if (!canvasReady || !canvasRef.current) return
 
@@ -419,18 +433,20 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     if (!ctx) return
 
     const drawTick = () => {
-      const bitmap = bitmapQueueRef.current.shift()
-      if (bitmap) {
+      const now = performance.now()
+      const item = bitmapQueueRef.current[0]
+      if (item && now >= item.displayAt) {
+        bitmapQueueRef.current.shift()
+        frameTimelineRef.current.currentIndex = item.frameId % 4
         frameCountRef.current++
-        const now = performance.now()
         if (now - lastFpsUpdateRef.current >= 1000) {
           setFps(frameCountRef.current)
           frameCountRef.current = 0
           lastFpsUpdateRef.current = now
         }
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-        bitmap.close()
+        ctx.drawImage(item.bitmap, 0, 0, canvas.width, canvas.height)
+        item.bitmap.close()
       }
       drawRafRef.current = requestAnimationFrame(drawTick)
     }
@@ -438,14 +454,22 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       if (drawRafRef.current !== null) cancelAnimationFrame(drawRafRef.current)
-      for (const b of bitmapQueueRef.current) b.close()
+      for (const item of bitmapQueueRef.current) item.bitmap.close()
       bitmapQueueRef.current = []
+      lastScheduledAtRef.current = 0
     }
   }, [canvasReady])
 
-  // Decode incoming frames off-thread and push to the draw queue
+  // Decode incoming frames off-thread and push to the draw queue.
+  // displayAt is computed inside the .then() callback — i.e. once the bitmap is
+  // actually ready — so that if all 4 decodes finish simultaneously the
+  // lastScheduledAtRef chain still spaces them correctly, and no frame is
+  // scheduled in the past just because decode was slow.
   useEffect(() => {
     if (!frame || !canvasReady) return
+
+    const genMs = frameGenMsRef.current / frameNFramesRef.current
+    const capturedFrameId = frameIdRef.current
 
     const source =
       frame instanceof Blob
@@ -455,7 +479,17 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     source
       .then((blob) => createImageBitmap(blob))
       .then((bitmap) => {
-        bitmapQueueRef.current.push(bitmap)
+        const now = performance.now()
+        const displayAt = Math.max(lastScheduledAtRef.current, now) + genMs
+        lastScheduledAtRef.current = displayAt
+
+        const batchIndex = capturedFrameId % 4
+        if (batchIndex === 0) {
+          frameTimelineRef.current.slotDisplayAts = [null, null, null, null]
+        }
+        frameTimelineRef.current.slotDisplayAts[batchIndex] = displayAt
+
+        bitmapQueueRef.current.push({ bitmap, displayAt, frameId: capturedFrameId, genMs })
       })
       .catch(() => {})
   }, [frame, canvasReady])
@@ -588,6 +622,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     // Stats
     genTime,
+    latentGenMs,
     frameId,
     fps,
     stats: {
@@ -600,6 +635,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     inputLatency,
     performanceStatsOverlay: settings.debug_overlays.performance_stats,
     inputOverlay: settings.debug_overlays.input,
+    frameTimelineOverlay: settings.debug_overlays.frame_timeline,
+    frameTimelineRef,
 
     endpointUrl,
     setEndpointUrl,

@@ -27,6 +27,7 @@ export type StreamingContextValue = {
   isFreshInstall: boolean
 
   genTime: number | null
+  latentGenMs: number | null
   frameId: number
   fps: number
   showStats: boolean
@@ -36,6 +37,8 @@ export type StreamingContextValue = {
   inputLatency: number | null
   performanceStatsOverlay: boolean
   inputOverlay: boolean
+  frameTimelineOverlay: boolean
+  frameTimelineRef: { current: { currentIndex: number; slotDisplayAts: (number | null)[] } }
 
   endpointUrl: string | null
   setEndpointUrl: (url: string | null) => void

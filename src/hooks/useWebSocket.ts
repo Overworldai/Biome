@@ -11,9 +11,6 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 export type ServerMetrics = {
   isMultiframe: boolean
-  perceivedFps: number
-  latentFps: number
-  avgGenMs: number
   vramUsedMb: number
   vramTotalMb: number
   vramPercent: number
@@ -32,6 +29,10 @@ type WebSocketHook = {
   hasRealFrame: boolean
   frameId: number
   genTime: number | null
+  latentGenMs: number | null
+  frameGenMsRef: { current: number }
+  frameNFramesRef: { current: number }
+  frameIdRef: { current: number }
   serverMetrics: ServerMetrics | null
   inputLatency: number | null
   logs: string[]
@@ -60,6 +61,7 @@ export const useWebSocket = (): WebSocketHook => {
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [genTime, setGenTime] = useState<number | null>(null)
+  const [latentGenMs, setLatentGenMs] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
@@ -72,6 +74,14 @@ export const useWebSocket = (): WebSocketHook => {
   const isConnectingRef = useRef(false)
   const isReadyRef = useRef(false)
   const lastControlTsRef = useRef<number>(0)
+  const frameGenMsRef = useRef<number>(0)
+  const frameNFramesRef = useRef<number>(1)
+  const frameIdRef = useRef<number>(0)
+  const staticMetricsRef = useRef<{ gpuName: string | null; cpuName: string | null; model: string }>({
+    gpuName: null,
+    cpuName: null,
+    model: ''
+  })
   const rpcRef = useRef(new WsRpcClient())
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -167,12 +177,31 @@ export const useWebSocket = (): WebSocketHook => {
         }
 
         // Binary frame
-        setFrame(imageBlob)
-        setHasRealFrame(true)
-        setFrameId((header.frame_id as number) ?? 0)
+        const nFrames = (header.n_frames as number) ?? 1
+        frameNFramesRef.current = nFrames
         if (typeof header.gen_ms === 'number') {
+          frameGenMsRef.current = header.gen_ms
           setGenTime(Math.round(header.gen_ms))
         }
+        frameIdRef.current = (header.frame_id as number) ?? 0
+        // First display frame of each latent pass: update latent gen stats and GPU metrics
+        if ((frameIdRef.current - 1) % nFrames === 0) {
+          if (typeof header.gen_ms === 'number') {
+            setLatentGenMs(Math.round(header.gen_ms))
+          }
+          // GPU metrics from frame header
+          setServerMetrics({
+            ...staticMetricsRef.current,
+            isMultiframe: nFrames > 1,
+            vramUsedMb: (header.vram_used_mb as number) ?? -1,
+            vramTotalMb: (header.vram_total_mb as number) ?? -1,
+            vramPercent: (header.vram_percent as number) ?? -1,
+            gpuUtilPercent: (header.gpu_util_percent as number) ?? -1
+          })
+        }
+        setFrame(imageBlob)
+        setHasRealFrame(true)
+        setFrameId(frameIdRef.current)
         if (typeof header.client_ts === 'number' && (header.client_ts as number) > 0) {
           setInputLatency(Math.round(performance.now() - (header.client_ts as number)))
         }
@@ -207,18 +236,19 @@ export const useWebSocket = (): WebSocketHook => {
             break
           }
           case 'metrics': {
-            setServerMetrics({
-              isMultiframe: !!msg.is_multiframe,
-              perceivedFps: (msg.perceived_fps as number) ?? 0,
-              latentFps: (msg.latent_fps as number) ?? 0,
-              avgGenMs: (msg.avg_gen_ms as number) ?? 0,
-              vramUsedMb: (msg.vram_used_mb as number) ?? -1,
-              vramTotalMb: (msg.vram_total_mb as number) ?? -1,
-              vramPercent: (msg.vram_percent as number) ?? -1,
-              gpuUtilPercent: (msg.gpu_util_percent as number) ?? -1,
+            // Initial static session info sent once at connection start
+            staticMetricsRef.current = {
               gpuName: (msg.gpu_name as string | null) ?? null,
               cpuName: (msg.cpu_name as string | null) ?? null,
               model: (msg.model as string) ?? ''
+            }
+            setServerMetrics({
+              ...staticMetricsRef.current,
+              isMultiframe: !!msg.is_multiframe,
+              vramUsedMb: (msg.vram_used_mb as number) ?? -1,
+              vramTotalMb: (msg.vram_total_mb as number) ?? -1,
+              vramPercent: (msg.vram_percent as number) ?? -1,
+              gpuUtilPercent: (msg.gpu_util_percent as number) ?? -1
             })
             break
           }
@@ -272,6 +302,7 @@ export const useWebSocket = (): WebSocketHook => {
       setHasRealFrame(false)
       setFrameId(0)
       setGenTime(null)
+      setLatentGenMs(null)
       setServerMetrics(null)
       setInputLatency(null)
     }
@@ -385,6 +416,10 @@ export const useWebSocket = (): WebSocketHook => {
     hasRealFrame,
     frameId,
     genTime,
+    latentGenMs,
+    frameGenMsRef,
+    frameNFramesRef,
+    frameIdRef,
     serverMetrics,
     inputLatency,
     logs,

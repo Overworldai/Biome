@@ -31,6 +31,7 @@ import { viewFadeVariants } from './transitions'
 import PortalSparksConfigurator from './components/PortalSparksConfigurator'
 import PerformanceStatsOverlay from './components/PerformanceStatsOverlay'
 import InputOverlay from './components/InputOverlay'
+import FrameTimelineOverlay from './components/FrameTimelineOverlay'
 
 const LAUNCH_PRE_SHRINK_MS = 420
 
@@ -290,6 +291,7 @@ const AppShell = () => {
             <VideoContainer />
             <PerformanceStatsOverlay />
             <InputOverlay />
+            <FrameTimelineOverlay />
             <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
             <PauseOverlay isActive={isPaused} />
             {warning && !connectionLost && (

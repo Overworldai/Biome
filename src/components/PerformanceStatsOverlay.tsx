@@ -3,6 +3,7 @@ import { useStreaming } from '../context/StreamingContext'
 import Sparkline from './Sparkline'
 
 const BUFFER_SIZE = 60
+const FT_BUFFER_SIZE = 600
 const SPARK_W = 48
 const SPARK_H = 14
 
@@ -36,10 +37,24 @@ const colorForPercent = (pct: number) => {
 
 const formatValue = (v: number, unavailable = -1) => (v === unavailable ? 'N/A' : v.toString())
 
-const PerformanceStatsOverlay = () => {
-  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, fps } = useStreaming()
-  const [, setTick] = useState(0)
+type FrametimeStats = { mean: number; stddev: number; min: number; max: number; p1: number; p99: number }
 
+const computeFrametimeStats = (samples: number[]): FrametimeStats | null => {
+  if (samples.length < 2) return null
+  const sorted = samples.slice().sort((a, b) => a - b)
+  const n = sorted.length
+  const mean = samples.reduce((a, b) => a + b, 0) / n
+  const stddev = Math.sqrt(samples.reduce((a, b) => a + (b - mean) ** 2, 0) / n)
+  const pct = (p: number) => sorted[Math.floor(p * (n - 1))]
+  return { mean, stddev, min: sorted[0], max: sorted[n - 1], p1: pct(0.01), p99: pct(0.99) }
+}
+
+const PerformanceStatsOverlay = () => {
+  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, fps, latentGenMs } = useStreaming()
+  const [, setTick] = useState(0)
+  const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
+
+  // Ring buffers for sparklines
   const pfpsBuf = useRingBuffer()
   const fpsBuf = useRingBuffer()
   const lfpsBuf = useRingBuffer()
@@ -47,36 +62,55 @@ const PerformanceStatsOverlay = () => {
   const vramBuf = useRingBuffer()
   const gpuBuf = useRingBuffer()
   const latBuf = useRingBuffer()
+  const ftBufRef = useRef<number[]>([])
 
-  // Push server metrics into ring buffers when they update
+  // Derive LFPS and FPS from gen time
+  const latentFps = latentGenMs !== null && latentGenMs > 0 ? 1000 / latentGenMs : 0
+  const nFrames = serverMetrics?.isMultiframe ? 4 : 1
+  const perceivedFps = latentFps * nFrames
+
+  // Change-detection refs (all declared before any conditional logic)
   const prevMetricsRef = useRef(serverMetrics)
+  const prevLatentGenMsRef = useRef(latentGenMs)
+  const prevFpsRef = useRef(fps)
+  const prevLatencyRef = useRef(inputLatency)
+
+  // Push GPU metrics into ring buffers when they update
   if (serverMetrics && serverMetrics !== prevMetricsRef.current) {
     prevMetricsRef.current = serverMetrics
-    fpsBuf.push(serverMetrics.perceivedFps)
-    lfpsBuf.push(serverMetrics.latentFps)
-    genBuf.push(serverMetrics.avgGenMs)
     if (serverMetrics.vramPercent >= 0) vramBuf.push(serverMetrics.vramPercent)
     if (serverMetrics.gpuUtilPercent >= 0) gpuBuf.push(serverMetrics.gpuUtilPercent)
   }
 
-  // Push client-side perceived FPS on each update
-  const prevFpsRef = useRef(fps)
+  // Push client-side perceived FPS
   if (fps !== prevFpsRef.current) {
     prevFpsRef.current = fps
     if (fps > 0) pfpsBuf.push(fps)
   }
 
-  // Push latency on each update
-  const prevLatencyRef = useRef(inputLatency)
+  // Accumulate per-latent-pass gen times for sparklines and distribution stats
+  if (latentGenMs !== null && latentGenMs !== prevLatentGenMsRef.current) {
+    prevLatentGenMsRef.current = latentGenMs
+    genBuf.push(latentGenMs)
+    fpsBuf.push(perceivedFps)
+    lfpsBuf.push(latentFps)
+    ftBufRef.current.push(latentGenMs)
+    if (ftBufRef.current.length > FT_BUFFER_SIZE) ftBufRef.current.shift()
+  }
+
+  // Push latency
   if (inputLatency !== null && inputLatency !== prevLatencyRef.current) {
     prevLatencyRef.current = inputLatency
     latBuf.push(inputLatency)
   }
 
-  // Re-render at 2Hz to update sparklines
+  // Re-render at 2Hz to update sparklines and recompute frametime stats
   useEffect(() => {
     if (!performanceStatsOverlay || !isStreaming) return
-    const interval = setInterval(() => setTick((t) => t + 1), 500)
+    const interval = setInterval(() => {
+      setTick((t) => t + 1)
+      setFtStats(computeFrametimeStats(ftBufRef.current))
+    }, 500)
     return () => clearInterval(interval)
   }, [performanceStatsOverlay, isStreaming])
 
@@ -100,7 +134,7 @@ const PerformanceStatsOverlay = () => {
       />
       <Row
         label="FPS"
-        value={m ? `${m.perceivedFps.toFixed(2)} fps` : '--'}
+        value={perceivedFps > 0 ? `${perceivedFps.toFixed(2)} fps` : '--'}
         color={COLOR_HUD}
         sparkValues={fpsBuf.values}
         sparkColor={COLOR_HUD}
@@ -108,7 +142,7 @@ const PerformanceStatsOverlay = () => {
       {m?.isMultiframe && (
         <Row
           label="LFPS"
-          value={m ? `${m.latentFps.toFixed(2)} lfps` : '--'}
+          value={latentFps > 0 ? `${latentFps.toFixed(2)} lfps` : '--'}
           color={COLOR_HUD}
           sparkValues={lfpsBuf.values}
           sparkColor={COLOR_HUD}
@@ -116,7 +150,7 @@ const PerformanceStatsOverlay = () => {
       )}
       <Row
         label="GEN"
-        value={m ? `${m.avgGenMs.toFixed(1)} ms` : '--'}
+        value={ftStats ? `${ftStats.mean.toFixed(1)} ms` : '--'}
         color={COLOR_WARM}
         sparkValues={genBuf.values}
         sparkColor={COLOR_WARM}
@@ -144,6 +178,19 @@ const PerformanceStatsOverlay = () => {
         sparkValues={latBuf.values}
         sparkColor={COLOR_WARM}
       />
+      <div className="border-t border-white/15 mt-[0.5cqh] mb-[0.3cqh]" />
+      <div style={{ color: COLOR_LABEL }} className="text-center mb-[0.3cqh]">
+        GEN stats
+      </div>
+      <Row label="MEAN" value={ftStats ? `${ftStats.mean.toFixed(1)} ms` : '--'} color={COLOR_WARM} />
+      <Row label="SDEV" value={ftStats ? `${ftStats.stddev.toFixed(1)} ms` : '--'} color={COLOR_LABEL} />
+      <Row label="MIN" value={ftStats ? `${ftStats.min.toFixed(1)} ms` : '--'} color={COLOR_GOOD} />
+      <Row label="P1" value={ftStats ? `${ftStats.p1.toFixed(1)} ms` : '--'} color={COLOR_GOOD} />
+      <Row label="P99" value={ftStats ? `${ftStats.p99.toFixed(1)} ms` : '--'} color={COLOR_ERROR} />
+      <Row label="MAX" value={ftStats ? `${ftStats.max.toFixed(1)} ms` : '--'} color={COLOR_ERROR} />
+      <div style={{ color: COLOR_LABEL }} className="text-center mt-[0.2cqh]">
+        {`n=${ftBufRef.current.length}`}
+      </div>
     </div>
   )
 }
