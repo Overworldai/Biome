@@ -161,6 +161,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
 
   // Load model list — refetch when mode, server URL, or selected model changes
   const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
+  const savedCustomModels = settings.custom_models ?? []
   useEffect(() => {
     // In server mode, don't fetch until server is validated
     if (menuEngineMode === 'server' && serverUrlStatus !== 'valid') {
@@ -178,7 +179,9 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         const remoteModels = await invoke('list-waypoint-models')
         if (cancelled) return
 
-        const ids = [...new Set([menuWorldModel, ...(Array.isArray(remoteModels) ? remoteModels : [])])]
+        const ids = [
+          ...new Set([menuWorldModel, ...(Array.isArray(remoteModels) ? remoteModels : []), ...savedCustomModels])
+        ]
           .map((id) => id.trim())
           .filter((id) => id.length > 0)
 
@@ -212,7 +215,7 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus])
+  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels])
 
   useEffect(() => {
     setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
@@ -295,12 +298,30 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         } else {
           setCustomModelStatus({ state: 'idle', error: null })
           setMenuModelOptions((prev) => [...prev, { id: modelId, isLocal: null, sizeBytes: info?.size_bytes ?? null }])
+          // Save verified custom model to settings for persistence
+          if (!savedCustomModels.includes(modelId)) {
+            void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
+          }
         }
       } catch {
         setCustomModelStatus({ state: 'error', error: 'Could not check model' })
       }
     },
-    [menuModelOptions, serverUrlForModels]
+    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings]
+  )
+
+  const handleDeleteCustomModel = useCallback(
+    (modelId: string) => {
+      const updated = savedCustomModels.filter((m) => m !== modelId)
+      void saveSettings({ ...settings, custom_models: updated })
+      setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
+      // If the deleted model was selected, switch to the first available option
+      if (menuWorldModel === modelId) {
+        const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
+        setMenuWorldModel(fallback)
+      }
+    },
+    [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
   )
 
   const handleMouseSensitivityChange = (value: number) => {
@@ -507,10 +528,12 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
                   model.isLocal === true ? 'local' : model.isLocal === false ? 'download' : null
                 ]
                   .filter(Boolean)
-                  .join(' \u00B7 ')
+                  .join(' \u00B7 '),
+                deletable: savedCustomModels.includes(model.id)
               }))}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
+              onDelete={handleDeleteCustomModel}
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}

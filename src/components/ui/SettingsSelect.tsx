@@ -7,12 +7,14 @@ type SettingsSelectOption = {
   value: string
   label: string
   prefix?: string
+  deletable?: boolean
 }
 
 type SettingsSelectProps = {
   options: SettingsSelectOption[]
   value: string
   onChange: (value: string) => void
+  onDelete?: (value: string) => void
   disabled?: boolean
   allowCustom?: boolean
   onCustomBlur?: (value: string) => void
@@ -30,6 +32,7 @@ const SettingsSelect = ({
   options,
   value,
   onChange,
+  onDelete,
   disabled,
   allowCustom,
   onCustomBlur,
@@ -118,23 +121,44 @@ const SettingsSelect = ({
             }}
           >
             {options.map((option) => (
-              <button
+              <div
                 key={option.value}
-                type="button"
-                className={`w-full font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] pr-[4.98cqh] text-[2.67cqh] ${
+                className={`flex items-center ${
                   option.value === value
                     ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
                     : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
                 }`}
-                onMouseEnter={playHover}
-                onClick={() => {
-                  playClick()
-                  onChange(option.value)
-                  setIsOpen(false)
-                }}
               >
-                <OptionContent option={option} />
-              </button>
+                <button
+                  type="button"
+                  className={`flex-1 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${option.deletable && onDelete ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
+                  onMouseEnter={playHover}
+                  onClick={() => {
+                    playClick()
+                    onChange(option.value)
+                    setIsOpen(false)
+                  }}
+                >
+                  <OptionContent option={option} />
+                </button>
+                {option.deletable && onDelete && (
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                    onMouseEnter={playHover}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      playClick()
+                      onDelete(option.value)
+                    }}
+                    title="Remove custom model"
+                  >
+                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                      <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             ))}
             {allowCustom && (
               <button
