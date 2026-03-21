@@ -129,6 +129,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const lastFpsUpdateRef = useRef(performance.now())
   const inputLoopRef = useRef<number | null>(null)
   const lastAppliedModelRef = useRef<string | null>(null)
+  const lastSeedRef = useRef<string>('default.png')
   const warmBootstrapSentRef = useRef(false)
   const warmFlowCancelledRef = useRef(false)
   const loadingFailureStopHandledRef = useRef(false)
@@ -205,16 +206,17 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     if (warmBootstrapSentRef.current) return
 
     const selectedModel = settings?.engine_model || DEFAULT_WORLD_ENGINE_MODEL
-    log.info('Loading connected - bootstrapping session with model+seed:', selectedModel)
-    // Use the default seed image as the immediate placeholder frame so transition
+    const seed = lastSeedRef.current
+    log.info('Loading connected - bootstrapping session with model+seed:', selectedModel, seed)
+    // Use the last seed image as the immediate placeholder frame so transition
     // to streaming never shows a blank frame while waiting for server output.
-    wsRequest<{ blob: Blob }>('seeds_image', { filename: 'default.png' })
+    wsRequest<{ blob: Blob }>('seeds_image', { filename: seed })
       .then((result) => {
         if (!result?.blob) return
         setPlaceholderFrame(result.blob)
       })
       .catch(() => null)
-    sendModel(selectedModel, 'default.png')
+    sendModel(selectedModel, seed)
     lastAppliedModelRef.current = selectedModel
     warmBootstrapSentRef.current = true
   }, [state, states.LOADING, isConnected, settings?.engine_model, sendModel, setPlaceholderFrame, wsRequest])
@@ -691,7 +693,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     prepareReturnToMainMenu,
     reset,
     sendPrompt,
-    sendPromptWithSeed,
+    sendPromptWithSeed: (promptOrFilename: string, maybeSeedUrl?: string) => {
+      // Track the last seed filename so model switches can resume from it
+      if (!maybeSeedUrl) lastSeedRef.current = promptOrFilename
+      sendPromptWithSeed(promptOrFilename, maybeSeedUrl)
+    },
     sendInitialSeed,
     requestPointerLock,
     exitPointerLock,
