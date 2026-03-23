@@ -3,7 +3,7 @@ import { useStreaming } from '../context/StreamingContext'
 import Sparkline from './Sparkline'
 
 const BUFFER_SIZE = 60
-const FT_BUFFER_SIZE = 600
+const FT_WINDOW_MS = 1000
 const SPARK_W = 48
 const SPARK_H = 14
 
@@ -39,7 +39,9 @@ const formatValue = (v: number, unavailable = -1) => (v === unavailable ? 'N/A' 
 
 type FrametimeStats = { mean: number; stddev: number; min: number; max: number; p1: number; p99: number }
 
-const computeFrametimeStats = (samples: number[]): FrametimeStats | null => {
+const computeFrametimeStats = (entries: { time: number; value: number }[]): FrametimeStats | null => {
+  const now = performance.now()
+  const samples = entries.filter((e) => e.time >= now - FT_WINDOW_MS).map((e) => e.value)
   if (samples.length < 2) return null
   const sorted = samples.slice().sort((a, b) => a - b)
   const n = sorted.length
@@ -50,20 +52,18 @@ const computeFrametimeStats = (samples: number[]): FrametimeStats | null => {
 }
 
 const PerformanceStatsOverlay = () => {
-  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, fps, latentGenMs, nFrames } =
-    useStreaming()
+  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, latentGenMs, nFrames } = useStreaming()
   const [, setTick] = useState(0)
   const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
 
   // Ring buffers for sparklines
-  const pfpsBuf = useRingBuffer()
   const fpsBuf = useRingBuffer()
   const lfpsBuf = useRingBuffer()
   const genBuf = useRingBuffer()
   const vramBuf = useRingBuffer()
   const gpuBuf = useRingBuffer()
   const latBuf = useRingBuffer()
-  const ftBufRef = useRef<number[]>([])
+  const ftBufRef = useRef<{ time: number; value: number }[]>([])
 
   // Derive LFPS and FPS from gen time
   const latentFps = latentGenMs !== null && latentGenMs > 0 ? 1000 / latentGenMs : 0
@@ -72,7 +72,6 @@ const PerformanceStatsOverlay = () => {
   // Change-detection refs (all declared before any conditional logic)
   const prevMetricsRef = useRef(serverMetrics)
   const prevLatentGenMsRef = useRef(latentGenMs)
-  const prevFpsRef = useRef(fps)
   const prevLatencyRef = useRef(inputLatency)
 
   // Push GPU metrics into ring buffers when they update
@@ -82,20 +81,16 @@ const PerformanceStatsOverlay = () => {
     if (serverMetrics.gpuUtilPercent >= 0) gpuBuf.push(serverMetrics.gpuUtilPercent)
   }
 
-  // Push client-side perceived FPS
-  if (fps !== prevFpsRef.current) {
-    prevFpsRef.current = fps
-    if (fps > 0) pfpsBuf.push(fps)
-  }
-
   // Accumulate per-latent-pass gen times for sparklines and distribution stats
   if (latentGenMs !== null && latentGenMs !== prevLatentGenMsRef.current) {
     prevLatentGenMsRef.current = latentGenMs
     genBuf.push(latentGenMs)
     fpsBuf.push(perceivedFps)
     lfpsBuf.push(latentFps)
-    ftBufRef.current.push(latentGenMs)
-    if (ftBufRef.current.length > FT_BUFFER_SIZE) ftBufRef.current.shift()
+    const now = performance.now()
+    ftBufRef.current.push({ time: now, value: latentGenMs })
+    const cutoff = now - FT_WINDOW_MS
+    while (ftBufRef.current.length > 0 && ftBufRef.current[0].time < cutoff) ftBufRef.current.shift()
   }
 
   // Push latency
@@ -126,13 +121,6 @@ const PerformanceStatsOverlay = () => {
       <Row label="CPU" value={m?.cpuName ?? '[Unknown CPU]'} color={COLOR_HUD} />
       <Row label="GPU" value={m?.gpuName ?? '[Unknown GPU]'} color={COLOR_HUD} />
       <Row label="MDL" value={m?.model || '\u2014'} color={COLOR_WARM} className="mb-[0.4cqh]" />
-      <Row
-        label="PFPS"
-        value={fps > 0 ? `${fps} fps` : '--'}
-        color={COLOR_HUD}
-        sparkValues={pfpsBuf.values}
-        sparkColor={COLOR_HUD}
-      />
       <Row
         label="FPS"
         value={perceivedFps > 0 ? `${perceivedFps.toFixed(2)} fps` : '--'}
