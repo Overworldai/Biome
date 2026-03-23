@@ -44,7 +44,7 @@ const PauseMainView = ({
         Your pinned scenes. Use the Scenes button to view{ALLOW_USER_SCENES ? ', pin or upload' : ' or pin'} more
         scenes.
       </p>
-      <div className="pause-scene-scroll overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh]">
+      <div className="styled-scrollbar overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh]">
         <div className="grid grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh] w-full">
           {pinnedScenes.length > 0 ? (
             pinnedScenes.map((seed) => (

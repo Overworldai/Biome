@@ -89,7 +89,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             animate="animate"
             exit="exit"
           >
-            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} />
+            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} wide />
           </motion.div>
         ) : view === PAUSE_VIEW.MAIN ? (
           <motion.div

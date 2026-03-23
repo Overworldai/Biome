@@ -17,3 +17,6 @@ export const SETTINGS_LABEL_BASE = 'font-serif text-[2.4cqh]'
 
 /** Muted description/label text */
 export const SETTINGS_MUTED_TEXT = `${SETTINGS_LABEL_BASE} text-text-muted`
+
+/** Styled scrollbar class for scrollable panels and dropdowns */
+export const STYLED_SCROLLBAR = 'styled-scrollbar'

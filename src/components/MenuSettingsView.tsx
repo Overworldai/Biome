@@ -60,9 +60,10 @@ const KeybindRow = (props: KeybindRowProps) => {
 
 type MenuSettingsViewProps = {
   onBack: () => void
+  wide?: boolean
 }
 
-const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
+const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const { settings, saveSettings } = useSettings()
   const {
     engineStatus,
@@ -452,7 +453,9 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
           Tweak your world to your liking.
         </p>
-        <div className="pause-scene-scroll overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] w-[63%]">
+        <div
+          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
+        >
           <SettingsSection
             title="Engine Mode"
             description="how will you run the model? as part of Biome, or elsewhere?"
