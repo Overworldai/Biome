@@ -364,6 +364,9 @@ class WorldEngineManager:
                             device=DEVICE,
                             quant=QUANT,
                             dtype=dtype,
+                            # Our models don't use prompt conditioning, but
+                            # WorldEngine's config expects the field to be present.
+                            model_config_overrides={"prompt_conditioning": None},
                         )
 
                     new_engine = await self._run_on_cuda_thread(_create_engine)
