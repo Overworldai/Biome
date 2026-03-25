@@ -149,7 +149,6 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         if (ok) {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
-          setMenuServerUrl((prev) => (prev === normalizedUrl ? prev : normalizedUrl))
         } else {
           setServerUrlStatus('error')
         }
@@ -251,9 +250,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     let normalizedUrl: string
     try {
       normalizedUrl = normalizeServerUrl(menuServerUrl)
-      setMenuServerUrl(normalizedUrl)
     } catch {
-      setMenuServerUrl(configServerUrl)
+      setServerUrlStatus('error')
       return
     }
 
@@ -334,10 +332,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     let nextServerUrl = menuServerUrl
     if (nextServerUrl.trim()) {
       try {
-        nextServerUrl = normalizeServerUrl(nextServerUrl)
+        normalizeServerUrl(nextServerUrl)
       } catch {
         nextServerUrl = configServerUrl
-        setMenuServerUrl(configServerUrl)
       }
     }
 
