@@ -52,14 +52,14 @@ const PortalPreview = ({
       className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[0.56cqh] saturate-[0.86]' : ''}`}
       style={portalStyle}
     >
-      <div className="portal-preview-frame-shell absolute inset-0 z-[2] p-[9%]">
-        <div className="relative h-full w-full">
-          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-1 absolute inset-0" />
-          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-2 absolute inset-0" />
+      <div className="portal-preview-frame-shell absolute inset-0 p-[9%]">
+        <div className="relative h-full w-full overflow-visible">
+          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-1 absolute" />
+          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-2 absolute" />
         </div>
       </div>
-      <div className="portal-preview-shell absolute inset-0 z-[2] p-[9%]">
-        <div className="portal-preview-halo-layer absolute inset-0" />
+      <div className="portal-preview-shell absolute inset-0 p-[9%]">
+        <div className="portal-preview-halo-layer absolute" />
         <div
           ref={coreRef}
           className="portal-preview-core relative w-full h-full overflow-hidden z-1"
@@ -71,7 +71,7 @@ const PortalPreview = ({
           }}
         >
           <div className="portal-preview-core-overlay absolute inset-0" />
-          <div className="portal-preview-core-ring absolute inset-0" />
+          <div className="portal-preview-core-ring absolute" />
           {videoElement && (
             <div className="portal-preview-media-rotate absolute inset-0 rounded-[inherit]">
               <div ref={portalVideoRef} className="portal-preview-image absolute rounded-[inherit] origin-center" />
