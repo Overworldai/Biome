@@ -84,7 +84,6 @@ const AppShell = () => {
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
   const backgroundBlurCqh = isMainUi ? (isSettingsOpen ? 1.94 : 0.14) : 0
-  const backgroundGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
   const portalGlowRgb = usePortalGlowSample(portalVisible, nextVideoElement)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen
   const showMenuSettings = isMainUi && !isConnected && isSettingsOpen
@@ -247,7 +246,7 @@ const AppShell = () => {
                 isSettingsOpen={!isConnected && isSettingsOpen}
                 glowRgb={portalGlowRgb}
                 portalSceneGlowRgb={portalGlowRgb}
-                sparkGlowRgb={backgroundGlowRgb}
+                sparkGlowRgb={portalGlowRgb}
                 onShrinkComplete={completePortalShrink}
               />
             </div>
