@@ -26,7 +26,7 @@ const PARTICLE_COUNTS: Record<VortexMode, number> = {
 
 type VortexContextValue = {
   claimCanvas: (container: HTMLElement, mode: VortexMode) => void
-  releaseCanvas: () => void
+  releaseCanvas: (container?: HTMLElement) => void
   setErrorMode: (error: boolean) => void
 }
 
@@ -157,7 +157,11 @@ export function VortexProvider({ children }: { children: ReactNode }) {
     [syncSize, frame]
   )
 
-  const releaseCanvas = useCallback(() => {
+  const releaseCanvas = useCallback((container?: HTMLElement) => {
+    if (container && ownerRef.current && ownerRef.current !== container) {
+      return
+    }
+
     const canvas = canvasRef.current
     if (canvas?.parentNode) {
       canvas.parentNode.removeChild(canvas)

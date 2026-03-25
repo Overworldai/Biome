@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '../bridge'
 
 const CYCLE_INTERVAL_MS = 5000
-const PORTAL_ENTER_DURATION_MS = 700
+const PORTAL_ENTER_DURATION_MS = 1050
 const PORTAL_PRE_SHRINK_FAILSAFE_MS = 700
 const TRANSITION_VISIBLE_MS = 100
 const TRANSITION_FAILSAFE_MS = 1400

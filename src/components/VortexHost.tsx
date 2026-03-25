@@ -26,7 +26,7 @@ const VortexHost = ({ mode }: VortexHostProps) => {
     if (!el) return
 
     claimCanvas(el, mode)
-    return () => releaseCanvas()
+    return () => releaseCanvas(el)
   }, [mode, claimCanvas, releaseCanvas])
 
   return (

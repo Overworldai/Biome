@@ -3,13 +3,15 @@
    All animation @keyframes from the UI system
    ============================================ */
 
-@keyframes portalPreviewFloat {
-  0%,
-  100% {
-    transform: translateY(0);
+@keyframes portalFloatOffset {
+  0% {
+    --portal-float-y: 0px;
   }
   50% {
-    transform: translateY(-0.83cqh);
+    --portal-float-y: -0.83cqh;
+  }
+  100% {
+    --portal-float-y: 0.83cqh;
   }
 }
 
@@ -40,12 +42,12 @@
   }
 }
 
-@keyframes portalImageCompensate {
+@keyframes portalPreviewImageRotateCompensate {
   0% {
-    transform: rotate(calc(var(--portal-tilt) * -1)) scale(1);
+    transform: rotate(var(--portal-counter-tilt, 8deg)) scale(1);
   }
   100% {
-    transform: rotate(calc(var(--portal-tilt) * -1)) scale(1.667);
+    transform: rotate(var(--portal-counter-tilt, 8deg)) scale(1.6667);
   }
 }
 
@@ -56,7 +58,7 @@
   }
   100% {
     opacity: 1;
-    filter: blur(3.06cqh);
+    filter: blur(3.33cqh);
   }
 }
 
@@ -73,12 +75,47 @@
   0% {
     opacity: 0.25;
     filter: drop-shadow(0 0 0.56cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.25))
-      drop-shadow(0 0 1.11cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.2));
+      drop-shadow(0 0 1.11cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.2)) brightness(1.18) saturate(1.2);
   }
   100% {
     opacity: 1;
-    filter: drop-shadow(0 0 1.39cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.72))
-      drop-shadow(0 0 2.78cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.48));
+    filter: drop-shadow(0 0 10px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.9))
+      drop-shadow(0 0 24px rgba(var(--portal-glow-rgb, 140, 206, 244), 0.62)) brightness(1.82) saturate(1.86);
+  }
+}
+
+@keyframes portalFrameSpawnIn {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.24);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes portalRingFadeIn1 {
+  0% {
+    opacity: 0;
+  }
+  58% {
+    opacity: 0.24;
+  }
+  100% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes portalRingFadeIn2 {
+  0% {
+    opacity: 0;
+  }
+  58% {
+    opacity: 0.1;
+  }
+  100% {
+    opacity: 0.3;
   }
 }
 

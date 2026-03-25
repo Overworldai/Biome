@@ -11,6 +11,7 @@ type PortalPreviewProps = {
   isSettingsOpen?: boolean
   glowRgb: [number, number, number]
   portalSceneGlowRgb: [number, number, number]
+  sparkGlowRgb: [number, number, number]
   onShrinkComplete: () => void
 }
 
@@ -24,6 +25,7 @@ const PortalPreview = ({
   isSettingsOpen = false,
   glowRgb,
   portalSceneGlowRgb,
+  sparkGlowRgb,
   onShrinkComplete
 }: PortalPreviewProps) => {
   const coreRef = useRef<HTMLDivElement>(null)
@@ -40,7 +42,9 @@ const PortalPreview = ({
   if (!visible || (!videoElement && !hoverContent)) return null
 
   const portalStyle: CSSProperties = {
-    ['--portal-glow-rgb' as string]: glowRgb.join(', ')
+    ['--portal-glow-rgb' as string]: glowRgb.join(', '),
+    ['--portal-border-rgb' as string]: glowRgb.join(', '),
+    ['--portal-enter-duration-ms' as string]: '1050'
   }
 
   return (
@@ -48,7 +52,14 @@ const PortalPreview = ({
       className={`portal-preview absolute inset-0 ${isHovered ? 'hovered' : ''} ${isEntering ? 'entering' : ''} ${isShrinking ? 'shrinking' : ''} ${isSettingsOpen ? 'blur-[0.56cqh] saturate-[0.86]' : ''}`}
       style={portalStyle}
     >
-      <div className="portal-preview-shell absolute inset-0 isolate z-[2] p-[9%] pb-[2%]">
+      <div className="portal-preview-frame-shell absolute inset-0 z-[2] p-[9%]">
+        <div className="relative h-full w-full">
+          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-1 absolute inset-0" />
+          <div className="portal-preview-core-ring-fade portal-preview-core-ring-fade-2 absolute inset-0" />
+        </div>
+      </div>
+      <div className="portal-preview-shell absolute inset-0 z-[2] p-[9%]">
+        <div className="portal-preview-halo-layer absolute inset-0" />
         <div
           ref={coreRef}
           className="portal-preview-core relative w-full h-full overflow-hidden z-1"
@@ -59,15 +70,16 @@ const PortalPreview = ({
             }
           }}
         >
+          <div className="portal-preview-core-overlay absolute inset-0" />
+          <div className="portal-preview-core-ring absolute inset-0" />
           {videoElement && (
-            <div
-              ref={portalVideoRef}
-              className="portal-preview-image absolute rounded-[inherit] origin-center opacity-100"
-            />
+            <div className="portal-preview-media-rotate absolute inset-0 rounded-[inherit]">
+              <div ref={portalVideoRef} className="portal-preview-image absolute rounded-[inherit] origin-center" />
+            </div>
           )}
           {hoverContent && (
             <div
-              className={`absolute inset-0 rounded-[inherit] transition-opacity duration-400 ${isHovered ? 'opacity-90' : 'opacity-0'}`}
+              className={`absolute inset-0 z-[1] rounded-[inherit] transition-opacity duration-400 pointer-events-none ${isHovered ? 'opacity-90' : 'opacity-0'}`}
             >
               {hoverContent}
             </div>
@@ -75,7 +87,7 @@ const PortalPreview = ({
         </div>
       </div>
       <PortalSparks
-        glowRgb={glowRgb}
+        glowRgb={sparkGlowRgb}
         hoverGlowRgb={portalSceneGlowRgb}
         isHovered={isHovered}
         visible={true}

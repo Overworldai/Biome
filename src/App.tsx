@@ -26,6 +26,7 @@ import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
+import usePortalGlowSample from './hooks/usePortalGlowSample'
 import { PORTAL_SPARKS_DEBUG, MENU_VIEW, type MenuViewKey } from './constants'
 import { viewFadeVariants } from './transitions'
 import PortalSparksConfigurator from './components/PortalSparksConfigurator'
@@ -83,8 +84,8 @@ const AppShell = () => {
   const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
   const useMainBackground = !isStreamingUi
   const backgroundBlurCqh = isMainUi ? (isSettingsOpen ? 1.94 : 0.14) : 0
-  const portalGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
-  const nextSceneGlowRgb = useSceneGlowColor(getVideoElement, nextIndex)
+  const backgroundGlowRgb = useSceneGlowColor(getVideoElement, currentIndex)
+  const portalGlowRgb = usePortalGlowSample(portalVisible, nextVideoElement)
   const showMenuHome = isMainUi && !isConnected && !isSettingsOpen
   const showMenuSettings = isMainUi && !isConnected && isSettingsOpen
   const activeMenuView: MenuViewKey | null = useMemo(
@@ -186,6 +187,15 @@ const AppShell = () => {
     <div
       className={`app-shell relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
     >
+      <svg aria-hidden="true" className="pointer-events-none absolute size-0" focusable="false">
+        <defs>
+          <filter colorInterpolationFilters="sRGB" height="120%" id="portal-edge-fade" width="120%" x="-10%" y="-10%">
+            <feMorphology in="SourceAlpha" operator="erode" radius="2" result="erodedAlpha" />
+            <feGaussianBlur in="erodedAlpha" result="softAlpha" stdDeviation="2" />
+            <feComposite in="SourceGraphic" in2="softAlpha" operator="in" />
+          </filter>
+        </defs>
+      </svg>
       <WindowControls />
       <div
         className={`app-shell-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
@@ -236,7 +246,8 @@ const AppShell = () => {
                 isEntering={isPortalEntering}
                 isSettingsOpen={!isConnected && isSettingsOpen}
                 glowRgb={portalGlowRgb}
-                portalSceneGlowRgb={nextSceneGlowRgb}
+                portalSceneGlowRgb={portalGlowRgb}
+                sparkGlowRgb={backgroundGlowRgb}
                 onShrinkComplete={completePortalShrink}
               />
             </div>
