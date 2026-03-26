@@ -629,7 +629,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             ))}
           </SettingsSection>
 
-          <SettingsSection title="Experimental" description="features that are still in development">
+          <SettingsSection
+            title="Experimental"
+            description="want to try some rough ideas that might change or disappear?"
+          >
             <SettingsCheckbox
               label="Scene Edit"
               description="Press a key during gameplay to edit the scene with a text prompt using AI. Requires ~10GB additional VRAM."
