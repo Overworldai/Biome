@@ -89,7 +89,7 @@ const SceneEditOverlay = () => {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder="Describe the scene change..."
-          className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full rounded-[0.6cqh] outline-none focus:ring-1 focus:ring-border-medium`}
+          className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full outline-none focus:ring-1 focus:ring-border-medium`}
         />
         <span className="font-serif text-[1.8cqh] text-text-muted">Enter to apply &middot; Esc to cancel</span>
       </div>
@@ -112,7 +112,7 @@ const SceneEditOverlay = () => {
           animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
           exit={{ opacity: 0, y: 20, transition: { duration: 0.15, ease: 'easeIn' } }}
         >
-          <div className="w-full max-w-[60cqw] rounded-[1cqh] bg-black/80 p-[1.5cqh_2cqw] backdrop-blur-sm">
+          <div className="w-full max-w-[60cqw] bg-black/80 p-[1.5cqh_2cqw] backdrop-blur-sm">
             {content[phase as Exclude<SceneEditPhase, 'inactive'>]()}
           </div>
         </motion.div>
