@@ -1196,6 +1196,8 @@ async def _handle_model_info(msg: dict) -> dict:
 
 
 def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
+    from inpainting_manager import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
+    from inpainting_manager import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
@@ -1230,11 +1232,25 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
             .contiguous()
         )
 
-    # append_frame uses @torch.compile with CUDA graphs — must run on
-    # the dedicated CUDA executor thread.
-    world_engine.cuda_executor.submit(
-        lambda f=inpainted: world_engine.engine.append_frame(f)
-    ).result()
+    # Apply the edited frame to the engine on the CUDA executor thread.
+    if SCENE_EDIT_RESET:
+        # Reset engine with the edited frame as the new seed
+        world_engine.seed_frame = inpainted
+
+        def _reset_with_frame():
+            world_engine.engine.reset()
+            world_engine.engine.append_frame(inpainted)
+            if world_engine.has_prompt_conditioning:
+                world_engine.engine.set_prompt(world_engine.current_prompt)
+
+        world_engine.cuda_executor.submit(_reset_with_frame).result()
+    else:
+        # Append repeatedly to strengthen the edit in the KV cache
+        def _append_repeated(f=inpainted):
+            for _ in range(SCENE_EDIT_APPEND_COUNT):
+                world_engine.engine.append_frame(f)
+
+        world_engine.cuda_executor.submit(_append_repeated).result()
 
     return {
         "original_jpeg_b64": original_b64,
@@ -1570,7 +1586,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Inpainting warmup failed: {e}", exc_info=True)
-                await send_warning(f"Scene edit model failed to load: {e}")
+                await send_json({"type": "error", "message": f"Scene edit model failed to load: {e}"})
+                return
 
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:

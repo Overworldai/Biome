@@ -20,6 +20,8 @@ dependencies = [
   "diffusers>=0.25.0",
   "accelerate>=0.25.0",
   "peft>=0.7.0",
+  "bitsandbytes>=0.41.0",
+  "qwen-vl-utils>=0.0.2",
 ]
 
 [dependency-groups]

@@ -1,8 +1,6 @@
 """
-Inpainting module - Handles scene editing via Stable Diffusion inpainting.
-
-Uses runwayml/stable-diffusion-inpainting with LCM-LoRA for fast (4-step)
-image-to-image inpainting of the center region of a gameplay frame.
+Scene editing module - Uses FLUX.2 Klein 4B for reference-based image editing,
+with Qwen3.5 vision to construct an edit-aware prompt grounded in the frame.
 """
 
 import asyncio
@@ -12,24 +10,29 @@ import time
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Fraction of each dimension to inpaint (centered).
-# 0.35 = center 35% of width × 35% of height.
-INPAINT_REGION_FRACTION = 0.35
+# ── Edit model configuration ────────────────────────────────────────
+EDIT_MODEL_ID = "black-forest-labs/FLUX.2-klein-4B"
+EDIT_NUM_STEPS = 4
+EDIT_APPEND_COUNT = 32  # How many times to append the edited frame to strengthen it
+EDIT_RESET_WITH_FRAME = True  # Reset engine with edited frame as new seed (vs append)
 
-# Gaussian blur radius (in pixels at 512x512) for soft mask edges.
-MASK_FEATHER_RADIUS = 20
+# ── Vision-language model configuration ─────────────────────────────
+VLM_MODEL_ID = "Qwen/Qwen3.5-4B"
+VLM_MAX_PIXELS = 512 * 28 * 28  # Cap vision tokens for speed/VRAM
 
 
 class InpaintingManager:
-    """Manages the Stable Diffusion inpainting pipeline for scene editing."""
+    """Manages FLUX.2 Klein (editing) + Qwen3.5 (vision-language) for scene editing."""
 
     def __init__(self, cuda_executor):
         self.cuda_executor = cuda_executor
         self.pipeline = None
+        self.vlm_model = None
+        self.vlm_processor = None
         self._loaded = False
 
     @property
@@ -42,27 +45,142 @@ class InpaintingManager:
         return await loop.run_in_executor(self.cuda_executor, fn)
 
     async def warmup(self):
-        """Load the inpainting model + LCM-LoRA to GPU."""
-        logger.info("[INPAINT] Loading inpainting model...")
+        """Load both the VLM and editing model to GPU."""
+        logger.info(f"[SCENE_EDIT] Loading VLM {VLM_MODEL_ID}...")
         t0 = time.perf_counter()
-        await self._run_on_cuda_thread(self._load_sync)
-        elapsed = time.perf_counter() - t0
-        logger.info(f"[INPAINT] Model loaded in {elapsed:.1f}s")
+        await self._run_on_cuda_thread(self._load_vlm_sync)
+        logger.info(f"[SCENE_EDIT] VLM loaded in {time.perf_counter() - t0:.1f}s")
 
-    def _load_sync(self):
-        """Synchronous model load on CUDA thread."""
-        from diffusers import LCMScheduler, StableDiffusionInpaintPipeline
+        logger.info(f"[SCENE_EDIT] Loading editing model {EDIT_MODEL_ID}...")
+        t1 = time.perf_counter()
+        await self._run_on_cuda_thread(self._load_edit_sync)
+        logger.info(f"[SCENE_EDIT] Editing model loaded in {time.perf_counter() - t1:.1f}s")
 
-        pipe = StableDiffusionInpaintPipeline.from_pretrained(
-            "runwayml/stable-diffusion-inpainting",
+        self._loaded = True
+
+    def _load_vlm_sync(self):
+        """Load the Qwen3.5 vision-language model (int4 for minimal VRAM)."""
+        from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
+
+        bnb_config = BitsAndBytesConfig(load_in_4bit=True)
+        self.vlm_model = AutoModelForImageTextToText.from_pretrained(
+            VLM_MODEL_ID,
             torch_dtype=torch.float16,
+            quantization_config=bnb_config,
+            device_map="auto",
+        )
+        self.vlm_processor = AutoProcessor.from_pretrained(
+            VLM_MODEL_ID,
+            max_pixels=VLM_MAX_PIXELS,
+        )
+
+    def _load_edit_sync(self):
+        """Load the FLUX.2 Klein editing pipeline."""
+        from diffusers import Flux2KleinPipeline
+
+        pipe = Flux2KleinPipeline.from_pretrained(
+            EDIT_MODEL_ID,
+            torch_dtype=torch.bfloat16,
         ).to("cuda")
-        pipe.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
-        pipe.fuse_lora()
-        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
         pipe.set_progress_bar_config(disable=True)
         self.pipeline = pipe
-        self._loaded = True
+
+    def _build_edit_prompt(self, frame_pil: Image.Image, user_request: str) -> str:
+        """Ask the VLM to write a Klein edit instruction from the user's request."""
+        from qwen_vl_utils import process_vision_info
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You write image editing instructions for an AI image editor. "
+                    "The editor receives a reference image and your instruction, then "
+                    "produces an edited version. Instructions should describe WHAT TO "
+                    "CHANGE, not the full scene — the reference image provides the "
+                    "visual context.\n\n"
+                    "This is a first-person game screenshot. Follow these rules:\n\n"
+                    "1. DEFAULT: ADD elements to the scene unless told to replace/remove.\n"
+                    "2. HANDHELD OBJECTS (weapons, tools, items): Place in a right hand "
+                    "at the bottom-right of the frame, as in a first-person shooter. "
+                    "If a hand is already visible, put the object in it. If not, add "
+                    "a hand holding the object in the bottom-right corner.\n"
+                    "3. SCENE ELEMENTS (buildings, creatures, weather): Place naturally "
+                    "in the environment.\n"
+                    "4. STYLE/MOOD changes: Describe the transformation clearly.\n\n"
+                    "EXAMPLES:\n"
+                    '- User: "sword" → "Add a glowing sword held in a right hand in '
+                    'the bottom-right corner of the frame, as in a first-person game. '
+                    'Keep everything else unchanged."\n'
+                    '- User: "dragon" → "Add a large dragon flying in the sky above '
+                    'the scene. Keep everything else unchanged."\n'
+                    '- User: "make it night" → "Change the lighting to nighttime with '
+                    'a dark sky, moonlight, and shadows. Keep everything else unchanged."\n'
+                    '- User: "remove the tree" → "Remove the tree from the scene and '
+                    'fill the area with the surrounding environment. Keep everything '
+                    'else unchanged."\n'
+                    '- User: "shotgun" → "Add a pump-action shotgun held in a right '
+                    'hand in the bottom-right corner of the frame, as in a first-person '
+                    'shooter. Keep everything else unchanged."\n\n'
+                    "Always end with 'Keep everything else unchanged.'\n"
+                    "Reply with ONLY a single one-line instruction. No preamble, "
+                    "no explanation, no line breaks."
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": frame_pil},
+                    {
+                        "type": "text",
+                        "text": (
+                            f"The user wants: \"{user_request}\"\n\n"
+                            "Look at the image and write a specific edit instruction."
+                        ),
+                    },
+                ],
+            },
+        ]
+
+        text = self.vlm_processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.vlm_processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.vlm_model.device)
+
+        with torch.no_grad():
+            output_ids = self.vlm_model.generate(
+                **inputs,
+                max_new_tokens=256,
+            )
+
+        generated_ids = output_ids[0, inputs.input_ids.shape[1] :].tolist()
+
+        # Find </think> token (ID 151668) and take only what follows.
+        # With enable_thinking=False this shouldn't be needed, but as a
+        # safety net in case reasoning leaks through.
+        THINK_END_TOKEN = 151668
+        try:
+            index = len(generated_ids) - generated_ids[::-1].index(THINK_END_TOKEN)
+        except ValueError:
+            index = 0
+
+        edit_prompt = self.vlm_processor.tokenizer.decode(
+            generated_ids[index:], skip_special_tokens=True
+        ).strip()
+
+        raw_full = self.vlm_processor.tokenizer.decode(
+            generated_ids, skip_special_tokens=True
+        ).strip()
+        logger.info(f"[SCENE_EDIT] VLM raw: {raw_full}")
+        logger.info(f"[SCENE_EDIT] Edit prompt: {edit_prompt}")
+        return edit_prompt
 
     async def inpaint(
         self,
@@ -70,18 +188,18 @@ class InpaintingManager:
         prompt: str,
         seed_target_size: tuple[int, int],
     ) -> torch.Tensor:
-        """Inpaint the center region of a frame.
+        """Edit a frame: VLM writes the edit prompt, Klein generates.
 
         Args:
             frame_numpy: HxWx3 uint8 numpy array (the last generated frame).
-            prompt: Text description of what to inpaint.
+            prompt: User's vague description of the desired change.
             seed_target_size: (height, width) tuple for the output tensor.
 
         Returns:
-            Composited frame as a uint8 CUDA tensor (HxWx3).
+            Edited frame as a uint8 CUDA tensor (HxWx3).
         """
         if not self._loaded:
-            raise RuntimeError("Inpainting model not loaded")
+            raise RuntimeError("Editing models not loaded")
         return await self._run_on_cuda_thread(
             lambda: self._inpaint_sync(frame_numpy, prompt, seed_target_size)
         )
@@ -95,64 +213,42 @@ class InpaintingManager:
         h_orig, w_orig = frame_numpy.shape[:2]
         frame_pil = Image.fromarray(frame_numpy)
 
-        # Take the full 1:1 center crop of the image (largest square that fits).
-        # This gives the inpainter maximum context around the edit region.
-        side = min(w_orig, h_orig)
-        crop_x0 = (w_orig - side) // 2
-        crop_y0 = (h_orig - side) // 2
-        crop = frame_pil.crop((crop_x0, crop_y0, crop_x0 + side, crop_y0 + side))
+        # Step 1: VLM sees the frame + user request, writes the full edit prompt
+        edit_prompt = self._build_edit_prompt(frame_pil, prompt)
 
-        # Resize the square crop to 512x512 (native SD resolution, no aspect distortion)
-        crop_512 = crop.resize((512, 512))
+        # Step 2: Align to 16px boundaries for the transformer
+        target_w = w_orig // 16 * 16
+        target_h = h_orig // 16 * 16
+        frame_resized = frame_pil.resize((target_w, target_h))
 
-        # Build the mask: center INPAINT_REGION_FRACTION of each dimension,
-        # with soft feathered edges for smooth blending.
-        margin = (1 - INPAINT_REGION_FRACTION) / 2
-        mask_x0 = int(512 * margin)
-        mask_y0 = int(512 * margin)
-        mask_x1 = 512 - mask_x0
-        mask_y1 = 512 - mask_y0
-
-        mask_512 = Image.new("L", (512, 512), 0)
-        draw = ImageDraw.Draw(mask_512)
-        draw.rectangle([mask_x0, mask_y0, mask_x1, mask_y1], fill=255)
-        mask_512 = mask_512.filter(ImageFilter.GaussianBlur(radius=MASK_FEATHER_RADIUS))
-
+        # Step 3: Run Klein with the VLM-authored prompt
         t0 = time.perf_counter()
-        result_512 = self.pipeline(
-            prompt=prompt,
-            image=crop_512,
-            mask_image=mask_512,
-            num_inference_steps=4,
-            guidance_scale=1.0,
-            width=512,
-            height=512,
+        result = self.pipeline(
+            image=frame_resized,
+            prompt=edit_prompt,
+            num_inference_steps=EDIT_NUM_STEPS,
+            height=target_h,
+            width=target_w,
         ).images[0]
         logger.info(
-            f"[INPAINT] Diffusion took {(time.perf_counter() - t0) * 1000:.0f}ms"
+            f"[SCENE_EDIT] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms"
         )
 
-        # Composite the inpainted result back using the same soft mask,
-        # then resize back to crop dimensions and paste into the full frame.
-        blended_512 = Image.composite(result_512, crop_512, mask_512)
-        blended_crop = blended_512.resize((side, side), Image.LANCZOS)
-
-        composited = frame_pil.copy()
-        composited.paste(blended_crop, (crop_x0, crop_y0))
-
-        # Resize to seed target size and convert to tensor
+        # Step 4: Resize to seed target size and convert to tensor
         h, w = seed_target_size
-        composited = composited.resize((w, h), Image.LANCZOS)
+        result = result.resize((w, h), Image.LANCZOS)
         result_tensor = (
-            torch.from_numpy(np.array(composited))
+            torch.from_numpy(np.array(result))
             .to(dtype=torch.uint8, device="cuda")
             .contiguous()
         )
         return result_tensor
 
     def unload(self):
-        """Free GPU memory used by the inpainting pipeline."""
+        """Free GPU memory used by both models."""
         self.pipeline = None
+        self.vlm_model = None
+        self.vlm_processor = None
         self._loaded = False
         gc.collect()
         if torch.cuda.is_available():
