@@ -59,7 +59,7 @@ class InpaintingManager:
         self._loaded = True
 
     def _load_vlm_sync(self):
-        """Load the Qwen3.5 vision-language model (int4 for minimal VRAM)."""
+        """Load the Qwen3.5 vision-language model (int4 quantized)."""
         from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
         bnb_config = BitsAndBytesConfig(load_in_4bit=True)
@@ -75,11 +75,20 @@ class InpaintingManager:
         )
 
     def _load_edit_sync(self):
-        """Load the FLUX.2 Klein editing pipeline."""
-        from diffusers import Flux2KleinPipeline
+        """Load the FLUX.2 Klein editing pipeline (Q8 GGUF quantized)."""
+        from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
 
+        gguf_config = GGUFQuantizationConfig(compute_dtype=torch.bfloat16)
+        transformer = Flux2Transformer2DModel.from_single_file(
+            "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/blob/main/flux-2-klein-4b-Q8_0.gguf",
+            config=EDIT_MODEL_ID,
+            subfolder="transformer",
+            quantization_config=gguf_config,
+            torch_dtype=torch.bfloat16,
+        )
         pipe = Flux2KleinPipeline.from_pretrained(
             EDIT_MODEL_ID,
+            transformer=transformer,
             torch_dtype=torch.bfloat16,
         ).to("cuda")
         pipe.set_progress_bar_config(disable=True)
@@ -209,7 +218,7 @@ class InpaintingManager:
         frame_numpy: np.ndarray,
         prompt: str,
         seed_target_size: tuple[int, int],
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, str]:
         h_orig, w_orig = frame_numpy.shape[:2]
         frame_pil = Image.fromarray(frame_numpy)
 
@@ -242,7 +251,7 @@ class InpaintingManager:
             .to(dtype=torch.uint8, device="cuda")
             .contiguous()
         )
-        return result_tensor
+        return result_tensor, edit_prompt
 
     def unload(self):
         """Free GPU memory used by both models."""
