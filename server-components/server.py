@@ -1426,6 +1426,9 @@ async def websocket_endpoint(websocket: WebSocket):
     progress_drain_task = asyncio.create_task(_drain_progress_queue())
 
     async def reset_engine():
+        # Restore the original seed (before any scene edits) on reset
+        if world_engine.original_seed_frame is not None:
+            world_engine.seed_frame = world_engine.original_seed_frame
         world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
         await world_engine.init_session()
         world_engine.set_progress_callback(None)
@@ -1475,6 +1478,7 @@ async def websocket_endpoint(websocket: WebSocket):
             return False
 
         world_engine.seed_frame = loaded_frame
+        world_engine.original_seed_frame = loaded_frame
         logger.info(f"[{client_host}] Initial seed loaded successfully")
         return True
 
@@ -1926,6 +1930,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             preview = _run_scene_edit_on_generator(
                                 req["prompt"], last_generated_cpu_frames
                             )
+                            session.frame_count = 0
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
