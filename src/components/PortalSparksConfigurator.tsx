@@ -1,16 +1,80 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { SPARK_TUNING, SPARK_TUNING_DEFAULTS } from '../lib/portalSparksTuning'
 import type { PortalSparksTuning } from '../lib/portalSparksTuning'
+import { SPARK_DEBUG } from '../lib/sparkDebug'
 import { invoke } from '../bridge'
 
 type TuningKey = keyof PortalSparksTuning
 
 const TUNING_KEYS = Object.keys(SPARK_TUNING_DEFAULTS) as TuningKey[]
 
+type DebugBg = 'none' | 'black' | 'white' | 'gray'
+
 const PortalSparksConfigurator = () => {
   // Force re-render when sliders change
   const [, setTick] = useState(0)
   const rerender = useCallback(() => setTick((t) => t + 1), [])
+
+  // Debug state
+  const [debugBg, setDebugBg] = useState<DebugBg>('none')
+  const [debugNoMask, setDebugNoMask] = useState(false)
+  const [debugIsolate, setDebugIsolate] = useState(false)
+  const [pauseCycling, setPauseCycling] = useState(false)
+  const [debugNoHalo, setDebugNoHalo] = useState(false)
+  const [debugNoOverlay, setDebugNoOverlay] = useState(false)
+  const [debugNoRing, setDebugNoRing] = useState(false)
+  const [debugNoRingFade, setDebugNoRingFade] = useState(false)
+  const [debugNoCoreContent, setDebugNoCoreContent] = useState(false)
+
+  // Sync pause cycling to the global debug state
+  useEffect(() => {
+    SPARK_DEBUG.pauseCycling = pauseCycling
+  }, [pauseCycling])
+
+  // Apply debug classes and backdrop to the portal-preview element.
+  // Use a MutationObserver to re-apply when the element is re-mounted during transitions.
+  useEffect(() => {
+    const BG_COLORS: Record<DebugBg, string> = { none: '', black: '#000', white: '#fff', gray: '#808080' }
+    const applyDebug = () => {
+      const el = document.querySelector('.portal-preview')
+      if (!el) return
+
+      el.classList.toggle('spark-debug-no-mask', debugNoMask)
+      el.classList.toggle('spark-debug-isolate', debugIsolate)
+      el.classList.toggle('spark-debug-no-halo', debugNoHalo)
+      el.classList.toggle('spark-debug-no-overlay', debugNoOverlay)
+      el.classList.toggle('spark-debug-no-ring', debugNoRing)
+      el.classList.toggle('spark-debug-no-ring-fade', debugNoRingFade)
+      el.classList.toggle('spark-debug-no-core-content', debugNoCoreContent)
+
+      // Manage a backdrop div that sits behind the sparks canvas
+      let backdrop = el.querySelector('.spark-debug-backdrop') as HTMLDivElement | null
+      if (debugBg !== 'none') {
+        if (!backdrop) {
+          backdrop = document.createElement('div')
+          backdrop.className = 'spark-debug-backdrop'
+          backdrop.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0;'
+          el.prepend(backdrop)
+        }
+        backdrop.style.background = BG_COLORS[debugBg]
+      } else if (backdrop) {
+        backdrop.remove()
+      }
+    }
+    applyDebug()
+    const observer = new MutationObserver(applyDebug)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [
+    debugBg,
+    debugNoMask,
+    debugIsolate,
+    debugNoHalo,
+    debugNoOverlay,
+    debugNoRing,
+    debugNoRingFade,
+    debugNoCoreContent
+  ])
 
   // Track raw text per field so intermediate strings like "0." or "-" aren't clobbered
   const [editing, setEditing] = useState<Partial<Record<TuningKey, string>>>({})
@@ -105,6 +169,65 @@ const PortalSparksConfigurator = () => {
           </div>
         )
       })}
+      <div className="mt-4 mb-2 border-t border-white/20 pt-3">
+        <span className="text-sm font-bold tracking-wide">Debug Composite</span>
+        <div className="mt-2 space-y-1.5">
+          <div>
+            <label className="block text-[10px] text-white/60 mb-0.5">Background behind sparks</label>
+            <div className="flex gap-1">
+              {(['none', 'black', 'white', 'gray'] as DebugBg[]).map((bg) => (
+                <button
+                  key={bg}
+                  type="button"
+                  className={`px-2 py-0.5 rounded text-[10px] ${debugBg === bg ? 'bg-orange-500/80' : 'bg-white/10 hover:bg-white/20'}`}
+                  onClick={() => setDebugBg(bg)}
+                >
+                  {bg}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <input type="checkbox" checked={pauseCycling} onChange={(e) => setPauseCycling(e.target.checked)} />
+            <span>Pause background cycling</span>
+          </label>
+          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <input type="checkbox" checked={debugNoMask} onChange={(e) => setDebugNoMask(e.target.checked)} />
+            <span>Disable mask (radial fade)</span>
+          </label>
+          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <input type="checkbox" checked={debugIsolate} onChange={(e) => setDebugIsolate(e.target.checked)} />
+            <span>Hide portal (isolate sparks)</span>
+          </label>
+          <div className="mt-2">
+            <label className="block text-[10px] text-white/60 mb-0.5">Portal sub-layers</label>
+            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+              <input type="checkbox" checked={debugNoHalo} onChange={(e) => setDebugNoHalo(e.target.checked)} />
+              <span>Hide halo glow</span>
+            </label>
+            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+              <input type="checkbox" checked={debugNoOverlay} onChange={(e) => setDebugNoOverlay(e.target.checked)} />
+              <span>Hide core overlay (vignette)</span>
+            </label>
+            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+              <input type="checkbox" checked={debugNoRing} onChange={(e) => setDebugNoRing(e.target.checked)} />
+              <span>Hide core ring (border)</span>
+            </label>
+            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+              <input type="checkbox" checked={debugNoRingFade} onChange={(e) => setDebugNoRingFade(e.target.checked)} />
+              <span>Hide ring fade (blurred borders)</span>
+            </label>
+            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={debugNoCoreContent}
+                onChange={(e) => setDebugNoCoreContent(e.target.checked)}
+              />
+              <span>Hide core content (video)</span>
+            </label>
+          </div>
+        </div>
+      </div>
       <div className="sticky bottom-0 flex justify-end gap-1 pt-2 pb-1 bg-black/80">
         <button
           type="button"

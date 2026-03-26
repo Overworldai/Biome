@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '../bridge'
+import { SPARK_DEBUG } from '../lib/sparkDebug'
 
 const CYCLE_INTERVAL_MS = 5000
 const PORTAL_ENTER_DURATION_MS = 1050
@@ -133,6 +134,7 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
       return
 
     const timer = window.setInterval(() => {
+      if (SPARK_DEBUG.pauseCycling) return
       setTransitionKey((k) => k + 1)
       setIsPortalShrinking(true)
     }, CYCLE_INTERVAL_MS)
