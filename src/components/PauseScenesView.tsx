@@ -5,6 +5,7 @@ import MenuButton from './ui/MenuButton'
 import SettingsButton from './ui/SettingsButton'
 import { HEADING_BASE } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
+import { useTranslation } from 'react-i18next'
 
 interface PauseScenesViewProps {
   seeds: SeedRecord[]
@@ -37,6 +38,7 @@ const PauseScenesView = ({
   onClipboardUpload,
   onBack
 }: PauseScenesViewProps) => {
+  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
   const [isDragActive, setIsDragActive] = useState(false)
@@ -136,14 +138,18 @@ const PauseScenesView = ({
           className="absolute inset-[2.4cqh] z-[20] border border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)] pointer-events-none grid place-items-center"
           aria-hidden="true"
         >
-          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">Drop images to add scenes</span>
+          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
+            {t('app.pause.scenes.dropImagesToAddScenes')}
+          </span>
         </div>
       )}
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[92%] z-[3] flex flex-col">
-        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Scenes</h2>
+        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>
+          {t('app.pause.scenes.title')}
+        </h2>
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-          All of your {seeds.length} {seeds.length === 1 ? 'scene' : 'scenes'}.
-          {ALLOW_USER_SCENES && ' Use the buttons to add more scenes, or drag/paste them in.'}
+          {t('app.pause.scenes.description', { count: seeds.length })}
+          {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
         </p>
         {uploadError && (
           <p className="m-0 mt-[0.6cqh] font-serif text-caption text-[var(--color-error-bright)]">{uploadError}</p>
@@ -165,7 +171,7 @@ const PauseScenesView = ({
                   variant="secondary"
                   className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                   onClick={() => void onClipboardUpload()}
-                  title="Paste image from clipboard"
+                  title={t('app.buttons.pasteImageFromClipboard')}
                 >
                   <svg
                     className="w-[2.67cqh] h-[2.67cqh]"
@@ -183,7 +189,7 @@ const PauseScenesView = ({
                   variant="secondary"
                   className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                   onClick={() => fileInputRef.current?.click()}
-                  title="Browse for image file"
+                  title={t('app.buttons.browseForImageFile')}
                 >
                   <svg
                     className="w-[2.67cqh] h-[2.67cqh]"
@@ -220,7 +226,7 @@ const PauseScenesView = ({
         className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
         onClick={onBack}
       >
-        Back
+        {t('app.buttons.back')}
       </MenuButton>
     </div>
   )

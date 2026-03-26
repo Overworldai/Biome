@@ -19,6 +19,8 @@ type SettingsSelectProps = {
   allowCustom?: boolean
   onCustomBlur?: (value: string) => void
   customPrefix?: string
+  customLabel?: string
+  deleteLabel?: string
 }
 
 const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
@@ -36,7 +38,9 @@ const SettingsSelect = ({
   disabled,
   allowCustom,
   onCustomBlur,
-  customPrefix
+  customPrefix,
+  customLabel = 'Custom...',
+  deleteLabel = 'Remove custom model'
 }: SettingsSelectProps) => {
   const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
@@ -152,7 +156,7 @@ const SettingsSelect = ({
                       playClick()
                       onDelete(option.value)
                     }}
-                    title="Remove custom model"
+                    title={deleteLabel}
                   >
                     <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
                       <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -170,7 +174,7 @@ const SettingsSelect = ({
                   setIsOpen(false)
                 }}
               >
-                Custom...
+                {customLabel}
               </button>
             )}
           </div>,

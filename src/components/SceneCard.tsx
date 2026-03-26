@@ -1,6 +1,7 @@
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/AudioContext'
+import { useTranslation } from 'react-i18next'
 
 const ACTION_BASE =
   'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-secondary)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
@@ -90,6 +91,7 @@ const SceneCard = ({
   onTogglePin,
   onRemove
 }: SceneCardProps) => {
+  const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const { play } = useAudio()
   const isUnsafe = !seed.is_safe
@@ -116,7 +118,7 @@ const SceneCard = ({
       />
       {isUnsafe && (
         <span className="absolute left-1 top-1 px-[0.58cqh] py-[0.18cqh] text-[1.11cqh] font-semibold tracking-[0.08em] uppercase text-[rgba(16,20,28,0.95)] bg-[rgba(214,218,228,0.92)]">
-          Unsafe
+          {t('app.pause.sceneCard.unsafe')}
         </span>
       )}
       <span className="absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100 group-focus-within/scene:opacity-100">
@@ -125,7 +127,7 @@ const SceneCard = ({
             role="button"
             tabIndex={0}
             className={`${ACTION_BASE} ${isPinned ? ACTION_PINNED : ACTION_UNPINNED}`}
-            title={isPinned ? 'Unpin scene' : 'Pin scene'}
+            title={isPinned ? t('app.pause.sceneCard.unpinScene') : t('app.pause.sceneCard.pinScene')}
             onMouseEnter={playHover}
             onClick={(event) => {
               event.stopPropagation()
@@ -148,7 +150,7 @@ const SceneCard = ({
             role="button"
             tabIndex={0}
             className={`${ACTION_BASE} ${ACTION_DELETE}`}
-            title="Remove scene"
+            title={t('app.pause.sceneCard.removeScene')}
             onMouseEnter={playHover}
             onClick={(event) => {
               event.stopPropagation()

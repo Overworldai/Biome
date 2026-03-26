@@ -4,12 +4,14 @@ import { useStreaming } from '../context/StreamingContext'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
+import { useTranslation } from 'react-i18next'
 
 type EngineInstallModalProps = {
   onClose: () => void
 }
 
 const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
+  const { t } = useTranslation()
   const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup } = useStreaming()
   const { logs: installLogs, clear: clearInstallLogs } = useEngineLogs(true)
   const [isExportingInstallDiagnostics, setIsExportingInstallDiagnostics] = useState(false)
@@ -49,12 +51,12 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
       if (result.canceled) {
-        setInstallExportStatus('Export canceled')
+        setInstallExportStatus(t('app.dialogs.install.exportCanceled'))
       } else {
-        setInstallExportStatus('Diagnostics exported')
+        setInstallExportStatus(t('app.dialogs.install.diagnosticsExported'))
       }
     } catch (exportErr) {
-      const message = exportErr instanceof Error ? exportErr.message : 'Export failed'
+      const message = exportErr instanceof Error ? exportErr.message : t('app.dialogs.install.exportFailed')
       setInstallExportStatus(message)
     } finally {
       setIsExportingInstallDiagnostics(false)
@@ -68,9 +70,9 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     setInstallExportStatus(null)
     try {
       const message = await abortEngineSetup()
-      setInstallExportStatus(message || 'Abort requested')
+      setInstallExportStatus(message || t('app.dialogs.install.abortRequested'))
     } catch (abortErr) {
-      const message = abortErr instanceof Error ? abortErr.message : 'Failed to abort install'
+      const message = abortErr instanceof Error ? abortErr.message : t('app.dialogs.install.abortFailed')
       setInstallExportStatus(message)
     } finally {
       setIsAbortingInstall(false)
@@ -85,18 +87,22 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     >
       <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
         <ServerLogDisplay
-          title="Installation"
+          title={t('app.dialogs.install.title')}
           logs={installLogs}
           showProgress={engineSetupInProgress}
           progressMessage={
-            engineSetupInProgress ? setupProgress || 'Installing...' : engineSetupError ? 'Failed.' : 'Complete.'
+            engineSetupInProgress
+              ? setupProgress || t('app.dialogs.install.installing')
+              : engineSetupError
+                ? t('app.dialogs.install.failed')
+                : t('app.dialogs.install.complete')
           }
           errorMessage={engineSetupError}
           buildDiagnosticsPayload={buildDiagnosticsPayload}
           showExportAction={!engineSetupInProgress && !!engineSetupError}
           onExportAction={() => void handleExportInstallDiagnostics()}
           isExportingAction={isExportingInstallDiagnostics}
-          exportActionLabel="Export Logs"
+          exportActionLabel={t('app.buttons.exportLogs')}
           actionStatus={installExportStatus}
           headerAction={
             engineSetupInProgress ? (
@@ -106,9 +112,9 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={() => void handleAbortInstall()}
                   disabled={isAbortingInstall}
-                  aria-label="Abort engine install"
+                  aria-label={t('app.dialogs.install.abortEngineInstall')}
                 >
-                  {isAbortingInstall ? 'Aborting...' : 'Abort'}
+                  {isAbortingInstall ? t('app.buttons.aborting') : t('app.buttons.abort')}
                 </Button>
               </div>
             ) : (
@@ -117,9 +123,9 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   variant="secondary"
                   className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={onClose}
-                  aria-label="Close install logs"
+                  aria-label={t('app.dialogs.install.closeInstallLogs')}
                 >
-                  Close
+                  {t('app.buttons.close')}
                 </Button>
               </div>
             )
