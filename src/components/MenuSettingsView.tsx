@@ -632,7 +632,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           <SettingsSection title="Experimental" description="features that are still in development">
             <SettingsCheckbox
               label="Scene Edit"
-              description="Press a key during gameplay to inpaint part of the scene with a text prompt. Requires ~1.5GB additional VRAM."
+              description="Press a key during gameplay to edit the scene with a text prompt using AI. Requires ~10GB additional VRAM."
               checked={menuSceneEditEnabled}
               onChange={setMenuSceneEditEnabled}
             />

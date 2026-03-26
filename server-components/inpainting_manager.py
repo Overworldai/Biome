@@ -75,9 +75,11 @@ class InpaintingManager:
         )
 
     def _load_edit_sync(self):
-        """Load the FLUX.2 Klein editing pipeline (Q8 GGUF quantized)."""
+        """Load the FLUX.2 Klein editing pipeline (quantized transformer + text encoder)."""
         from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
+        from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
+        # Transformer: Q8 GGUF (~4.3GB)
         gguf_config = GGUFQuantizationConfig(compute_dtype=torch.bfloat16)
         transformer = Flux2Transformer2DModel.from_single_file(
             "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/blob/main/flux-2-klein-4b-Q8_0.gguf",
@@ -86,9 +88,20 @@ class InpaintingManager:
             quantization_config=gguf_config,
             torch_dtype=torch.bfloat16,
         )
+
+        # Text encoder: 4-bit quantized (~2GB instead of ~8GB)
+        bnb_config = BitsAndBytesConfig(load_in_4bit=True)
+        text_encoder = AutoModelForCausalLM.from_pretrained(
+            EDIT_MODEL_ID,
+            subfolder="text_encoder",
+            quantization_config=bnb_config,
+            torch_dtype=torch.bfloat16,
+        )
+
         pipe = Flux2KleinPipeline.from_pretrained(
             EDIT_MODEL_ID,
             transformer=transformer,
+            text_encoder=text_encoder,
             torch_dtype=torch.bfloat16,
         ).to("cuda")
         pipe.set_progress_bar_config(disable=True)
