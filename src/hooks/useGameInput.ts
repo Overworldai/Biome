@@ -3,24 +3,36 @@ import { DEFAULT_KEYBINDINGS, type Keybindings } from '../types/settings'
 
 /** Fixed game controls — the single source of truth for non-rebindable bindings.
  *  Entries with `code` are real keyboard keys (used for conflict detection).
- *  Entries with `displayValue` are display-only (mouse, clicks). */
-export type FixedControl = { label: string } & (
-  | { code: string; displayValue?: never }
-  | { code?: never; displayValue: string }
+ *  Entries with `displayValue` are display-only (mouse, clicks).
+  `label` is the stable internal identifier used elsewhere in input logic.
+  `labelKey` and `displayValueKey` are the i18n keys used by the settings UI.
+  That keeps the fixed-control definitions as the single source of truth while
+  letting display text be localized without hardcoding lookup tables in the view. */
+export type FixedControl = {
+  label: string
+  labelKey: string
+} & (
+  | { code: string; displayValue?: never; displayValueKey?: never }
+  | { code?: never; displayValue: string; displayValueKey: string }
 )
 
 export const FIXED_CONTROLS: readonly FixedControl[] = [
-  { label: 'Move Forward', code: 'KeyW' },
-  { label: 'Move Left', code: 'KeyA' },
-  { label: 'Move Back', code: 'KeyS' },
-  { label: 'Move Right', code: 'KeyD' },
-  { label: 'Jump', code: 'Space' },
-  { label: 'Sprint', code: 'ShiftLeft' },
-  { label: 'Look', displayValue: 'Mouse' },
-  { label: 'Interact', code: 'KeyE' },
-  { label: 'Primary Fire', displayValue: 'Left Click' },
-  { label: 'Secondary Fire', displayValue: 'Right Click' },
-  { label: 'Pause Menu', code: 'Escape' }
+  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW' },
+  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA' },
+  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS' },
+  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD' },
+  { label: 'Jump', labelKey: 'jump', code: 'Space' },
+  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft' },
+  { label: 'Look', labelKey: 'look', displayValue: 'Mouse', displayValueKey: 'mouse' },
+  { label: 'Interact', labelKey: 'interact', code: 'KeyE' },
+  { label: 'Primary Fire', labelKey: 'primaryFire', displayValue: 'Left Click', displayValueKey: 'leftClick' },
+  {
+    label: 'Secondary Fire',
+    labelKey: 'secondaryFire',
+    displayValue: 'Right Click',
+    displayValueKey: 'rightClick'
+  },
+  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape' }
 ]
 
 const FIXED_CODE_TO_LABEL = new Map(

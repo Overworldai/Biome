@@ -3,18 +3,24 @@ import { initReactI18next } from 'react-i18next'
 import { resources } from './resources'
 
 export const FALLBACK_LOCALE = 'en' as const
-export const SUPPORTED_LOCALES = ['en', 'ja'] as const
+export const SUPPORTED_LOCALES = ['en', 'ja', 'zh'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
-export function resolveLocale(locale: string | null | undefined): SupportedLocale {
-  const normalized = locale?.toLowerCase()
+const LOCALE_MAP: Record<string, SupportedLocale> = {
+  en: 'en',
+  ja: 'ja',
+  zh: 'zh'
+}
 
-  if (!normalized || normalized === 'system') {
-    const systemLocale = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : FALLBACK_LOCALE
-    return systemLocale.startsWith('ja') ? 'ja' : FALLBACK_LOCALE
+export function resolveLocale(locale: string | null | undefined): SupportedLocale {
+  if (locale && locale !== 'system') {
+    return LOCALE_MAP[locale] ?? FALLBACK_LOCALE
   }
 
-  return normalized.startsWith('ja') ? 'ja' : FALLBACK_LOCALE
+  const systemLanguage =
+    typeof navigator !== 'undefined' ? navigator.language.toLowerCase().split('-')[0] : FALLBACK_LOCALE
+
+  return LOCALE_MAP[systemLanguage] ?? FALLBACK_LOCALE
 }
 
 void i18n.use(initReactI18next).init({

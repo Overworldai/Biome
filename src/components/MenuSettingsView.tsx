@@ -13,7 +13,7 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { fixedControlDisplay } from './ui/SettingsKeybind'
+import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
 import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
@@ -580,7 +580,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               options={[
                 { value: 'system', label: t('app.settings.language.system') },
                 { value: 'en', label: t('app.settings.language.english') },
-                { value: 'ja', label: t('app.settings.language.japanese') }
+                { value: 'ja', label: t('app.settings.language.japanese') },
+                { value: 'zh', label: t('app.settings.language.chinese') }
               ]}
               value={menuLocale}
               onChange={(value) => handleLocaleChange(value as AppLocale)}
@@ -647,7 +648,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             description={t('app.settings.fixedControls.description')}
           >
             {FIXED_CONTROLS.map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={ctrl.label} fixedLabel={fixedControlDisplay(ctrl)} />
+              <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
             ))}
           </SettingsSection>
 

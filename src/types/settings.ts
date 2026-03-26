@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
-export const LOCALE_OPTIONS = ['system', 'en', 'ja'] as const
+export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh'] as const
 
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
