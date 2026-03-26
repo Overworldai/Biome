@@ -7,6 +7,15 @@ import type { Settings } from '../../src/types/settings.js'
 
 const SETTINGS_FILENAME = 'settings.json'
 const LEGACY_CONFIG_FILENAME = 'config.json'
+const IS_MACOS = process.platform === 'darwin'
+
+function normalizeSettingsForPlatform(settings: Settings): Settings {
+  if (!IS_MACOS) return settings
+  return {
+    ...settings,
+    engine_mode: 'server'
+  }
+}
 
 function getSettingsPath(): string {
   const configDir = getConfigDir()
@@ -93,7 +102,7 @@ function readSettingsSync(): Settings {
         const legacyContent = fs.readFileSync(legacyPath, 'utf-8')
         const legacyParsed = JSON.parse(legacyContent) as Record<string, unknown>
         const migrated = migrateFromLegacyConfig(legacyParsed)
-        const result = settingsSchema.parse(migrated)
+        const result = normalizeSettingsForPlatform(settingsSchema.parse(migrated))
 
         // Write migrated settings
         fs.writeFileSync(settingsPath, JSON.stringify(result, null, 2))
@@ -105,7 +114,7 @@ function readSettingsSync(): Settings {
     }
 
     // No existing files — use defaults
-    const defaults = settingsSchema.parse({})
+    const defaults = normalizeSettingsForPlatform(settingsSchema.parse({}))
     fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
     return defaults
   }
@@ -116,18 +125,18 @@ function readSettingsSync(): Settings {
     parsed = JSON.parse(content)
   } catch {
     console.warn('[SETTINGS] Failed to parse settings.json, using defaults')
-    const defaults = settingsSchema.parse({})
+    const defaults = normalizeSettingsForPlatform(settingsSchema.parse({}))
     fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
     return defaults
   }
 
   const result = settingsSchema.safeParse(parsed)
   if (result.success) {
-    return result.data
+    return normalizeSettingsForPlatform(result.data)
   }
 
   console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
-  const defaults = settingsSchema.parse({})
+  const defaults = normalizeSettingsForPlatform(settingsSchema.parse({}))
   fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
   return defaults
 }
@@ -146,12 +155,12 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('read-default-settings', () => {
-    return settingsSchema.parse({})
+    return normalizeSettingsForPlatform(settingsSchema.parse({}))
   })
 
   ipcMain.handle('write-settings', (_event, settings: Settings) => {
     const settingsPath = getSettingsPath()
-    const validated = settingsSchema.parse(settings)
+    const validated = normalizeSettingsForPlatform(settingsSchema.parse(settings))
     fs.writeFileSync(settingsPath, JSON.stringify(validated, null, 2))
   })
 
@@ -162,7 +171,7 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('open-settings', () => {
     const settingsPath = getSettingsPath()
     if (!fs.existsSync(settingsPath)) {
-      const defaults = settingsSchema.parse({})
+      const defaults = normalizeSettingsForPlatform(settingsSchema.parse({}))
       fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
     }
     shell.showItemInFolder(settingsPath)

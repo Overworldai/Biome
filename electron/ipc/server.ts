@@ -21,8 +21,14 @@ function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
 
+const IS_MACOS = process.platform === 'darwin'
+
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
+    if (IS_MACOS) {
+      throw new Error('Standalone mode is unavailable on macOS. Use server mode with a remote World Engine.')
+    }
+
     const engineDir = getEngineDir()
     const uvDir = getUvDir()
     const uvBinary = getUvBinaryPath()

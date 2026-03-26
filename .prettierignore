@@ -2,3 +2,4 @@ server-components
 out
 .vite
 build/installer.nsh
+build/entitlements.mac.plist

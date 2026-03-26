@@ -28,6 +28,8 @@ type MenuModelOption = {
   sizeBytes: number | null
 }
 
+const IS_MACOS = navigator.platform.toLowerCase().includes('mac')
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
@@ -85,7 +87,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const configWorldModel = settings.engine_model
 
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
-    configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
+    IS_MACOS || configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
   )
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
@@ -225,7 +227,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels])
 
   useEffect(() => {
-    setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
+    setMenuEngineMode(IS_MACOS || configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
     setMenuWorldModel(configWorldModel)
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
     setMenuServerUrl(configServerUrl)
@@ -278,6 +280,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [menuServerUrl, configServerUrl, lastValidatedServerUrl, serverUrlStatus])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
+    if (IS_MACOS && mode === 'standalone') return
     setMenuEngineMode(mode)
     setServerUrlStatus('idle')
     setLastValidatedServerUrl('')
@@ -464,7 +467,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           >
             <SettingsToggle
               options={[
-                { value: 'standalone', label: 'Standalone' },
+                {
+                  value: 'standalone',
+                  label: 'Standalone',
+                  disabled: IS_MACOS,
+                  disabledTooltip: IS_MACOS
+                    ? 'Standalone mode is currently unavailable on macOS. We are working on integrating support, check back in a future version!'
+                    : undefined
+                },
                 { value: 'server', label: 'Server' }
               ]}
               value={menuEngineMode}
@@ -515,7 +525,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             </SettingsSection>
           )}
 
-          {menuEngineMode === 'standalone' && (
+          {!IS_MACOS && menuEngineMode === 'standalone' && (
             <WorldEngineSection
               engineReady={engineReady}
               onFixInPlaceClick={() => setShowFixModal(true)}

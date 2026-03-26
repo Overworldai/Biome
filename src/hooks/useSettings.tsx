@@ -65,7 +65,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const saveSettings = useCallback(async (newSettings: Settings) => {
     try {
       await invoke('write-settings', newSettings)
-      setSettings(newSettings)
+      const persisted = await invoke('read-settings')
+      setSettings(persisted)
       setError(null)
       return true
     } catch (err) {
