@@ -43,6 +43,13 @@ export const SOUND_LOOP_VOLUMES: Partial<Record<SoundId, number>> = {
   music_menu: 0.8
 }
 
+/**
+ * Exclusive one-shot groups: when any sound in a group plays, all other
+ * active sounds in the same group are stopped first. This prevents overlaps
+ * (e.g. rapid goose toggle producing stacked honks).
+ */
+export const EXCLUSIVE_ONE_SHOT_GROUPS: SoundId[][] = [['goose_start', 'goose_end']]
+
 export const SYNTH_ONE_SHOTS: Partial<Record<SoundId, SynthOneShot>> = {
   ui_hover: synthUIHover,
   ui_click: synthUIClick,

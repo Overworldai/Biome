@@ -8,7 +8,14 @@
  */
 
 import type { SoundId, VolumeSettings } from './types'
-import { SOUND_CATEGORIES, SOUND_ASSETS, SOUND_LOOP_VOLUMES, SYNTH_ONE_SHOTS, SYNTH_LOOPS } from './registry'
+import {
+  SOUND_CATEGORIES,
+  SOUND_ASSETS,
+  SOUND_LOOP_VOLUMES,
+  EXCLUSIVE_ONE_SHOT_GROUPS,
+  SYNTH_ONE_SHOTS,
+  SYNTH_LOOPS
+} from './registry'
 
 export class AudioEngine {
   private ctx: AudioContext | null = null
@@ -83,10 +90,7 @@ export class AudioEngine {
   }
 
   private getExclusiveOneShotGroup(id: SoundId): SoundId[] | null {
-    if (id === 'goose_start' || id === 'goose_end') {
-      return ['goose_start', 'goose_end']
-    }
-    return null
+    return EXCLUSIVE_ONE_SHOT_GROUPS.find((group) => group.includes(id)) ?? null
   }
 
   private stopOneShotGroup(ids: SoundId[]) {
