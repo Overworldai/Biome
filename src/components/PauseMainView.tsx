@@ -104,18 +104,20 @@ const PauseMainView = ({
       </ViewLabel>
 
       <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
-        <MenuButton variant="secondary" className="w-full px-0" onClick={onResetAndResume}>
-          {t('app.buttons.reset')}
-        </MenuButton>
-        <MenuButton variant="secondary" className="w-full px-0" onClick={() => onNavigate('scenes')}>
-          {t('app.buttons.scenes')}
-        </MenuButton>
-        <MenuButton variant="secondary" className="w-full px-0" onClick={() => onNavigate('settings')}>
-          {t('app.buttons.settings')}
-        </MenuButton>
-        <MenuButton variant="primary" className="w-full px-0" onClick={requestPointerLock}>
-          {t('app.buttons.resume')}
-        </MenuButton>
+        <MenuButton variant="secondary" label="app.buttons.reset" className="w-full px-0" onClick={onResetAndResume} />
+        <MenuButton
+          variant="secondary"
+          label="app.buttons.scenes"
+          className="w-full px-0"
+          onClick={() => onNavigate('scenes')}
+        />
+        <MenuButton
+          variant="secondary"
+          label="app.buttons.settings"
+          className="w-full px-0"
+          onClick={() => onNavigate('settings')}
+        />
+        <MenuButton variant="primary" label="app.buttons.resume" className="w-full px-0" onClick={requestPointerLock} />
       </div>
     </div>
   )

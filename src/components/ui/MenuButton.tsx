@@ -1,19 +1,18 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { ButtonVariant } from './Button'
-import Button from './Button'
+import type { ButtonHTMLAttributes } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TranslationKey } from '../../i18n'
+import type { ButtonVariant } from './RawButton'
+import RawMenuButton from './RawMenuButton'
 
 type MenuButtonProps = {
   variant: ButtonVariant
-  children: ReactNode
+  label: TranslationKey
   className?: string
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'>
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>
 
-const MenuButton = ({ className = '', ...rest }: MenuButtonProps) => (
-  <Button
-    autoShrinkLabel
-    className={`min-h-[5.2cqh] leading-[1.05] py-[0.8cqh] px-[2.67cqh] text-body ${className}`}
-    {...rest}
-  />
-)
+const MenuButton = ({ label, ...rest }: MenuButtonProps) => {
+  const { t } = useTranslation()
+  return <RawMenuButton {...rest}>{t(label)}</RawMenuButton>
+}
 
 export default MenuButton

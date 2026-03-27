@@ -1,4 +1,6 @@
 import { useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TranslationKey } from '../../i18n'
 import { SETTINGS_CONTROL_BASE, SETTINGS_OUTLINE_HOVER, SETTINGS_MUTED_TEXT } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
 
@@ -7,11 +9,12 @@ type SettingsSliderProps = {
   onChange: (value: number) => void
   min: number
   max: number
-  label?: string
+  label?: TranslationKey
   suffix?: string
 }
 
 const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSliderProps) => {
+  const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const trackRef = useRef<HTMLDivElement>(null)
 
@@ -64,7 +67,7 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
       </div>
       {(label || suffix) && (
         <span className={`${SETTINGS_MUTED_TEXT} flex flex-wrap w-full items-start gap-[0.6cqh_1cqh] justify-between`}>
-          {label && <span className="lowercase break-words">{label}</span>}
+          {label && <span className="lowercase break-words">{t(label)}</span>}
           {suffix && <span className="ml-auto">{suffix}</span>}
         </span>
       )}

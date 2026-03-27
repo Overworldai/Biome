@@ -13,8 +13,8 @@ const WorldEngineSection = ({ engineReady, onFixInPlaceClick, onTotalReinstallCl
 
   return (
     <SettingsSection
-      title={t('app.settings.worldEngine.title')}
-      description={
+      title="app.settings.worldEngine.title"
+      rawDescription={
         <span className="inline-flex items-center gap-[0.71cqh]">
           {t('app.settings.worldEngine.description')}{' '}
           {engineReady === null ? (
@@ -34,12 +34,12 @@ const WorldEngineSection = ({ engineReady, onFixInPlaceClick, onTotalReinstallCl
       }
     >
       <div className="flex justify-start gap-[1.2cqh]">
-        <SettingsButton variant="secondary" onClick={onFixInPlaceClick}>
-          {t('app.settings.worldEngine.fixInPlace')}
-        </SettingsButton>
-        <SettingsButton variant="danger" onClick={onTotalReinstallClick}>
-          {t('app.settings.worldEngine.totalReinstall')}
-        </SettingsButton>
+        <SettingsButton variant="secondary" label="app.settings.worldEngine.fixInPlace" onClick={onFixInPlaceClick} />
+        <SettingsButton
+          variant="danger"
+          label="app.settings.worldEngine.totalReinstall"
+          onClick={onTotalReinstallClick}
+        />
       </div>
     </SettingsSection>
   )

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TranslationKey } from '../i18n'
 import { useWindow } from '../hooks/useWindow'
 import { useStreaming } from '../context/StreamingContext'
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -11,20 +12,24 @@ const WindowControlButton = ({
   children
 }: {
   onClick: () => void
-  label: string
+  label: TranslationKey
   hoverBg?: string
   children: ReactNode
-}) => (
-  <button
-    type="button"
-    className={`flex items-center justify-center w-[35px] h-6 m-0 p-0 rounded-sm text-[14px] leading-none cursor-pointer bg-surface-btn-secondary text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
-    onClick={onClick}
-    aria-label={label}
-    style={noDragRegionStyle}
-  >
-    {children}
-  </button>
-)
+}) => {
+  const { t } = useTranslation()
+
+  return (
+    <button
+      type="button"
+      className={`flex items-center justify-center w-[35px] h-6 m-0 p-0 rounded-sm text-[14px] leading-none cursor-pointer bg-surface-btn-secondary text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
+      onClick={onClick}
+      aria-label={t(label)}
+      style={noDragRegionStyle}
+    >
+      {children}
+    </button>
+  )
+}
 
 const WindowControls = () => {
   const { t } = useTranslation()
@@ -53,10 +58,10 @@ const WindowControls = () => {
         }`}
         style={noDragRegionStyle}
       >
-        <WindowControlButton onClick={minimize} label={t('app.window.minimize')}>
+        <WindowControlButton onClick={minimize} label="app.window.minimize">
           &#x2014;
         </WindowControlButton>
-        <WindowControlButton onClick={toggleMaximize} label={t('app.window.maximize')}>
+        <WindowControlButton onClick={toggleMaximize} label="app.window.maximize">
           <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true" className="block">
             <rect
               x="2.25"
@@ -70,7 +75,7 @@ const WindowControls = () => {
             />
           </svg>
         </WindowControlButton>
-        <WindowControlButton onClick={close} label={t('app.window.close')} hoverBg="hover:bg-danger hover:text-white">
+        <WindowControlButton onClick={close} label="app.window.close" hoverBg="hover:bg-danger hover:text-white">
           &#x2715;
         </WindowControlButton>
       </div>

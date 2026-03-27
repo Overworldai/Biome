@@ -46,17 +46,20 @@ const ConnectionLostOverlay = () => {
           </p>
         </div>
         <div className="flex justify-end gap-[1.5cqh] w-full">
-          <Button variant="danger" autoShrinkLabel className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleQuit}>
-            {t('app.buttons.quit')}
-          </Button>
+          <Button
+            variant="danger"
+            autoShrinkLabel
+            label="app.buttons.quit"
+            className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
+            onClick={handleQuit}
+          />
           <Button
             variant="primary"
             autoShrinkLabel
+            label="app.buttons.reconnect"
             className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
             onClick={handleReconnect}
-          >
-            {t('app.buttons.reconnect')}
-          </Button>
+          />
         </div>
       </div>
     </div>

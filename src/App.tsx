@@ -262,11 +262,10 @@ const AppShell = () => {
 
               <MenuButton
                 variant="secondary"
+                label="app.buttons.settings"
                 className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
                 onClick={toggleSettings}
-              >
-                {t('app.buttons.settings')}
-              </MenuButton>
+              />
             </motion.div>
           )}
           {activeMenuView === MENU_VIEW.SETTINGS && (
@@ -344,11 +343,12 @@ const AppShell = () => {
       {PORTAL_SPARKS_DEBUG && <PortalSparksConfigurator />}
       {availableUpdate && (
         <ConfirmModal
-          title={t('app.dialogs.updateAvailable.title')}
-          description={t('app.dialogs.updateAvailable.description', {
+          title="app.dialogs.updateAvailable.title"
+          description="app.dialogs.updateAvailable.description"
+          descriptionParams={{
             latestVersion: availableUpdate.latest_version,
             currentVersion: availableUpdate.current_version
-          })}
+          }}
           onCancel={() => setAvailableUpdate(null)}
           onConfirm={() => {
             const releaseUrl = availableUpdate.release_url
@@ -357,8 +357,8 @@ const AppShell = () => {
             }
             setAvailableUpdate(null)
           }}
-          confirmLabel={t('app.buttons.upgrade')}
-          cancelLabel={t('app.buttons.later')}
+          confirmLabel="app.buttons.upgrade"
+          cancelLabel="app.buttons.later"
         />
       )}
     </div>

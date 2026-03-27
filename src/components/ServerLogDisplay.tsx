@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import Button from './ui/Button'
+import type { TranslationKey } from '../i18n'
+import RawButton from './ui/RawButton'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
 const MAX_GITHUB_BODY_CHARS = 1200
@@ -47,7 +48,7 @@ const ServerLogDisplay = ({
   showExportAction = false,
   onExportAction,
   isExportingAction = false,
-  exportActionLabel = 'Export Logs',
+  exportActionLabel,
   actionStatus = null
 }: {
   errorMessage?: string | null
@@ -55,12 +56,12 @@ const ServerLogDisplay = ({
   progressMessage?: string | null
   headerAction?: ReactNode
   logs?: string[]
-  title?: string | null
+  title?: TranslationKey | null
   buildDiagnosticsPayload: () => Promise<Record<string, unknown>>
   showExportAction?: boolean
   onExportAction?: () => void
   isExportingAction?: boolean
-  exportActionLabel?: string
+  exportActionLabel?: TranslationKey
   actionStatus?: string | null
 }) => {
   const { t } = useTranslation()
@@ -193,7 +194,9 @@ const ServerLogDisplay = ({
       {(title || headerAction) && (
         <div className="flex items-center gap-[1.42cqh] px-[2.13cqh] py-[0.8cqh] bg-white/8 border-b border-white/20 justify-between">
           <div className="flex items-center gap-[1.42cqh]">
-            <span className="font-serif text-[2.13cqh] tracking-[0.02em] text-text-primary">{title}</span>
+            <span className="font-serif text-[2.13cqh] tracking-[0.02em] text-text-primary">
+              {title ? t(title) : null}
+            </span>
           </div>
           {headerAction}
         </div>
@@ -232,7 +235,7 @@ const ServerLogDisplay = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-[0.8cqh]">
               {showExportAction && onExportAction && (
-                <Button
+                <RawButton
                   variant="secondary"
                   autoShrinkLabel
                   className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -240,10 +243,10 @@ const ServerLogDisplay = ({
                   disabled={isExportingAction}
                   title={t('app.loading.terminal.exportDiagnosticsJson')}
                 >
-                  {isExportingAction ? `${exportActionLabel}...` : exportActionLabel}
-                </Button>
+                  {exportActionLabel ? (isExportingAction ? `${t(exportActionLabel)}...` : t(exportActionLabel)) : null}
+                </RawButton>
               )}
-              <Button
+              <RawButton
                 variant="secondary"
                 autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -252,7 +255,7 @@ const ServerLogDisplay = ({
                 title={t('app.loading.terminal.copyDiagnosticsJsonForBugReports')}
               >
                 {isCopyingReport ? t('app.loading.terminal.copying') : t('app.buttons.copyReport')}
-              </Button>
+              </RawButton>
               {(reportActionStatus || actionStatus) && (
                 <span className="ml-[0.4cqh] font-serif text-[2.13cqh] text-text-muted whitespace-nowrap">
                   {reportActionStatus || actionStatus}
@@ -260,7 +263,7 @@ const ServerLogDisplay = ({
               )}
             </div>
             <div className="flex items-center gap-[0.8cqh]">
-              <Button
+              <RawButton
                 variant="primary"
                 autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -269,8 +272,8 @@ const ServerLogDisplay = ({
                 title={t('app.loading.terminal.openPrefilledIssueOnGithub')}
               >
                 {isOpeningIssue ? t('app.loading.terminal.opening') : t('app.buttons.reportOnGithub')}
-              </Button>
-              <Button
+              </RawButton>
+              <RawButton
                 variant="primary"
                 autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -278,7 +281,7 @@ const ServerLogDisplay = ({
                 title={t('app.loading.terminal.askForHelpInDiscord')}
               >
                 {t('app.buttons.askOnDiscord')}
-              </Button>
+              </RawButton>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { useVortex } from '../context/VortexContext'
 import { useSettings } from '../hooks/useSettings'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
+import RawButton from './ui/RawButton'
 import ServerLogDisplay from './ServerLogDisplay'
 import SocialCtaRow from './SocialCtaRow'
 import { useTranslation } from 'react-i18next'
@@ -169,7 +170,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               showExportAction={!!errorDetail}
               onExportAction={() => void handleExportDiagnostics()}
               isExportingAction={isExportingDiagnostics}
-              exportActionLabel={t('app.buttons.exportLogs')}
+              exportActionLabel="app.buttons.exportLogs"
               actionStatus={exportStatus}
             />
           </div>
@@ -177,7 +178,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       </div>
       <SocialCtaRow rowClassName="z-55" />
       <div className="absolute z-55 bottom-[var(--edge-bottom)] right-[calc((100cqw-135.11cqh)/2)] flex items-end gap-[1.8cqh] pointer-events-auto">
-        <Button
+        <RawButton
           variant="secondary"
           className="flex items-center justify-center gap-[0.8cqh] w-[19.2cqh] h-[4.9cqh] px-[1.4cqh] text-[2.45cqh] leading-none"
           aria-label={showLogsPanel ? t('app.loading.terminal.hideLogsPanel') : t('app.loading.terminal.showLogsPanel')}
@@ -198,10 +199,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               </svg>
             )}
           </span>
-        </Button>
+        </RawButton>
         <Button
           variant="danger"
           autoShrinkLabel
+          label="app.buttons.cancel"
           className="!animate-none flex items-center justify-center h-[4.9cqh] min-w-[12.5cqh] px-[1.8cqh] text-[2.45cqh] leading-none"
           onClick={() => {
             if (onCancel) {
@@ -210,9 +212,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             }
             void cancelConnection()
           }}
-        >
-          {t('app.buttons.cancel')}
-        </Button>
+        />
       </div>
     </>
   )
