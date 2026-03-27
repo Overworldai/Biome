@@ -127,8 +127,8 @@ const en = {
           description: 'which language should Biome use?',
           system: 'System Default',
           english: 'English',
-          japanese: 'Japanese',
-          chinese: 'Chinese'
+          japanese: '日本語',
+          chinese: '中文'
         },
         engineMode: {
           title: 'Engine Mode',

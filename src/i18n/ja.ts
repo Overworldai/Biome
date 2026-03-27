@@ -125,7 +125,7 @@ const ja = {
           title: '言語',
           description: 'Biome で使用する言語はどれですか？',
           system: 'システム設定',
-          english: '英語',
+          english: 'English',
           japanese: '日本語',
           chinese: '中文'
         },
@@ -219,7 +219,7 @@ const ja = {
         title: '一時停止',
         pinnedScenes: {
           title: '固定シーン',
-          description: '固定したシーンです。Scenes ボタンを使って{{suffix}}さらにシーンを表示できます。',
+          description: '固定したシーンです。シーンボタンを使って{{suffix}}さらにシーンを表示できます。',
           uploadSuffix: '、固定、またはアップロードして',
           pinSuffix: '固定して'
         },
