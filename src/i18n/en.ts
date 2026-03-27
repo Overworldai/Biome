@@ -127,10 +127,7 @@ const en = {
         language: {
           title: 'Language',
           description: 'which language should Biome use?',
-          system: 'System Default',
-          english: 'English',
-          japanese: '日本語',
-          chinese: '中文'
+          system: 'System Default'
         },
         engineMode: {
           title: 'Engine Mode',

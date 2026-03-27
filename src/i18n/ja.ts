@@ -126,10 +126,7 @@ const ja = {
         language: {
           title: '言語',
           description: 'Biome で使用する言語はどれですか？',
-          system: 'システム設定',
-          english: 'English',
-          japanese: '日本語',
-          chinese: '中文'
+          system: 'システム設定'
         },
         engineMode: {
           title: 'エンジンモード',

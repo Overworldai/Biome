@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
 import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
@@ -566,9 +567,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             <SettingsSelect
               options={[
                 { value: 'system', label: 'app.settings.language.system' },
-                { value: 'en', label: 'app.settings.language.english' },
-                { value: 'ja', label: 'app.settings.language.japanese' },
-                { value: 'zh', label: 'app.settings.language.chinese' }
+                ...SUPPORTED_LOCALES.map((locale) => ({
+                  value: locale,
+                  rawLabel: LOCALE_DISPLAY_NAMES[locale]
+                }))
               ]}
               value={menuLocale}
               onChange={(value) => handleLocaleChange(value as AppLocale)}

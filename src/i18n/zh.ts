@@ -121,10 +121,7 @@ const zh = {
         language: {
           title: '语言',
           description: 'Biome 应该使用哪种语言？',
-          system: '跟随系统',
-          english: 'English',
-          japanese: '日本語',
-          chinese: '中文'
+          system: '跟随系统'
         },
         engineMode: {
           title: '引擎模式',
