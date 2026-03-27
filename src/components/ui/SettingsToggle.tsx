@@ -7,12 +7,12 @@ type SettingsToggleProps = {
 }
 
 const SettingsToggle = ({ options, value, onChange }: SettingsToggleProps) => (
-  <div className="flex">
+  <div className="flex flex-wrap">
     {options.map((option) => (
       <SettingsButton
         key={option.value}
         variant={value === option.value ? 'primary' : 'secondary'}
-        className="flex-1"
+        className="flex-1 min-w-[16cqh]"
         onClick={() => onChange(option.value)}
       >
         {option.label}

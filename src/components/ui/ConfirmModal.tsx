@@ -24,11 +24,11 @@ const ConfirmModal = ({
     <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] whitespace-pre-line">
       {description}
     </p>
-    <div className="flex justify-end mt-[1.4cqh] gap-[1.42cqh]">
-      <Button variant="secondary" className={MODAL_BUTTON} onClick={onCancel}>
+    <div className="flex flex-wrap justify-end mt-[1.4cqh] gap-[1.42cqh]">
+      <Button variant="secondary" autoShrinkLabel className={MODAL_BUTTON} onClick={onCancel}>
         {cancelLabel}
       </Button>
-      <Button variant="primary" className={MODAL_BUTTON} onClick={onConfirm}>
+      <Button variant="primary" autoShrinkLabel className={MODAL_BUTTON} onClick={onConfirm}>
         {confirmLabel}
       </Button>
     </div>

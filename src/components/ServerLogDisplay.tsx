@@ -234,6 +234,7 @@ const ServerLogDisplay = ({
               {showExportAction && onExportAction && (
                 <Button
                   variant="secondary"
+                  autoShrinkLabel
                   className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                   onClick={onExportAction}
                   disabled={isExportingAction}
@@ -244,6 +245,7 @@ const ServerLogDisplay = ({
               )}
               <Button
                 variant="secondary"
+                autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => void handleCopyBugReport()}
                 disabled={isCopyingReport}
@@ -260,6 +262,7 @@ const ServerLogDisplay = ({
             <div className="flex items-center gap-[0.8cqh]">
               <Button
                 variant="primary"
+                autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => void handleOpenGithubIssue()}
                 disabled={isOpeningIssue}
@@ -269,6 +272,7 @@ const ServerLogDisplay = ({
               </Button>
               <Button
                 variant="primary"
+                autoShrinkLabel
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
                 title={t('app.loading.terminal.askForHelpInDiscord')}

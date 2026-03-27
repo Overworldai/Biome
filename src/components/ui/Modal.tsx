@@ -15,10 +15,10 @@ const Modal = ({ title, children, onBackdropClick }: ModalProps) => (
     onClick={onBackdropClick}
   >
     <div
-      className="select-none border border-[var(--color-border-medium)] backdrop-blur-xl text-[var(--color-text-primary)] w-[70cqh] p-[2.16cqh_3.41cqh]"
+      className="select-none border border-[var(--color-border-medium)] backdrop-blur-xl text-[var(--color-text-primary)] w-[min(70cqh,92vw)] max-h-[85vh] overflow-y-auto p-[2.16cqh_3.41cqh]"
       onClick={onBackdropClick ? (e) => e.stopPropagation() : undefined}
     >
-      <h3 className="m-0 mb-[0.24cqh] font-serif font-medium text-[4.69cqh]">{title}</h3>
+      <h3 className="m-0 mb-[0.24cqh] font-serif font-medium text-[4.69cqh] break-words">{title}</h3>
       {children}
     </div>
   </div>

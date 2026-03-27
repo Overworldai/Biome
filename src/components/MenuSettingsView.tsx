@@ -42,7 +42,11 @@ const KeybindRow = (props: KeybindRowProps) => {
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-[2cqh]">
-        <span className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] text-right shrink-0`}>{props.label}</span>
+        <span
+          className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] max-w-[45%] text-right shrink-0 whitespace-normal break-words leading-[1.1]`}
+        >
+          {props.label}
+        </span>
         <div className="flex-1">
           {props.fixedLabel !== undefined ? (
             <SettingsKeybind value={props.fixedLabel} disabled />
@@ -677,7 +681,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         </div>
       </section>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] z-[5] w-btn-w flex flex-col gap-[1.1cqh]">
         <MenuButton variant="secondary" className="w-full px-0" onClick={() => setShowCredits(true)}>
           {t('app.buttons.credits')}
         </MenuButton>
@@ -750,6 +754,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           <div className="flex justify-end mt-[1.4cqh]">
             <Button
               variant="primary"
+              autoShrinkLabel
               className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
               onClick={() => setShowCredits(false)}
             >

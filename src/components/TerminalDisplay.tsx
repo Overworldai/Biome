@@ -201,6 +201,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
         </Button>
         <Button
           variant="danger"
+          autoShrinkLabel
           className="!animate-none flex items-center justify-center h-[4.9cqh] min-w-[12.5cqh] px-[1.8cqh] text-[2.45cqh] leading-none"
           onClick={() => {
             if (onCancel) {
