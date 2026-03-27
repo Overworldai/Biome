@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useWindow } from '../hooks/useWindow'
 import { useStreaming } from '../context/StreamingContext'
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -26,6 +27,7 @@ const WindowControlButton = ({
 )
 
 const WindowControls = () => {
+  const { t } = useTranslation()
   const { minimize, toggleMaximize, close } = useWindow()
   const { isStreaming, isPaused } = useStreaming()
   const dragRegionStyle = {
@@ -51,10 +53,10 @@ const WindowControls = () => {
         }`}
         style={noDragRegionStyle}
       >
-        <WindowControlButton onClick={minimize} label="Minimize">
+        <WindowControlButton onClick={minimize} label={t('app.window.minimize')}>
           &#x2014;
         </WindowControlButton>
-        <WindowControlButton onClick={toggleMaximize} label="Maximize">
+        <WindowControlButton onClick={toggleMaximize} label={t('app.window.maximize')}>
           <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true" className="block">
             <rect
               x="2.25"
@@ -68,7 +70,7 @@ const WindowControls = () => {
             />
           </svg>
         </WindowControlButton>
-        <WindowControlButton onClick={close} label="Close" hoverBg="hover:bg-danger hover:text-white">
+        <WindowControlButton onClick={close} label={t('app.window.close')} hoverBg="hover:bg-danger hover:text-white">
           &#x2715;
         </WindowControlButton>
       </div>

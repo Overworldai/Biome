@@ -9,7 +9,11 @@ type MenuButtonProps = {
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'>
 
 const MenuButton = ({ className = '', ...rest }: MenuButtonProps) => (
-  <Button className={`leading-none py-[0.8cqh] px-[2.67cqh] text-body ${className}`} {...rest} />
+  <Button
+    autoShrinkLabel
+    className={`min-h-[5.2cqh] leading-[1.05] py-[0.8cqh] px-[2.67cqh] text-body ${className}`}
+    {...rest}
+  />
 )
 
 export default MenuButton

@@ -1,8 +1,10 @@
 import { invoke } from '../bridge'
 import { useStreaming } from '../context/StreamingContext'
 import Button from './ui/Button'
+import { useTranslation } from 'react-i18next'
 
 const ConnectionLostOverlay = () => {
+  const { t } = useTranslation()
   const { connectionLost, reconnectAfterConnectionLost } = useStreaming()
 
   const handleReconnect = () => {
@@ -38,17 +40,22 @@ const ConnectionLostOverlay = () => {
           </svg>
         </div>
         <div className="flex flex-col items-center">
-          <h3 className="m-0 font-serif font-medium text-[3.91cqh]">Connection Lost</h3>
+          <h3 className="m-0 font-serif font-medium text-[3.91cqh]">{t('app.dialogs.connectionLost.title')}</h3>
           <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] text-center">
-            The connection to the World Engine was lost. Would you like to try reconnecting?
+            {t('app.dialogs.connectionLost.description')}
           </p>
         </div>
         <div className="flex justify-end gap-[1.5cqh] w-full">
-          <Button variant="danger" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleQuit}>
-            Quit
+          <Button variant="danger" autoShrinkLabel className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleQuit}>
+            {t('app.buttons.quit')}
           </Button>
-          <Button variant="primary" className="p-[0.5cqh_1.78cqh] text-[2.49cqh]" onClick={handleReconnect}>
-            Reconnect
+          <Button
+            variant="primary"
+            autoShrinkLabel
+            className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
+            onClick={handleReconnect}
+          >
+            {t('app.buttons.reconnect')}
           </Button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
 import type { FixedControl } from '../../hooks/useGameInput'
+import i18n from '../../i18n'
 
 export const keyCodeToLabel = (code: string): string => {
   if (code.startsWith('Key')) return code.slice(3)
@@ -81,7 +82,7 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
     <button
       ref={buttonRef}
       type="button"
-      className={`w-full text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none ${listening ? 'border-text-primary' : ''}`}
+      className={`w-full min-w-0 text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none break-words ${listening ? 'border-text-primary' : ''}`}
       onMouseEnter={disabled ? undefined : playHover}
       onClick={handleClick}
       onBlur={handleBlur}
@@ -92,7 +93,15 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
   )
 }
 
+export const fixedControlLabel = (ctrl: FixedControl): string => {
+  return i18n.t(`app.settings.fixedControls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
+}
+
 /** Human-readable display string for a fixed control entry. */
-export const fixedControlDisplay = (ctrl: FixedControl): string => ctrl.displayValue ?? keyCodeToLabel(ctrl.code)
+export const fixedControlDisplay = (ctrl: FixedControl): string => {
+  const displayValue = ctrl.displayValue ?? keyCodeToLabel(ctrl.code)
+  if (!ctrl.displayValueKey) return displayValue
+  return i18n.t(`app.settings.fixedControls.values.${ctrl.displayValueKey}`, { defaultValue: displayValue })
+}
 
 export default SettingsKeybind

@@ -1,4 +1,5 @@
 import { useUISound } from '../hooks/useUISound'
+import { useTranslation } from 'react-i18next'
 
 type SocialCtaRowProps = {
   rowClassName?: string
@@ -37,7 +38,15 @@ const CTA_ROW_CLASS =
   'absolute bottom-[var(--edge-bottom)] left-1/2 -translate-x-1/2 flex items-end gap-[1.24cqh] pointer-events-auto'
 
 const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: SocialCtaRowProps) => {
+  const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
+  const ariaLabels = {
+    'https://over.world/': t('app.social.website'),
+    'https://x.com/overworld_ai': t('app.social.x'),
+    'https://discord.gg/overworld': t('app.social.discord'),
+    'https://github.com/Overworldai': t('app.social.github'),
+    'mailto:feedback@over.world': t('app.social.feedback')
+  } as const
 
   return (
     <div className={rowClassName ? `${CTA_ROW_CLASS} ${rowClassName}` : CTA_ROW_CLASS}>
@@ -48,7 +57,7 @@ const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: Social
           target="_blank"
           rel="noopener noreferrer"
           className={`${buttonClassName} w-[4.62cqh] h-[4.62cqh] m-0 grid place-items-center box-border text-[rgba(238,248,255,0.88)] bg-[rgba(7,13,24,0.24)] border border-[rgba(236,247,255,0.34)] rounded-[0.8cqh] no-underline cursor-pointer outline-0 outline-white/60 transition-[transform,border-color,background-color,outline-width] duration-150 ease-in-out hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] hover:outline-2 [&>svg]:w-[62%] [&>svg]:h-[62%]`}
-          aria-label={cta.ariaLabel}
+          aria-label={ariaLabels[cta.href]}
           onMouseEnter={playHover}
           onMouseDown={playClick}
         >

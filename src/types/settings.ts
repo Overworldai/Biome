@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
+export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh'] as const
+
+export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
 export const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1-Small'
 
@@ -32,6 +35,7 @@ export const DEFAULT_AUDIO = {
 } as const
 
 export const settingsSchema = z.object({
+  locale: z.enum(LOCALE_OPTIONS).default('system'),
   server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),

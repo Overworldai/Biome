@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { invoke } from '../bridge'
 import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES, type Keybindings } from '../types/settings'
+import { ENGINE_MODES, type AppLocale, type Keybindings } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
@@ -12,7 +13,7 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { fixedControlDisplay } from './ui/SettingsKeybind'
+import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
 import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
@@ -42,7 +43,11 @@ const KeybindRow = (props: KeybindRowProps) => {
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-[2cqh]">
-        <span className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] text-right shrink-0`}>{props.label}</span>
+        <span
+          className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] max-w-[45%] text-right shrink-0 whitespace-normal break-words leading-[1.1]`}
+        >
+          {props.label}
+        </span>
         <div className="flex-1">
           {props.fixedLabel !== undefined ? (
             <SettingsKeybind value={props.fixedLabel} disabled />
@@ -66,25 +71,25 @@ type MenuSettingsViewProps = {
 }
 
 const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
+  const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
   const {
     engineStatus,
     checkEngineStatus,
     setupEngine,
     nukeAndReinstallEngine,
-    engineSetupInProgress,
     isStreaming,
     mouseSensitivity,
     setMouseSensitivity
   } = useStreaming()
   const volume = useVolumeControls()
 
-  // Convert streaming scale (0.1-3.0) to menu scale (10-100)
   const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
 
+  const [menuLocale, setMenuLocale] = useState<AppLocale>(settings.locale)
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
     configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
   )
@@ -129,15 +134,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     ? engineStatus.uv_installed && engineStatus.repo_cloned && engineStatus.dependencies_synced
     : null
 
-  // Check engine status in standalone mode
   useEffect(() => {
     if (menuEngineMode === 'standalone') {
       checkEngineStatus().catch(() => null)
     }
   }, [menuEngineMode, checkEngineStatus])
 
-  // Auto-validate server URL when entering server mode or opening settings with a saved URL.
-  // Uses a ref to avoid including serverUrlStatus in deps (which would cancel the in-flight probe).
   const serverUrlStatusRef = useRef(serverUrlStatus)
   serverUrlStatusRef.current = serverUrlStatus
   useEffect(() => {
@@ -162,17 +164,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         if (!cancelled) setServerUrlStatus('error')
       }
     }
-    validate()
+    void validate()
     return () => {
       cancelled = true
     }
   }, [menuEngineMode, menuServerUrl])
 
-  // Load model list — refetch when mode, server URL, or selected model changes
   const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
   const savedCustomModels = settings.custom_models ?? []
   useEffect(() => {
-    // In server mode, don't fetch until server is validated
     if (menuEngineMode === 'server' && serverUrlStatus !== 'valid') {
       setMenuModelOptions([{ id: menuWorldModel, isLocal: false, sizeBytes: null }])
       setMenuModelsLoading(false)
@@ -211,7 +211,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         )
       } catch {
         if (cancelled) return
-        setMenuModelsError('Could not load model list')
+        setMenuModelsError(t('app.settings.worldModel.couldNotLoadModelList'))
       } finally {
         if (!cancelled) {
           setMenuModelsLoading(false)
@@ -219,14 +219,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       }
     }
 
-    loadMenuModels()
+    void loadMenuModels()
 
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels])
+  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels, t])
 
   useEffect(() => {
+    setMenuLocale(settings.locale)
     setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
     setMenuWorldModel(configWorldModel)
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
@@ -237,6 +238,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
     setMenuGooseMode(settings.goose_mode)
   }, [
+    settings.locale,
     configEngineMode,
     configWorldModel,
     settings.mouse_sensitivity,
@@ -279,7 +281,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       setServerUrlStatus('error')
       setShowServerErrorModal(true)
     }
-  }, [menuServerUrl, configServerUrl, lastValidatedServerUrl, serverUrlStatus])
+  }, [menuServerUrl, lastValidatedServerUrl, serverUrlStatus])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
@@ -300,22 +302,21 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         const results = await invoke('get-models-info', [modelId], serverUrlForModels)
         const info = results?.[0]
         if (info && !info.exists) {
-          setCustomModelStatus({ state: 'error', error: info.error ?? 'Model not found' })
+          setCustomModelStatus({ state: 'error', error: info.error ?? t('app.settings.worldModel.modelNotFound') })
         } else if (info?.error) {
           setCustomModelStatus({ state: 'error', error: info.error })
         } else {
           setCustomModelStatus({ state: 'idle', error: null })
           setMenuModelOptions((prev) => [...prev, { id: modelId, isLocal: null, sizeBytes: info?.size_bytes ?? null }])
-          // Save verified custom model to settings for persistence
           if (!savedCustomModels.includes(modelId)) {
             void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
           }
         }
       } catch {
-        setCustomModelStatus({ state: 'error', error: 'Could not check model' })
+        setCustomModelStatus({ state: 'error', error: t('app.settings.worldModel.couldNotCheckModel') })
       }
     },
-    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings]
+    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
   )
 
   const handleDeleteCustomModel = useCallback(
@@ -323,7 +324,6 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       const updated = savedCustomModels.filter((m) => m !== modelId)
       void saveSettings({ ...settings, custom_models: updated })
       setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
-      // If the deleted model was selected, switch to the first available option
       if (menuWorldModel === modelId) {
         const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
         setMenuWorldModel(fallback)
@@ -332,9 +332,13 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
   )
 
-  const handleMouseSensitivityChange = (value: number) => {
-    setMenuMouseSensitivity(value)
-  }
+  const handleLocaleChange = useCallback(
+    (locale: AppLocale) => {
+      setMenuLocale(locale)
+      void saveSettings({ ...settings, locale })
+    },
+    [settings, saveSettings]
+  )
 
   const applyDraftSettings = useCallback(async () => {
     let nextServerUrl = menuServerUrl
@@ -351,6 +355,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
     await saveSettings({
       ...settings,
+      locale: menuLocale,
       server_url: nextServerUrl,
       engine_mode: engineModeValue,
       engine_model: menuWorldModel,
@@ -367,6 +372,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMouseSensitivity(streamingValue)
   }, [
     settings,
+    menuLocale,
     configServerUrl,
     menuEngineMode,
     menuMouseSensitivity,
@@ -428,8 +434,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     onBack()
   }
 
-  const handleCancelEngineModeSwitch = () => {
-    setShowModeSwitchModal(false)
+  const handleServerErrorDescription = () => {
+    if (!menuServerUrl.trim()) return t('app.dialogs.serverUnreachable.noUrl')
+
+    const base = t('app.dialogs.serverUnreachable.withUrl', { url: menuServerUrl })
+    if (!serverUrlUsesSecureTransport) return base
+    return `${base}\n\n${t('app.dialogs.serverUnreachable.secureTransportHint')}`
   }
 
   const handleConfirmFixEngine = async () => {
@@ -457,21 +467,23 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   return (
     <div className="absolute inset-0 z-[9] pointer-events-auto">
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
-        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Settings</h2>
+        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>
+          {t('app.settings.title')}
+        </h2>
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-          Tweak your world to your liking.
+          {t('app.settings.subtitle')}
         </p>
         <div
-          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.2cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
+          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
         >
           <SettingsSection
-            title="Engine Mode"
-            description="how will you run the model? as part of Biome, or elsewhere?"
+            title={t('app.settings.engineMode.title')}
+            description={t('app.settings.engineMode.description')}
           >
             <SettingsToggle
               options={[
-                { value: 'standalone', label: 'Standalone' },
-                { value: 'server', label: 'Server' }
+                { value: 'standalone', label: t('app.settings.engineMode.standalone') },
+                { value: 'server', label: t('app.settings.engineMode.server') }
               ]}
               value={menuEngineMode}
               onChange={(v) => handleEngineModeChange(v as 'server' | 'standalone')}
@@ -480,10 +492,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
           {menuEngineMode === 'server' && (
             <SettingsSection
-              title="Server URL"
+              title={t('app.settings.serverUrl.title')}
               description={
                 <span className="inline-flex items-center gap-[0.71cqh] flex-wrap">
-                  the address of the GPU server running the model ·{' '}
+                  {t('app.settings.serverUrl.descriptionPrefix')} ·{' '}
                   <a
                     className="underline cursor-pointer text-inherit"
                     onClick={() =>
@@ -494,18 +506,18 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                       )
                     }
                   >
-                    setup instructions
+                    {t('app.settings.serverUrl.setupInstructions')}
                   </a>
-                  {serverUrlStatus === 'loading' && ' · checking...'}
+                  {serverUrlStatus === 'loading' && ` · ${t('app.settings.serverUrl.checking')}`}
                   {serverUrlStatus === 'valid' && (
                     <>
-                      {' · connected'}
+                      {` · ${t('app.settings.serverUrl.connected')}`}
                       <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
                     </>
                   )}
                   {serverUrlStatus === 'error' && (
                     <>
-                      {' · unreachable'}
+                      {` · ${t('app.settings.serverUrl.unreachable')}`}
                       <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
                     </>
                   )}
@@ -516,7 +528,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 value={menuServerUrl}
                 onChange={setMenuServerUrl}
                 onBlur={() => void handleServerUrlBlur()}
-                placeholder="http://localhost:7987"
+                placeholder={t('app.settings.serverUrl.placeholder')}
               />
             </SettingsSection>
           )}
@@ -529,17 +541,24 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             />
           )}
 
-          <SettingsSection title="World Model" description="which Overworld model will simulate your world?">
+          <SettingsSection
+            title={t('app.settings.worldModel.title')}
+            description={t('app.settings.worldModel.description')}
+          >
             <SettingsSelect
               options={menuModelOptions.map((model) => ({
                 value: model.id,
                 label: model.id.replace(/^Overworld\//, ''),
                 prefix: [
                   model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === true ? 'local' : model.isLocal === false ? 'download' : null
+                  model.isLocal === true
+                    ? t('app.settings.worldModel.local')
+                    : model.isLocal === false
+                      ? t('app.settings.worldModel.download')
+                      : null
                 ]
                   .filter(Boolean)
-                  .join(' \u00B7 '),
+                  .join(' · '),
                 deletable: savedCustomModels.includes(model.id)
               }))}
               value={menuWorldModel}
@@ -548,11 +567,13 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}
+              customLabel={t('app.settings.worldModel.custom')}
+              deleteLabel={t('app.settings.worldModel.removeCustomModel')}
               customPrefix={
                 customModelStatus.state === 'loading'
-                  ? 'checking...'
+                  ? t('app.settings.worldModel.checking')
                   : customModelStatus.state === 'error'
-                    ? (customModelStatus.error ?? 'Model not found')
+                    ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
                     : undefined
               }
             />
@@ -561,14 +582,30 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             )}
           </SettingsSection>
 
-          <SettingsSection title="Volume" description="how loud should things be?">
+          <SettingsSection
+            title={t('app.settings.language.title')}
+            description={t('app.settings.language.description')}
+          >
+            <SettingsSelect
+              options={[
+                { value: 'system', label: t('app.settings.language.system') },
+                { value: 'en', label: t('app.settings.language.english') },
+                { value: 'ja', label: t('app.settings.language.japanese') },
+                { value: 'zh', label: t('app.settings.language.chinese') }
+              ]}
+              value={menuLocale}
+              onChange={(value) => handleLocaleChange(value as AppLocale)}
+            />
+          </SettingsSection>
+
+          <SettingsSection title={t('app.settings.volume.title')} description={t('app.settings.volume.description')}>
             <div className="flex flex-col gap-[1.5cqh]">
               <SettingsSlider
                 min={0}
                 max={100}
                 value={volume.master}
                 onChange={volume.setMaster}
-                label="master"
+                label={t('app.settings.volume.master')}
                 suffix={`${volume.master}%`}
               />
               <SettingsSlider
@@ -576,7 +613,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 max={100}
                 value={volume.sfx}
                 onChange={volume.setSfx}
-                label="sound effects"
+                label={t('app.settings.volume.soundEffects')}
                 suffix={`${volume.sfx}%`}
               />
               <SettingsSlider
@@ -584,59 +621,76 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 max={100}
                 value={volume.music}
                 onChange={volume.setMusic}
-                label="music"
+                label={t('app.settings.volume.music')}
                 suffix={`${volume.music}%`}
               />
             </div>
           </SettingsSection>
 
           <SettingsSection
-            title="Mouse Sensitivity"
-            description="how much should the camera move when you move your mouse?"
+            title={t('app.settings.mouseSensitivity.title')}
+            description={t('app.settings.mouseSensitivity.description')}
           >
             <SettingsSlider
               min={10}
               max={100}
               value={menuMouseSensitivity}
-              onChange={handleMouseSensitivityChange}
-              label="sensitivity"
+              onChange={setMenuMouseSensitivity}
+              label={t('app.settings.mouseSensitivity.sensitivity')}
               suffix={`${menuMouseSensitivity}%`}
             />
           </SettingsSection>
 
-          <SettingsSection title="Keybindings" description="what keys do you want to use?">
+          <SettingsSection
+            title={t('app.settings.keybindings.title')}
+            description={t('app.settings.keybindings.description')}
+          >
             <KeybindRow
-              label="Reset Scene"
+              label={t('app.settings.keybindings.resetScene')}
               value={menuKeybindings.reset_scene}
               onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
               warning={getKeybindConflict(menuKeybindings.reset_scene, [])}
             />
           </SettingsSection>
 
-          <SettingsSection title="Fixed Controls" description="what are the built-in controls?">
+          <SettingsSection
+            title={t('app.settings.fixedControls.title')}
+            description={t('app.settings.fixedControls.description')}
+          >
             {FIXED_CONTROLS.map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={ctrl.label} fixedLabel={fixedControlDisplay(ctrl)} />
+              <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
             ))}
           </SettingsSection>
 
-          <SettingsSection title="Debug Metrics" description="want to see what's happening under the hood?">
+          <SettingsSection
+            title={t('app.settings.debugMetrics.title')}
+            description={t('app.settings.debugMetrics.description')}
+          >
             <div className="flex flex-col gap-[1cqh]">
               <SettingsCheckbox
-                label="Performance Stats"
+                label={t('app.settings.debugMetrics.performanceStats')}
                 checked={menuPerformanceStats}
                 onChange={setMenuPerformanceStats}
               />
-              <SettingsCheckbox label="Input Overlay" checked={menuInputOverlay} onChange={setMenuInputOverlay} />
-              <SettingsCheckbox label="Frame Timeline" checked={menuFrameTimeline} onChange={setMenuFrameTimeline} />
+              <SettingsCheckbox
+                label={t('app.settings.debugMetrics.inputOverlay')}
+                checked={menuInputOverlay}
+                onChange={setMenuInputOverlay}
+              />
+              <SettingsCheckbox
+                label={t('app.settings.debugMetrics.frameTimeline')}
+                checked={menuFrameTimeline}
+                onChange={setMenuFrameTimeline}
+              />
               <GooseModeCheckbox checked={menuGooseMode} onChange={setMenuGooseMode} />
             </div>
           </SettingsSection>
         </div>
       </section>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] z-[5] w-btn-w flex flex-col gap-[1.1cqh]">
         <MenuButton variant="secondary" className="w-full px-0" onClick={() => setShowCredits(true)}>
-          Credits
+          {t('app.buttons.credits')}
         </MenuButton>
         <MenuButton
           variant="primary"
@@ -645,76 +699,73 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             void handleBackClick()
           }}
         >
-          Back
+          {t('app.buttons.back')}
         </MenuButton>
       </div>
 
       {showFixModal && (
         <ConfirmModal
-          title="Fix In Place?"
-          description="This will re-sync engine dependencies without deleting anything. Usually enough to fix issues after an update."
+          title={t('app.dialogs.fixInPlace.title')}
+          description={t('app.dialogs.fixInPlace.description')}
           onCancel={() => setShowFixModal(false)}
           onConfirm={() => void handleConfirmFixEngine()}
-          confirmLabel="Fix"
+          confirmLabel={t('app.buttons.fix')}
         />
       )}
 
       {showNukeModal && (
         <ConfirmModal
-          title="Total Reinstall?"
-          description="This will completely delete the engine directory and reinstall everything from scratch, including re-downloading Python, all dependencies, and the UV package manager. This can take a while, but may fix stubborn issues that Fix In Place cannot."
+          title={t('app.dialogs.totalReinstall.title')}
+          description={t('app.dialogs.totalReinstall.description')}
           onCancel={() => setShowNukeModal(false)}
           onConfirm={() => void handleConfirmNukeEngine()}
-          confirmLabel="Reinstall Everything"
+          confirmLabel={t('app.buttons.reinstallEverything')}
         />
       )}
 
       {showModeSwitchModal && (
         <ConfirmModal
-          title="Apply Engine Changes?"
-          description="Changing engine mode or world model will interrupt your current session and apply all pending settings."
-          onCancel={handleCancelEngineModeSwitch}
+          title={t('app.dialogs.applyEngineChanges.title')}
+          description={t('app.dialogs.applyEngineChanges.description')}
+          onCancel={() => setShowModeSwitchModal(false)}
           onConfirm={() => {
             void handleConfirmEngineModeSwitch()
           }}
-          confirmLabel="Switch Mode"
-          cancelLabel="Keep Current"
+          confirmLabel={t('app.buttons.switchMode')}
+          cancelLabel={t('app.buttons.keepCurrent')}
         />
       )}
 
       {showServerErrorModal && (
         <ConfirmModal
-          title="Server Unreachable"
-          description={
-            menuServerUrl.trim()
-              ? `Could not connect to ${menuServerUrl}. The server may be down, the URL may be wrong, or a firewall may be blocking the connection.${serverUrlUsesSecureTransport ? '\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.' : ''}`
-              : 'Please enter a server URL before leaving settings.'
-          }
+          title={t('app.dialogs.serverUnreachable.title')}
+          description={handleServerErrorDescription()}
           onConfirm={() => setShowServerErrorModal(false)}
           onCancel={() => {
             setShowServerErrorModal(false)
             setMenuServerUrl(configServerUrl)
             setServerUrlStatus('idle')
           }}
-          confirmLabel="Edit URL"
-          cancelLabel="Revert"
+          confirmLabel={t('app.buttons.editUrl')}
+          cancelLabel={t('app.buttons.revert')}
         />
       )}
 
       {showLocalInstallLog && <EngineInstallModal onClose={() => setShowLocalInstallLog(false)} />}
 
       {showCredits && (
-        <Modal title="Credits" onBackdropClick={() => setShowCredits(false)}>
+        <Modal title={t('app.settings.credits.title')} onBackdropClick={() => setShowCredits(false)}>
           <pre className="m-0 mt-[0.8cqh] font-mono text-[1.8cqh] text-text-modal-muted whitespace-pre-wrap border border-border-subtle bg-white/5 p-[1.2cqh] rounded-[0.4cqh]">
             {attributionText.trim()}
           </pre>
           <div className="flex justify-end mt-[1.4cqh]">
             <Button
               variant="primary"
+              autoShrinkLabel
               className="p-[0.5cqh_1.78cqh] text-[2.49cqh]"
               onClick={() => setShowCredits(false)}
             >
-              Close
+              {t('app.buttons.close')}
             </Button>
           </div>
         </Modal>

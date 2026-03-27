@@ -63,8 +63,8 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
         <span className="invisible">X</span>
       </div>
       {(label || suffix) && (
-        <span className={`${SETTINGS_MUTED_TEXT} flex w-full justify-between`}>
-          {label && <span className="lowercase">{label}</span>}
+        <span className={`${SETTINGS_MUTED_TEXT} flex flex-wrap w-full items-start gap-[0.6cqh_1cqh] justify-between`}>
+          {label && <span className="lowercase break-words">{label}</span>}
           {suffix && <span className="ml-auto">{suffix}</span>}
         </span>
       )}
