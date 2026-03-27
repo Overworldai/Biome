@@ -19,8 +19,8 @@ export const PORTAL_SPARKS_DEBUG = false
 /** Allow users to add their own scenes via drag-and-drop, paste, or file picker. */
 export const ALLOW_USER_SCENES = false
 
-/** Show the last inpainted frame as a debug thumbnail in the bottom-right during streaming. */
-export const SCENE_EDIT_DEBUG_PREVIEW = true
+/** Show debug info (edit prompt toast + before/after preview) for scene edits. */
+export const SCENE_EDIT_DEBUG_PREVIEW = false
 
 /** How long (ms) to show the edit prompt toast at the bottom of the screen. */
 export const SCENE_EDIT_PROMPT_TOAST_MS = 2500

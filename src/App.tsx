@@ -329,19 +329,22 @@ const AppShell = () => {
             <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
             <PauseOverlay isActive={isPaused && sceneEditState.phase === 'inactive'} />
             <SceneEditOverlay />
-            {editPromptVisible && sceneEditState.lastEditPrompt && sceneEditState.phase === 'inactive' && (
-              <div
-                key={editPromptKeyRef.current}
-                className="absolute bottom-[3.2cqh] left-1/2 -translate-x-1/2 z-[180] pointer-events-none max-w-[80cqw]"
-              >
+            {SCENE_EDIT_DEBUG_PREVIEW &&
+              editPromptVisible &&
+              sceneEditState.lastEditPrompt &&
+              sceneEditState.phase === 'inactive' && (
                 <div
-                  className="border border-white/20 bg-black/70 text-white/90 px-[2.1cqh] py-[0.9cqh] font-serif text-[2cqh] tracking-[0.01em] shadow-lg backdrop-blur-sm text-center"
-                  style={{ animation: `streamingWarningToast ${SCENE_EDIT_PROMPT_TOAST_MS}ms ease forwards` }}
+                  key={editPromptKeyRef.current}
+                  className="absolute bottom-[3.2cqh] left-1/2 -translate-x-1/2 z-[180] pointer-events-none max-w-[80cqw]"
                 >
-                  {sceneEditState.lastEditPrompt}
+                  <div
+                    className="border border-white/20 bg-black/70 text-white/90 px-[2.1cqh] py-[0.9cqh] font-serif text-[2cqh] tracking-[0.01em] shadow-lg backdrop-blur-sm text-center"
+                    style={{ animation: `streamingWarningToast ${SCENE_EDIT_PROMPT_TOAST_MS}ms ease forwards` }}
+                  >
+                    {sceneEditState.lastEditPrompt}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             {SCENE_EDIT_DEBUG_PREVIEW && editPreviewVisible && sceneEditState.lastPreview && (
               <div
                 className="absolute bottom-[2cqh] right-[2cqw] z-40 pointer-events-none flex flex-col gap-[0.5cqh]"
