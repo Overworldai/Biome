@@ -8,8 +8,8 @@
     "dev": "electron-forge start",
     "build": "electron-forge make",
     "package": "electron-forge package",
-    "lint": "prettier --check .",
-    "lint-fix": "prettier --write .",
+    "lint": "prettier --check . && tsc --noEmit",
+    "lint-fix": "prettier --write . && tsc --noEmit",
     "prepare": "husky"
   },
   "dependencies": {
