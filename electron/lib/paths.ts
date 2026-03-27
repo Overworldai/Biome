@@ -3,15 +3,17 @@ import { app } from 'electron'
 
 const WORLD_ENGINE_DIR = 'world_engine'
 
-/** Python files bundled in server-components that must be unpacked to the engine dir. */
-export const SERVER_COMPONENT_FILES = [
-  'server.py',
-  'pyproject.toml',
-  'engine_manager.py',
-  'inpainting_manager.py',
-  'safety.py',
-  'progress_stages.py'
-]
+/** Patterns to exclude when copying server-components to the engine dir.
+ * Matches directory names and file names (not full paths). */
+export const SERVER_COMPONENT_EXCLUDES = new Set([
+  '.venv',
+  '__pycache__',
+  'uv.lock',
+  'server.log',
+  'server-hosted.log',
+  '.python-version',
+  'node_modules'
+])
 
 /** Get the portable data directory.
  * AppImages are read-only squashfs mounts, so we use the directory
