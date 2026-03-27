@@ -8,7 +8,14 @@
  */
 
 import type { SoundId, VolumeSettings } from './types'
-import { SOUND_CATEGORIES, SOUND_ASSETS, SOUND_LOOP_VOLUMES, SYNTH_ONE_SHOTS, SYNTH_LOOPS } from './registry'
+import {
+  SOUND_CATEGORIES,
+  SOUND_ASSETS,
+  SOUND_LOOP_VOLUMES,
+  EXCLUSIVE_ONE_SHOT_GROUPS,
+  SYNTH_ONE_SHOTS,
+  SYNTH_LOOPS
+} from './registry'
 
 export class AudioEngine {
   private ctx: AudioContext | null = null
@@ -16,6 +23,7 @@ export class AudioEngine {
   private sfxGain: GainNode | null = null
   private musicGain: GainNode | null = null
   private assetBuffers = new Map<string, AudioBuffer>()
+  private activeOneShots = new Map<SoundId, Set<AudioBufferSourceNode>>()
   private activeLoops = new Map<SoundId, { stop: () => void; gain: GainNode }>()
   private pendingLoops = new Map<SoundId, { volume: number }>()
   private _masterVolume = 1.0
@@ -81,6 +89,28 @@ export class AudioEngine {
     return cat === 'music' ? this.musicGain! : this.sfxGain!
   }
 
+  private getExclusiveOneShotGroup(id: SoundId): SoundId[] | null {
+    return EXCLUSIVE_ONE_SHOT_GROUPS.find((group) => group.includes(id)) ?? null
+  }
+
+  private stopOneShotGroup(ids: SoundId[]) {
+    for (const id of ids) {
+      const activeSources = this.activeOneShots.get(id)
+      if (!activeSources) continue
+      for (const source of activeSources) {
+        source.onended = null
+        try {
+          source.stop()
+        } catch {
+          // Source may have already ended.
+        }
+        source.disconnect()
+      }
+      activeSources.clear()
+      this.activeOneShots.delete(id)
+    }
+  }
+
   /** Preload an asset file into a decoded AudioBuffer. */
   async preloadAsset(id: string, url: string): Promise<void> {
     try {
@@ -103,6 +133,10 @@ export class AudioEngine {
     const ctx = this.ensureContext()
     const cat = SOUND_CATEGORIES[id]
     const dest = this.getDestForCategory(cat)
+    const exclusiveGroup = this.getExclusiveOneShotGroup(id)
+    if (exclusiveGroup) {
+      this.stopOneShotGroup(exclusiveGroup)
+    }
 
     // Try asset buffer first
     const buffer = this.assetBuffers.get(id)
@@ -110,6 +144,18 @@ export class AudioEngine {
       const source = ctx.createBufferSource()
       source.buffer = buffer
       source.connect(dest)
+      const activeSources = this.activeOneShots.get(id) ?? new Set<AudioBufferSourceNode>()
+      activeSources.add(source)
+      this.activeOneShots.set(id, activeSources)
+      source.onended = () => {
+        const currentSources = this.activeOneShots.get(id)
+        if (!currentSources) return
+        currentSources.delete(source)
+        if (currentSources.size === 0) {
+          this.activeOneShots.delete(id)
+        }
+        source.disconnect()
+      }
       source.start()
       return
     }

@@ -4,6 +4,8 @@ export type SoundId =
   | 'ui_back'
   | 'ui_toggle_on'
   | 'ui_toggle_off'
+  | 'goose_start'
+  | 'goose_end'
   | 'error'
   | 'portal_swoosh'
   | 'portal_swoosh_long'

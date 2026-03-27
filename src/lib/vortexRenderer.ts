@@ -47,6 +47,88 @@
  * See VortexContext.tsx for the reparenting mechanism.
  */
 
+// --- Goose sprite constants ---
+export const GOOSE_MAX_COUNT = 10
+export const GOOSE_FRAME_COUNT = 6
+export const GOOSE_FPS = 6
+export const GOOSE_SPEED_MIN = 0.3
+export const GOOSE_SPEED_MAX = 0.7
+export const GOOSE_RADIUS_MIN = 0.5
+export const GOOSE_RADIUS_MAX = 2.5
+export const GOOSE_MIN_SCALE = 0.01
+export const GOOSE_MAX_SCALE = 0.12
+export const GOOSE_FADE_IN_END = 0.15
+export const GOOSE_FADE_OUT_START = 0.85
+
+// Goose particle fields
+const G_ANGLE = 0
+const G_RADIUS = 1
+const G_Z = 2
+const G_SPEED = 3
+const G_FRAME_OFFSET = 4
+const G_TILT = 5
+const G_ANIM_TIME = 6
+const G_SIZE_MULT = 7 // per-goose size variation (0.7–1.3)
+const G_HUE_SHIFT = 8 // per-goose hue shift in radians
+const G_BRIGHTNESS = 9 // per-goose brightness variation (0.8–1.1)
+const GOOSE_FLOATS_PER_PARTICLE = 10
+
+// Per-instance data: center(2) + scale(1) + rotation(1) + frame(1) + alpha(1) + flipX(1) + colorShift(3) = 10 floats
+const GOOSE_INSTANCE_FLOATS = 10
+
+// Minimum angular separation (radians) between geese at similar z depths
+const GOOSE_MIN_ANGLE_SEP = Math.PI / 4 // 45 degrees
+const GOOSE_MIN_Z_SEP = 0.15
+
+/**
+ * Check if a candidate (angle, z) is too close to any existing goose.
+ * "Close" means both angularly near AND at a similar depth.
+ */
+function isGooseTooClose(
+  particles: Float32Array,
+  count: number,
+  skipOffset: number,
+  candidateAngle: number,
+  candidateZ: number
+): boolean {
+  for (let i = 0; i < count; i++) {
+    const off = i * GOOSE_FLOATS_PER_PARTICLE
+    if (off === skipOffset) continue
+    const oz = particles[off + G_Z]
+    if (Math.abs(oz - candidateZ) > GOOSE_MIN_Z_SEP) continue
+    // Angular distance on the circle
+    let da = Math.abs(particles[off + G_ANGLE] - candidateAngle) % (Math.PI * 2)
+    if (da > Math.PI) da = Math.PI * 2 - da
+    if (da < GOOSE_MIN_ANGLE_SEP) return true
+  }
+  return false
+}
+
+function randomGoose(out: Float32Array, offset: number, spreadZ: boolean, index = -1, total = 1): void {
+  if (spreadZ && index >= 0) {
+    out[offset + G_ANGLE] = (index / total) * Math.PI * 2 + (Math.random() - 0.5) * 0.5
+    out[offset + G_Z] = (index + Math.random()) / total
+  } else {
+    // Try to find a position that doesn't overlap with existing geese
+    const z = Math.random() * 0.05
+    let angle = Math.random() * Math.PI * 2
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (!isGooseTooClose(out, total, offset, angle, z)) break
+      angle = Math.random() * Math.PI * 2
+    }
+    out[offset + G_ANGLE] = angle
+    out[offset + G_Z] = z
+  }
+  out[offset + G_RADIUS] = GOOSE_RADIUS_MIN + Math.random() * (GOOSE_RADIUS_MAX - GOOSE_RADIUS_MIN)
+  out[offset + G_SPEED] = GOOSE_SPEED_MIN + Math.random() * (GOOSE_SPEED_MAX - GOOSE_SPEED_MIN)
+  out[offset + G_FRAME_OFFSET] = Math.floor(Math.random() * GOOSE_FRAME_COUNT)
+  out[offset + G_TILT] = (Math.random() - 0.5) * 0.5 // ±~14 degrees
+  out[offset + G_ANIM_TIME] = Math.random() * GOOSE_FRAME_COUNT // random start phase
+  out[offset + G_SIZE_MULT] = 0.7 + Math.random() * 0.6 // 0.7–1.3
+  out[offset + G_HUE_SHIFT] = (Math.random() - 0.5) * 0.3 // ±0.15 radians (~±9°)
+  out[offset + G_BRIGHTNESS] = 0.85 + Math.random() * 0.25 // 0.85–1.1
+}
+
 // --- Tuning constants (exported for easy tweaking) ---
 export const VORTEX_MAX_PARTICLES = 3000
 export const VORTEX_PORTAL_COUNT = 800
@@ -174,6 +256,75 @@ void main() {
 }
 `
 
+// --- Goose sprite shaders (instanced) ---
+// A single unit quad is drawn N times via instancing. Each instance carries
+// center position, scale, rotation angle, animation frame, and alpha.
+// The vertex shader builds the full transform so no CPU-side rotation is needed.
+const GOOSE_VS = `#version 300 es
+precision highp float;
+
+// Per-vertex (unit quad)
+layout(location = 0) in vec2 a_quadPos;  // [-1,1] corners
+layout(location = 1) in vec2 a_quadUV;   // [0,1] base UVs
+
+// Per-instance
+layout(location = 2) in vec2 a_center;   // clip-space center
+layout(location = 3) in float a_scale;   // uniform scale in clip-space height units
+layout(location = 4) in float a_rotation; // radians
+layout(location = 5) in float a_frame;   // sprite frame index
+layout(location = 6) in float a_alpha;
+layout(location = 7) in float a_flipX;  // 1.0 to mirror horizontally, 0.0 normal
+layout(location = 8) in vec3 a_colorTint; // per-goose color variation
+
+uniform float u_aspect;       // viewport width / height
+uniform float u_spriteAspect; // sprite frame width / height
+uniform float u_frameCount;   // number of frames in spritesheet
+
+out vec2 v_uv;
+out float v_alpha;
+out vec3 v_colorTint;
+
+void main() {
+  // Work in square (aspect-corrected) space for rotation, then convert to clip space.
+  // Unit quad scaled by sprite proportions in square space:
+  vec2 local = a_quadPos * vec2(a_scale * u_spriteAspect, a_scale);
+
+  // Rotate in square space (no distortion)
+  float c = cos(a_rotation);
+  float s = sin(a_rotation);
+  vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
+
+  // Convert from square space to clip space by compressing X
+  rotated.x /= u_aspect;
+
+  gl_Position = vec4(a_center + rotated, 0.0, 1.0);
+
+  // Compute spritesheet UV: offset base U by frame, flip if needed
+  float frameWidth = 1.0 / u_frameCount;
+  float u = mix(a_quadUV.x, 1.0 - a_quadUV.x, a_flipX);
+  v_uv = vec2(u * frameWidth + a_frame * frameWidth, a_quadUV.y);
+  v_alpha = a_alpha;
+  v_colorTint = a_colorTint;
+}
+`
+
+const GOOSE_FS = `#version 300 es
+precision highp float;
+
+in vec2 v_uv;
+in float v_alpha;
+in vec3 v_colorTint;
+
+uniform sampler2D u_spritesheet;
+
+out vec4 fragColor;
+
+void main() {
+  vec4 texel = texture(u_spritesheet, v_uv);
+  fragColor = vec4(texel.rgb * v_colorTint, texel.a * v_alpha);
+}
+`
+
 // --- Palette uploaded to u_palette[8] in the streak fragment shader ---
 // Slots 0-3: normal (blue), slots 4-7: error (red)
 // prettier-ignore
@@ -264,6 +415,23 @@ export class VortexRenderer {
   private viewWarpY = 1
   private speedMultiplier = 1
   private _errorMode = false
+  private _gooseEnabled = false
+  private _gooseCount = 8
+
+  // Goose sprite state (instanced rendering)
+  private gooseProgram: WebGLProgram | null = null
+  private gooseVao: WebGLVertexArrayObject | null = null
+  private gooseQuadVbo: WebGLBuffer | null = null
+  private gooseInstanceVbo: WebGLBuffer | null = null
+  private gooseSpritesheetTex: WebGLTexture | null = null
+  private gooseUniforms: {
+    spritesheet: WebGLUniformLocation | null
+    aspect: WebGLUniformLocation | null
+    spriteAspect: WebGLUniformLocation | null
+    frameCount: WebGLUniformLocation | null
+  } = { spritesheet: null, aspect: null, spriteAspect: null, frameCount: null }
+  private gooseParticles: Float32Array
+  private gooseInstanceData: Float32Array
 
   settings: VortexSettings = { ...DEFAULT_SETTINGS }
 
@@ -284,6 +452,14 @@ export class VortexRenderer {
       this.indices[ii + 3] = vi + 2
       this.indices[ii + 4] = vi + 1
       this.indices[ii + 5] = vi + 3
+    }
+
+    // Goose buffers
+    this.gooseParticles = new Float32Array(GOOSE_MAX_COUNT * GOOSE_FLOATS_PER_PARTICLE)
+    this.gooseInstanceData = new Float32Array(GOOSE_MAX_COUNT * GOOSE_INSTANCE_FLOATS)
+    // Spawn initial geese evenly distributed in angle and depth
+    for (let i = 0; i < GOOSE_MAX_COUNT; i++) {
+      randomGoose(this.gooseParticles, i * GOOSE_FLOATS_PER_PARTICLE, true, i, GOOSE_MAX_COUNT)
     }
 
     this.handleContextLost = (e: Event) => {
@@ -363,6 +539,75 @@ export class VortexRenderer {
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
     gl.bindVertexArray(null)
+
+    // --- Goose sprite program (instanced) ---
+    this.gooseProgram = this.buildProgram(GOOSE_VS, GOOSE_FS)
+    if (this.gooseProgram) {
+      this.gooseUniforms = {
+        spritesheet: gl.getUniformLocation(this.gooseProgram, 'u_spritesheet'),
+        aspect: gl.getUniformLocation(this.gooseProgram, 'u_aspect'),
+        spriteAspect: gl.getUniformLocation(this.gooseProgram, 'u_spriteAspect'),
+        frameCount: gl.getUniformLocation(this.gooseProgram, 'u_frameCount')
+      }
+
+      this.gooseVao = gl.createVertexArray()!
+      gl.bindVertexArray(this.gooseVao)
+
+      // Static unit quad: position + UV (triangle strip)
+      // prettier-ignore
+      const quadData = new Float32Array([
+        // pos.x  pos.y  uv.x  uv.y
+        -1, +1,   0, 0,  // top-left
+        +1, +1,   1, 0,  // top-right
+        -1, -1,   0, 1,  // bottom-left
+        +1, -1,   1, 1,  // bottom-right
+      ])
+      this.gooseQuadVbo = gl.createBuffer()!
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.gooseQuadVbo)
+      gl.bufferData(gl.ARRAY_BUFFER, quadData, gl.STATIC_DRAW)
+      // a_quadPos (location 0)
+      gl.enableVertexAttribArray(0)
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0)
+      // a_quadUV (location 1)
+      gl.enableVertexAttribArray(1)
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8)
+
+      // Per-instance data buffer
+      this.gooseInstanceVbo = gl.createBuffer()!
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.gooseInstanceVbo)
+      gl.bufferData(gl.ARRAY_BUFFER, this.gooseInstanceData.byteLength, gl.DYNAMIC_DRAW)
+      const instStride = GOOSE_INSTANCE_FLOATS * 4 // 24 bytes
+      // a_center (location 2) — vec2
+      gl.enableVertexAttribArray(2)
+      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, instStride, 0)
+      gl.vertexAttribDivisor(2, 1)
+      // a_scale (location 3) — float
+      gl.enableVertexAttribArray(3)
+      gl.vertexAttribPointer(3, 1, gl.FLOAT, false, instStride, 8)
+      gl.vertexAttribDivisor(3, 1)
+      // a_rotation (location 4) — float
+      gl.enableVertexAttribArray(4)
+      gl.vertexAttribPointer(4, 1, gl.FLOAT, false, instStride, 12)
+      gl.vertexAttribDivisor(4, 1)
+      // a_frame (location 5) — float
+      gl.enableVertexAttribArray(5)
+      gl.vertexAttribPointer(5, 1, gl.FLOAT, false, instStride, 16)
+      gl.vertexAttribDivisor(5, 1)
+      // a_alpha (location 6) — float
+      gl.enableVertexAttribArray(6)
+      gl.vertexAttribPointer(6, 1, gl.FLOAT, false, instStride, 20)
+      gl.vertexAttribDivisor(6, 1)
+      // a_flipX (location 7) — float
+      gl.enableVertexAttribArray(7)
+      gl.vertexAttribPointer(7, 1, gl.FLOAT, false, instStride, 24)
+      gl.vertexAttribDivisor(7, 1)
+      // a_colorTint (location 8) — vec3
+      gl.enableVertexAttribArray(8)
+      gl.vertexAttribPointer(8, 3, gl.FLOAT, false, instStride, 28)
+      gl.vertexAttribDivisor(8, 1)
+
+      gl.bindVertexArray(null)
+    }
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
@@ -468,6 +713,35 @@ export class VortexRenderer {
 
   setErrorMode(error: boolean): void {
     this._errorMode = error
+  }
+
+  setGooseEnabled(enabled: boolean): void {
+    this._gooseEnabled = enabled
+  }
+
+  setGooseCount(count: number): void {
+    this._gooseCount = Math.min(count, GOOSE_MAX_COUNT)
+  }
+
+  loadGooseSpritesheet(image: HTMLImageElement): void {
+    const gl = this.gl
+    if (!gl) return
+
+    if (this.gooseSpritesheetTex) gl.deleteTexture(this.gooseSpritesheetTex)
+    this.gooseSpritesheetTex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, this.gooseSpritesheetTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+  }
+
+  respawnAllGoose(): void {
+    for (let i = 0; i < GOOSE_MAX_COUNT; i++) {
+      randomGoose(this.gooseParticles, i * GOOSE_FLOATS_PER_PARTICLE, true, i, GOOSE_MAX_COUNT)
+    }
   }
 
   respawnAllParticles(): void {
@@ -607,7 +881,13 @@ export class VortexRenderer {
     gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0)
     gl.bindVertexArray(null)
 
-    if (!hasFbos) return
+    if (!hasFbos) {
+      // No bloom — render geese directly to screen after streaks
+      if (this._gooseEnabled && this.gooseProgram && this.gooseSpritesheetTex && this.gooseVao) {
+        this.renderGeese(gl, dtClamped, aspect)
+      }
+      return
+    }
 
     // --- Blur passes ---
     gl.disable(gl.BLEND)
@@ -662,7 +942,119 @@ export class VortexRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
     gl.bindVertexArray(null)
+
+    // --- Render goose sprites after bloom (so they don't get bloomed) ---
+    if (this._gooseEnabled && this.gooseProgram && this.gooseSpritesheetTex && this.gooseVao) {
+      this.renderGeese(gl, dtClamped, aspect)
+    }
+
     // Restore default blend state
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
+  }
+
+  private renderGeese(gl: WebGL2RenderingContext, dt: number, aspect: number): void {
+    const spriteAspect = 163 / 101
+
+    const warpX = this.viewWarpX
+    const warpY = this.viewWarpY
+    const count = this._gooseCount
+
+    // Update particles and build sort index (far first for painter's order)
+    const sortIndices: number[] = []
+    for (let i = 0; i < count; i++) {
+      const off = i * GOOSE_FLOATS_PER_PARTICLE
+      this.gooseParticles[off + G_Z] += this.gooseParticles[off + G_SPEED] * this.speedMultiplier * dt
+      // Accumulate animation time — speeds up mildly with depth (1x at z=0, 1.5x at z=1)
+      const z = this.gooseParticles[off + G_Z]
+      this.gooseParticles[off + G_ANIM_TIME] += GOOSE_FPS * (1.0 + z * 0.5) * dt
+      if (z > 1.0) {
+        randomGoose(this.gooseParticles, off, false, -1, count)
+      }
+      sortIndices.push(i)
+    }
+    sortIndices.sort(
+      (a, b) =>
+        this.gooseParticles[a * GOOSE_FLOATS_PER_PARTICLE + G_Z] -
+        this.gooseParticles[b * GOOSE_FLOATS_PER_PARTICLE + G_Z]
+    )
+
+    // Build per-instance data
+    for (let si = 0; si < count; si++) {
+      const i = sortIndices[si]
+      const off = i * GOOSE_FLOATS_PER_PARTICLE
+      const angle = this.gooseParticles[off + G_ANGLE]
+      const radius = this.gooseParticles[off + G_RADIUS]
+      const z = this.gooseParticles[off + G_Z]
+
+      const persp = 1.0 / (1.0 + (1.0 - z) * VORTEX_PERSPECTIVE_DEPTH)
+      const sizeMult = this.gooseParticles[off + G_SIZE_MULT]
+      const scale = (GOOSE_MIN_SCALE + (GOOSE_MAX_SCALE - GOOSE_MIN_SCALE) * persp) * sizeMult
+
+      // Center position in clip space — fly straight out from center along fixed angle
+      const cx = ((radius * Math.cos(angle) * persp) / aspect) * warpX
+      const cy = radius * Math.sin(angle) * persp * warpY
+
+      // Rotation: tilt toward the radial outward direction.
+      // If the tilt would flip the goose upside down, negate it and flip the sprite instead.
+      const radialX = Math.cos(angle) * warpX
+      const radialY = Math.sin(angle) * warpY
+      const radialAngle = Math.atan2(radialY, radialX)
+      let tilt = radialAngle - Math.PI / 2 + this.gooseParticles[off + G_TILT]
+      // Normalize to [-π, π]
+      tilt = ((((tilt + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI
+      let flipX = 0.0
+      if (tilt > Math.PI / 2) {
+        tilt = Math.PI - tilt
+        flipX = 1.0
+      } else if (tilt < -Math.PI / 2) {
+        tilt = -Math.PI - tilt
+        flipX = 1.0
+      }
+
+      // Fade in/out
+      const fadeIn = smoothstep(0, GOOSE_FADE_IN_END, z)
+      const fadeOut = smoothstep(1.0, GOOSE_FADE_OUT_START, z)
+
+      const frame = Math.floor(this.gooseParticles[off + G_ANIM_TIME]) % GOOSE_FRAME_COUNT
+
+      const iOff = si * GOOSE_INSTANCE_FLOATS
+      this.gooseInstanceData[iOff] = cx
+      this.gooseInstanceData[iOff + 1] = cy
+      this.gooseInstanceData[iOff + 2] = scale
+      this.gooseInstanceData[iOff + 3] = tilt
+      this.gooseInstanceData[iOff + 4] = frame
+      this.gooseInstanceData[iOff + 5] = fadeIn * fadeOut
+      this.gooseInstanceData[iOff + 6] = flipX
+
+      // Color tint from hue shift + brightness
+      const hue = this.gooseParticles[off + G_HUE_SHIFT]
+      const bright = this.gooseParticles[off + G_BRIGHTNESS]
+      // Approximate hue rotation as RGB multiplier: shift toward warm or cool
+      const cosH = Math.cos(hue)
+      const sinH = Math.sin(hue)
+      this.gooseInstanceData[iOff + 7] = bright * (0.7 + 0.3 * cosH + 0.15 * sinH) // R
+      this.gooseInstanceData[iOff + 8] = bright * (0.7 + 0.3 * cosH - 0.08 * sinH) // G
+      this.gooseInstanceData[iOff + 9] = bright * (0.7 + 0.3 * cosH - 0.2 * sinH) // B
+    }
+
+    // Switch to standard alpha blending for sprites
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    gl.useProgram(this.gooseProgram)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.gooseSpritesheetTex)
+    gl.uniform1i(this.gooseUniforms.spritesheet, 0)
+    gl.uniform1f(this.gooseUniforms.aspect, aspect)
+    gl.uniform1f(this.gooseUniforms.spriteAspect, spriteAspect)
+    gl.uniform1f(this.gooseUniforms.frameCount, GOOSE_FRAME_COUNT)
+
+    gl.bindVertexArray(this.gooseVao)
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gooseInstanceVbo)
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.gooseInstanceData, 0, count * GOOSE_INSTANCE_FLOATS)
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count)
+    gl.bindVertexArray(null)
+
+    // Restore additive blending
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
   }
 
@@ -680,6 +1072,11 @@ export class VortexRenderer {
       if (this.bloomQuadVao) gl.deleteVertexArray(this.bloomQuadVao)
       if (this.blurProgram) gl.deleteProgram(this.blurProgram)
       if (this.compositeProgram) gl.deleteProgram(this.compositeProgram)
+      if (this.gooseQuadVbo) gl.deleteBuffer(this.gooseQuadVbo)
+      if (this.gooseInstanceVbo) gl.deleteBuffer(this.gooseInstanceVbo)
+      if (this.gooseVao) gl.deleteVertexArray(this.gooseVao)
+      if (this.gooseProgram) gl.deleteProgram(this.gooseProgram)
+      if (this.gooseSpritesheetTex) gl.deleteTexture(this.gooseSpritesheetTex)
       if (this.sceneFbo) gl.deleteFramebuffer(this.sceneFbo)
       if (this.sceneTex) gl.deleteTexture(this.sceneTex)
       if (this.pingFbo) gl.deleteFramebuffer(this.pingFbo)
@@ -703,6 +1100,11 @@ export class VortexRenderer {
     this.pingTex = null
     this.pongFbo = null
     this.pongTex = null
+    this.gooseProgram = null
+    this.gooseVao = null
+    this.gooseQuadVbo = null
+    this.gooseInstanceVbo = null
+    this.gooseSpritesheetTex = null
   }
 }
 

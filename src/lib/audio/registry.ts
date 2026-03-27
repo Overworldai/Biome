@@ -9,6 +9,8 @@ export const SOUND_CATEGORIES: Record<SoundId, SoundCategory> = {
   ui_back: 'sfx',
   ui_toggle_on: 'sfx',
   ui_toggle_off: 'sfx',
+  goose_start: 'sfx',
+  goose_end: 'sfx',
   error: 'sfx',
   portal_swoosh: 'sfx',
   portal_swoosh_long: 'sfx',
@@ -28,6 +30,8 @@ export const SOUND_CATEGORIES: Record<SoundId, SoundCategory> = {
  *   ui_click: new URL('../../../assets/audio/click.wav', import.meta.url).href
  */
 export const SOUND_ASSETS: Partial<Record<SoundId, string>> = {
+  goose_start: new URL('../../../assets/audio/goose_start.mp3', import.meta.url).href,
+  goose_end: new URL('../../../assets/audio/goose_end.mp3', import.meta.url).href,
   music_menu: new URL('../../../assets/audio/music_menu.mp3', import.meta.url).href,
   vortex_loop: new URL('../../../assets/audio/vortex_loop.wav', import.meta.url).href
 }
@@ -38,6 +42,13 @@ export const SOUND_LOOP_VOLUMES: Partial<Record<SoundId, number>> = {
   vortex_loop: 0.3,
   music_menu: 0.8
 }
+
+/**
+ * Exclusive one-shot groups: when any sound in a group plays, all other
+ * active sounds in the same group are stopped first. This prevents overlaps
+ * (e.g. rapid goose toggle producing stacked honks).
+ */
+export const EXCLUSIVE_ONE_SHOT_GROUPS: SoundId[][] = [['goose_start', 'goose_end']]
 
 export const SYNTH_ONE_SHOTS: Partial<Record<SoundId, SynthOneShot>> = {
   ui_hover: synthUIHover,

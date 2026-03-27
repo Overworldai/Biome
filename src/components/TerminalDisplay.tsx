@@ -6,6 +6,8 @@ import { useVortex } from '../context/VortexContext'
 import { useSettings } from '../hooks/useSettings'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
+import { GooseFactTicker } from './GooseMode'
+import { isGooseMode } from '../i18n'
 import RawButton from './ui/RawButton'
 import ServerLogDisplay from './ServerLogDisplay'
 import SocialCtaRow from './SocialCtaRow'
@@ -22,7 +24,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { t } = useTranslation()
   const { connectionState, statusStage, isFreshInstall, engineError, error, cancelConnection, wsLogs } = useStreaming()
   const { setErrorMode } = useVortex()
-  const { isServerMode } = useSettings()
+  const { isServerMode, settings } = useSettings()
   const { logs: engineLogs } = useEngineLogs(!isServerMode)
   const activeLogs = isServerMode ? wsLogs : engineLogs
   const [showLogsPanel, setShowLogsPanel] = useState(false)
@@ -152,6 +154,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               />
             </div>
           </div>
+          {!errorDetail && isGooseMode(settings.locale) && <GooseFactTicker />}
           <div
             className="loading-inline-logs"
             style={{
