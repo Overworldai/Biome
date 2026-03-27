@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TranslationKey } from '../i18n'
 import Button from './ui/Button'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
@@ -46,7 +48,7 @@ const ServerLogDisplay = ({
   showExportAction = false,
   onExportAction,
   isExportingAction = false,
-  exportActionLabel = 'Export Logs',
+  exportActionLabel,
   actionStatus = null
 }: {
   errorMessage?: string | null
@@ -54,14 +56,15 @@ const ServerLogDisplay = ({
   progressMessage?: string | null
   headerAction?: ReactNode
   logs?: string[]
-  title?: string | null
+  title?: TranslationKey | null
   buildDiagnosticsPayload: () => Promise<Record<string, unknown>>
   showExportAction?: boolean
   onExportAction?: () => void
   isExportingAction?: boolean
-  exportActionLabel?: string
+  exportActionLabel?: TranslationKey
   actionStatus?: string | null
 }) => {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [reportActionStatus, setReportActionStatus] = useState<string | null>(null)
   const [isCopyingReport, setIsCopyingReport] = useState(false)
@@ -100,9 +103,9 @@ const ServerLogDisplay = ({
       const payload = await buildDiagnosticsPayload()
       const reportText = JSON.stringify(payload, null, 2)
       await copyToClipboard(reportText)
-      setReportActionStatus('Diagnostics copied')
+      setReportActionStatus(t('app.loading.terminal.diagnosticsCopied'))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to copy diagnostics'
+      const message = error instanceof Error ? error.message : t('app.loading.terminal.failedToCopyDiagnostics')
       setReportActionStatus(message)
     } finally {
       setIsCopyingReport(false)
@@ -125,7 +128,9 @@ const ServerLogDisplay = ({
         copiedDiagnostics = false
       }
 
-      const firstLine = (errorMessage || progressMessage || 'Runtime error').split('\n')[0]?.trim() || 'Runtime error'
+      const runtimeErrorLabel = t('app.loading.terminal.runtimeError')
+      const firstLine =
+        (errorMessage || progressMessage || runtimeErrorLabel).split('\n')[0]?.trim() || runtimeErrorLabel
       const issueTitle = `[Auto Bug Report] ${firstLine.slice(0, 76)}`
       const runtime = payload.runtime as Record<string, unknown> | undefined
       const appVersion = String(runtime?.app_version ?? 'unknown')
@@ -137,30 +142,30 @@ const ServerLogDisplay = ({
           : recentLogsRaw
 
       const issueBody = [
-        '## What happened',
-        '<please describe what you were doing and what failed>',
+        `## ${t('app.loading.terminal.whatHappened')}`,
+        t('app.loading.terminal.whatHappenedPlaceholder'),
         '',
-        '## Environment',
-        `- App version: ${appVersion}`,
-        `- Platform: ${platform}`,
+        `## ${t('app.loading.terminal.environment')}`,
+        `- ${t('app.loading.terminal.appVersion')}: ${appVersion}`,
+        `- ${t('app.loading.terminal.platform')}: ${platform}`,
         '',
-        '## Reproduction steps',
+        `## ${t('app.loading.terminal.reproductionSteps')}`,
         '1. ',
         '2. ',
         '3. ',
         '',
-        '## Recent logs',
+        `## ${t('app.loading.terminal.recentLogs')}`,
         '```text',
         recentLogsTrimmed || '<none>',
         '```',
         '',
-        '## Full diagnostics',
+        `## ${t('app.loading.terminal.fullDiagnostics')}`,
         copiedDiagnostics
-          ? '- Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.'
-          : '- Click "Copy Report" in-app and paste diagnostics JSON below.',
+          ? `- ${t('app.loading.terminal.fullDiagnosticsCopied')}`
+          : `- ${t('app.loading.terminal.fullDiagnosticsPaste')}`,
         '',
         '```json',
-        '<paste full diagnostics JSON here>',
+        t('app.loading.terminal.pasteDiagnosticsJson'),
         '```'
       ].join('\n')
 
@@ -172,10 +177,12 @@ const ServerLogDisplay = ({
       const url = `${GITHUB_NEW_ISSUE_URL}?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(clippedIssueBody)}`
       window.open(url, '_blank', 'noopener,noreferrer')
       setReportActionStatus(
-        copiedDiagnostics ? 'Opened GitHub issue form and copied diagnostics' : 'Opened GitHub issue form'
+        copiedDiagnostics
+          ? t('app.loading.terminal.openedGithubIssueFormAndCopiedDiagnostics')
+          : t('app.loading.terminal.openedGithubIssueForm')
       )
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to open issue form'
+      const message = error instanceof Error ? error.message : t('app.loading.terminal.failedToOpenIssueForm')
       setReportActionStatus(message)
     } finally {
       setIsOpeningIssue(false)
@@ -187,7 +194,9 @@ const ServerLogDisplay = ({
       {(title || headerAction) && (
         <div className="flex items-center gap-[1.42cqh] px-[2.13cqh] py-[0.8cqh] bg-white/8 border-b border-white/20 justify-between">
           <div className="flex items-center gap-[1.42cqh]">
-            <span className="font-serif text-[2.13cqh] tracking-[0.02em] text-text-primary">{title}</span>
+            <span className="font-serif text-[2.13cqh] tracking-[0.02em] text-text-primary">
+              {title ? t(title) : null}
+            </span>
           </div>
           {headerAction}
         </div>
@@ -197,7 +206,7 @@ const ServerLogDisplay = ({
         ref={containerRef}
       >
         {logs.length === 0 ? (
-          <div className="italic text-text-muted">Waiting for server output...</div>
+          <div className="italic text-text-muted">{t('app.loading.terminal.waitingForServerOutput')}</div>
         ) : (
           logs.map((line, index) => (
             <div key={index} className="whitespace-pre-wrap break-all text-text-modal-muted">
@@ -225,26 +234,26 @@ const ServerLogDisplay = ({
         <div className="flex flex-col gap-[0.4cqh] px-[2.13cqh] py-[0.8cqh] bg-white/5 border-t border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-[0.8cqh]">
-              {showExportAction && onExportAction && (
+              {showExportAction && onExportAction && exportActionLabel && (
                 <Button
                   variant="secondary"
+                  autoShrinkLabel
+                  label={exportActionLabel}
                   className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                   onClick={onExportAction}
                   disabled={isExportingAction}
-                  title="Export diagnostics JSON"
-                >
-                  {isExportingAction ? 'Exporting...' : exportActionLabel}
-                </Button>
+                  title={t('app.loading.terminal.exportDiagnosticsJson')}
+                />
               )}
               <Button
                 variant="secondary"
+                autoShrinkLabel
+                label={isCopyingReport ? 'app.loading.terminal.copying' : 'app.buttons.copyReport'}
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => void handleCopyBugReport()}
                 disabled={isCopyingReport}
-                title="Copy diagnostics JSON for bug reports"
-              >
-                {isCopyingReport ? 'Copying...' : 'Copy Report'}
-              </Button>
+                title={t('app.loading.terminal.copyDiagnosticsJsonForBugReports')}
+              />
               {(reportActionStatus || actionStatus) && (
                 <span className="ml-[0.4cqh] font-serif text-[2.13cqh] text-text-muted whitespace-nowrap">
                   {reportActionStatus || actionStatus}
@@ -254,21 +263,21 @@ const ServerLogDisplay = ({
             <div className="flex items-center gap-[0.8cqh]">
               <Button
                 variant="primary"
+                autoShrinkLabel
+                label={isOpeningIssue ? 'app.loading.terminal.opening' : 'app.buttons.reportOnGithub'}
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => void handleOpenGithubIssue()}
                 disabled={isOpeningIssue}
-                title="Open prefilled issue on GitHub"
-              >
-                {isOpeningIssue ? 'Opening...' : 'Report on GitHub'}
-              </Button>
+                title={t('app.loading.terminal.openPrefilledIssueOnGithub')}
+              />
               <Button
                 variant="primary"
+                autoShrinkLabel
+                label="app.buttons.askOnDiscord"
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
-                title="Ask for help in Discord"
-              >
-                Ask on Discord
-              </Button>
+                title={t('app.loading.terminal.askForHelpInDiscord')}
+              />
             </div>
           </div>
         </div>

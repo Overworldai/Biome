@@ -1,5 +1,6 @@
 import SettingsSection from './ui/SettingsSection'
 import SettingsButton from './ui/SettingsButton'
+import { useTranslation } from 'react-i18next'
 
 type WorldEngineSectionProps = {
   engineReady: boolean | null
@@ -8,22 +9,24 @@ type WorldEngineSectionProps = {
 }
 
 const WorldEngineSection = ({ engineReady, onFixInPlaceClick, onTotalReinstallClick }: WorldEngineSectionProps) => {
+  const { t } = useTranslation()
+
   return (
     <SettingsSection
-      title="World Engine"
-      description={
+      title="app.settings.worldEngine.title"
+      rawDescription={
         <span className="inline-flex items-center gap-[0.71cqh]">
-          is the local engine healthy?{' '}
+          {t('app.settings.worldEngine.description')}{' '}
           {engineReady === null ? (
-            'checking...'
+            t('app.settings.worldEngine.checking')
           ) : engineReady ? (
             <>
-              yes
+              {t('app.settings.worldEngine.yes')}
               <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
             </>
           ) : (
             <>
-              no
+              {t('app.settings.worldEngine.no')}
               <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
             </>
           )}
@@ -31,12 +34,12 @@ const WorldEngineSection = ({ engineReady, onFixInPlaceClick, onTotalReinstallCl
       }
     >
       <div className="flex justify-start gap-[1.2cqh]">
-        <SettingsButton variant="secondary" onClick={onFixInPlaceClick}>
-          Fix In Place
-        </SettingsButton>
-        <SettingsButton variant="danger" onClick={onTotalReinstallClick}>
-          Total Reinstall
-        </SettingsButton>
+        <SettingsButton variant="secondary" label="app.settings.worldEngine.fixInPlace" onClick={onFixInPlaceClick} />
+        <SettingsButton
+          variant="danger"
+          label="app.settings.worldEngine.totalReinstall"
+          onClick={onTotalReinstallClick}
+        />
       </div>
     </SettingsSection>
   )

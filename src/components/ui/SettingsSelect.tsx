@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
+import type { TranslationKey } from '../../i18n'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
 
-type SettingsSelectOption = {
+type SettingsSelectOptionBase = {
   value: string
-  label: string
   prefix?: string
   deletable?: boolean
 }
+
+type SettingsSelectOption = SettingsSelectOptionBase &
+  ({ label: TranslationKey; rawLabel?: never } | { label?: never; rawLabel: string })
 
 type SettingsSelectProps = {
   options: SettingsSelectOption[]
@@ -18,13 +22,15 @@ type SettingsSelectProps = {
   disabled?: boolean
   allowCustom?: boolean
   onCustomBlur?: (value: string) => void
-  customPrefix?: string
+  rawCustomPrefix?: string
+  customLabel?: TranslationKey
+  deleteLabel?: TranslationKey
 }
 
-const OptionContent = ({ option }: { option: SettingsSelectOption }) => (
-  <span className="flex items-center justify-between w-full">
-    <span>{option.label}</span>
-    {option.prefix ? <span className="text-[rgba(238,244,252,0.45)] lowercase">{option.prefix}</span> : <span />}
+const OptionContent = ({ displayLabel, prefix }: { displayLabel: string; prefix?: string }) => (
+  <span className="flex items-start justify-between gap-[1cqh] w-full min-w-0">
+    <span className="min-w-0 break-words">{displayLabel}</span>
+    {prefix ? <span className="shrink-0 text-[rgba(238,244,252,0.45)] lowercase">{prefix}</span> : <span />}
   </span>
 )
 
@@ -36,8 +42,12 @@ const SettingsSelect = ({
   disabled,
   allowCustom,
   onCustomBlur,
-  customPrefix
+  rawCustomPrefix,
+  customLabel,
+  deleteLabel
 }: SettingsSelectProps) => {
+  const { t } = useTranslation()
+  const resolveLabel = (option: SettingsSelectOption) => (option.label ? t(option.label) : option.rawLabel)
   const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
   const [isCustom, setIsCustom] = useState(() => allowCustom && !options.some((o) => o.value === value))
@@ -132,7 +142,7 @@ const SettingsSelect = ({
               >
                 <button
                   type="button"
-                  className={`flex-1 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${option.deletable && onDelete ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
+                  className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${option.deletable && onDelete ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
                   onMouseEnter={playHover}
                   onClick={() => {
                     playClick()
@@ -140,7 +150,7 @@ const SettingsSelect = ({
                     setIsOpen(false)
                   }}
                 >
-                  <OptionContent option={option} />
+                  <OptionContent displayLabel={resolveLabel(option)} prefix={option.prefix} />
                 </button>
                 {option.deletable && onDelete && (
                   <button
@@ -152,7 +162,7 @@ const SettingsSelect = ({
                       playClick()
                       onDelete(option.value)
                     }}
-                    title="Remove custom model"
+                    title={deleteLabel ? t(deleteLabel) : undefined}
                   >
                     <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
                       <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -170,7 +180,7 @@ const SettingsSelect = ({
                   setIsOpen(false)
                 }}
               >
-                Custom...
+                {customLabel ? t(customLabel) : undefined}
               </button>
             )}
           </div>,
@@ -187,7 +197,7 @@ const SettingsSelect = ({
           <input
             ref={inputRef}
             type="text"
-            className={`flex-1 bg-transparent border-none outline-none ${SETTINGS_CONTROL_TEXT}`}
+            className={`flex-1 min-w-0 bg-transparent border-none outline-none break-words ${SETTINGS_CONTROL_TEXT}`}
             value={customValue}
             onChange={(e) => setCustomValue(e.target.value)}
             onPaste={(e) => {
@@ -207,9 +217,9 @@ const SettingsSelect = ({
             }}
             autoFocus
           />
-          {customPrefix && (
-            <span className="flex items-center pr-[1cqh] text-[rgba(238,244,252,0.45)] lowercase text-[2.67cqh] font-serif whitespace-nowrap">
-              {customPrefix}
+          {rawCustomPrefix && (
+            <span className="flex items-center pr-[1cqh] text-[rgba(238,244,252,0.45)] lowercase text-[2.67cqh] font-serif text-right">
+              {rawCustomPrefix}
             </span>
           )}
           <button
@@ -245,8 +255,12 @@ const SettingsSelect = ({
         }}
         disabled={disabled}
       >
-        <span className={`flex-1 ${SETTINGS_CONTROL_TEXT}`}>
-          {selectedOption ? <OptionContent option={selectedOption} /> : value}
+        <span className={`flex-1 min-w-0 break-words ${SETTINGS_CONTROL_TEXT}`}>
+          {selectedOption ? (
+            <OptionContent displayLabel={resolveLabel(selectedOption)} prefix={selectedOption.prefix} />
+          ) : (
+            value
+          )}
         </span>
         <span className="flex items-center justify-center w-[3.56cqh] bg-surface-btn-primary">
           <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 6" fill="none">

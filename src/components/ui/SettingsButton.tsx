@@ -1,15 +1,18 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { ButtonVariant } from './Button'
-import Button from './Button'
+import type { ButtonHTMLAttributes } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TranslationKey } from '../../i18n'
+import type { ButtonVariant } from './RawButton'
+import RawSettingsButton from './RawSettingsButton'
 
 type SettingsButtonProps = {
   variant: ButtonVariant
-  children: ReactNode
+  label: TranslationKey
   className?: string
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'>
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>
 
-const SettingsButton = ({ className = '', ...rest }: SettingsButtonProps) => (
-  <Button className={`leading-[1.2] p-[0.55cqh_1.42cqh] text-[2.67cqh] ${className}`} {...rest} />
-)
+const SettingsButton = ({ label, ...rest }: SettingsButtonProps) => {
+  const { t } = useTranslation()
+  return <RawSettingsButton {...rest}>{t(label)}</RawSettingsButton>
+}
 
 export default SettingsButton

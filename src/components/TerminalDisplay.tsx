@@ -6,8 +6,10 @@ import { useVortex } from '../context/VortexContext'
 import { useSettings } from '../hooks/useSettings'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
+import RawButton from './ui/RawButton'
 import ServerLogDisplay from './ServerLogDisplay'
 import SocialCtaRow from './SocialCtaRow'
+import { useTranslation } from 'react-i18next'
 
 const INLINE_ERROR_MAX_LENGTH = 80
 const ERROR_DETAIL_CLASS = 'font-serif text-[3.2cqh] leading-[1.15] text-[var(--color-error-bright)]'
@@ -17,6 +19,7 @@ type TerminalDisplayProps = {
 }
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
+  const { t } = useTranslation()
   const { connectionState, statusStage, isFreshInstall, engineError, error, cancelConnection, wsLogs } = useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode } = useSettings()
@@ -44,11 +47,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const currentStage = statusStage ? resolveStage(statusStage) : null
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
-    if (errorDetail) return 'Error'
-    if (currentStage?.label) return currentStage.label
-    if (connectionState === 'connecting') return 'Connecting...'
-    return 'Starting...'
-  }, [connectionState, currentStage?.label, errorDetail])
+    if (errorDetail) return t('app.loading.error')
+    if (currentStage?.label) return t(`stage.${currentStage.id}`, { defaultValue: currentStage.label })
+    if (connectionState === 'connecting') return t('app.loading.connecting')
+    return t('app.loading.starting')
+  }, [connectionState, currentStage?.id, currentStage?.label, errorDetail, t])
 
   const handleExportDiagnostics = async () => {
     if (isExportingDiagnostics) return
@@ -61,12 +64,12 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
       if (result.canceled) {
-        setExportStatus('Export canceled')
+        setExportStatus(t('app.loading.exportCanceled'))
       } else {
-        setExportStatus('Diagnostics exported')
+        setExportStatus(t('app.loading.diagnosticsExported'))
       }
     } catch (exportErr) {
-      const message = exportErr instanceof Error ? exportErr.message : 'Export failed'
+      const message = exportErr instanceof Error ? exportErr.message : t('app.loading.exportFailed')
       setExportStatus(message)
     } finally {
       setIsExportingDiagnostics(false)
@@ -116,13 +119,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
           }}
         >
           <div className="font-serif text-[5.2cqh] font-normal text-white [text-shadow:0_0.14cqh_0.83cqh_rgba(0,0,0,0.5)]">
-            First-time setup
+            {t('app.loading.firstTimeSetup')}
           </div>
           <div className="font-serif text-[3.2cqh] font-normal text-text-modal-muted [text-shadow:0_0.14cqh_0.56cqh_rgba(0,0,0,0.4)] text-center leading-[1.4] max-w-[80cqh]">
-            This will take 10-30 minutes while components are
-            <br />
-            downloaded and optimized for your system.
-            <span className="block mt-[1.6cqh]">Feel free to grab a coffee in the meantime.</span>
+            {t('app.loading.firstTimeSetupDescription')}
+            <span className="block mt-[1.6cqh]">{t('app.loading.firstTimeSetupHint')}</span>
           </div>
         </div>
       )}
@@ -169,7 +170,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               showExportAction={!!errorDetail}
               onExportAction={() => void handleExportDiagnostics()}
               isExportingAction={isExportingDiagnostics}
-              exportActionLabel="Export Logs"
+              exportActionLabel="app.buttons.exportLogs"
               actionStatus={exportStatus}
             />
           </div>
@@ -177,15 +178,15 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       </div>
       <SocialCtaRow rowClassName="z-55" />
       <div className="absolute z-55 bottom-[var(--edge-bottom)] right-[calc((100cqw-135.11cqh)/2)] flex items-end gap-[1.8cqh] pointer-events-auto">
-        <Button
+        <RawButton
           variant="secondary"
           className="flex items-center justify-center gap-[0.8cqh] w-[19.2cqh] h-[4.9cqh] px-[1.4cqh] text-[2.45cqh] leading-none"
-          aria-label={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
-          title={showLogsPanel ? 'Hide logs panel' : 'Show logs panel'}
+          aria-label={showLogsPanel ? t('app.loading.terminal.hideLogsPanel') : t('app.loading.terminal.showLogsPanel')}
+          title={showLogsPanel ? t('app.loading.terminal.hideLogsPanel') : t('app.loading.terminal.showLogsPanel')}
           onClick={() => setShowLogsPanel((prev) => !prev)}
         >
           <span className="inline-block text-left w-[13cqh] whitespace-nowrap">
-            {showLogsPanel ? 'Hide Logs' : 'Show Logs'}
+            {showLogsPanel ? t('app.buttons.hideLogs') : t('app.buttons.showLogs')}
           </span>
           <span className="inline-flex w-[2.2cqh] justify-center">
             {showLogsPanel ? (
@@ -198,9 +199,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
               </svg>
             )}
           </span>
-        </Button>
+        </RawButton>
         <Button
           variant="danger"
+          autoShrinkLabel
+          label="app.buttons.cancel"
           className="!animate-none flex items-center justify-center h-[4.9cqh] min-w-[12.5cqh] px-[1.8cqh] text-[2.45cqh] leading-none"
           onClick={() => {
             if (onCancel) {
@@ -209,9 +212,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             }
             void cancelConnection()
           }}
-        >
-          Cancel
-        </Button>
+        />
       </div>
     </>
   )

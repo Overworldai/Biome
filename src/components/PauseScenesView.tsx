@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import type { SeedRecord } from '../types/app'
 import SceneCard from './SceneCard'
 import MenuButton from './ui/MenuButton'
-import SettingsButton from './ui/SettingsButton'
+import RawSettingsButton from './ui/RawSettingsButton'
 import { HEADING_BASE } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
+import { useTranslation } from 'react-i18next'
 
 interface PauseScenesViewProps {
   seeds: SeedRecord[]
@@ -37,6 +38,7 @@ const PauseScenesView = ({
   onClipboardUpload,
   onBack
 }: PauseScenesViewProps) => {
+  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
   const [isDragActive, setIsDragActive] = useState(false)
@@ -136,14 +138,18 @@ const PauseScenesView = ({
           className="absolute inset-[2.4cqh] z-[20] border border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)] pointer-events-none grid place-items-center"
           aria-hidden="true"
         >
-          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">Drop images to add scenes</span>
+          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
+            {t('app.pause.scenes.dropImagesToAddScenes')}
+          </span>
         </div>
       )}
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[92%] z-[3] flex flex-col">
-        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>Scenes</h2>
+        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>
+          {t('app.pause.scenes.title')}
+        </h2>
         <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-          All of your {seeds.length} {seeds.length === 1 ? 'scene' : 'scenes'}.
-          {ALLOW_USER_SCENES && ' Use the buttons to add more scenes, or drag/paste them in.'}
+          {t('app.pause.scenes.description', { count: seeds.length })}
+          {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
         </p>
         {uploadError && (
           <p className="m-0 mt-[0.6cqh] font-serif text-caption text-[var(--color-error-bright)]">{uploadError}</p>
@@ -161,11 +167,11 @@ const PauseScenesView = ({
                   className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-[rgba(245,249,255,0.4)] pointer-events-none z-[1]"
                   aria-hidden="true"
                 />
-                <SettingsButton
+                <RawSettingsButton
                   variant="secondary"
                   className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                   onClick={() => void onClipboardUpload()}
-                  title="Paste image from clipboard"
+                  title={t('app.buttons.pasteImageFromClipboard')}
                 >
                   <svg
                     className="w-[2.67cqh] h-[2.67cqh]"
@@ -178,12 +184,12 @@ const PauseScenesView = ({
                     <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
                     <rect x="12" y="10" width="8" height="10" rx="1" />
                   </svg>
-                </SettingsButton>
-                <SettingsButton
+                </RawSettingsButton>
+                <RawSettingsButton
                   variant="secondary"
                   className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
                   onClick={() => fileInputRef.current?.click()}
-                  title="Browse for image file"
+                  title={t('app.buttons.browseForImageFile')}
                 >
                   <svg
                     className="w-[2.67cqh] h-[2.67cqh]"
@@ -196,7 +202,7 @@ const PauseScenesView = ({
                     <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
                     <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                </SettingsButton>
+                </RawSettingsButton>
               </div>
             )}
             {seeds.map((seed) => (
@@ -217,11 +223,10 @@ const PauseScenesView = ({
       </section>
       <MenuButton
         variant="primary"
+        label="app.buttons.back"
         className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
         onClick={onBack}
-      >
-        Back
-      </MenuButton>
+      />
     </div>
   )
 }
