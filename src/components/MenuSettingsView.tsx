@@ -21,7 +21,6 @@ import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
 import WorldEngineSection from './WorldEngineSection'
 import EngineInstallModal from './EngineInstallModal'
-import { GooseModeCheckbox } from './GooseMode'
 import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
 import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
 
@@ -335,8 +334,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
   const handleLocaleChange = useCallback(
     (locale: AppLocale) => {
+      const gooseMode = locale === 'goose'
       setMenuLocale(locale)
-      void saveSettings({ ...settings, locale })
+      setMenuGooseMode(gooseMode)
+      void saveSettings({ ...settings, locale, goose_mode: gooseMode })
     },
     [settings, saveSettings]
   )
@@ -661,7 +662,6 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 checked={menuFrameTimeline}
                 onChange={setMenuFrameTimeline}
               />
-              <GooseModeCheckbox checked={menuGooseMode} onChange={setMenuGooseMode} />
             </div>
           </SettingsSection>
         </div>

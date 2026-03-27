@@ -1,4 +1,5 @@
 import en from './en'
+import goose from './goose'
 import ja from './ja'
 import zh from './zh'
 
@@ -15,6 +16,6 @@ type KeyShape<T> = {
 /** All locale files must have the same key structure as en.ts (the source of truth). */
 type ExpectedShape = KeyShape<typeof en>
 
-export const resources: Record<string, ExpectedShape> = { en, ja, zh }
+export const resources: Record<string, ExpectedShape> = { en, goose, ja, zh }
 
 export type TranslationResources = typeof resources

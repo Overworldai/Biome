@@ -6,20 +6,22 @@ import { resources } from './resources'
 export type TranslationKey = ParseKeys
 
 export const FALLBACK_LOCALE = 'en' as const
-export const SUPPORTED_LOCALES = ['en', 'ja', 'zh'] as const
+export const SUPPORTED_LOCALES = ['en', 'ja', 'zh', 'goose'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
 /** Native-script display names for the language picker. Not translated — each language is always shown in its own script. */
 export const LOCALE_DISPLAY_NAMES: Record<SupportedLocale, string> = {
   en: 'English',
   ja: '日本語',
-  zh: '中文'
+  zh: '中文',
+  goose: 'English (Goose)'
 }
 
 const LOCALE_MAP: Record<string, SupportedLocale> = {
   en: 'en',
   ja: 'ja',
-  zh: 'zh'
+  zh: 'zh',
+  goose: 'goose'
 }
 
 export function resolveLocale(locale: string | null | undefined): SupportedLocale {
