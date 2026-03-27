@@ -468,7 +468,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           {t('app.settings.subtitle')}
         </p>
         <div
-          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
+          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
         >
           <SettingsSection
             title={t('app.settings.engineMode.title')}
