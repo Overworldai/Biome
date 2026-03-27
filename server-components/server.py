@@ -1225,13 +1225,14 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     preview_b64 = base64.b64encode(preview_jpeg).decode("ascii")
 
     # Safety check on the inpainted result
+    from inpainting_manager import SafetyRejectionError
     inpainted_pil = Image.fromarray(inpainted_np)
     safety_result = safety_checker.check_pil_image(inpainted_pil)
     if not safety_result["is_safe"]:
         logger.warning(
             f"[SCENE_EDIT] Safety checker rejected inpainted image: {safety_result['scores']}"
         )
-        raise RuntimeError("Scene edit rejected: the generated image did not pass the safety check.")
+        raise SafetyRejectionError()
 
     # Expand to full n_frames for multiframe models
     if world_engine.is_multiframe:

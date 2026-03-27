@@ -18,6 +18,15 @@ from qwen_tool_parser import parse_tool_calls
 
 logger = logging.getLogger(__name__)
 
+SAFETY_REJECTION_MESSAGE = "Scene edit rejected: the request did not pass the content safety check."
+
+
+class SafetyRejectionError(RuntimeError):
+    """Raised when a scene edit is rejected by the VLM or output safety checker."""
+
+    def __init__(self):
+        super().__init__(SAFETY_REJECTION_MESSAGE)
+
 # ── Edit model configuration ────────────────────────────────────────
 EDIT_MODEL_ID = "black-forest-labs/FLUX.2-klein-4B"
 EDIT_NUM_STEPS = 4
@@ -47,7 +56,20 @@ VLM_SYSTEM_PROMPT = (
     "a hand holding the object in the bottom-right corner.\n"
     "3. SCENE ELEMENTS (buildings, creatures, weather): Place naturally "
     "in the environment.\n"
-    "4. STYLE/MOOD changes: Describe the transformation clearly.\n\n"
+    "4. STYLE/MOOD changes: Describe the transformation clearly.\n"
+    "5. CONTENT POLICY: You MUST sanitize the user's request before "
+    "producing the edit instruction.\n"
+    "   - COPYRIGHTED CHARACTERS/IP: Replace any named copyrighted "
+    "characters, brands, or intellectual property with generic "
+    "equivalents. E.g. 'Master Chief' → 'armored sci-fi soldier', "
+    "'Pikachu' → 'small yellow electric creature', 'Coca-Cola' → "
+    "'red soda can'.\n"
+    "   - NUDITY/SEXUAL CONTENT: Remove or replace any request for "
+    "nudity or sexual content with a clothed/appropriate equivalent. "
+    "Violence (weapons, combat, monsters) is acceptable.\n"
+    "   - If the ENTIRE request is only about NSFW "
+    "content with no salvageable intent, call the reject_request "
+    "tool instead of submit_edit_instruction.\n\n"
     "EXAMPLES:\n"
     '- User: "sword" → "Add a glowing sword held in a right hand in '
     'the bottom-right corner of the frame, as in a first-person game. '
@@ -65,11 +87,16 @@ VLM_SYSTEM_PROMPT = (
     "Always end with 'Keep everything else unchanged.'\n\n"
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
     "immediately submit your instruction. Do not deliberate at length.\n\n"
-    "You MUST submit your instruction by calling the "
-    "submit_edit_instruction tool using this exact format:\n\n"
+    "You MUST call one of these tools:\n\n"
+    "To submit an edit instruction:\n"
     "<tool_call>\n"
     "<function=submit_edit_instruction>\n"
     "<parameter=instruction>YOUR INSTRUCTION HERE</parameter>\n"
+    "</function>\n"
+    "</tool_call>\n\n"
+    "To reject an unsafe request:\n"
+    "<tool_call>\n"
+    "<function=reject_request>\n"
     "</function>\n"
     "</tool_call>"
 )
@@ -175,10 +202,13 @@ class InpaintingManager:
     def _parse_edit_instruction(text: str) -> str:
         """Extract the 'instruction' from a submit_edit_instruction tool call.
 
+        Raises SafetyRejectionError if a reject_request tool call is found.
         Raises ValueError if no valid tool call is found or the instruction is missing.
         """
         tool_calls = parse_tool_calls(text)
         for call in tool_calls:
+            if call.name == "reject_request":
+                raise SafetyRejectionError()
             if call.name == "submit_edit_instruction":
                 instruction = call.arguments.get("instruction", "")
                 if instruction:
