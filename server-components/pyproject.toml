@@ -21,7 +21,7 @@ dependencies = [
   "accelerate>=0.25.0",
   "peft>=0.7.0",
   "bitsandbytes>=0.41.0",
-  "llama-cpp-python>=0.3.0",
+  "llama-cpp-python",
   "gguf>=0.6.0",
 ]
 
@@ -34,14 +34,10 @@ index-strategy = "unsafe-best-match"
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
-llama-cpp-python = { index = "llama-cpp-python-cu124" }
+llama-cpp-python = { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-linux-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-linux_x86_64.whl" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
-[[tool.uv.index]]
-name = "llama-cpp-python-cu124"
-url = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
-explicit = true

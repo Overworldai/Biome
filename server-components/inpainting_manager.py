@@ -119,12 +119,17 @@ class InpaintingManager:
         """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
         from huggingface_hub import hf_hub_download
         from llama_cpp import Llama
-        from llama_cpp.llama_chat_format import Qwen25VLChatHandler
+        from llama_cpp.llama_chat_format import Qwen35ChatHandler
 
         model_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
         mmproj_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
 
-        chat_handler = Qwen25VLChatHandler(clip_model_path=mmproj_path, verbose=False)
+        chat_handler = Qwen35ChatHandler(
+            clip_model_path=mmproj_path,
+            enable_thinking=True,
+            add_vision_id=False,
+            verbose=False,
+        )
         self.vlm = Llama(
             model_path=model_path,
             chat_handler=chat_handler,
