@@ -27,6 +27,7 @@ void i18n.use(initReactI18next).init({
   resources,
   lng: FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,
+  returnObjects: true,
   interpolation: {
     escapeValue: false
   }
