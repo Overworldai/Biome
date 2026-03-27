@@ -6,6 +6,9 @@ npm run build        # Production build with installers
 npm run package      # Package without installers
 npm run lint         # Check formatting (Prettier)
 npm run lint-fix     # Auto-fix formatting (Prettier) — run after finishing work
+
+node scripts/release.mjs          # Print current version
+node scripts/release.mjs <version> # Cut a release (bump versions, commit, tag)
 ```
 
 No test framework is configured.

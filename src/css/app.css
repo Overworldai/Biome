@@ -272,6 +272,33 @@
     z-index: 1;
   }
 
+  /* Debug: disable mask */
+  .spark-debug-no-mask .portal-sparks-canvas {
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+  }
+  /* Debug: hide portal shell (isolate sparks against background) */
+  .spark-debug-isolate > .portal-preview-shell,
+  .spark-debug-isolate > .portal-preview-frame-shell {
+    opacity: 0 !important;
+  }
+  /* Debug: toggle individual portal sub-layers */
+  .spark-debug-no-halo .portal-preview-halo-layer {
+    opacity: 0 !important;
+  }
+  .spark-debug-no-overlay .portal-preview-core-overlay {
+    opacity: 0 !important;
+  }
+  .spark-debug-no-ring .portal-preview-core-ring {
+    opacity: 0 !important;
+  }
+  .spark-debug-no-ring-fade .portal-preview-core-ring-fade {
+    opacity: 0 !important;
+  }
+  .spark-debug-no-core-content .portal-preview-media-rotate {
+    opacity: 0 !important;
+  }
+
   .portal-preview-frame-shell {
     z-index: 2;
     transform: translateY(var(--portal-float-y, 0px));

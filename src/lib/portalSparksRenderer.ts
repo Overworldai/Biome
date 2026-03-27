@@ -87,13 +87,26 @@ void main() {
   float coreMix = smoothstep(0.4, 0.0, d) * (1.0 - u_colorBoost * 0.6);
   vec3 color = mix(saturated, vec3(1.0), coreMix);
 
-  // Output premultiplied color with non-zero alpha for robust compositing.
-  // Some GPU/browser paths drop rgb when alpha is forced to 0 on a
-  // premultiplied surface, which can make particles invisible.
+  // Output premultiplied color with alpha tracking the brightest channel.
+  //
+  // Standard compositing: result = rgb + bg * (1 - alpha). When the spark
+  // color is < 1 (e.g. a tinted glow), outputting alpha = a means "replace
+  // a-fraction of the background with this dim color", which darkens bright
+  // backgrounds. With additive WebGL blending, many overlapping spark edges
+  // each contribute full a to alpha but only color*a to RGB, making the
+  // accumulated alpha much larger than RGB and worsening the darkening.
+  //
+  // Fix: set alpha = max(rgb) so each fragment only "replaces" as much
+  // background as its brightest channel warrants. The premultiplied
+  // constraint (each component <= alpha) is preserved, and the visible
+  // spark color is unchanged -- only the background dimming is reduced.
+  //
   // When color-boosted, slightly reduce brightness to preserve color.
   float intensityScale = mix(1.0, 0.7, u_colorBoost);
   float a = alpha * v_brightness * intensityScale;
-  fragColor = vec4(color * a, a);
+  vec3 premul = color * a;
+  float outAlpha = max(max(premul.r, premul.g), premul.b);
+  fragColor = vec4(premul, outAlpha);
 }
 `
 

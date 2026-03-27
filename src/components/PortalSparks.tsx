@@ -98,9 +98,9 @@ const PortalSparks = ({ glowRgb, hoverGlowRgb, isHovered, visible, coreRef }: Po
     if (parent) ro.observe(parent)
 
     // Animation loop — re-measures core each frame to track bobbing and size changes
-    lastTimeRef.current = performance.now()
+    lastTimeRef.current = 0
     const tick = (now: number) => {
-      const dt = (now - lastTimeRef.current) / 1000
+      const dt = lastTimeRef.current > 0 ? (now - lastTimeRef.current) / 1000 : 0.016
       lastTimeRef.current = now
 
       // Track portal bobbing/hover scale by re-measuring each frame.
@@ -137,7 +137,22 @@ const PortalSparks = ({ glowRgb, hoverGlowRgb, isHovered, visible, coreRef }: Po
     }
     rafRef.current = requestAnimationFrame(tick)
 
+    // Pause rAF when the page is hidden so particles freeze in place
+    // instead of draining (throttled rAF would age them out).
+    // Mirrors the pattern used by VortexContext.
+    const handleVisibility = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = 0
+      } else {
+        lastTimeRef.current = 0
+        rafRef.current = requestAnimationFrame(tick)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
       cancelAnimationFrame(rafRef.current)
       ro.disconnect()
       renderer.dispose()
