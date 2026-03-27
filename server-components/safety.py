@@ -105,46 +105,24 @@ class SafetyChecker:
     def check_image(self, image_path: str) -> Dict[str, any]:
         """
         Check single image for NSFW content.
-        Uses CPU to avoid GPU memory conflicts with world model.
 
         Args:
             image_path: Path to image file
 
         Returns:
-            {
-                'is_safe': bool,
-                'scores': {
-                    'neutral': float,
-                    'low': float,
-                    'medium': float,
-                    'high': float
-                }
-            }
+            Same format as check_pil_image(): {'is_safe': bool, 'scores': {...}}
         """
-        with self._lock:
-            device = self.current_device if self._resident else "cpu"
-            self._load_model(device=device)
-
-            try:
-                img = Image.open(image_path)
-                # Convert to RGB to handle RGBA/RGB mode differences
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                scores = self.predict_batch_values([img], device=device)[0]
-                is_safe = scores["low"] < 0.5  # Strict threshold
-                result = {"is_safe": is_safe, "scores": scores}
-            except Exception as e:
-                logger.error(f"Failed to check image {image_path}: {e}")
-                # Default to unsafe on error (conservative approach)
-                result = {
-                    "is_safe": False,
-                    "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
-                }
-            finally:
-                if self._should_unload():
-                    self.unload_model()
-
-            return result
+        try:
+            img = Image.open(image_path)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+        except Exception as e:
+            logger.error(f"Failed to load image {image_path}: {e}")
+            return {
+                "is_safe": False,
+                "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+            }
+        return self.check_pil_image(img)
 
     def check_pil_image(self, image: Image.Image) -> Dict[str, any]:
         """
