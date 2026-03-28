@@ -110,11 +110,17 @@ const createWindow = () => {
     mainWindow.webContents.send('window-resized', { width, height })
   })
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-  })
+  // Window stays hidden until the renderer signals it's ready (renderer-ready IPC).
+  // Fallback: show after 5 s in case the renderer never signals (e.g. crash).
+  const showFallbackTimer = setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }, 5000)
 
   mainWindow.on('closed', () => {
+    clearTimeout(showFallbackTimer)
     mainWindow = null
   })
 }

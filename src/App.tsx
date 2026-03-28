@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { resolveStage } from './stages'
 import { SettingsProvider } from './hooks/useSettings'
@@ -81,6 +81,14 @@ const AppShell = () => {
   )
 
   const nextVideoElement = getVideoElement(nextIndex)
+  const rendererReadySentRef = useRef(false)
+  const handleInitialPreviewReady = useCallback(() => {
+    triggerPortalEnter()
+    if (!rendererReadySentRef.current) {
+      rendererReadySentRef.current = true
+      invoke('renderer-ready')
+    }
+  }, [triggerPortalEnter])
   const isLaunchTransition = isEnteringLoading
   const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
@@ -242,6 +250,7 @@ const AppShell = () => {
                 portalSceneGlowRgb={portalGlowRgb}
                 sparkGlowRgb={portalGlowRgb}
                 onShrinkComplete={completePortalShrink}
+                onInitialPreviewReady={handleInitialPreviewReady}
               />
             </div>
           </div>
