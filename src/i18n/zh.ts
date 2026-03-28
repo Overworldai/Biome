@@ -175,7 +175,8 @@ const zh = {
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',
-          resetScene: '重置场景'
+          resetScene: '重置场景',
+          sceneEdit: '场景编辑'
         },
         fixedControls: {
           title: '固定操作',
@@ -198,6 +199,12 @@ const zh = {
             leftClick: '左键单击',
             rightClick: '右键单击'
           }
+        },
+        experimental: {
+          title: '实验性功能',
+          description: '想尝试一些可能会改变或消失的粗略想法吗？',
+          sceneEdit: '场景编辑',
+          sceneEditDescription: '在游戏过程中按键，使用AI通过文字提示编辑场景。需要额外约10GB显存。'
         },
         debugMetrics: {
           title: '调试指标',
@@ -249,6 +256,11 @@ const zh = {
         github: 'Overworld GitHub',
         feedback: '发送反馈邮件'
       },
+      sceneEdit: {
+        placeholder: '描述场景变化...',
+        instructions: 'Enter 应用 \u00b7 Esc 取消',
+        applying: '正在应用场景编辑...'
+      },
       server: {
         fallbackError: '服务器错误：{{message}}',
         fallbackWarning: '服务器警告：{{message}}',
@@ -269,6 +281,12 @@ const zh = {
         error: {
           serverStartupFailed: '服务器启动失败',
           timeoutWaitingForSeed: '等待初始种子超时',
+          sceneEditModelLoadFailed: '场景编辑模型加载失败',
+          sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
+          sceneEditEmptyPrompt: '提示词为空',
+          sceneEditModelNotLoaded: '场景编辑模型未加载。请在实验性功能设置中启用场景编辑。',
+          sceneEditAlreadyInProgress: '场景编辑已在进行中',
+          contentFilterLoadFailed: '内容过滤器加载失败',
           cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
         },
         warning: {
@@ -313,6 +331,14 @@ const zh = {
           load: '正在加载模型...',
           instantiate: '正在将模型载入内存...',
           done: '模型已加载！'
+        },
+        inpainting: {
+          load: '正在加载场景编辑模型...',
+          ready: '场景编辑模型已就绪。'
+        },
+        safety: {
+          load: '正在加载内容过滤器...',
+          ready: '内容过滤器已就绪。'
         },
         warmup: {
           reset: '正在准备预热...',

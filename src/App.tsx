@@ -21,13 +21,21 @@ import SocialCtaRow from './components/SocialCtaRow'
 import ViewLabel from './components/ui/ViewLabel'
 import MenuButton from './components/ui/MenuButton'
 import PauseOverlay from './components/PauseOverlay'
+import SceneEditOverlay from './components/SceneEditOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import useSceneGlowColor from './hooks/useSceneGlowColor'
 import usePortalGlowSample from './hooks/usePortalGlowSample'
-import { PORTAL_SPARKS_DEBUG, MENU_VIEW, type MenuViewKey } from './constants'
+import {
+  PORTAL_SPARKS_DEBUG,
+  SCENE_EDIT_DEBUG_PREVIEW,
+  SCENE_EDIT_PROMPT_TOAST_MS,
+  SCENE_EDIT_PREVIEW_TOAST_MS,
+  MENU_VIEW,
+  type MenuViewKey
+} from './constants'
 import { viewFadeVariants } from './transitions'
 import PortalSparksConfigurator from './components/PortalSparksConfigurator'
 import PerformanceStatsOverlay from './components/PerformanceStatsOverlay'
@@ -47,6 +55,9 @@ const AppShell = () => {
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
   const [isStreamingReveal, setIsStreamingReveal] = useState(false)
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdateInfo | null>(null)
+  const [editPromptVisible, setEditPromptVisible] = useState(false)
+  const [editPreviewVisible, setEditPreviewVisible] = useState(false)
+  const editPromptKeyRef = useRef(0)
   const prevStreamingUiRef = useRef(false)
   const {
     state: portalState,
@@ -56,8 +67,16 @@ const AppShell = () => {
     toggleSettings,
     transitionTo
   } = usePortal()
-  const { isStreaming, isPaused, connectionState, warning, connectionLost, statusStage, prepareReturnToMainMenu } =
-    useStreaming()
+  const {
+    isStreaming,
+    isPaused,
+    connectionState,
+    warning,
+    connectionLost,
+    statusStage,
+    prepareReturnToMainMenu,
+    sceneEditState
+  } = useStreaming()
   const {
     getVideoElement,
     currentIndex,
@@ -128,6 +147,20 @@ const AppShell = () => {
     }
     prevStreamingUiRef.current = isStreamingUi
   }, [isStreamingUi])
+
+  // Show edit prompt + preview toasts when a scene edit completes, then auto-hide
+  useEffect(() => {
+    if (!sceneEditState.lastEditPrompt) return
+    editPromptKeyRef.current += 1
+    setEditPromptVisible(true)
+    setEditPreviewVisible(true)
+    const promptTimer = setTimeout(() => setEditPromptVisible(false), SCENE_EDIT_PROMPT_TOAST_MS)
+    const previewTimer = setTimeout(() => setEditPreviewVisible(false), SCENE_EDIT_PREVIEW_TOAST_MS)
+    return () => {
+      clearTimeout(promptTimer)
+      clearTimeout(previewTimer)
+    }
+  }, [sceneEditState.lastEditPrompt])
 
   useEffect(() => {
     if (!portalVisible) {
@@ -296,7 +329,47 @@ const AppShell = () => {
             <InputOverlay />
             <FrameTimelineOverlay />
             <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
-            <PauseOverlay isActive={isPaused} />
+            <PauseOverlay isActive={isPaused && sceneEditState.phase === 'inactive'} />
+            <SceneEditOverlay />
+            {SCENE_EDIT_DEBUG_PREVIEW &&
+              editPromptVisible &&
+              sceneEditState.lastEditPrompt &&
+              sceneEditState.phase === 'inactive' && (
+                <div
+                  key={editPromptKeyRef.current}
+                  className="absolute bottom-[3.2cqh] left-1/2 -translate-x-1/2 z-[180] pointer-events-none max-w-[80cqw]"
+                >
+                  <div
+                    className="border border-white/20 bg-black/70 text-white/90 px-[2.1cqh] py-[0.9cqh] font-serif text-[2cqh] tracking-[0.01em] shadow-lg backdrop-blur-sm text-center"
+                    style={{ animation: `streamingWarningToast ${SCENE_EDIT_PROMPT_TOAST_MS}ms ease forwards` }}
+                  >
+                    {sceneEditState.lastEditPrompt}
+                  </div>
+                </div>
+              )}
+            {SCENE_EDIT_DEBUG_PREVIEW && editPreviewVisible && sceneEditState.lastPreview && (
+              <div
+                className="absolute bottom-[2cqh] right-[2cqw] z-40 pointer-events-none flex flex-col gap-[0.5cqh]"
+                style={{ animation: `streamingWarningToast ${SCENE_EDIT_PREVIEW_TOAST_MS}ms ease forwards` }}
+              >
+                <div className="flex flex-col items-end">
+                  <span className="font-serif text-[1.6cqh] text-white/70 mb-[0.3cqh]">Before</span>
+                  <img
+                    src={`data:image/jpeg;base64,${sceneEditState.lastPreview.originalB64}`}
+                    alt="Before inpainting"
+                    className="h-[18cqh] border border-white/30 shadow-lg"
+                  />
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="font-serif text-[1.6cqh] text-white/70 mb-[0.3cqh]">After</span>
+                  <img
+                    src={`data:image/jpeg;base64,${sceneEditState.lastPreview.inpaintedB64}`}
+                    alt="After inpainting"
+                    className="h-[18cqh] border border-white/30 shadow-lg"
+                  />
+                </div>
+              </div>
+            )}
             {warning && !connectionLost && (
               <div
                 key={warning}

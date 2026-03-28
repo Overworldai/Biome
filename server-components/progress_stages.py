@@ -42,6 +42,12 @@ SESSION_WARMUP_SEED = Stage("session.warmup.seed")
 SESSION_WARMUP_PROMPT = Stage("session.warmup.prompt")
 SESSION_WARMUP_COMPILE = Stage("session.warmup.compile")
 
+SESSION_INPAINTING_LOAD = Stage("session.inpainting.load")
+SESSION_INPAINTING_READY = Stage("session.inpainting.ready")
+
+SESSION_SAFETY_LOAD = Stage("session.safety.load")
+SESSION_SAFETY_READY = Stage("session.safety.ready")
+
 SESSION_INIT_RESET = Stage("session.init.reset")
 SESSION_INIT_SEED = Stage("session.init.seed")
 SESSION_INIT_FRAME = Stage("session.init.frame")

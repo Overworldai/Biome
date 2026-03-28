@@ -109,6 +109,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showCredits, setShowCredits] = useState(false)
 
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
+  const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
+    () => settings.experimental?.scene_edit_enabled ?? false
+  )
   const [menuPerformanceStats, setMenuPerformanceStats] = useState(() => settings.debug_overlays.performance_stats)
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
@@ -232,6 +235,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
     setMenuServerUrl(configServerUrl)
     setMenuKeybindings({ ...settings.keybindings })
+    setMenuSceneEditEnabled(settings.experimental?.scene_edit_enabled ?? false)
     setMenuPerformanceStats(settings.debug_overlays.performance_stats)
     setMenuInputOverlay(settings.debug_overlays.input)
     setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
@@ -359,6 +363,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       mouse_sensitivity: streamingValue,
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
+      experimental: {
+        scene_edit_enabled: menuSceneEditEnabled
+      },
       debug_overlays: {
         performance_stats: menuPerformanceStats,
         input: menuInputOverlay,
@@ -375,6 +382,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuServerUrl,
     menuWorldModel,
     menuKeybindings,
+    menuSceneEditEnabled,
     menuPerformanceStats,
     menuInputOverlay,
     menuFrameTimeline,
@@ -625,8 +633,16 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               label={t('app.settings.keybindings.resetScene')}
               value={menuKeybindings.reset_scene}
               onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
-              warning={getKeybindConflict(menuKeybindings.reset_scene, [])}
+              warning={getKeybindConflict(menuKeybindings.reset_scene, [menuKeybindings.scene_edit])}
             />
+            {menuSceneEditEnabled && (
+              <KeybindRow
+                label={t('app.settings.keybindings.sceneEdit')}
+                value={menuKeybindings.scene_edit}
+                onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, scene_edit: code }))}
+                warning={getKeybindConflict(menuKeybindings.scene_edit, [menuKeybindings.reset_scene])}
+              />
+            )}
           </SettingsSection>
 
           <SettingsSection
@@ -636,6 +652,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             {FIXED_CONTROLS.map((ctrl) => (
               <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
             ))}
+          </SettingsSection>
+
+          <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
+            <SettingsCheckbox
+              label="app.settings.experimental.sceneEdit"
+              description="app.settings.experimental.sceneEditDescription"
+              checked={menuSceneEditEnabled}
+              onChange={setMenuSceneEditEnabled}
+            />
           </SettingsSection>
 
           <SettingsSection title="app.settings.debugMetrics.title" description="app.settings.debugMetrics.description">

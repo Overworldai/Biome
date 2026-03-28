@@ -181,7 +181,8 @@ const en = {
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          resetScene: 'Reset Scene'
+          resetScene: 'Reset Scene',
+          sceneEdit: 'Scene Edit'
         },
         fixedControls: {
           title: 'Fixed Controls',
@@ -204,6 +205,13 @@ const en = {
             leftClick: 'Left Click',
             rightClick: 'Right Click'
           }
+        },
+        experimental: {
+          title: 'Experimental',
+          description: 'want to try some rough ideas that might change or disappear?',
+          sceneEdit: 'Scene Edit',
+          sceneEditDescription:
+            'Press a key during gameplay to edit the scene with a text prompt using AI. Requires ~10GB additional VRAM.'
         },
         debugMetrics: {
           title: 'Debug Metrics',
@@ -255,6 +263,11 @@ const en = {
         github: 'Overworld GitHub',
         feedback: 'Send feedback email'
       },
+      sceneEdit: {
+        placeholder: 'Describe the scene change...',
+        instructions: 'Enter to apply \u00b7 Esc to cancel',
+        applying: 'Applying scene edit...'
+      },
       server: {
         fallbackError: 'Server error: {{message}}',
         fallbackWarning: 'Server warning: {{message}}',
@@ -275,6 +288,12 @@ const en = {
         error: {
           serverStartupFailed: 'Server startup failed',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
+          sceneEditModelLoadFailed: 'Scene edit model failed to load',
+          sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
+          sceneEditEmptyPrompt: 'Empty prompt',
+          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
+          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          contentFilterLoadFailed: 'Content filter failed to load',
           cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
         },
         warning: {
@@ -319,6 +338,14 @@ const en = {
           load: 'Loading model...',
           instantiate: 'Loading model into memory...',
           done: 'Model loaded!'
+        },
+        inpainting: {
+          load: 'Loading scene edit model...',
+          ready: 'Scene edit model ready.'
+        },
+        safety: {
+          load: 'Loading content filter...',
+          ready: 'Content filter ready.'
         },
         warmup: {
           reset: 'Preparing for warmup...',
