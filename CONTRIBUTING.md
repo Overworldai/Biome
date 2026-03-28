@@ -54,7 +54,7 @@ The renderer connects to the World Engine at `ws(s)://{host}/ws`. All messages a
 - `status` — loading progress (`code`, `stage: {id, label, percent}`); `code: 'ready'` signals the engine is ready
 - `frame` — a rendered frame (`data` as base64, `frame_id`, `gen_ms`)
 - `log` — server log line
-- `error` / `warning` — error or transient warning message
+- `error` / `warning` — error or transient warning message (see [Server error messages](#server-error-messages) below)
 
 **Client→server commands**, sent as fire-and-forget JSON:
 
@@ -65,6 +65,32 @@ The renderer connects to the World Engine at `ws(s)://{host}/ws`. All messages a
 - `set_initial_seed`, `set_model`, `reset`
 
 **RPC layer** (`src/lib/wsRpc.ts`): For request/response patterns. Client sends `{type, req_id, ...params}`, server replies `{type: 'response', req_id, success, data/error}`. Used via `useWebSocket().request()`.
+
+#### Server error messages
+
+Server `error` and `warning` push messages use **translation keys** so the client can display localised text. The protocol:
+
+```jsonc
+// Preferred: known error with a translation key
+{"type": "error", "message_id": "app.server.error.serverStartupFailed", "message": "CUDA out of memory"}
+// Warning with interpolation params
+{"type": "warning", "message_id": "app.server.warning.seedUnsafe", "params": {"filename": "bad.jpg"}}
+// Fallback: unknown/dynamic error with no translation key
+{"type": "error", "message": "some unexpected exception text"}
+```
+
+- `message_id` — a fully-qualified i18n key (e.g. `app.server.error.cudaRecoveryFailed`). The server must send the **full key path** so it's searchable across the codebase.
+- `message` — optional raw detail string (e.g. an exception message). When both `message_id` and `message` are present, the client displays them as `"Localised label: raw detail"`.
+- `params` — optional interpolation parameters for the translation key (e.g. `{"filename": "seed.jpg"}`).
+
+RPC error responses use the same convention with `error_id` instead of `error`:
+
+```jsonc
+{"type": "response", "req_id": "1", "success": false, "error_id": "app.server.error.someKnownError"}
+{"type": "response", "req_id": "1", "success": false, "error": "unknown error text"}
+```
+
+On the client, `RpcError` (from `src/lib/wsRpc.ts`) carries the `errorId` for consumers to resolve via `t()`.
 
 ### State Management
 
@@ -178,6 +204,30 @@ Other components use prop-level `raw` prefixes for escape hatches:
 4. Add the locale code to the `AppLocale` type in `src/types/settings.ts`
 
 Language display names (e.g. "English", "日本語", "中文") are **not** translation keys — they live in `LOCALE_DISPLAY_NAMES` in `src/i18n/index.ts` and always appear in their native script regardless of the current locale. Only the "System Default" option is translated.
+
+### Error handling and `TranslatableError`
+
+All user-visible errors should be localised. `TranslatableError` (exported from `src/i18n/index.ts`) is an `Error` subclass that carries a `translationKey` and `translationParams`:
+
+```typescript
+import { TranslatableError } from '../i18n'
+
+throw new TranslatableError('app.server.notResponding', { url: 'http://localhost:7987' })
+```
+
+`TranslatableError.message` is eagerly resolved at construction time via `i18n.t()`, so existing `err.message` catch sites get localised text automatically. Consumers with access to `t()` can re-resolve `translationKey` + `translationParams` for the freshest locale.
+
+**Rules:**
+
+- **Never throw raw English strings** for user-visible errors. Use `TranslatableError` with a translation key.
+- **Never lose information.** When wrapping an unknown error, preserve the original message:
+  ```typescript
+  const message = err instanceof Error ? err.message : String(err)
+  new TranslatableError('app.server.fallbackError', { message })
+  ```
+- **Use `TranslatableError` as the state type**, not `string`. Error state should be `TranslatableError | null`, never `string | TranslatableError | null`.
+- **Resolve at the display boundary.** Components that display errors call `t(err.translationKey, { defaultValue: err.translationKey, ...err.translationParams })`. Intermediate layers pass `TranslatableError` through without resolving.
+- **Server-originated errors** use `message_id` / `error_id` in the WebSocket protocol (see [Server error messages](#server-error-messages)). The client maps these to `RpcError` (for RPC responses) or resolves them directly in `useWebSocket.ts` (for push messages).
 
 ## Key Conventions
 
