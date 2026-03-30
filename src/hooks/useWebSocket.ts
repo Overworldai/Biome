@@ -57,7 +57,7 @@ type WebSocketHook = {
   sendPrompt: (prompt: string) => void
   sendPromptWithSeed: (promptOrFilename: string, seedUrl?: string) => void
   sendInitialSeed: (filename: string) => void
-  sendModel: (model: string, seed?: string | null) => void
+  sendModel: (model: string, seed?: string | null, options?: { sceneEdit?: boolean }) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
   reset: () => void
   request: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
@@ -420,10 +420,14 @@ export const useWebSocket = (): WebSocketHook => {
     }
   }, [])
 
-  const sendModel = useCallback((model: string, seed: string | null = null) => {
+  const sendModel = useCallback((model: string, seed: string | null = null, options?: { sceneEdit?: boolean }) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && model) {
-      const payload: { type: 'set_model'; model: string; seed?: string } = { type: 'set_model', model }
+      const payload: { type: 'set_model'; model: string; seed?: string; scene_edit?: boolean } = {
+        type: 'set_model',
+        model
+      }
       if (seed) payload.seed = seed
+      if (options?.sceneEdit) payload.scene_edit = true
       wsRef.current.send(JSON.stringify(payload))
     }
   }, [])

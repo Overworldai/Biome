@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { getEngineDir, getUvDir, getResourcePath, SERVER_COMPONENT_FILES } from '../lib/paths.js'
+import { getEngineDir, getUvDir } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions, getUvArchiveName, getVenvPythonPath } from '../lib/platform.js'
 import { getServerState, stopServerSync } from '../lib/serverState.js'
@@ -28,28 +28,20 @@ function execFileAsync(file: string, args: string[], options?: Parameters<typeof
 
 /** Unpack bundled server files to the engine directory */
 function unpackServerFilesInner(force: boolean): string {
-  const engineDir = getEngineDir()
-  fs.mkdirSync(engineDir, { recursive: true })
-
-  const resourceDir = getResourcePath('server-components')
-  const unpacked: string[] = []
-
-  for (const filename of SERVER_COMPONENT_FILES) {
-    const destPath = path.join(engineDir, filename)
-
-    if (force || !fs.existsSync(destPath)) {
-      const srcPath = path.join(resourceDir, filename)
-      if (fs.existsSync(srcPath)) {
-        fs.copyFileSync(srcPath, destPath)
-        unpacked.push(filename)
-      }
-    }
+  if (force) {
+    copyServerComponentFiles(getEngineDir())
+    return 'Unpacked all server component files (forced)'
   }
 
-  if (unpacked.length === 0) {
+  const engineDir = getEngineDir()
+  const hasKey =
+    fs.existsSync(path.join(engineDir, 'pyproject.toml')) && fs.existsSync(path.join(engineDir, 'server.py'))
+  if (hasKey) {
     return 'Files already exist, skipped unpacking'
   }
-  return `Unpacked: ${unpacked.join(', ')}`
+
+  copyServerComponentFiles(engineDir)
+  return 'Unpacked all server component files'
 }
 
 /** Create .uv subdirectories, then run uv sync with mirrored logs. */

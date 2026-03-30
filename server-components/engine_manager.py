@@ -127,6 +127,7 @@ class WorldEngineManager:
     def __init__(self):
         self.engine = None
         self.seed_frame = None
+        self.original_seed_frame = None  # Preserved across scene edits for U-key reset
         self.CtrlInput = None
         self.model_uri = DEFAULT_MODEL_URI
         self.current_prompt = DEFAULT_PROMPT

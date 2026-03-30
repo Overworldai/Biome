@@ -15,12 +15,16 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   isPointerLocked: boolean
   settingsOpen: boolean
   isPaused: boolean
+  sceneEditEnabled?: boolean
 }
 
 export const buildStreamingLifecycleSyncPayload = (
   args: BuildStreamingLifecycleSyncPayloadArgs
 ): StreamingLifecycleSyncPayload => {
-  const selectedModel = args.engineModel || DEFAULT_WORLD_ENGINE_MODEL
+  // Encode scene_edit_enabled into the model key so toggling it triggers
+  // the same intentional-reconnect flow as switching models.
+  const baseModel = args.engineModel || DEFAULT_WORLD_ENGINE_MODEL
+  const selectedModel = args.sceneEditEnabled ? `${baseModel}+scene_edit` : baseModel
 
   return {
     portalState: args.portalState,

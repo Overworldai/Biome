@@ -180,7 +180,8 @@ const ja = {
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          resetScene: 'シーンをリセット'
+          resetScene: 'シーンをリセット',
+          sceneEdit: 'シーン編集'
         },
         fixedControls: {
           title: '固定コントロール',
@@ -203,6 +204,13 @@ const ja = {
             leftClick: '左クリック',
             rightClick: '右クリック'
           }
+        },
+        experimental: {
+          title: '実験的機能',
+          description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
+          sceneEdit: 'シーン編集',
+          sceneEditDescription:
+            'ゲームプレイ中にキーを押して、AIでテキストプロンプトを使ってシーンを編集します。追加で約10GBのVRAMが必要です。'
         },
         debugMetrics: {
           title: 'デバッグメトリクス',
@@ -254,6 +262,11 @@ const ja = {
         github: 'Overworld の GitHub',
         feedback: 'フィードバックメールを送る'
       },
+      sceneEdit: {
+        placeholder: 'シーンの変更を説明してください...',
+        instructions: 'Enter で適用 \u00b7 Esc でキャンセル',
+        applying: 'シーン編集を適用中...'
+      },
       server: {
         fallbackError: 'サーバーエラー: {{message}}',
         fallbackWarning: 'サーバー警告: {{message}}',
@@ -274,6 +287,14 @@ const ja = {
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
+          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
+          sceneEditSafetyRejected:
+            'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
+          sceneEditEmptyPrompt: 'プロンプトが空です',
+          sceneEditModelNotLoaded:
+            'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',
+          sceneEditAlreadyInProgress: 'シーン編集が既に進行中です',
+          contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
         },
         warning: {
@@ -318,6 +339,14 @@ const ja = {
           load: 'モデルを読み込んでいます...',
           instantiate: 'モデルをメモリに読み込んでいます...',
           done: 'モデルを読み込みました。'
+        },
+        inpainting: {
+          load: 'シーン編集モデルを読み込んでいます...',
+          ready: 'シーン編集モデルの準備ができました。'
+        },
+        safety: {
+          load: 'コンテンツフィルターを読み込んでいます...',
+          ready: 'コンテンツフィルターの準備ができました。'
         },
         warmup: {
           reset: 'ウォームアップの準備をしています...',

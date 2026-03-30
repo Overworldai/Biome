@@ -182,7 +182,8 @@ const goose = {
         keybindings: {
           title: 'Beak bindings',
           description: 'which keys do you want to peck?',
-          resetScene: 'Shake off'
+          resetScene: 'Shake off',
+          sceneEdit: 'Pond edit'
         },
         fixedControls: {
           title: 'Built-in instincts',
@@ -205,6 +206,13 @@ const goose = {
             leftClick: 'Left peck',
             rightClick: 'Right peck'
           }
+        },
+        experimental: {
+          title: 'Experimental honks',
+          description: 'want to try some half-baked eggs that might hatch or roll away?',
+          sceneEdit: 'Pond edit',
+          sceneEditDescription:
+            'Honk a key during waddling to edit the pond with a text quack using AI. Requires ~10GB additional nest space.'
         },
         debugMetrics: {
           title: 'Goose telemetry',
@@ -256,6 +264,11 @@ const goose = {
         github: 'Gooseworld GitHub',
         feedback: 'Send a honk'
       },
+      sceneEdit: {
+        placeholder: 'Describe the pond change...',
+        instructions: 'Enter to quack \u00b7 Esc to waddle away',
+        applying: 'Rearranging the pond...'
+      },
       server: {
         fallbackError: 'Goose error: {{message}}',
         fallbackWarning: 'Goose warning: {{message}}',
@@ -276,6 +289,12 @@ const goose = {
         error: {
           serverStartupFailed: 'The goose failed to wake up',
           timeoutWaitingForSeed: 'Timeout waiting for bread crumb',
+          sceneEditModelLoadFailed: 'Pond edit model failed to load',
+          sceneEditSafetyRejected: 'Pond edit rejected: the honk did not pass the fox safety check.',
+          sceneEditEmptyPrompt: 'Empty quack',
+          sceneEditModelNotLoaded: 'Pond edit model not loaded. Enable Pond Edit in Experimental Honks settings.',
+          sceneEditAlreadyInProgress: 'Pond edit already in progress',
+          contentFilterLoadFailed: 'Fox detector failed to load',
           cudaRecoveryFailed: 'CUDA honk — recovery failed. Please re-waddle.'
         },
         warning: {
@@ -320,6 +339,14 @@ const goose = {
           load: 'Hatching the goose...',
           instantiate: 'Loading goose into pond...',
           done: 'The goose has landed!'
+        },
+        inpainting: {
+          load: 'Loading pond editor...',
+          ready: 'Pond editor ready.'
+        },
+        safety: {
+          load: 'Loading fox detector...',
+          ready: 'Fox detector ready.'
         },
         warmup: {
           reset: 'Stretching wings...',

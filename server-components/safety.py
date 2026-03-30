@@ -27,6 +27,7 @@ class SafetyChecker:
         self.model = None
         self.processor = None
         self.current_device = None  # Track which device model is currently loaded on
+        self._resident = False  # When True, model stays loaded between checks
         self._lock = threading.Lock()  # Prevent concurrent model access
         logger.info("SafetyChecker initialized")
 
@@ -70,6 +71,7 @@ class SafetyChecker:
             self.model = None
             self.processor = None
             self.current_device = None
+            self._resident = False
 
             # Clear CUDA cache only if was on GPU
             # Avoids clearing world engine's CUDA cache when safety checker ran on CPU
@@ -81,48 +83,78 @@ class SafetyChecker:
 
             logger.info("NSFW detection model unloaded")
 
+    def load_resident(self, device: str = "cuda"):
+        """Load model and keep it resident in memory (no unload after checks).
+
+        Call this during session setup so the model is ready for repeated
+        checks without load/unload overhead.
+        """
+        with self._lock:
+            self._load_model(device=device)
+            self._resident = True
+            logger.info(f"Safety checker model loaded as resident on {device}")
+
+    @property
+    def is_resident(self) -> bool:
+        return self._resident
+
+    def _should_unload(self) -> bool:
+        """Return True if the model should be unloaded after a check."""
+        return not self._resident
+
     def check_image(self, image_path: str) -> Dict[str, any]:
         """
         Check single image for NSFW content.
-        Uses CPU to avoid GPU memory conflicts with world model.
 
         Args:
             image_path: Path to image file
 
         Returns:
-            {
-                'is_safe': bool,
-                'scores': {
-                    'neutral': float,
-                    'low': float,
-                    'medium': float,
-                    'high': float
-                }
+            Same format as check_pil_image(): {'is_safe': bool, 'scores': {...}}
+        """
+        try:
+            img = Image.open(image_path)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+        except Exception as e:
+            logger.error(f"Failed to load image {image_path}: {e}")
+            return {
+                "is_safe": False,
+                "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
             }
+        return self.check_pil_image(img)
+
+    def check_pil_image(self, image: Image.Image) -> Dict[str, any]:
+        """
+        Check a PIL image for NSFW content (no file I/O).
+        Uses the resident device if loaded, otherwise CPU.
+
+        Args:
+            image: PIL Image to check
+
+        Returns:
+            Same format as check_image(): {'is_safe': bool, 'scores': {...}}
         """
         with self._lock:
-            self._load_model(device="cpu")
+            device = self.current_device if self._resident else "cpu"
+            self._load_model(device=device)
 
             try:
-                img = Image.open(image_path)
-                # Convert to RGB to handle RGBA/RGB mode differences
+                img = image
                 if img.mode != "RGB":
                     img = img.convert("RGB")
-                scores = self.predict_batch_values([img], device="cpu")[0]
-                is_safe = scores["low"] < 0.5  # Strict threshold
-                result = {"is_safe": is_safe, "scores": scores}
+                scores = self.predict_batch_values([img], device=device)[0]
+                is_safe = scores["low"] < 0.5
+                return {"is_safe": is_safe, "scores": scores}
             except Exception as e:
-                logger.error(f"Failed to check image {image_path}: {e}")
-                # Default to unsafe on error (conservative approach)
-                result = {
+                logger.error(f"Failed to check PIL image: {e}")
+                return {
                     "is_safe": False,
                     "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
                 }
             finally:
-                # Unload model after check to free memory
-                self.unload_model()
-
-            return result
+                if self._should_unload():
+                    self.unload_model()
 
     def check_batch(
         self, image_paths: List[str], batch_size: int = 8
@@ -203,8 +235,8 @@ class SafetyChecker:
                     for _ in image_paths
                 ]
             finally:
-                # Unload model after batch check to free memory
-                self.unload_model()
+                if self._should_unload():
+                    self.unload_model()
 
     def predict_batch_values(
         self, img_batch: List[Image.Image], device: str = "cpu"

@@ -25,7 +25,8 @@ export const DEFAULT_PINNED_SCENES = [
 ]
 
 export const DEFAULT_KEYBINDINGS = {
-  reset_scene: 'KeyU'
+  reset_scene: 'KeyU',
+  scene_edit: 'KeyQ'
 } as const
 
 export const DEFAULT_AUDIO = {
@@ -44,7 +45,8 @@ export const settingsSchema = z.object({
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
   keybindings: z
     .object({
-      reset_scene: z.string().default('KeyU')
+      reset_scene: z.string().default('KeyU'),
+      scene_edit: z.string().default('KeyQ')
     })
     .default(DEFAULT_KEYBINDINGS),
   audio: z
@@ -54,6 +56,11 @@ export const settingsSchema = z.object({
       music_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.music_volume)
     })
     .default(DEFAULT_AUDIO),
+  experimental: z
+    .object({
+      scene_edit_enabled: z.boolean().default(false)
+    })
+    .default({ scene_edit_enabled: false }),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),
