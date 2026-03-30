@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { resolveStage } from './stages'
 import { SettingsProvider } from './hooks/useSettings'
@@ -81,6 +81,26 @@ const AppShell = () => {
   )
 
   const nextVideoElement = getVideoElement(nextIndex)
+  const rendererReadySentRef = useRef(false)
+  const portalReadyRef = useRef(false)
+  const backgroundReadyRef = useRef(false)
+
+  const showWindowIfReady = useCallback(() => {
+    if (!portalReadyRef.current || !backgroundReadyRef.current) return
+    if (rendererReadySentRef.current) return
+    rendererReadySentRef.current = true
+    invoke('renderer-ready')
+  }, [])
+
+  const handleInitialPreviewReady = useCallback(() => {
+    portalReadyRef.current = true
+    showWindowIfReady()
+  }, [showWindowIfReady])
+
+  const handleBackgroundReady = useCallback(() => {
+    backgroundReadyRef.current = true
+    showWindowIfReady()
+  }, [showWindowIfReady])
   const isLaunchTransition = isEnteringLoading
   const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
@@ -202,6 +222,7 @@ const AppShell = () => {
             isTransitioning={isTransitioning}
             transitionKey={transitionKey}
             onTransitionComplete={completeTransition}
+            onInitialReady={handleBackgroundReady}
           />
         )}
         {isMainUi && !isConnected && !isEnteringLoading && (
@@ -242,6 +263,8 @@ const AppShell = () => {
                 portalSceneGlowRgb={portalGlowRgb}
                 sparkGlowRgb={portalGlowRgb}
                 onShrinkComplete={completePortalShrink}
+                onInitialPreviewReady={handleInitialPreviewReady}
+                onMediaReady={triggerPortalEnter}
               />
             </div>
           </div>

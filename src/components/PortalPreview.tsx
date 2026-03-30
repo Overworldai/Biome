@@ -1,4 +1,5 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useRef, type CSSProperties, type ReactNode } from 'react'
+import { usePortalMediaMount } from '../hooks/usePortalMediaMount'
 import PortalSparks from './PortalSparks'
 
 type PortalPreviewProps = {
@@ -13,6 +14,8 @@ type PortalPreviewProps = {
   portalSceneGlowRgb: [number, number, number]
   sparkGlowRgb: [number, number, number]
   onShrinkComplete: () => void
+  onInitialPreviewReady: () => void
+  onMediaReady: () => void
 }
 
 const PortalPreview = ({
@@ -26,25 +29,28 @@ const PortalPreview = ({
   glowRgb,
   portalSceneGlowRgb,
   sparkGlowRgb,
-  onShrinkComplete
+  onShrinkComplete,
+  onInitialPreviewReady,
+  onMediaReady
 }: PortalPreviewProps) => {
   const coreRef = useRef<HTMLDivElement>(null)
-  const portalVideoRef = useRef<HTMLDivElement>(null)
-
-  // Mount the shared video element into the portal container
-  useEffect(() => {
-    const container = portalVideoRef.current
-    if (!container || !videoElement) return
-    container.replaceChildren(videoElement)
-    videoElement.play().catch(() => {})
-  }, [videoElement])
+  const { portalVideoRef, isPortalMediaReady, hasHadInitialReady } = usePortalMediaMount(
+    videoElement,
+    onInitialPreviewReady,
+    onMediaReady
+  )
 
   if (!visible || (!videoElement && !hoverContent)) return null
 
   const portalStyle: CSSProperties = {
     ['--portal-glow-rgb' as string]: glowRgb.join(', '),
     ['--portal-border-rgb' as string]: glowRgb.join(', '),
-    ['--portal-enter-duration-ms' as string]: '1050'
+    ['--portal-enter-duration-ms' as string]: '1050',
+    opacity: isPortalMediaReady ? 1 : 0,
+    visibility: isPortalMediaReady ? 'visible' : 'hidden',
+    // Skip the CSS opacity transition for the very first appearance so the
+    // portal is fully visible the instant the window opens.
+    ...(!hasHadInitialReady && { transition: 'none' })
   }
 
   return (

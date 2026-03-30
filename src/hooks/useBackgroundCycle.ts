@@ -53,7 +53,8 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
     setCurrentIndex((prev) => (prev + 1) % (videos.length || 1))
     setIsTransitioning(false)
     setPortalVisible(true)
-    setIsPortalEntering(true)
+    // Don't trigger enter yet — usePortalMediaMount will call
+    // triggerPortalEnter once the next video has decoded its first frame.
   }, [videos.length, isTransitioning])
 
   const triggerPortalEnter = useCallback(() => {
@@ -93,7 +94,8 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
           setVideos(urls)
           setCurrentIndex(0)
           setPortalVisible(true)
-          setIsPortalEntering(true)
+          // Don't trigger enter yet — usePortalMediaMount will call
+          // triggerPortalEnter once the video has decoded its first frame.
         }
       } catch (err) {
         console.error('Failed to load background videos:', err)

@@ -22,6 +22,14 @@ function getMaxAspectFitBounds(win: BrowserWindow, aspectRatio: number): Electro
 }
 
 export function registerWindowIpc(): void {
+  ipcMain.handle('renderer-ready', (_event) => {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (win && !win.isVisible()) {
+      win.show()
+      win.focus()
+    }
+  })
+
   ipcMain.handle('window-set-size', (_event, width: number, height: number) => {
     const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
     if (win) {

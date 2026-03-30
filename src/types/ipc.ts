@@ -92,6 +92,7 @@ export type IpcCommandMap = {
   // Backgrounds
   'list-background-videos': { args: []; return: string[] }
   // Window
+  'renderer-ready': { args: []; return: void }
   'window-set-size': { args: [width: number, height: number]; return: void }
   'window-get-size': { args: []; return: { width: number; height: number } }
   'window-set-position': { args: [x: number, y: number]; return: void }
