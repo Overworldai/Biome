@@ -8,6 +8,7 @@ type BackgroundSlideshowProps = {
   isTransitioning: boolean
   transitionKey: number
   onTransitionComplete: () => void
+  onInitialReady?: () => void
 }
 
 const BackgroundSlideshow = ({
@@ -17,10 +18,14 @@ const BackgroundSlideshow = ({
   blurCqh,
   isTransitioning,
   transitionKey,
-  onTransitionComplete
+  onTransitionComplete,
+  onInitialReady
 }: BackgroundSlideshowProps) => {
   const currentContainerRef = useRef<HTMLDivElement>(null)
   const transitionContainerRef = useRef<HTMLDivElement>(null)
+  const hasNotifiedReadyRef = useRef(false)
+  const onInitialReadyRef = useRef(onInitialReady)
+  onInitialReadyRef.current = onInitialReady
 
   // Mount current video element
   useEffect(() => {
@@ -29,6 +34,26 @@ const BackgroundSlideshow = ({
     if (!container || !el) return
     container.replaceChildren(el)
     el.play().catch(() => {})
+
+    // Track readiness of the first background video for startup coordination.
+    if (hasNotifiedReadyRef.current) return
+
+    const notifyReady = () => {
+      if (hasNotifiedReadyRef.current) return
+      hasNotifiedReadyRef.current = true
+      onInitialReadyRef.current?.()
+    }
+
+    if (el.readyState >= 2) {
+      notifyReady()
+    } else {
+      el.addEventListener('loadeddata', notifyReady, { once: true })
+      el.addEventListener('canplay', notifyReady, { once: true })
+      return () => {
+        el.removeEventListener('loadeddata', notifyReady)
+        el.removeEventListener('canplay', notifyReady)
+      }
+    }
   }, [currentIndex, getVideoElement])
 
   // Mount transition video element

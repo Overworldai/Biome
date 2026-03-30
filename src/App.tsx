@@ -82,13 +82,25 @@ const AppShell = () => {
 
   const nextVideoElement = getVideoElement(nextIndex)
   const rendererReadySentRef = useRef(false)
+  const portalReadyRef = useRef(false)
+  const backgroundReadyRef = useRef(false)
+
+  const showWindowIfReady = useCallback(() => {
+    if (!portalReadyRef.current || !backgroundReadyRef.current) return
+    if (rendererReadySentRef.current) return
+    rendererReadySentRef.current = true
+    invoke('renderer-ready')
+  }, [])
+
   const handleInitialPreviewReady = useCallback(() => {
-    triggerPortalEnter()
-    if (!rendererReadySentRef.current) {
-      rendererReadySentRef.current = true
-      invoke('renderer-ready')
-    }
-  }, [triggerPortalEnter])
+    portalReadyRef.current = true
+    showWindowIfReady()
+  }, [showWindowIfReady])
+
+  const handleBackgroundReady = useCallback(() => {
+    backgroundReadyRef.current = true
+    showWindowIfReady()
+  }, [showWindowIfReady])
   const isLaunchTransition = isEnteringLoading
   const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
   const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
@@ -210,6 +222,7 @@ const AppShell = () => {
             isTransitioning={isTransitioning}
             transitionKey={transitionKey}
             onTransitionComplete={completeTransition}
+            onInitialReady={handleBackgroundReady}
           />
         )}
         {isMainUi && !isConnected && !isEnteringLoading && (
