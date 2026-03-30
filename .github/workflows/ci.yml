@@ -50,5 +50,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Package Electron app
-        run: npm run package
+      - name: Build Electron app
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: biome-${{ matrix.platform }}
+          path: out/make/**/*
