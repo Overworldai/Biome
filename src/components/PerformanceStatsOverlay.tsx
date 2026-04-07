@@ -37,6 +37,13 @@ const colorForPercent = (pct: number) => {
 
 const formatValue = (v: number, unavailable = -1) => (v === unavailable ? 'N/A' : v.toString())
 
+const formatElapsed = (seconds: number) => {
+  const totalSec = Math.floor(seconds)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 type FrametimeStats = { mean: number; stddev: number; min: number; max: number; p1: number; p99: number }
 
 const computeFrametimeStats = (entries: { time: number; value: number }[]): FrametimeStats | null => {
@@ -52,7 +59,8 @@ const computeFrametimeStats = (entries: { time: number; value: number }[]): Fram
 }
 
 const PerformanceStatsOverlay = () => {
-  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, latentGenMs, nFrames } = useStreaming()
+  const { performanceStatsOverlay, isStreaming, serverMetrics, inputLatency, latentGenMs, nFrames, frameId } =
+    useStreaming()
   const [, setTick] = useState(0)
   const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
 
@@ -74,6 +82,14 @@ const PerformanceStatsOverlay = () => {
   const prevLatentGenMsRef = useRef(latentGenMs)
   const prevLatencyRef = useRef(inputLatency)
 
+  // Track latent frame count for rollout time — resets when frameId drops (new seed)
+  const latentFrameCountRef = useRef(0)
+  const prevFrameIdRef = useRef(frameId)
+  if (frameId < prevFrameIdRef.current) {
+    latentFrameCountRef.current = 0
+  }
+  prevFrameIdRef.current = frameId
+
   // Push GPU metrics into ring buffers when they update
   if (serverMetrics && serverMetrics !== prevMetricsRef.current) {
     prevMetricsRef.current = serverMetrics
@@ -84,6 +100,7 @@ const PerformanceStatsOverlay = () => {
   // Accumulate per-latent-pass gen times for sparklines and distribution stats
   if (latentGenMs !== null && latentGenMs !== prevLatentGenMsRef.current) {
     prevLatentGenMsRef.current = latentGenMs
+    latentFrameCountRef.current++
     genBuf.push(latentGenMs)
     fpsBuf.push(perceivedFps)
     lfpsBuf.push(latentFps)
@@ -120,7 +137,13 @@ const PerformanceStatsOverlay = () => {
     >
       <Row label="CPU" value={m?.cpuName ?? '[Unknown CPU]'} color={COLOR_HUD} />
       <Row label="GPU" value={m?.gpuName ?? '[Unknown GPU]'} color={COLOR_HUD} />
-      <Row label="MDL" value={m?.model || '\u2014'} color={COLOR_WARM} className="mb-[0.4cqh]" />
+      <Row label="MDL" value={m?.model || '\u2014'} color={COLOR_WARM} />
+      <Row
+        label="ROLL"
+        value={formatElapsed((latentFrameCountRef.current * nFrames) / (m?.inferenceFps ?? 60))}
+        color={COLOR_HUD}
+        className="mb-[0.4cqh]"
+      />
       <Row
         label="FPS"
         value={perceivedFps > 0 ? `${perceivedFps.toFixed(2)} fps` : '--'}

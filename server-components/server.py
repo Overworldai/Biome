@@ -1565,11 +1565,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
         def _build_initial_metrics() -> dict:
             """Static session info sent once at connection start."""
+            from engine_manager import DEFAULT_INFERENCE_FPS
             return {
                 "type": "metrics",
                 "gpu_name": _metrics_gpu_name,
                 "cpu_name": _metrics_cpu_name,
                 "model": getattr(world_engine, 'model_uri', "") or "",
+                "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
             }
 
         def queue_send(payload: dict | bytes) -> None:

@@ -29,6 +29,7 @@ export type ServerMetrics = {
   gpuName: string | null
   cpuName: string | null
   model: string
+  inferenceFps: number
   profile: FrameProfile | null
 }
 
@@ -90,10 +91,16 @@ export const useWebSocket = (): WebSocketHook => {
   const frameNFramesRef = useRef<number>(1)
   const frameIdRef = useRef<number>(0)
   const [nFrames, setNFrames] = useState(1)
-  const staticMetricsRef = useRef<{ gpuName: string | null; cpuName: string | null; model: string }>({
+  const staticMetricsRef = useRef<{
+    gpuName: string | null
+    cpuName: string | null
+    model: string
+    inferenceFps: number
+  }>({
     gpuName: null,
     cpuName: null,
-    model: ''
+    model: '',
+    inferenceFps: 60
   })
   const rpcRef = useRef(new WsRpcClient())
   const resolveServerMessage = useCallback(
@@ -268,7 +275,8 @@ export const useWebSocket = (): WebSocketHook => {
             staticMetricsRef.current = {
               gpuName: (msg.gpu_name as string | null) ?? null,
               cpuName: (msg.cpu_name as string | null) ?? null,
-              model: (msg.model as string) ?? ''
+              model: (msg.model as string) ?? '',
+              inferenceFps: (msg.inference_fps as number) ?? 60
             }
             setServerMetrics({
               ...staticMetricsRef.current,

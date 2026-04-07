@@ -67,6 +67,7 @@ MODEL_CFG = {
         "has_prompt_conditioning": False,
     },
 }
+DEFAULT_INFERENCE_FPS = 60
 
 BUTTON_CODES = {}
 # A-Z keys
@@ -199,6 +200,8 @@ class WorldEngineManager:
         temporal_compression = getattr(model_cfg, "temporal_compression", None)
         if temporal_compression is not None:
             cfg["n_frames"] = int(temporal_compression)
+
+        cfg["inference_fps"] = int(getattr(model_cfg, "inference_fps", DEFAULT_INFERENCE_FPS))
 
         return cfg
 
@@ -401,6 +404,7 @@ class WorldEngineManager:
             self.is_multiframe = self.n_frames > 1
             self.seed_target_size = self.cfg["seed_target_size"]
             self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
+            self.inference_fps = self.cfg.get("inference_fps", DEFAULT_INFERENCE_FPS)
             logger.info(f"[2/4] Model type: {self.cfg['label']}")
             logger.info(f"[2/4] Seed target size: {self.seed_target_size}")
             logger.info(f"[2/4] Prompt conditioning: {self.has_prompt_conditioning}")
