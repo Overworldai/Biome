@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_MODEL_URI = "Overworld/Waypoint-1-Small"
-QUANT = None
 N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
@@ -130,6 +129,7 @@ class WorldEngineManager:
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
         self.CtrlInput = None
         self.model_uri = DEFAULT_MODEL_URI
+        self.quant = None
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
         self.cfg = MODEL_CFG["waypoint-1"].copy()
@@ -307,18 +307,25 @@ class WorldEngineManager:
             lambda: self._load_seed_from_base64_sync(base64_data)
         )
 
-    async def load_engine(self, model_uri: str | None = None):
+    async def load_engine(self, model_uri: str | None = None, quant: str | None = None):
         """Initialize or switch the WorldEngine model."""
         async with self._model_load_lock:
             # Re-evaluate after acquiring lock in case another task just loaded this model.
             requested_model = self._normalize_model_uri(model_uri)
+            requested_quant = quant or None  # Normalize empty string to None
 
-            if self.engine is not None and requested_model == self.model_uri:
-                logger.info(f"[ENGINE] Model already loaded: {requested_model}")
+            model_unchanged = requested_model == self.model_uri
+            quant_unchanged = requested_quant == self.quant
+
+            if self.engine is not None and model_unchanged and quant_unchanged:
+                logger.info(f"[ENGINE] Model already loaded: {requested_model} (quant={self.quant})")
                 return
 
-            if self.engine is not None and requested_model != self.model_uri:
-                logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
+            if self.engine is not None:
+                if not model_unchanged:
+                    logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
+                if not quant_unchanged:
+                    logger.info(f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}")
                 self._log_cuda_memory("before unload")
                 await self._run_on_cuda_thread(self._unload_engine_sync)
                 self._log_cuda_memory("after unload")
@@ -345,7 +352,7 @@ class WorldEngineManager:
 
             self._report_progress(SESSION_LOADING_MODEL)
             logger.info(f"[2/4] Loading model: {requested_model}")
-            logger.info(f"      Quantization: {QUANT}")
+            logger.info(f"      Quantization: {requested_quant}")
             logger.info(f"      Device: {DEVICE}")
             logger.info(f"      N_FRAMES: {N_FRAMES}")
             logger.info(f"      Prompt: {self.current_prompt[:60]}...")
@@ -363,7 +370,7 @@ class WorldEngineManager:
                         return WorldEngine(
                             requested_model,
                             device=DEVICE,
-                            quant=QUANT,
+                            quant=requested_quant,
                             dtype=dtype,
                         )
 
@@ -407,6 +414,7 @@ class WorldEngineManager:
 
             self._report_progress(SESSION_LOADING_DONE)
             self.model_uri = requested_model
+            self.quant = requested_quant
 
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
             # seed_frame when a new seed is required after a model switch.

@@ -154,6 +154,13 @@ const en = {
           fixInPlace: 'Fix In Place',
           totalReinstall: 'Total Reinstall'
         },
+        quantization: {
+          title: 'Quantization',
+          description: 'trade a little quality for faster speed and lower memory?',
+          none: 'None (full precision)',
+          fp8w8a8: 'FP8 W8A8',
+          intw8a8: 'INT8 W8A8'
+        },
         worldModel: {
           title: 'World Model',
           description: 'which Overworld model will simulate your world?',

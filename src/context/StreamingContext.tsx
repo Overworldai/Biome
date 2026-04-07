@@ -220,18 +220,21 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         setPlaceholderFrame(result.blob)
       })
       .catch(() => null)
+    const quant = settings.engine_quant ?? 'none'
     sendModel(selectedModel, seed, {
-      sceneEdit: settings.experimental?.scene_edit_enabled ?? false
+      sceneEdit: settings.experimental?.scene_edit_enabled ?? false,
+      quant
     })
     lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
-      ? `${selectedModel}+scene_edit`
-      : selectedModel
+      ? `${selectedModel}+scene_edit+${quant}`
+      : `${selectedModel}+${quant}`
     warmBootstrapSentRef.current = true
   }, [
     state,
     states.LOADING,
     isConnected,
     settings?.engine_model,
+    settings?.engine_quant,
     settings.experimental?.scene_edit_enabled,
     sendModel,
     setPlaceholderFrame,
@@ -302,7 +305,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         isPointerLocked,
         settingsOpen,
         isPaused,
-        sceneEditEnabled: settings.experimental?.scene_edit_enabled
+        sceneEditEnabled: settings.experimental?.scene_edit_enabled,
+        engineQuant: settings.engine_quant
       })
     })
   }, [
@@ -310,6 +314,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     connectionState,
     error,
     settings?.engine_model,
+    settings?.engine_quant,
     settings.experimental?.scene_edit_enabled,
     engineError,
     hasReceivedFrame,

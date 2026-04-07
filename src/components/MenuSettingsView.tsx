@@ -4,7 +4,7 @@ import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
 import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES, type AppLocale, type Keybindings } from '../types/settings'
+import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
@@ -23,6 +23,10 @@ import WorldEngineSection from './WorldEngineSection'
 import EngineInstallModal from './EngineInstallModal'
 import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
 import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
+
+const isMac = navigator.platform.startsWith('Mac')
+/** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
+const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
 
 type MenuModelOption = {
   id: string
@@ -108,6 +112,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
 
+  const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
     () => settings.experimental?.scene_edit_enabled ?? false
@@ -234,6 +239,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuWorldModel(configWorldModel)
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
     setMenuServerUrl(configServerUrl)
+    setMenuQuant(settings.engine_quant ?? 'none')
     setMenuKeybindings({ ...settings.keybindings })
     setMenuSceneEditEnabled(settings.experimental?.scene_edit_enabled ?? false)
     setMenuPerformanceStats(settings.debug_overlays.performance_stats)
@@ -360,6 +366,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       server_url: nextServerUrl,
       engine_mode: engineModeValue,
       engine_model: menuWorldModel,
+      engine_quant: menuQuant,
       mouse_sensitivity: streamingValue,
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
@@ -381,6 +388,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuMouseSensitivity,
     menuServerUrl,
     menuWorldModel,
+    menuQuant,
     menuKeybindings,
     menuSceneEditEnabled,
     menuPerformanceStats,
@@ -393,13 +401,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
   const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
+  const hasQuantChanged = menuQuant !== (settings.engine_quant ?? 'none')
 
   const handleBackClick = useCallback(async () => {
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowServerErrorModal(true)
       return
     }
-    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged)) {
+    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged || hasQuantChanged)) {
       setShowModeSwitchModal(true)
       return
     }
@@ -569,6 +578,17 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             {menuModelsError && (
               <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0.35cqh_0_0.8cqh]`}>{menuModelsError}</p>
             )}
+          </SettingsSection>
+
+          <SettingsSection title="app.settings.quantization.title" description="app.settings.quantization.description">
+            <SettingsSelect
+              options={availableQuantOptions.map((q) => ({
+                value: q,
+                label: `app.settings.quantization.${q}` as const
+              }))}
+              value={menuQuant}
+              onChange={(v) => setMenuQuant(v as QuantOption)}
+            />
           </SettingsSection>
 
           <SettingsSection title="app.settings.language.title" description="app.settings.language.description">

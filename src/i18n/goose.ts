@@ -155,6 +155,13 @@ const goose = {
           fixInPlace: 'Preen in place',
           totalReinstall: 'Full molt'
         },
+        quantization: {
+          title: 'Feather compression',
+          description: 'pluck a few feathers to waddle faster with less nest space?',
+          none: 'None (full plumage)',
+          fp8w8a8: 'FP8 W8A8',
+          intw8a8: 'INT8 W8A8'
+        },
         worldModel: {
           title: 'Goose Model',
           description: 'which goose will waddle through your world?',

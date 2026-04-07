@@ -1306,7 +1306,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "set_model", "model": str}
+            {"type": "set_model", "model": str, "quant": str|null}
             {"type": "reset"}
             {"type": "set_initial_seed", "filename": str}
             {"type": "prompt", "prompt": str}
@@ -1496,7 +1496,7 @@ async def websocket_endpoint(websocket: WebSocket):
         return True
 
     async def handle_model_request(
-        model_uri: str | None, live_switch: bool, seed_filename: str | None = None
+        model_uri: str | None, live_switch: bool, seed_filename: str | None = None, quant: str | None = None
     ) -> None:
         """Load/switch model and transition back to waiting-for-seed state."""
         model_uri = (model_uri or "").strip()
@@ -1508,10 +1508,10 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"[{client_host}] Live model switch requested: {model_uri}")
         else:
             logger.info(f"[{client_host}] Requested model: {model_uri}")
-        logger.info(f"[{client_host}] set_model seed payload: {seed_filename!r}")
+        logger.info(f"[{client_host}] set_model seed payload: {seed_filename!r}, quant: {quant!r}")
 
         world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
-        await world_engine.load_engine(model_uri)
+        await world_engine.load_engine(model_uri, quant=quant)
         world_engine.set_progress_callback(None)
 
         world_engine.seed_frame = None
@@ -1565,6 +1565,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         msg.get("model"),
                         live_switch=False,
                         seed_filename=msg.get("seed"),
+                        quant=msg.get("quant"),
                     )
 
                 elif msg_type == "set_initial_seed":
@@ -1801,7 +1802,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     match msg_type:
                         case "set_model":
-                            await handle_model_request(msg.get("model"), live_switch=True)
+                            await handle_model_request(msg.get("model"), live_switch=True, quant=msg.get("quant"))
                             if world_engine.seed_frame is not None:
                                 reset_flag = True
                             continue

@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
 export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh', 'goose'] as const
+export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
+export type QuantOption = (typeof QUANT_OPTIONS)[number]
 
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
@@ -40,6 +42,7 @@ export const settingsSchema = z.object({
   server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
+  engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   custom_models: z.array(z.string()).default([]),
   mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.0),
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
