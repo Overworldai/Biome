@@ -301,6 +301,8 @@ const en = {
           sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
           sceneEditAlreadyInProgress: 'Scene edit already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
+          quantUnsupportedGpu:
+            'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
           cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
         },
         warning: {

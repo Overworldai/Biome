@@ -1625,7 +1625,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
-            await world_engine.warmup()
+            try:
+                await world_engine.warmup()
+            except RuntimeError as e:
+                err_str = str(e)
+                if "compute capability" in err_str or "scaled_mm" in err_str:
+                    logger.error(f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}")
+                    await send_json({
+                        "type": "error",
+                        "message_id": "app.server.error.quantUnsupportedGpu",
+                        "params": {"quant": world_engine.quant or "unknown"},
+                    })
+                    return
+                raise
 
         # Init session (reset, seed, prompt) with granular progress
         await world_engine.init_session()

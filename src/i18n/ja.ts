@@ -302,6 +302,7 @@ const ja = {
             'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',
           sceneEditAlreadyInProgress: 'シーン編集が既に進行中です',
           contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
+          quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
           cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
         },
         warning: {

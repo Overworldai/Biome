@@ -302,6 +302,7 @@ const goose = {
           sceneEditModelNotLoaded: 'Pond edit model not loaded. Enable Pond Edit in Experimental Honks settings.',
           sceneEditAlreadyInProgress: 'Pond edit already in progress',
           contentFilterLoadFailed: 'Fox detector failed to load',
+          quantUnsupportedGpu: 'Your nest does not support {{quant}} feather compression. Try a different setting.',
           cudaRecoveryFailed: 'CUDA honk — recovery failed. Please re-waddle.'
         },
         warning: {
