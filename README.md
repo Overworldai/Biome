@@ -64,14 +64,9 @@ Interested in setting up World Engine for the "Server" option under settings? To
 
 - [Remote Server Setup](server-components/README.md)
 
-## Releases
+## Development
 
-Releases are automated via GitHub Actions. To trigger a new release:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build commands, architecture overview, code style, and release instructions.
 
 ## License
 

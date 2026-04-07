@@ -6,12 +6,18 @@ npm run build        # Production build with installers
 npm run package      # Package without installers
 npm run lint         # Check formatting (Prettier) + type-check (tsc)
 npm run lint-fix     # Auto-fix formatting (Prettier) + type-check (tsc) — run after finishing work
-
-node scripts/release.mjs          # Print current version
-node scripts/release.mjs <version> # Cut a release (bump versions, commit, tag)
 ```
 
 No test framework is configured.
+
+## Cutting a Release
+
+```bash
+node scripts/release.mjs          # Print current version
+node scripts/release.mjs <version> # Bump versions, commit, and tag
+```
+
+This updates version numbers across the project, creates a commit, and tags it. Follow the script's output for next steps.
 
 Run `npm run lint` after every major block of work to catch formatting and type errors early. Use `npm run lint-fix` to auto-fix formatting issues found by the linter.
 
