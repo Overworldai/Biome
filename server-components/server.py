@@ -788,9 +788,11 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Seed loaded successfully")
         return True
 
-    async def handle_init(msg: dict, is_game_loop: bool = False) -> bool:
-        """Handle unified init message — apply deltas for model, seed, flags."""
-        nonlocal scene_edit_requested, action_logging_requested, action_logger
+    async def handle_init(msg: dict, is_game_loop: bool = False) -> tuple[bool, bool]:
+        """Handle unified init message — apply deltas for model, seed, flags.
+        Returns (ready, seed_loaded): ready=session has a seed frame,
+        seed_loaded=a new seed was loaded in this call."""
+        nonlocal scene_edit_requested, action_logging_requested, action_logger, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
@@ -840,7 +842,8 @@ async def websocket_endpoint(websocket: WebSocket):
         if model_changed and not seed_loaded and not world_engine.seed_frame:
             await send_stage(SESSION_WAITING_FOR_SEED)
 
-        return seed_loaded or (world_engine.seed_frame is not None)
+        ready = seed_loaded or (world_engine.seed_frame is not None)
+        return ready, seed_loaded
 
     scene_edit_requested = False
     action_logging_requested = False
@@ -878,7 +881,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if msg_type == "init":
                     # init RPC: response is deferred until after warmup/session init completes
                     init_req_id = msg.get("req_id")
-                    ready = await handle_init(msg)
+                    ready, _ = await handle_init(msg)
                     if not ready and init_req_id:
                         await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.initFailed"})
                         init_req_id = None
@@ -1104,9 +1107,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if "req_id" in msg:
                         if msg_type == "init":
                             # init RPC: apply deltas and respond with metrics
-                            seed_loaded = await handle_init(msg, is_game_loop=True)
+                            ready, new_seed = await handle_init(msg, is_game_loop=True)
                             from engine_manager import DEFAULT_INFERENCE_FPS
-                            if seed_loaded or world_engine.seed_frame is not None:
+                            if ready:
                                 queue_send({
                                     "type": "response",
                                     "req_id": msg["req_id"],
@@ -1125,7 +1128,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "success": False,
                                     "error_id": "app.server.error.initFailed",
                                 })
-                            if seed_loaded:
+                            if new_seed:
                                 reset_flag = True
                         elif msg_type == "scene_edit":
                             # scene_edit is handled by the generator thread at
