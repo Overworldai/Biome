@@ -217,14 +217,17 @@ const ja = {
           description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
           sceneEdit: 'シーン編集',
           sceneEditDescription:
-            'ゲームプレイ中にキーを押して、AIでテキストプロンプトを使ってシーンを編集します。追加で約10GBのVRAMが必要です。'
+            'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
         },
         debugMetrics: {
           title: 'デバッグメトリクス',
           description: '内部で何が起きているか見ますか？',
           performanceStats: '性能統計',
+          performanceStatsDescription: 'FPS、フレーム時間、GPU使用率、VRAM、レイテンシのスパークラインを表示します。',
           inputOverlay: '入力オーバーレイ',
+          inputOverlayDescription: 'アクティブな入力をハイライトするキーボードとマウスの図を表示します。',
           frameTimeline: 'フレームタイムライン',
+          frameTimelineDescription: 'スロットごとのタイミングを含むフレーム補間パイプラインを表示します。',
           actionLogging: 'アクションログ',
           actionLoggingDescription: 'リプレイ用に全入力をサーバー上のファイルに記録します。/tmpに書き込まれます。'
         },

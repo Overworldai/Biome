@@ -218,14 +218,17 @@ const en = {
           description: 'want to try some rough ideas that might change or disappear?',
           sceneEdit: 'Scene Edit',
           sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using AI. Requires ~10GB additional VRAM.'
+            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
         debugMetrics: {
           title: 'Debug Metrics',
           description: "want to see what's happening under the hood?",
           performanceStats: 'Performance Stats',
+          performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',
           inputOverlay: 'Input Overlay',
+          inputOverlayDescription: 'Show a keyboard and mouse diagram highlighting active inputs.',
           frameTimeline: 'Frame Timeline',
+          frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
           actionLogging: 'Action Logging',
           actionLoggingDescription: 'Record all inputs to a file on the server for replay. Written to /tmp.'
         },

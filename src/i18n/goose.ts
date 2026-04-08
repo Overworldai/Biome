@@ -219,14 +219,18 @@ const goose = {
           description: 'want to try some half-baked eggs that might hatch or roll away?',
           sceneEdit: 'Pond edit',
           sceneEditDescription:
-            'Honk a key during waddling to edit the pond with a text quack using AI. Requires ~10GB additional nest space.'
+            'Honk a key during waddling to edit the pond with a text quack using a local image edit model. Requires 8-10 GB additional nest space.'
         },
         debugMetrics: {
           title: 'Goose telemetry',
           description: 'want to see what the goose is thinking?',
           performanceStats: 'Waddle stats',
+          performanceStatsDescription:
+            'Show honks per second, waddle time, pond usage, nest memory, and lag sparklines.',
           inputOverlay: 'Peck overlay',
+          inputOverlayDescription: 'Show a beak and webbed-foot diagram highlighting active pecks.',
           frameTimeline: 'Feather timeline',
+          frameTimelineDescription: 'Show the feather interpolation pipeline with per-egg timing.',
           actionLogging: 'Migration log',
           actionLoggingDescription:
             'Record all pecks and waddles to a file on the pond server for replay. Honked to /tmp.'

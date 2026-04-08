@@ -692,16 +692,19 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             <div className="flex flex-col gap-[1cqh]">
               <SettingsCheckbox
                 label="app.settings.debugMetrics.performanceStats"
+                description="app.settings.debugMetrics.performanceStatsDescription"
                 checked={menuPerformanceStats}
                 onChange={setMenuPerformanceStats}
               />
               <SettingsCheckbox
                 label="app.settings.debugMetrics.inputOverlay"
+                description="app.settings.debugMetrics.inputOverlayDescription"
                 checked={menuInputOverlay}
                 onChange={setMenuInputOverlay}
               />
               <SettingsCheckbox
                 label="app.settings.debugMetrics.frameTimeline"
+                description="app.settings.debugMetrics.frameTimelineDescription"
                 checked={menuFrameTimeline}
                 onChange={setMenuFrameTimeline}
               />

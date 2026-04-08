@@ -211,14 +211,17 @@ const zh = {
           title: '实验性功能',
           description: '想尝试一些可能会改变或消失的粗略想法吗？',
           sceneEdit: '场景编辑',
-          sceneEditDescription: '在游戏过程中按键，使用AI通过文字提示编辑场景。需要额外约10GB显存。'
+          sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
         },
         debugMetrics: {
           title: '调试指标',
           description: '想看看底层正在发生什么吗？',
           performanceStats: '性能统计',
+          performanceStatsDescription: '显示FPS、帧时间、GPU使用率、显存和延迟的迷你图。',
           inputOverlay: '输入叠层',
+          inputOverlayDescription: '显示键盘和鼠标示意图，高亮当前活动的输入。',
           frameTimeline: '帧时间线',
+          frameTimelineDescription: '显示帧插值管线及每个槽位的计时。',
           actionLogging: '操作日志',
           actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入 /tmp。'
         },
