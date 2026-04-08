@@ -230,7 +230,8 @@ const en = {
           frameTimeline: 'Frame Timeline',
           frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
           actionLogging: 'Action Logging',
-          actionLoggingDescription: 'Record all inputs to a file on the server for replay. Written to /tmp.'
+          actionLoggingDescription:
+            "Record all inputs to a file on the server for replay. Written to the OS's temp directory."
         },
         credits: {
           title: 'Credits'

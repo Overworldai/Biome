@@ -233,7 +233,7 @@ const goose = {
           frameTimelineDescription: 'Show the feather interpolation pipeline with per-egg timing.',
           actionLogging: 'Migration log',
           actionLoggingDescription:
-            'Record all pecks and waddles to a file on the pond server for replay. Honked to /tmp.'
+            "Record all pecks and waddles to a file on the pond server for replay. Honked to the OS's temp nest."
         },
         credits: {
           title: 'The flock'

@@ -1,9 +1,9 @@
 """
 Optional per-session action stream recorder.
 
-Writes every consumed input to an NDJSON file under /tmp so sessions can be
-replayed against the same model and seed.  Enabled per-session by the client
-via the ``action_logging`` flag in the ``set_model`` message.
+Writes every consumed input to an NDJSON file under the OS temp directory so
+sessions can be replayed against the same model and seed.  Enabled per-session
+by the client via the ``action_logging`` flag in the ``set_model`` message.
 
 A new file is created each time the engine resets to a seed or unpauses.
 Each file starts with ``session_start`` and ends with ``session_end``.
@@ -13,6 +13,7 @@ sub-frames.
 
 import datetime
 import json
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -20,7 +21,7 @@ from typing import Literal, TypedDict, Union
 
 from server_logging import logger
 
-ACTION_LOG_DIR = Path("/tmp")
+ACTION_LOG_DIR = Path(tempfile.gettempdir())
 
 # -- Event types ----------------------------------------------------------
 
