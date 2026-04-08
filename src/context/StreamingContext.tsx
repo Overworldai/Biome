@@ -110,6 +110,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sceneEditState, dispatchSceneEdit] = useReducer(sceneEditReducer, initialSceneEditState)
   const sceneEditActive = sceneEditState.phase !== 'inactive'
+  const [sceneEditGrace, setSceneEditGrace] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(() => settings.mouse_sensitivity ?? 1.0)
   const [fps, setFps] = useState(0)
@@ -146,6 +147,17 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const isStreaming = state === states.STREAMING
   const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen && !connectionLost && !sceneEditActive
   const canUnpause = pauseElapsedMs >= UNLOCK_DELAY_MS
+
+  // Time-based grace period after scene edit closes — suppresses pauseOnPointerUnlock
+  // long enough for the delayed requestPointerLock() to succeed.
+  useEffect(() => {
+    if (sceneEditActive) {
+      setSceneEditGrace(true)
+    } else if (sceneEditGrace) {
+      const timer = setTimeout(() => setSceneEditGrace(false), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [sceneEditActive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track elapsed time since pause for unlock delay
   useEffect(() => {
@@ -309,8 +321,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   }, [reset, requestPointerLock])
 
   const handleSceneEdit = useCallback(() => {
+    exitPointerLock()
     dispatchSceneEdit({ type: 'OPEN' })
-  }, [])
+  }, [exitPointerLock])
 
   const { pressedKeys, mouseButtons, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
@@ -335,6 +348,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         isPointerLocked,
         settingsOpen,
         isPaused,
+        sceneEditActive: sceneEditGrace,
         sceneEditEnabled: settings.experimental?.scene_edit_enabled,
         engineQuant: settings.engine_quant
       })
@@ -351,7 +365,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isReady,
     isPointerLocked,
     settingsOpen,
-    isPaused
+    isPaused,
+    sceneEditGrace
   ])
 
   useEffect(() => {

@@ -15,6 +15,7 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   isPointerLocked: boolean
   settingsOpen: boolean
   isPaused: boolean
+  sceneEditActive: boolean
   sceneEditEnabled?: boolean
   engineQuant?: string
 }
@@ -40,6 +41,7 @@ export const buildStreamingLifecycleSyncPayload = (
     socketReady: args.socketReady,
     isPointerLocked: args.isPointerLocked,
     settingsOpen: args.settingsOpen,
-    isPaused: args.isPaused
+    isPaused: args.isPaused,
+    sceneEditActive: args.sceneEditActive
   }
 }

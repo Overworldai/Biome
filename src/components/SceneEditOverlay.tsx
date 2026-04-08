@@ -9,7 +9,7 @@ import type { TranslationKey } from '../i18n'
 
 const SceneEditOverlay = () => {
   const { t } = useTranslation()
-  const { sceneEditState, dispatchSceneEdit, wsRequest } = useStreaming()
+  const { sceneEditState, dispatchSceneEdit, wsRequest, requestPointerLock } = useStreaming()
   const { phase, errorMessage } = sceneEditState
   const isActive = phase !== 'inactive'
 
@@ -45,6 +45,23 @@ const SceneEditOverlay = () => {
     window.addEventListener('keydown', handleGlobalKeyDown, true)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true)
   }, [isActive, dispatchSceneEdit])
+
+  // Re-acquire pointer lock when scene edit finishes (dismiss, success, or error timeout)
+  // so the lifecycle machine doesn't interpret the unlocked state as a pause request.
+  const wasActiveRef = useRef(false)
+  useEffect(() => {
+    if (isActive) {
+      wasActiveRef.current = true
+    } else if (wasActiveRef.current) {
+      wasActiveRef.current = false
+      // Delay pointer lock re-acquisition so the Escape keyup event passes
+      // first — the browser revokes pointer lock if Escape is still held.
+      const timer = setTimeout(() => {
+        requestPointerLock()
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [isActive, requestPointerLock])
 
   const handleSubmit = useCallback(async () => {
     const trimmed = prompt.trim()

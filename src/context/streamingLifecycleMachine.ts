@@ -82,6 +82,7 @@ export type StreamingLifecycleSyncPayload = {
   isPointerLocked: boolean
   settingsOpen: boolean
   isPaused: boolean
+  sceneEditActive: boolean
 }
 
 export type StreamingLifecycleEvent = {
@@ -106,7 +107,8 @@ export const streamingLifecycleReducer = (
     socketReady,
     isPointerLocked,
     settingsOpen,
-    isPaused
+    isPaused,
+    sceneEditActive
   } = event.payload
 
   const next: StreamingLifecycleState = {
@@ -170,7 +172,7 @@ export const streamingLifecycleReducer = (
 
   if (streamingReady && isPointerLocked && (settingsOpen || isPaused)) {
     next.effects.resumeOnPointerLock = true
-  } else if (streamingReady && !isPointerLocked && !settingsOpen && !isPaused) {
+  } else if (streamingReady && !isPointerLocked && !settingsOpen && !isPaused && !sceneEditActive) {
     next.effects.pauseOnPointerUnlock = true
   }
 
