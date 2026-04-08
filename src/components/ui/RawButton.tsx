@@ -87,7 +87,7 @@ const RawButton = ({
     <button
       ref={buttonRef}
       type="button"
-      className={`inline-flex min-w-0 items-center justify-center text-center whitespace-nowrap overflow-hidden font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150 ${variantClasses[variant]} ${className}`}
+      className={`inline-flex min-w-0 items-center justify-center text-center whitespace-nowrap overflow-x-clip overflow-y-visible font-serif rounded-none cursor-pointer border outline-0 hover:outline-2 transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150 ${variantClasses[variant]} ${className}`}
       onMouseEnter={playHover}
       onMouseDown={playClick}
       {...rest}
@@ -95,7 +95,7 @@ const RawButton = ({
       {autoShrinkLabel ? (
         <span
           ref={labelWrapRef}
-          className="flex flex-1 min-w-0 items-center justify-center overflow-hidden whitespace-nowrap text-center"
+          className="flex flex-1 min-w-0 items-center justify-center overflow-x-clip overflow-y-visible whitespace-nowrap text-center"
         >
           <span ref={labelTextRef} className="inline-block whitespace-nowrap" style={labelStyle}>
             {children}
