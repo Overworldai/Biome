@@ -11,7 +11,7 @@ import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { requestPointerLock, reset, selectSeed } = useStreaming()
+  const { requestPointerLock, reset, selectSeed, wsRequest } = useStreaming()
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)
@@ -28,6 +28,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     handleImageDrop,
     handleClipboardUpload
   } = useSeedManager({
+    wsRequest,
     isActive,
     onPinnedSceneRemoved: removePinnedScene
   })

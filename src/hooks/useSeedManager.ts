@@ -65,11 +65,12 @@ function sortSeeds(a: SeedFileRecord, b: SeedFileRecord) {
 }
 
 type UseSeedManagerOptions = {
+  wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   isActive: boolean
   onPinnedSceneRemoved: (filename: string) => void
 }
 
-export function useSeedManager({ isActive, onPinnedSceneRemoved }: UseSeedManagerOptions) {
+export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: UseSeedManagerOptions) {
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -83,6 +84,26 @@ export function useSeedManager({ isActive, onPinnedSceneRemoved }: UseSeedManage
       isMountedRef.current = false
     }
   }, [])
+
+  const checkSeedSafety = useCallback(
+    async (seedRecords: SeedRecord[]) => {
+      for (const seed of seedRecords) {
+        if (!isMountedRef.current) return
+        try {
+          const imageResult = await invoke('get-seed-image-base64', seed.filename)
+          if (!imageResult || !isMountedRef.current) continue
+          const result = await wsRequest<{ is_safe: boolean; hash: string }>('check_seed_safety', {
+            image_data: imageResult.base64
+          })
+          if (!isMountedRef.current) return
+          setSeeds((prev) => prev.map((s) => (s.filename === seed.filename ? { ...s, is_safe: result.is_safe } : s)))
+        } catch {
+          // Safety check failed — leave as null (unchecked)
+        }
+      }
+    },
+    [wsRequest]
+  )
 
   const loadSeedsAndThumbnails = useCallback(async () => {
     const records = await invoke('list-seeds')
@@ -116,7 +137,10 @@ export function useSeedManager({ isActive, onPinnedSceneRemoved }: UseSeedManage
     if (!isMountedRef.current) return
     const nextThumbs: Record<string, string> = Object.fromEntries(thumbEntries.filter((e) => e !== null))
     setThumbnails(nextThumbs)
-  }, [])
+
+    // Run safety checks in background (doesn't block UI)
+    void checkSeedSafety(seedRecords)
+  }, [checkSeedSafety])
 
   useEffect(() => {
     if (!isActive || loadingRef.current) return
