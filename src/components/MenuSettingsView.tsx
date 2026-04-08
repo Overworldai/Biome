@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
-import { HEADING_BASE, SETTINGS_LABEL_BASE, SETTINGS_MUTED_TEXT } from '../styles'
+import { HEADING_BASE, SETTINGS_MUTED_TEXT } from '../styles'
 import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
@@ -15,6 +15,7 @@ import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
 import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
+import SettingsRow from './ui/SettingsRow'
 import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
@@ -45,27 +46,13 @@ type KeybindRowProps =
 
 const KeybindRow = (props: KeybindRowProps) => {
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center gap-[2cqh]">
-        <span
-          className={`${SETTINGS_LABEL_BASE} text-text-primary w-[25cqh] max-w-[45%] text-right shrink-0 whitespace-normal break-words leading-[1.1]`}
-        >
-          {props.label}
-        </span>
-        <div className="flex-1">
-          {props.fixedLabel !== undefined ? (
-            <SettingsKeybind value={props.fixedLabel} disabled />
-          ) : (
-            <SettingsKeybind value={props.value} onChange={props.onChange} />
-          )}
-        </div>
-      </div>
-      {props.warning && (
-        <p className={`${SETTINGS_MUTED_TEXT} text-left m-0 mt-[0.4cqh] text-[1.8cqh] opacity-70 pl-[27cqh]`}>
-          {props.warning}
-        </p>
+    <SettingsRow label={props.label} hint={props.warning}>
+      {props.fixedLabel !== undefined ? (
+        <SettingsKeybind value={props.fixedLabel} disabled />
+      ) : (
+        <SettingsKeybind value={props.value} onChange={props.onChange} />
       )}
-    </div>
+    </SettingsRow>
   )
 }
 
