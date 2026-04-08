@@ -152,7 +152,8 @@ const zh = {
           title: '性能设置',
           description: '想要调整模型的性能吗？',
           quantization: '量化',
-          quantizationDescription: '降低模型精度以加快推理速度并减少显存占用，但会略微降低画质。',
+          quantizationDescription:
+            '降低模型精度以加快推理速度并减少显存占用，但会略微降低画质。\n首次使用INT8量化时，推理内核优化可能需要1-2小时，但这是一次性的。',
           capInferenceFps: '限制推理帧率',
           capInferenceFpsDescription: '将生成速率限制为模型的训练帧率。关闭此选项可能导致游戏速度快于预期。'
         },

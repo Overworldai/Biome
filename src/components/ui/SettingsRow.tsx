@@ -21,7 +21,11 @@ const SettingsRow = ({ label, hint, align = 'center', children }: SettingsRowPro
         <div className="flex-1">{children}</div>
       </div>
       {hint && (
-        <p className={`${SETTINGS_MUTED_TEXT} text-left m-0 mt-[0.4cqh] text-[1.8cqh] opacity-70 pl-[27cqh]`}>{hint}</p>
+        <p
+          className={`${SETTINGS_MUTED_TEXT} text-left m-0 mt-[0.4cqh] text-[1.8cqh] opacity-70 pl-[27cqh] whitespace-pre-line`}
+        >
+          {hint}
+        </p>
       )}
     </div>
   )

@@ -160,7 +160,7 @@ const goose = {
           description: "want to dial in the goose's waddle?",
           quantization: 'Feather compression',
           quantizationDescription:
-            'Plucks a few feathers for faster waddling with less nest space, at the cost of some plumage quality.',
+            'Plucks a few feathers for faster waddling with less nest space, at the cost of some plumage quality.\nFirst INT8 plucking takes 1-2 hours while the goose optimizes its molt - this is a one-time cost.',
           capInferenceFps: 'Cap honk rate',
           capInferenceFpsDescription:
             "Limits the waddling rate to the flock's trained pace. Turning this off may result in the goose waddling faster than intended."

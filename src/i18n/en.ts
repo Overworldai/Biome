@@ -159,7 +159,7 @@ const en = {
           description: "want to dial in the model's performance?",
           quantization: 'Quantization',
           quantizationDescription:
-            'Reduces model precision for faster inference and lower memory usage, at the cost of some visual quality.',
+            'Reduces model precision for faster inference and lower memory usage, at the cost of some visual quality.\nFirst use of INT8 quantization can take 1-2 hours while inference kernels are optimized - this is a one-time cost.',
           capInferenceFps: 'Cap Inference FPS',
           capInferenceFpsDescription:
             "Limits the generation rate to the model's trained framerate. Without this, the game may run faster than intended."
