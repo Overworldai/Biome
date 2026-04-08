@@ -148,6 +148,13 @@ const zh = {
           fixInPlace: '原地修复',
           totalReinstall: '全部重装'
         },
+        quantization: {
+          title: '量化',
+          description: '用少许画质换取更快的速度和更低的显存占用？',
+          none: '无（最高精度）',
+          fp8w8a8: 'FP8 W8A8',
+          intw8a8: 'INT8 W8A8'
+        },
         worldModel: {
           title: '世界模型',
           description: '要使用哪个 Overworld 模型来模拟你的世界？',
@@ -289,6 +296,7 @@ const zh = {
           sceneEditModelNotLoaded: '场景编辑模型未加载。请在实验性功能设置中启用场景编辑。',
           sceneEditAlreadyInProgress: '场景编辑已在进行中',
           contentFilterLoadFailed: '内容过滤器加载失败',
+          quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
           cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
         },
         warning: {

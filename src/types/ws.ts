@@ -20,6 +20,7 @@ export type InitMessage = {
   seed_filename?: string // informational, for action logging only
   scene_edit?: boolean
   action_logging?: boolean
+  quant?: string
 }
 export type InitResponse = {
   gpu_name: string | null

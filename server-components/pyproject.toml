@@ -3,7 +3,7 @@ name = "biome-server"
 version = "1.0.0-rc3"
 requires-python = "==3.12.*"
 dependencies = [
-  "world-engine @ https://github.com/Overworldai/world_engine/archive/d34a3e8a45b68fa107d73e6ffc2a2d6a99295a28.zip",
+  "world-engine @ https://github.com/Overworldai/world_engine/archive/470a05a01a928be24f05f19a8ff2b9b2039e9050.zip",
   "torch",
   "torchvision",
   "pillow",
@@ -30,6 +30,14 @@ dev = []
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+required-environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
+override-dependencies = [
+  "triton==3.6.0; sys_platform == 'linux'",
+  "triton-windows==3.6.0.post26; sys_platform == 'win32'",
+]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }

@@ -153,6 +153,13 @@ const ja = {
           fixInPlace: 'その場で修復',
           totalReinstall: '完全再インストール'
         },
+        quantization: {
+          title: '量子化',
+          description: '速度とメモリを優先して、少しだけ品質を下げますか？',
+          none: 'なし（最高精度）',
+          fp8w8a8: 'FP8 W8A8',
+          intw8a8: 'INT8 W8A8'
+        },
         worldModel: {
           title: 'ワールドモデル',
           description: 'どの Overworld モデルで世界をシミュレートしますか？',
@@ -297,6 +304,7 @@ const ja = {
             'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',
           sceneEditAlreadyInProgress: 'シーン編集が既に進行中です',
           contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
+          quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
           cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
         },
         warning: {

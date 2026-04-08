@@ -591,7 +591,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool}
+            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool, "quant": str|null}
             {"type": "reset"}
             {"type": "pause"}
             {"type": "resume"}
@@ -795,6 +795,7 @@ async def websocket_endpoint(websocket: WebSocket):
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
         seed_filename = msg.get("seed_filename")
+        quant = msg.get("quant")
 
         # Update flags
         if "scene_edit" in msg:
@@ -807,7 +808,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if model_uri and model_uri != getattr(world_engine, "model_uri", None):
             logger.info(f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri}")
             world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
-            await world_engine.load_engine(model_uri)
+            await world_engine.load_engine(model_uri, quant=quant)
             world_engine.set_progress_callback(None)
             world_engine.seed_frame = None
             session.frame_count = 0
@@ -913,7 +914,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Warmup on first connection AFTER seed is loaded
         if not world_engine.engine_warmed_up:
-            await world_engine.warmup()
+            try:
+                await world_engine.warmup()
+            except RuntimeError as e:
+                err_str = str(e)
+                if "compute capability" in err_str or "scaled_mm" in err_str:
+                    logger.error(f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}")
+                    await send_json({
+                        "type": "error",
+                        "message_id": "app.server.error.quantUnsupportedGpu",
+                        "params": {"quant": world_engine.quant or "unknown"},
+                    })
+                    return
+                raise
 
         # Init session (reset, seed, prompt) with granular progress
         await world_engine.init_session()

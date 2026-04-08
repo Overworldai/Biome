@@ -233,16 +233,18 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
       // Set lastAppliedModel before await to prevent the lifecycle machine from
       // seeing a model mismatch during the re-render triggered by setInitMetrics.
+      const quant = settings.engine_quant ?? 'none'
       lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
-        ? `${selectedModel}+scene_edit`
-        : selectedModel
+        ? `${selectedModel}+scene_edit+${quant}`
+        : `${selectedModel}+${quant}`
 
       const metrics = await sendInit({
         model: selectedModel,
         seed_image_data: imageData,
         seed_filename: seedFilename,
         scene_edit: settings.experimental?.scene_edit_enabled ?? false,
-        action_logging: settings.debug_overlays?.action_logging ?? false
+        action_logging: settings.debug_overlays?.action_logging ?? false,
+        quant: quant !== 'none' ? quant : undefined
       })
       setInitMetrics(metrics)
     }
@@ -253,6 +255,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     states.LOADING,
     isConnected,
     settings?.engine_model,
+    settings?.engine_quant,
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
     sendInit,
@@ -324,7 +327,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         isPointerLocked,
         settingsOpen,
         isPaused,
-        sceneEditEnabled: settings.experimental?.scene_edit_enabled
+        sceneEditEnabled: settings.experimental?.scene_edit_enabled,
+        engineQuant: settings.engine_quant
       })
     })
   }, [
@@ -332,6 +336,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     connectionState,
     error,
     settings?.engine_model,
+    settings?.engine_quant,
     settings.experimental?.scene_edit_enabled,
     engineError,
     hasReceivedFrame,

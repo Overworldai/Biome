@@ -155,6 +155,13 @@ const goose = {
           fixInPlace: 'Preen in place',
           totalReinstall: 'Full molt'
         },
+        quantization: {
+          title: 'Feather compression',
+          description: 'pluck a few feathers to waddle faster with less nest space?',
+          none: 'None (full plumage)',
+          fp8w8a8: 'FP8 W8A8',
+          intw8a8: 'INT8 W8A8'
+        },
         worldModel: {
           title: 'Goose Model',
           description: 'which goose will waddle through your world?',
@@ -298,6 +305,7 @@ const goose = {
           sceneEditModelNotLoaded: 'Pond edit model not loaded. Enable Pond Edit in Experimental Honks settings.',
           sceneEditAlreadyInProgress: 'Pond edit already in progress',
           contentFilterLoadFailed: 'Fox detector failed to load',
+          quantUnsupportedGpu: 'Your nest does not support {{quant}} feather compression. Try a different setting.',
           cudaRecoveryFailed: 'CUDA honk — recovery failed. Please re-waddle.'
         },
         warning: {
