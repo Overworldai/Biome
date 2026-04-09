@@ -33,6 +33,7 @@ from queue import Empty, Queue
 from typing import Optional, TypedDict
 
 from action_logger import ActionLogger
+from video_recorder import VideoRecorder
 from progress_stages import (
     Stage,
     STARTUP_BEGIN,
@@ -818,10 +819,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
                 )
+                video_recorder = VideoRecorder(client_host)
+                video_recorder.new_segment(
+                    width=world_engine.seed_target_size[1],
+                    height=world_engine.seed_target_size[0],
+                    fps=int(world_engine.inference_fps),
+                )
                 logger.info(f"[{client_host}] Action logging enabled")
             elif not action_logging_requested and action_logger is not None:
                 action_logger.end_segment()
                 action_logger = None
+                video_recorder.end_segment()
+                video_recorder = None
                 logger.info(f"[{client_host}] Action logging disabled")
 
         # Model delta — reload if model URI or quantization changed.
@@ -855,6 +864,7 @@ async def websocket_endpoint(websocket: WebSocket):
     action_logging_requested = False
     cap_inference_fps = True
     action_logger: ActionLogger | None = None
+    video_recorder: VideoRecorder | None = None
     current_seed_hash: str | None = None
     current_seed_filename: str | None = None
 
@@ -974,6 +984,19 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Ready for game loop")
 
         action_logger = ActionLogger(client_host) if action_logging_requested else None
+        video_recorder = VideoRecorder(client_host) if action_logging_requested else None
+
+        def _video_recorder_new_segment() -> None:
+            if video_recorder is not None:
+                video_recorder.new_segment(
+                    width=world_engine.seed_target_size[1],
+                    height=world_engine.seed_target_size[0],
+                    fps=int(world_engine.inference_fps),
+                )
+
+        def _video_recorder_end_segment() -> None:
+            if video_recorder is not None:
+                video_recorder.end_segment()
 
         def _action_logger_new_segment() -> None:
             if action_logger is not None:
@@ -990,6 +1013,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger.end_segment()
 
         _action_logger_new_segment()
+        _video_recorder_new_segment()
 
         running = True
         paused = False
@@ -1307,6 +1331,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     _flush_pending()
                     if not _gen_was_paused:
                         _action_logger_end_segment()
+                        _video_recorder_end_segment()
                         _gen_was_paused = True
                     time.sleep(0.01)
                     next_frame_time = 0.0
@@ -1315,6 +1340,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if _gen_was_paused:
                     _gen_was_paused = False
                     _action_logger_new_segment()
+                    _video_recorder_new_segment()
 
                 try:
                     # Start frame timer before pacing sleep so gen_time
@@ -1334,6 +1360,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         prompt_pending = None
                         run_coro(reset_engine())
                         _action_logger_new_segment()
+                        _video_recorder_new_segment()
                         next_frame_time = 0.0
 
                     # Auto-reset at context length limit (single-frame models only;
@@ -1349,6 +1376,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         run_coro(reset_engine())
                         reset_flag = False
                         _action_logger_new_segment()
+                        _video_recorder_new_segment()
                         next_frame_time = 0.0
 
                     # Handle pending scene edit — runs inpainting on the last
@@ -1440,6 +1468,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Keep all subframes for scene editing (read by receiver thread)
                     last_generated_cpu_frames = cpu_frames
 
+                    if video_recorder is not None:
+                        video_recorder.write_frames(cpu_frames)
+
                     # Stash this batch's CPU frames for deferred JPEG encoding
                     _flush_pending.work = (cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync)
 
@@ -1526,6 +1557,8 @@ async def websocket_endpoint(websocket: WebSocket):
         world_engine.set_progress_callback(None)
         if action_logger is not None:
             action_logger.end_segment()
+        if video_recorder is not None:
+            video_recorder.end_segment()
         logger.info(f"[{client_host}] Disconnected (frames: {session.perceptual_frame_count})")
 
 
