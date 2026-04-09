@@ -500,7 +500,7 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
-    inpaints it, expands to a full n_frames tensor, submits append_frame
+    inpaints it, expands to a full temporal_compression tensor, submits append_frame
     to the CUDA executor (required for CUDA graph compatibility), and
     returns preview data for the RPC response.
     """
@@ -533,11 +533,11 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
         )
         raise SafetyRejectionError()
 
-    # Expand to full n_frames for multiframe models
+    # Expand to full temporal_compression for multiframe models
     if world_engine.is_multiframe:
         inpainted = (
             inpainted.unsqueeze(0)
-            .expand(world_engine.n_frames, -1, -1, -1)
+            .expand(world_engine.temporal_compression, -1, -1, -1)
             .contiguous()
         )
 
@@ -714,7 +714,7 @@ async def websocket_endpoint(websocket: WebSocket):
         world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
         await world_engine.init_session()
         world_engine.set_progress_callback(None)
-        session.frame_count = 0
+        session.perceptual_frame_count = 0
         logger.info(f"[{client_host}] Engine Reset")
 
     async def load_seed_from_data(image_data_b64: str | None, seed_filename: str | None = None) -> bool:
@@ -814,7 +814,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger.new_segment(
                     model=getattr(world_engine, "model_uri", None),
                     seed=current_seed_filename,
-                    n_frames=world_engine.n_frames,
+                    temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
                 )
@@ -833,7 +833,8 @@ async def websocket_endpoint(websocket: WebSocket):
             await world_engine.load_engine(model_uri, quant=quant)
             world_engine.set_progress_callback(None)
             world_engine.seed_frame = None
-            session.frame_count = 0
+            session.perceptual_frame_count = 0
+            session.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
             model_changed = True
             logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
 
@@ -979,7 +980,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger.new_segment(
                     model=getattr(world_engine, "model_uri", None),
                     seed=current_seed_filename,
-                    n_frames=world_engine.n_frames,
+                    temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
                 )
@@ -1076,8 +1077,8 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass  # metrics are best-effort
 
-        def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float, n_frames: int = 1, profile: dict | None = None) -> bytes:
-            header_data = {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms, "n_frames": n_frames}
+        def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float, temporal_compression: int = 1, profile: dict | None = None) -> bytes:
+            header_data = {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms, "temporal_compression": temporal_compression}
             header_data.update(_cached_gpu_metrics)
             if profile is not None:
                 header_data.update(profile)
@@ -1269,19 +1270,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 """JPEG-encode + queue pending CPU frames."""
                 if not _flush_pending.work:
                     return
-                cpu_frames, gen_time, n_frames, client_ts, t_infer_start, t_infer, t_sync = _flush_pending.work
+                cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync = _flush_pending.work
                 _flush_pending.work = None
 
                 t_enc_start = time.perf_counter()
                 encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in cpu_frames]
                 t_enc = time.perf_counter()
 
-                if session.frame_count % 5 == 0:
+                if session.perceptual_frame_count % 5 == 0:
                     _update_gpu_metrics()
                 t_metrics = time.perf_counter()
 
                 for jpeg in encoded:
-                    session.frame_count += 1
+                    session.perceptual_frame_count += 1
                     t_queued = time.perf_counter()
                     profile = {
                         "t_infer_ms": round((t_infer - t_infer_start) * 1000, 1),
@@ -1290,11 +1291,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         "t_metrics_ms": round((t_metrics - t_enc) * 1000, 1),
                         "t_overhead_ms": round((t_queued - t_metrics) * 1000, 1),
                     }
-                    queue_send(build_binary_frame(jpeg, session.frame_count, client_ts, gen_time, n_frames=n_frames, profile=profile))
+                    queue_send(build_binary_frame(jpeg, session.perceptual_frame_count, client_ts, gen_time, temporal_compression=temporal_compression, profile=profile))
 
-                if session.frame_count % 60 == 0:
+                if session.perceptual_frame_count % 60 == 0:
                     logger.info(
-                        f"[{client_host}] Sent frame {session.frame_count} (gen={gen_time:.1f}ms)"
+                        f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={gen_time:.1f}ms)"
                     )
 
             _flush_pending.work = None
@@ -1335,9 +1336,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         _action_logger_new_segment()
                         next_frame_time = 0.0
 
-                    if reset_flag or session.frame_count >= session.max_frames:
+                    if reset_flag or session.perceptual_frame_count >= session.max_perceptual_frames:
                         _flush_pending()
-                        if session.frame_count >= session.max_frames:
+                        if session.perceptual_frame_count >= session.max_perceptual_frames:
                             logger.info(f"[{client_host}] Auto-reset at frame limit")
                         run_coro(reset_engine())
                         reset_flag = False
@@ -1354,7 +1355,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             preview = _run_scene_edit_on_generator(
                                 req["prompt"], last_generated_cpu_frames
                             )
-                            session.frame_count = 0
+                            session.perceptual_frame_count = 0
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
@@ -1396,7 +1397,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if cap_inference_fps:
                         fps = world_engine.inference_fps
                         if fps > 0:
-                            frame_interval = world_engine.n_frames / fps
+                            frame_interval = world_engine.temporal_compression / fps
                             if next_frame_time == 0.0:
                                 next_frame_time = t_infer_start + frame_interval
                             else:
@@ -1420,12 +1421,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     t_sync = time.perf_counter()
 
                     gen_time = (t_sync - t0) * 1000
-                    n_frames = world_engine.n_frames
+                    temporal_compression = world_engine.temporal_compression
 
                     # Transfer result tensors to CPU numpy arrays immediately
                     # while the data is still valid (gen_frame may reuse GPU
                     # buffers on the next call).
-                    if n_frames > 1:
+                    if temporal_compression > 1:
                         cpu_frames = [world_engine._tensor_to_numpy(result[i]) for i in range(result.shape[0])]
                     else:
                         cpu_frames = [world_engine._tensor_to_numpy(result)]
@@ -1434,7 +1435,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     last_generated_cpu_frames = cpu_frames
 
                     # Stash this batch's CPU frames for deferred JPEG encoding
-                    _flush_pending.work = (cpu_frames, gen_time, n_frames, client_ts, t_infer_start, t_infer, t_sync)
+                    _flush_pending.work = (cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync)
 
                 except Exception as cuda_err:
                     _flush_pending.work = None
@@ -1519,7 +1520,7 @@ async def websocket_endpoint(websocket: WebSocket):
         world_engine.set_progress_callback(None)
         if action_logger is not None:
             action_logger.end_segment()
-        logger.info(f"[{client_host}] Disconnected (frames: {session.frame_count})")
+        logger.info(f"[{client_host}] Disconnected (frames: {session.perceptual_frame_count})")
 
 
 # ============================================================================

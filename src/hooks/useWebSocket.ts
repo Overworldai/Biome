@@ -43,9 +43,9 @@ type WebSocketHook = {
   frameId: number
   genTime: number | null
   latentGenMs: number | null
-  nFrames: number
+  temporalCompression: number
   frameGenMsRef: { current: number }
-  frameNFramesRef: { current: number }
+  frameTemporalCompressionRef: { current: number }
   frameIdRef: { current: number }
   serverMetrics: ServerMetrics | null
   inputLatency: number | null
@@ -87,9 +87,9 @@ export const useWebSocket = (): WebSocketHook => {
   const isReadyRef = useRef(false)
   const lastControlTsRef = useRef<number>(0)
   const frameGenMsRef = useRef<number>(0)
-  const frameNFramesRef = useRef<number>(1)
+  const frameTemporalCompressionRef = useRef<number>(1)
   const frameIdRef = useRef<number>(0)
-  const [nFrames, setNFrames] = useState(1)
+  const [temporalCompression, setTemporalCompression] = useState(1)
   const staticMetricsRef = useRef<{
     gpuName: string | null
     cpuName: string | null
@@ -200,23 +200,23 @@ export const useWebSocket = (): WebSocketHook => {
         }
 
         // Binary frame
-        const headerNFrames = (header.n_frames as number) ?? 1
-        frameNFramesRef.current = headerNFrames
-        setNFrames(headerNFrames)
+        const headerTemporalCompression = (header.temporal_compression as number) ?? 1
+        frameTemporalCompressionRef.current = headerTemporalCompression
+        setTemporalCompression(headerTemporalCompression)
         if (typeof header.gen_ms === 'number') {
           frameGenMsRef.current = header.gen_ms
           setGenTime(Math.round(header.gen_ms))
         }
         frameIdRef.current = (header.frame_id as number) ?? 0
         // First display frame of each latent pass: update latent gen stats and GPU metrics
-        if ((frameIdRef.current - 1) % headerNFrames === 0) {
+        if ((frameIdRef.current - 1) % headerTemporalCompression === 0) {
           if (typeof header.gen_ms === 'number') {
             setLatentGenMs(Math.round(header.gen_ms))
           }
           // GPU metrics from frame header
           setServerMetrics({
             ...staticMetricsRef.current,
-            isMultiframe: headerNFrames > 1,
+            isMultiframe: headerTemporalCompression > 1,
             vramUsedMb: (header.vram_used_mb as number) ?? -1,
             vramTotalMb: (header.vram_total_mb as number) ?? -1,
             vramPercent: (header.vram_percent as number) ?? -1,
@@ -405,9 +405,9 @@ export const useWebSocket = (): WebSocketHook => {
     frameId,
     genTime,
     latentGenMs,
-    nFrames,
+    temporalCompression,
     frameGenMsRef,
-    frameNFramesRef,
+    frameTemporalCompressionRef,
     frameIdRef,
     serverMetrics,
     inputLatency,

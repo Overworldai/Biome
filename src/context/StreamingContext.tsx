@@ -80,9 +80,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     frameId,
     genTime,
     latentGenMs,
-    nFrames,
+    temporalCompression,
     frameGenMsRef,
-    frameNFramesRef,
+    frameTemporalCompressionRef,
     frameIdRef,
     serverMetrics,
     inputLatency,
@@ -526,7 +526,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       const item = bitmapQueueRef.current[0]
       if (item && now >= item.displayAt) {
         bitmapQueueRef.current.shift()
-        frameTimelineRef.current.currentIndex = item.frameId % frameNFramesRef.current
+        frameTimelineRef.current.currentIndex = item.frameId % frameTemporalCompressionRef.current
         frameCountRef.current++
         if (now - lastFpsUpdateRef.current >= 1000) {
           setFps(frameCountRef.current)
@@ -557,8 +557,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!frame || !canvasReady) return
 
-    const nFrames = frameNFramesRef.current
-    const genMs = frameGenMsRef.current / nFrames
+    const temporalCompression = frameTemporalCompressionRef.current
+    const genMs = frameGenMsRef.current / temporalCompression
     const capturedFrameId = frameIdRef.current
 
     const source =
@@ -577,9 +577,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         const displayAt = Math.max(lastScheduledAtRef.current, now)
         lastScheduledAtRef.current = displayAt + genMs
 
-        const batchIndex = capturedFrameId % nFrames
+        const batchIndex = capturedFrameId % temporalCompression
         if (batchIndex === 0) {
-          frameTimelineRef.current.slotDisplayAts = Array.from({ length: nFrames }, () => null)
+          frameTimelineRef.current.slotDisplayAts = Array.from({ length: temporalCompression }, () => null)
         }
         frameTimelineRef.current.slotDisplayAts[batchIndex] = displayAt
 
@@ -729,7 +729,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Stats
     genTime,
     latentGenMs,
-    nFrames,
+    temporalCompression,
     frameId,
     fps,
     stats: {

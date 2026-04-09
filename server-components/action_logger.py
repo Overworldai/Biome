@@ -35,7 +35,7 @@ class SessionStartEvent(_BaseEvent):
     type: Literal["session_start"]
     model: str | None
     seed: str | None
-    n_frames: int
+    n_frames: int  # Actually temporal_compression; kept as n_frames for protocol compatibility
     seed_target_size: list[int] | None
     has_prompt_conditioning: bool
 
@@ -118,7 +118,7 @@ class ActionLogger:
         *,
         model: str | None,
         seed: str | None,
-        n_frames: int,
+        temporal_compression: int,
         seed_target_size: tuple[int, ...] | None,
         has_prompt_conditioning: bool,
     ) -> None:
@@ -130,7 +130,7 @@ class ActionLogger:
             type="session_start",
             model=model,
             seed=seed,
-            n_frames=n_frames,
+            n_frames=temporal_compression,
             seed_target_size=list(seed_target_size) if seed_target_size else None,
             has_prompt_conditioning=has_prompt_conditioning,
         ))

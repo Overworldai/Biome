@@ -45,23 +45,23 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_MODEL_URI = "Overworld/Waypoint-1.5-1B"
-N_FRAMES = 4096
+DEFAULT_N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
 
 # Model-specific runtime configuration.
-# n_frames is derived from model_cfg.temporal_compression at load time;
+# temporal_compression is overridden from model_cfg.temporal_compression at load time;
 # the value here is only a fallback for models that don't expose it.
 MODEL_CFG = {
     "waypoint-1": {
         "label": "waypoint-1 (single-frame)",
-        "n_frames": 1,
+        "temporal_compression": 1,
         "seed_target_size": (360, 640),
         "has_prompt_conditioning": False,
     },
     "waypoint-1.5": {
         "label": "waypoint-1.5 (multi-frame)",
-        "n_frames": 4,
+        "temporal_compression": 4,
         "seed_target_size": (720, 1280),
         "has_prompt_conditioning": False,
     },
@@ -110,10 +110,13 @@ DEFAULT_PROMPT = (
 
 @dataclass
 class Session:
-    """Tracks state for a single WebSocket connection."""
+    """Tracks state for a single WebSocket connection.
 
-    frame_count: int = 0
-    max_frames: int = N_FRAMES - 2
+    All frame counts are in perceptual frames (i.e. post-temporal-compression).
+    """
+
+    perceptual_frame_count: int = 0
+    max_perceptual_frames: int = DEFAULT_N_FRAMES - 2
 
 
 # ============================================================================
@@ -134,8 +137,9 @@ class WorldEngineManager:
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
         self.cfg = MODEL_CFG["waypoint-1"].copy()
-        self.n_frames = self.cfg["n_frames"]
-        self.is_multiframe = self.n_frames > 1
+        self.n_frames = DEFAULT_N_FRAMES
+        self.temporal_compression = self.cfg["temporal_compression"]
+        self.is_multiframe = self.temporal_compression > 1
         self.seed_target_size = self.cfg["seed_target_size"]
         self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._progress_callback = None
@@ -200,7 +204,9 @@ class WorldEngineManager:
         # Prefer temporal_compression from the model config over the hardcoded default
         temporal_compression = getattr(model_cfg, "temporal_compression", None)
         if temporal_compression is not None:
-            cfg["n_frames"] = int(temporal_compression)
+            cfg["temporal_compression"] = int(temporal_compression)
+
+        cfg["n_frames"] = int(getattr(model_cfg, "n_frames", DEFAULT_N_FRAMES))
 
         cfg["inference_fps"] = int(
             getattr(model_cfg, "inference_fps", DEFAULT_INFERENCE_FPS)
@@ -246,8 +252,9 @@ class WorldEngineManager:
         self.seed_frame = None
         self.engine_warmed_up = False
         self.cfg = MODEL_CFG["waypoint-1"].copy()
-        self.n_frames = self.cfg["n_frames"]
-        self.is_multiframe = self.n_frames > 1
+        self.n_frames = DEFAULT_N_FRAMES
+        self.temporal_compression = self.cfg["temporal_compression"]
+        self.is_multiframe = self.temporal_compression > 1
         self.seed_target_size = self.cfg["seed_target_size"]
         self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._free_cuda_memory_sync()
@@ -272,7 +279,9 @@ class WorldEngineManager:
             )
             if self.is_multiframe:
                 frame = (
-                    frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                    frame.unsqueeze(0)
+                    .expand(self.temporal_compression, -1, -1, -1)
+                    .contiguous()
                 )
             return frame
         except Exception as e:
@@ -306,7 +315,9 @@ class WorldEngineManager:
             )
             if self.is_multiframe:
                 frame = (
-                    frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                    frame.unsqueeze(0)
+                    .expand(self.temporal_compression, -1, -1, -1)
+                    .contiguous()
                 )
             return frame
         except Exception as e:
@@ -428,11 +439,14 @@ class WorldEngineManager:
             # Resolve runtime config from defaults overridden by model config.
             self.cfg = self._resolve_runtime_cfg(self.engine.model_cfg)
             self.n_frames = self.cfg["n_frames"]
-            self.is_multiframe = self.n_frames > 1
+            self.temporal_compression = self.cfg["temporal_compression"]
+            self.is_multiframe = self.temporal_compression > 1
             self.seed_target_size = self.cfg["seed_target_size"]
             self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
             self.inference_fps = self.cfg.get("inference_fps", DEFAULT_INFERENCE_FPS)
             logger.info(f"[2/4] Model type: {self.cfg['label']}")
+            logger.info(f"[2/4] Context length (n_frames): {self.n_frames}")
+            logger.info(f"[2/4] Temporal compression: {self.temporal_compression}")
             logger.info(f"[2/4] Seed target size: {self.seed_target_size}")
             logger.info(f"[2/4] Prompt conditioning: {self.has_prompt_conditioning}")
 

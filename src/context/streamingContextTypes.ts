@@ -31,7 +31,7 @@ export type StreamingContextValue = {
 
   genTime: number | null
   latentGenMs: number | null
-  nFrames: number
+  temporalCompression: number
   frameId: number
   fps: number
   showStats: boolean
