@@ -6,7 +6,7 @@ import { getHfHubCacheDir } from '../lib/paths.js'
 import type { ModelInfo } from '../../src/types/ipc.js'
 
 const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1.5-1B'
-const WAYPOINT_COLLECTION_API_URL = 'https://huggingface.co/api/collections/Overworld/waypoint-1'
+const WAYPOINT_COLLECTION_API_URL = 'https://huggingface.co/api/collections/Overworld/waypoint'
 
 type HuggingFaceCollectionItem = {
   id: string
