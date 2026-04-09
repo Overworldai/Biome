@@ -13,7 +13,7 @@
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/Overworldai/Biome/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-  <img src="assets/launch_grid.gif" width="600">
+<video autoPlay loop muted playsInline src="https://over.world/biome.mp4" />
 
 **[Download the latest release](https://github.com/Overworldai/Biome/releases/latest)**
 
@@ -21,9 +21,9 @@
 
 ## Overview
 
-Biome is Overworld's desktop client for running [Waypoint world models](https://github.com/Overworldai/world_engine) — a series of **60 FPS, sub-20ms latency**, real-time world models that generate interactive environments **entirely on your local GPU**. Walk around, look in any direction, and watch the world unfold frame by frame.
+Biome is Overworld's desktop client for running [Waypoint world models](https://github.com/Overworldai/world_engine) - a series of **60 FPS** real-time world models that generate interactive environments **entirely on your local GPU**. Walk around, look in any direction, and watch the world unfold frame by frame.
 
-Biome installs just like a video game — download, run the installer, and start exploring new worlds.
+Biome installs just like a video game - download, run the installer, and start exploring new worlds.
 
 ## Features
 
@@ -35,34 +35,11 @@ Biome installs just like a video game — download, run the installer, and start
 
 Grab the installer from the [Releases](https://github.com/Overworldai/Biome/releases/latest) page and you're good to go.
 
-**GPU Requirements:** One NVIDIA GPU with 16GB+ VRAM. Most cards from the last 5 years will run the model, though minimally a 5090 is recommended for the smoothest experience. Don't have a powerful enough GPU? Try [Overworld.stream](https://overworld.stream) instead!
-
-## Building from Source
-
-If you want to hack on Biome yourself, you'll need:
-
-- [Node.js](https://nodejs.org/) 18+
-
-```bash
-git clone https://github.com/Wayfarer-Labs/Biome.git
-cd Biome
-npm install
-
-# Development mode with hot-reload
-npm run dev
-
-# Production build
-npm run build
-
-# Package without building installers
-npm run package
-```
+**GPU Requirements:** One NVIDIA GPU with 16GB+ VRAM. Most cards from the last 5 years will run the model, but a 5090 is recommended for the smoothest experience. Don't have a powerful enough GPU? Try [Overworld Stream](https://overworld.stream) instead!
 
 ## Hosting Remote Server
 
-Interested in setting up World Engine for the "Server" option under settings? To run `server.py` on another device and connect Biome to it, see:
-
-- [Remote Server Setup](server-components/README.md)
+Interested in setting up the server on another computer? See [Remote Server Setup](server-components/README.md).
 
 ## Development
 
@@ -70,7 +47,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build commands, architecture overview
 
 ## License
 
-GPL-3.0 — see [LICENSE](LICENSE) for details.
+GPL-3.0 - see [LICENSE](LICENSE) for details.
 
 ---
 
