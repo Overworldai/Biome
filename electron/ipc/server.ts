@@ -61,6 +61,7 @@ export function registerServerIpc(): void {
       HF_HOME: hfHomeDir,
       HF_HUB_CACHE: hfHubCacheDir,
       HUGGINGFACE_HUB_CACHE: hfHubCacheDir,
+      HF_HUB_DOWNLOAD_TIMEOUT: '600',
       PYTHONUNBUFFERED: '1',
       PYTHONFAULTHANDLER: '1',
       BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
