@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
-DEFAULT_MODEL_URI = "Overworld/Waypoint-1-Small"
+DEFAULT_MODEL_URI = "Overworld/Waypoint-1.5-1B"
 N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
@@ -144,7 +144,9 @@ class WorldEngineManager:
         self._model_load_lock = asyncio.Lock()
         # Single-threaded executor for CUDA operations to maintain thread-local storage
         # This is critical for CUDA graphs which must run in the same thread they were compiled in
-        self.cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
+        self.cuda_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="cuda-thread"
+        )
 
     def set_progress_callback(self, callback, loop=None):
         """Set a progress callback and event loop for cross-thread reporting."""
@@ -167,8 +169,8 @@ class WorldEngineManager:
         if not torch.cuda.is_available():
             return
         try:
-            allocated = torch.cuda.memory_allocated() / (1024 ** 3)
-            reserved = torch.cuda.memory_reserved() / (1024 ** 3)
+            allocated = torch.cuda.memory_allocated() / (1024**3)
+            reserved = torch.cuda.memory_reserved() / (1024**3)
             logger.info(
                 f"[CUDA] {stage}: allocated={allocated:.2f} GiB reserved={reserved:.2f} GiB"
             )
@@ -178,9 +180,8 @@ class WorldEngineManager:
 
     def _normalize_model_uri(self, model_uri: str | None) -> str:
         return (
-            (model_uri or self.model_uri or DEFAULT_MODEL_URI).strip()
-            or DEFAULT_MODEL_URI
-        )
+            model_uri or self.model_uri or DEFAULT_MODEL_URI
+        ).strip() or DEFAULT_MODEL_URI
 
     def _resolve_runtime_cfg(self, model_cfg) -> dict:
         """Resolve runtime config from defaults, overridden by model_cfg attributes."""
@@ -201,7 +202,9 @@ class WorldEngineManager:
         if temporal_compression is not None:
             cfg["n_frames"] = int(temporal_compression)
 
-        cfg["inference_fps"] = int(getattr(model_cfg, "inference_fps", DEFAULT_INFERENCE_FPS))
+        cfg["inference_fps"] = int(
+            getattr(model_cfg, "inference_fps", DEFAULT_INFERENCE_FPS)
+        )
 
         return cfg
 
@@ -259,15 +262,18 @@ class WorldEngineManager:
                 torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             )
             frame = F.interpolate(
-                img_tensor, size=self.seed_target_size, mode="bilinear", align_corners=False
+                img_tensor,
+                size=self.seed_target_size,
+                mode="bilinear",
+                align_corners=False,
             )[0]
             frame = (
-                frame.to(dtype=torch.uint8, device=DEVICE)
-                .permute(1, 2, 0)
-                .contiguous()
+                frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
             )
             if self.is_multiframe:
-                frame = frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                frame = (
+                    frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                )
             return frame
         except Exception as e:
             logger.error(f"Failed to load seed from file {file_path}: {e}")
@@ -290,15 +296,18 @@ class WorldEngineManager:
                 torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             )
             frame = F.interpolate(
-                img_tensor, size=self.seed_target_size, mode="bilinear", align_corners=False
+                img_tensor,
+                size=self.seed_target_size,
+                mode="bilinear",
+                align_corners=False,
             )[0]
             frame = (
-                frame.to(dtype=torch.uint8, device=DEVICE)
-                .permute(1, 2, 0)
-                .contiguous()
+                frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
             )
             if self.is_multiframe:
-                frame = frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                frame = (
+                    frame.unsqueeze(0).expand(self.n_frames, -1, -1, -1).contiguous()
+                )
             return frame
         except Exception as e:
             logger.error(f"Failed to load seed from base64: {e}")
@@ -321,14 +330,20 @@ class WorldEngineManager:
             quant_unchanged = requested_quant == self.quant
 
             if self.engine is not None and model_unchanged and quant_unchanged:
-                logger.info(f"[ENGINE] Model already loaded: {requested_model} (quant={self.quant})")
+                logger.info(
+                    f"[ENGINE] Model already loaded: {requested_model} (quant={self.quant})"
+                )
                 return
 
             if self.engine is not None:
                 if not model_unchanged:
-                    logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
+                    logger.info(
+                        f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}"
+                    )
                 if not quant_unchanged:
-                    logger.info(f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}")
+                    logger.info(
+                        f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}"
+                    )
                 self._log_cuda_memory("before unload")
                 await self._run_on_cuda_thread(self._unload_engine_sync)
                 self._log_cuda_memory("after unload")
@@ -369,6 +384,7 @@ class WorldEngineManager:
             for dtype in dtype_attempts:
                 try:
                     logger.info(f"[2/4] Attempting load with dtype={dtype}")
+
                     def _create_engine():
                         return WorldEngine(
                             requested_model,
@@ -395,7 +411,11 @@ class WorldEngineManager:
                     break
 
             if new_engine is None:
-                raise last_error if last_error is not None else RuntimeError("Failed to initialize WorldEngine")
+                raise (
+                    last_error
+                    if last_error is not None
+                    else RuntimeError("Failed to initialize WorldEngine")
+                )
 
             self._report_progress(SESSION_LOADING_WEIGHTS)
             self.engine = new_engine
@@ -423,7 +443,9 @@ class WorldEngineManager:
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
             # seed_frame when a new seed is required after a model switch.
             if self.seed_frame is None:
-                logger.info("[3/4] Seed frame: waiting for client to provide initial seed")
+                logger.info(
+                    "[3/4] Seed frame: waiting for client to provide initial seed"
+                )
             else:
                 logger.info("[3/4] Seed frame: preserved existing seed")
 
@@ -443,7 +465,7 @@ class WorldEngineManager:
     def _numpy_to_jpeg(rgb, quality: int = JPEG_QUALITY) -> bytes:
         """Encode a CPU numpy RGB array to JPEG bytes."""
         if simplejpeg is not None:
-            return simplejpeg.encode_jpeg(rgb, quality=quality, colorspace='RGB')
+            return simplejpeg.encode_jpeg(rgb, quality=quality, colorspace="RGB")
         img = Image.fromarray(rgb, mode="RGB")
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality)
@@ -479,7 +501,9 @@ class WorldEngineManager:
         await self._run_on_cuda_thread(
             lambda: self.engine.append_frame(self.seed_frame)
         )
-        logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+        logger.info(
+            f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s"
+        )
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.set_prompt()...")
@@ -507,7 +531,9 @@ class WorldEngineManager:
         await self._run_on_cuda_thread(
             lambda: self.engine.append_frame(self.seed_frame)
         )
-        logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+        logger.info(
+            f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s"
+        )
 
         self._report_progress(SESSION_INIT_FRAME)
         if self.has_prompt_conditioning:
@@ -516,9 +542,13 @@ class WorldEngineManager:
             await self._run_on_cuda_thread(
                 lambda: self.engine.set_prompt(self.current_prompt)
             )
-            logger.info(f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+            logger.info(
+                f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s"
+            )
         else:
-            logger.info(f"[INIT] No prompt conditioning enabled, skipping engine.set_prompt()")
+            logger.info(
+                f"[INIT] No prompt conditioning enabled, skipping engine.set_prompt()"
+            )
 
     async def recover_from_cuda_error(self):
         """
@@ -580,7 +610,7 @@ class WorldEngineManager:
             )
 
             self._report_progress(SESSION_WARMUP_PROMPT)
-            
+
             if self.has_prompt_conditioning:
                 logger.info("[5/5] Step 3: Setting prompt...")
                 prompt_start = time.perf_counter()

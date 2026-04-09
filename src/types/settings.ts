@@ -7,7 +7,7 @@ export type QuantOption = (typeof QUANT_OPTIONS)[number]
 
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
-export const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1-Small'
+export const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1.5-1B'
 
 // Port 7987 = 'O' (79) + 'W' (87) in ASCII
 export const STANDALONE_PORT = 7987
