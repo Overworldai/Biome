@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
-DEFAULT_MODEL_URI = "Overworld/Waypoint-1.5-1B"
 DEFAULT_N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
@@ -132,7 +131,7 @@ class WorldEngineManager:
         self.seed_frame = None
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
         self.CtrlInput = None
-        self.model_uri = DEFAULT_MODEL_URI
+        self.model_uri = None
         self.quant = None
         self.current_prompt = DEFAULT_PROMPT
         self.engine_warmed_up = False
@@ -181,11 +180,6 @@ class WorldEngineManager:
         except Exception:
             # Memory stats are best-effort diagnostics only.
             pass
-
-    def _normalize_model_uri(self, model_uri: str | None) -> str:
-        return (
-            model_uri or self.model_uri or DEFAULT_MODEL_URI
-        ).strip() or DEFAULT_MODEL_URI
 
     def _resolve_runtime_cfg(self, model_cfg) -> dict:
         """Resolve runtime config from defaults, overridden by model_cfg attributes."""
@@ -330,11 +324,16 @@ class WorldEngineManager:
             lambda: self._load_seed_from_base64_sync(base64_data)
         )
 
-    async def load_engine(self, model_uri: str | None = None, quant: str | None = None):
-        """Initialize or switch the WorldEngine model."""
+    async def load_engine(self, model_uri: str, quant: str | None = None):
+        """Initialize or switch the WorldEngine model.
+
+        model_uri is required — the server does not have a default model.
+        The client must always specify which model to load.
+        """
+        if not model_uri or not model_uri.strip():
+            raise ValueError("model_uri is required — the client must specify a model")
         async with self._model_load_lock:
-            # Re-evaluate after acquiring lock in case another task just loaded this model.
-            requested_model = self._normalize_model_uri(model_uri)
+            requested_model = model_uri.strip()
             requested_quant = quant or None  # Normalize empty string to None
 
             model_unchanged = requested_model == self.model_uri
@@ -383,7 +382,6 @@ class WorldEngineManager:
             logger.info(f"[2/4] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
             logger.info(f"      Device: {DEVICE}")
-            logger.info(f"      N_FRAMES: {N_FRAMES}")
             logger.info(f"      Prompt: {self.current_prompt[:60]}...")
 
             model_start = time.perf_counter()

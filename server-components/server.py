@@ -824,7 +824,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger = None
                 logger.info(f"[{client_host}] Action logging disabled")
 
-        # Model delta — reload if model URI or quantization changed
+        # Model delta — reload if model URI or quantization changed.
+        # The engine must be loaded before the seed so that seed_target_size
+        # and temporal_compression are resolved from the actual model config.
         model_changed = False
         quant_changed = "quant" in msg and quant != getattr(world_engine, "quant", None)
         if model_uri and (model_uri != getattr(world_engine, "model_uri", None) or quant_changed):
@@ -905,9 +907,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # Wire progress callback so engine_manager reports granular stages
         world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
 
-        # If no model was selected by client, load default/current model now.
-        if world_engine.engine is None:
-            await world_engine.load_engine()
+        assert world_engine.engine is not None, "Client must specify a model in the init message"
 
         if world_engine.seed_frame is None:
             logger.info(
