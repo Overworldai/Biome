@@ -2,7 +2,7 @@
   "name": "biome",
   "productName": "Biome",
   "private": true,
-  "version": "1.0.0-rc5",
+  "version": "1.0.0",
   "main": ".vite/build/main.js",
   "scripts": {
     "dev": "electron-forge start",

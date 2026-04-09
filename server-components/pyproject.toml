@@ -1,6 +1,6 @@
 [project]
 name = "biome-server"
-version = "1.0.0-rc5"
+version = "1.0.0"
 requires-python = "==3.12.*"
 dependencies = [
   "world-engine @ https://github.com/Overworldai/world_engine/archive/refs/tags/1.5.3.zip",
