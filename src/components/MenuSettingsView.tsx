@@ -109,6 +109,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
   const [menuActionLogging, setMenuActionLogging] = useState(() => settings.debug_overlays.action_logging)
+  const [menuVideoRecording, setMenuVideoRecording] = useState(() => settings.debug_overlays.video_recording)
 
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -235,6 +236,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuInputOverlay(settings.debug_overlays.input)
     setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
     setMenuActionLogging(settings.debug_overlays.action_logging)
+    setMenuVideoRecording(settings.debug_overlays.video_recording)
   }, [
     settings.locale,
     configEngineMode,
@@ -246,7 +248,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     settings.debug_overlays.performance_stats,
     settings.debug_overlays.input,
     settings.debug_overlays.frame_timeline,
-    settings.debug_overlays.action_logging
+    settings.debug_overlays.action_logging,
+    settings.debug_overlays.video_recording
   ])
 
   const handleServerUrlBlur = useCallback(async () => {
@@ -369,7 +372,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         performance_stats: menuPerformanceStats,
         input: menuInputOverlay,
         frame_timeline: menuFrameTimeline,
-        action_logging: menuActionLogging
+        action_logging: menuActionLogging,
+        video_recording: menuVideoRecording
       }
     })
     setMouseSensitivity(streamingValue)
@@ -389,6 +393,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuInputOverlay,
     menuFrameTimeline,
     menuActionLogging,
+    menuVideoRecording,
     volume.getAudioSettings,
     saveSettings,
     setMouseSensitivity
@@ -716,6 +721,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 description="app.settings.debugMetrics.actionLoggingDescription"
                 checked={menuActionLogging}
                 onChange={setMenuActionLogging}
+              />
+              <SettingsCheckbox
+                label="app.settings.debugMetrics.videoRecording"
+                description="app.settings.debugMetrics.videoRecordingDescription"
+                checked={menuVideoRecording}
+                onChange={setMenuVideoRecording}
               />
             </div>
           </SettingsSection>

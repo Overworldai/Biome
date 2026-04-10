@@ -70,9 +70,16 @@ export const settingsSchema = z.object({
       performance_stats: z.boolean().default(false),
       input: z.boolean().default(false),
       frame_timeline: z.boolean().default(false),
-      action_logging: z.boolean().default(false)
+      action_logging: z.boolean().default(false),
+      video_recording: z.boolean().default(false)
     })
-    .default({ performance_stats: false, input: false, frame_timeline: false, action_logging: false })
+    .default({
+      performance_stats: false,
+      input: false,
+      frame_timeline: false,
+      action_logging: false,
+      video_recording: false
+    })
 })
 
 export type Settings = z.infer<typeof settingsSchema>
