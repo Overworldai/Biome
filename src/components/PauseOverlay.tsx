@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStreaming } from '../context/StreamingContext'
 import MenuSettingsView from './MenuSettingsView'
@@ -10,10 +11,15 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
+import { RpcError } from '../lib/wsRpc'
+import type { GenerateSceneResponse } from '../types/ws'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
+  const { t } = useTranslation()
   const { requestPointerLock, reset, wsRequest } = useStreaming()
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
+  const [generateState, setGenerateState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)
 
@@ -41,6 +47,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   useEffect(() => {
     if (!isActive) {
       setView(PAUSE_VIEW.MAIN)
+      setGenerateState('idle')
+      setGenerateError(null)
       return
     }
 
@@ -48,6 +56,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       if (e.key !== 'Escape') return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
+      if (generateState === 'loading') return
       if (view === PAUSE_VIEW.SCENES) {
         setView(PAUSE_VIEW.MAIN)
       } else {
@@ -57,7 +66,38 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, requestPointerLock])
+  }, [isActive, view, generateState, requestPointerLock])
+
+  // Auto-dismiss generate error after 5 seconds
+  useEffect(() => {
+    if (generateState !== 'error') return
+    const timer = setTimeout(() => {
+      setGenerateState('idle')
+      setGenerateError(null)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [generateState])
+
+  const handleGenerateScene = useCallback(
+    async (prompt: string) => {
+      setGenerateState('loading')
+      setGenerateError(null)
+      try {
+        await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
+        setGenerateState('idle')
+      } catch (err) {
+        let msg: string
+        if (err instanceof RpcError && err.errorId) {
+          msg = t(err.errorId, { defaultValue: err.message })
+        } else {
+          msg = err instanceof Error ? err.message : String(err)
+        }
+        setGenerateState('error')
+        setGenerateError(msg)
+      }
+    },
+    [wsRequest, t]
+  )
 
   const handleResetAndResume = () => {
     reset()
@@ -104,6 +144,9 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
               showUnlockHint={showUnlockHint}
+              generateState={generateState}
+              generateError={generateError}
+              onGenerateScene={handleGenerateScene}
             />
           </motion.div>
         ) : (
