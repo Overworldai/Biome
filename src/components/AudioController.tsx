@@ -11,40 +11,27 @@ const MUSIC_FADE_S = 0.5
  * Renders nothing — pure side-effect component.
  */
 const AudioController = () => {
-  const { play, startLoop, stopLoop, fadeOutLoop, crossfadeLoop, stopAllLoops } = useAudio()
+  const { play, fadeOutLoop, crossfadeLoop, stopAllLoops } = useAudio()
   const { state, states } = usePortal()
   const { error, engineError, isPaused } = useStreaming()
   const prevHasErrorRef = useRef(false)
-  const prevStateRef = useRef<string | null>(null)
-
   // Manage ambient loops based on portal state
   useEffect(() => {
-    const cameFromLoading = prevStateRef.current === states.LOADING
-    prevStateRef.current = state
-
     if (state === states.LOADING) {
       fadeOutLoop('music_menu', 0.3)
       fadeOutLoop('music_pause', 0.3)
       fadeOutLoop('music_gameplay', 0.3)
       fadeOutLoop('portal_hum', 0.15)
-      startLoop('vortex_loop', 1, 0.5)
     } else if (state === states.STREAMING) {
-      fadeOutLoop('vortex_loop', 0.3)
-      fadeOutLoop('vortex_error', 0.3)
       fadeOutLoop('music_menu', 0.3)
       // Pause/gameplay music handled by the isPaused effect below
     } else if (state === states.MAIN_MENU) {
-      // Stop vortex when returning from loading; leave it alone if portal hover started it
-      if (cameFromLoading) {
-        fadeOutLoop('vortex_loop', 0.3)
-        fadeOutLoop('vortex_error', 0.3)
-      }
       crossfadeLoop('music_gameplay', 'music_menu', MUSIC_FADE_S)
       crossfadeLoop('music_pause', 'music_menu', MUSIC_FADE_S)
     } else {
       stopAllLoops()
     }
-  }, [state, states, startLoop, stopLoop, fadeOutLoop, crossfadeLoop, stopAllLoops])
+  }, [state, states, fadeOutLoop, crossfadeLoop, stopAllLoops])
 
   // Swap between gameplay and pause music with crossfade
   useEffect(() => {
@@ -56,18 +43,14 @@ const AudioController = () => {
     }
   }, [isPaused, state, states, crossfadeLoop])
 
-  // On error during loading: swap vortex_loop for menacing vortex_error
+  // On error during loading: play error sound
   useEffect(() => {
     const hasError = !!(error || engineError)
     if (hasError && !prevHasErrorRef.current) {
       play('error')
-      if (state === states.LOADING) {
-        fadeOutLoop('vortex_loop', 0.3)
-        startLoop('vortex_error', 1, 0.3)
-      }
     }
     prevHasErrorRef.current = hasError
-  }, [error, engineError, play, state, states, stopLoop, fadeOutLoop, startLoop])
+  }, [error, engineError, play])
 
   // Cleanup on unmount
   useEffect(() => {

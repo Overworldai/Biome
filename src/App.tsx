@@ -224,7 +224,6 @@ const AppShell = () => {
     ) {
       play('portal_swoosh_long')
       fadeOutLoop('portal_hum', 0.15)
-      startLoop('vortex_loop', 1, 0.5)
       setIsLaunchShrinking(true)
     }
   }

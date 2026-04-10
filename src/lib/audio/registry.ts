@@ -1,7 +1,7 @@
 import type { SoundId, SoundCategory, SynthOneShot, SynthLoop } from './types'
 import { synthUIHover, synthUIClick, synthUIBack, synthToggleOn, synthToggleOff } from './synthUI'
 import { synthError, synthPortalSwoosh, synthPortalSwooshLong } from './synthEffects'
-import { synthVortexLoop, synthVortexError, synthPortalHum } from './synthVortex'
+import { synthPortalHum } from './synthVortex'
 
 export const SOUND_CATEGORIES: Record<SoundId, SoundCategory> = {
   ui_hover: 'sfx',
@@ -15,8 +15,6 @@ export const SOUND_CATEGORIES: Record<SoundId, SoundCategory> = {
   portal_swoosh: 'sfx',
   portal_swoosh_long: 'sfx',
   portal_hum: 'sfx',
-  vortex_loop: 'sfx',
-  vortex_error: 'sfx',
   music_menu: 'music',
   music_pause: 'music',
   music_gameplay: 'music'
@@ -32,14 +30,12 @@ export const SOUND_CATEGORIES: Record<SoundId, SoundCategory> = {
 export const SOUND_ASSETS: Partial<Record<SoundId, string>> = {
   goose_start: new URL('../../../assets/audio/goose_start.mp3', import.meta.url).href,
   goose_end: new URL('../../../assets/audio/goose_end.mp3', import.meta.url).href,
-  music_menu: new URL('../../../assets/audio/music_menu.mp3', import.meta.url).href,
-  vortex_loop: new URL('../../../assets/audio/vortex_loop.wav', import.meta.url).href
+  music_menu: new URL('../../../assets/audio/music_menu.mp3', import.meta.url).href
 }
 
 /** Per-sound volume overrides for loops (0–1). */
 export const SOUND_LOOP_VOLUMES: Partial<Record<SoundId, number>> = {
   portal_hum: 0.6,
-  vortex_loop: 0.3,
   music_menu: 0.8
 }
 
@@ -62,7 +58,5 @@ export const SYNTH_ONE_SHOTS: Partial<Record<SoundId, SynthOneShot>> = {
 }
 
 export const SYNTH_LOOPS: Partial<Record<SoundId, SynthLoop>> = {
-  portal_hum: synthPortalHum,
-  vortex_loop: synthVortexLoop,
-  vortex_error: synthVortexError
+  portal_hum: synthPortalHum
 }
