@@ -10,8 +10,6 @@ export type SoundId =
   | 'portal_swoosh'
   | 'portal_swoosh_long'
   | 'portal_hum'
-  | 'vortex_loop'
-  | 'vortex_error'
   | 'music_menu'
   | 'music_pause'
   | 'music_gameplay'

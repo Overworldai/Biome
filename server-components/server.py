@@ -188,7 +188,7 @@ except Exception as e:
 # ============================================================================
 
 world_engine = None
-inpainting_manager = None
+image_gen = None
 safety_checker = None
 safety_hash_cache: dict[str, "SafetyCacheEntry"] = {}
 
@@ -288,7 +288,7 @@ def _broadcast_startup_stage(stage: Stage) -> None:
 
 async def _heavy_init() -> None:
     """Run heavy startup work (safety warmup, seed validation) in background."""
-    global world_engine, inpainting_manager, safety_checker, safety_hash_cache, startup_complete, startup_error, _is_mlx
+    global world_engine, image_gen, safety_checker, safety_hash_cache, startup_complete, startup_error, _is_mlx
 
     try:
         _broadcast_startup_stage(STARTUP_BEGIN)
@@ -299,8 +299,8 @@ async def _heavy_init() -> None:
         world_engine = WorldEngineManager()
         _is_mlx = world_engine.platform == "mlx"
 
-        from inpainting_manager import InpaintingManager
-        inpainting_manager = InpaintingManager(world_engine.cuda_executor)
+        from image_gen import ImageGenManager
+        image_gen = ImageGenManager(world_engine.cuda_executor)
 
         logger.info("Initializing Safety Checker...")
         _broadcast_startup_stage(STARTUP_SAFETY_CHECKER)
@@ -518,8 +518,8 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
 
 
 def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
-    from inpainting_manager import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
-    from inpainting_manager import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
+    from image_gen import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
+    from image_gen import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
@@ -537,7 +537,7 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     original_b64 = base64.b64encode(original_jpeg).decode("ascii")
 
     # Run inpainting (diffusers pipeline, not CUDA-graph dependent)
-    inpainted, edit_prompt = inpainting_manager._inpaint_sync(
+    inpainted, edit_prompt = image_gen._inpaint_sync(
         last_frame_np, prompt, world_engine.seed_target_size
     )
 
@@ -547,7 +547,7 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     preview_b64 = base64.b64encode(preview_jpeg).decode("ascii")
 
     # Safety check on the inpainted result
-    from inpainting_manager import SafetyRejectionError
+    from image_gen import SafetyRejectionError
     inpainted_pil = Image.fromarray(inpainted_np)
     safety_result = safety_checker.check_pil_image(inpainted_pil)
     if not safety_result["is_safe"]:
@@ -944,14 +944,14 @@ async def websocket_endpoint(websocket: WebSocket):
         # Load or unload inpainting model based on scene_edit flag.
         # Loading happens BEFORE WorldEngine warmup so CUDA graphs
         # are compiled with the inpainting model's memory already allocated.
-        if not scene_edit_requested and inpainting_manager is not None and inpainting_manager.is_loaded:
+        if not scene_edit_requested and image_gen is not None and image_gen.is_loaded:
             logger.info(f"[{client_host}] Scene edit disabled — unloading inpainting model")
-            await asyncio.to_thread(inpainting_manager.unload)
+            await asyncio.to_thread(image_gen.unload)
 
-        if scene_edit_requested and inpainting_manager is not None and not inpainting_manager.is_loaded:
+        if scene_edit_requested and image_gen is not None and not image_gen.is_loaded:
             await send_stage(SESSION_INPAINTING_LOAD)
             try:
-                await inpainting_manager.warmup()
+                await image_gen.warmup()
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Inpainting warmup failed: {e}", exc_info=True)
@@ -1189,7 +1189,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             prompt = msg.get("prompt", "").strip()
                             if not prompt:
                                 result = {"success": False, "error_id": "app.server.error.sceneEditEmptyPrompt"}
-                            elif inpainting_manager is None or not inpainting_manager.is_loaded:
+                            elif image_gen is None or not image_gen.is_loaded:
                                 result = {"success": False, "error_id": "app.server.error.sceneEditModelNotLoaded"}
                             elif scene_edit_request is not None:
                                 result = {"success": False, "error_id": "app.server.error.sceneEditAlreadyInProgress"}

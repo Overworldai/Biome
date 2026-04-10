@@ -87,6 +87,7 @@ export type StreamingContextValue = {
   cancelConnection: () => Promise<void>
   prepareReturnToMainMenu: () => Promise<void>
   reset: () => void
+  resume: () => void
   requestPointerLock: () => boolean
   exitPointerLock: () => void
   registerContainerRef: (element: HTMLDivElement | null) => void

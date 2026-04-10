@@ -313,6 +313,7 @@ const goose = {
           timeoutWaitingForSeed: 'Timeout waiting for bread crumb',
           sceneEditModelLoadFailed: 'Pond edit model failed to load',
           sceneEditSafetyRejected: 'Pond edit rejected: the honk did not pass the fox safety check.',
+          generateSceneSafetyRejected: 'Pond creation rejected: the honk did not pass the fox safety check.',
           sceneEditEmptyPrompt: 'Empty quack',
           sceneEditModelNotLoaded: 'Pond edit model not loaded. Enable Pond Edit in Experimental Honks settings.',
           sceneEditAlreadyInProgress: 'Pond edit already in progress',

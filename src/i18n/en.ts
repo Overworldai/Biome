@@ -311,6 +311,7 @@ const en = {
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           sceneEditModelLoadFailed: 'Scene edit model failed to load',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
+          generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
           sceneEditEmptyPrompt: 'Empty prompt',
           sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
           sceneEditAlreadyInProgress: 'Scene edit already in progress',

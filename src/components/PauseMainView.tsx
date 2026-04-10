@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import type { SeedRecord } from '../types/app'
-import SceneCard from './SceneCard'
+import SceneGrid from './SceneGrid'
 import SocialCtaRow from './SocialCtaRow'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
-import { HEADING_BASE } from '../styles'
+import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
 
@@ -38,54 +39,43 @@ const PauseMainView = ({
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
   const suffix = ALLOW_USER_SCENES ? t('app.pause.pinnedScenes.uploadSuffix') : t('app.pause.pinnedScenes.pinSuffix')
+  const pinnedSceneIds = useMemo(() => pinnedScenes.map((s) => s.filename), [pinnedScenes])
 
   return (
     <div className="absolute inset-0 p-[3.8%_4%]">
       <SocialCtaRow />
 
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col">
-        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>
-          {t('app.pause.pinnedScenes.title')}
-        </h2>
-        <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-          {t('app.pause.pinnedScenes.description', { suffix })}
-        </p>
-        <div className="styled-scrollbar overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh]">
-          <div className="grid grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh] w-full">
-            {pinnedScenes.length > 0 ? (
-              pinnedScenes.map((seed) => (
-                <SceneCard
-                  key={`pinned-${seed.filename}`}
-                  seed={seed}
-                  thumbnailSrc={thumbnails[seed.filename]}
-                  isPinned={true}
-                  pinVariant="pinned-only"
-                  selectCooldown={selectCooldown}
-                  onSelect={onSceneSelect}
-                  onTogglePin={onTogglePin}
-                  onRemove={onRemoveScene}
-                />
-              ))
-            ) : (
-              <div
-                className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
-                aria-hidden="true"
+        <h2 className={VIEW_HEADING}>{t('app.pause.pinnedScenes.title')}</h2>
+        <p className={VIEW_DESCRIPTION}>{t('app.pause.pinnedScenes.description', { suffix })}</p>
+        <SceneGrid
+          seeds={pinnedScenes}
+          thumbnails={thumbnails}
+          pinnedSceneIds={pinnedSceneIds}
+          pinVariant="pinned-only"
+          selectCooldown={selectCooldown}
+          onSelect={onSceneSelect}
+          onTogglePin={onTogglePin}
+          onRemove={onRemoveScene}
+          emptyState={
+            <div
+              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
+              aria-hidden="true"
+            >
+              <svg
+                className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
               >
-                <svg
-                  className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.4" />
-                  <polyline points="21,15 16,10 5,21" />
-                </svg>
-              </div>
-            )}
-          </div>
-        </div>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.4" />
+                <polyline points="21,15 16,10 5,21" />
+              </svg>
+            </div>
+          }
+        />
       </section>
 
       <ViewLabel>

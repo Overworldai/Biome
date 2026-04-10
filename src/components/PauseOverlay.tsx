@@ -9,9 +9,10 @@ import { viewFadeVariants } from '../transitions'
 import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
+import { useSceneActions } from '../hooks/useSceneActions'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { requestPointerLock, reset, selectSeed, wsRequest } = useStreaming()
+  const { requestPointerLock, reset, wsRequest } = useStreaming()
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)
@@ -33,6 +34,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     onPinnedSceneRemoved: removePinnedScene
   })
 
+  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
+
+  const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+
   useEffect(() => {
     if (!isActive) {
       setView(PAUSE_VIEW.MAIN)
@@ -53,20 +58,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
   }, [isActive, view, requestPointerLock])
-
-  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
-
-  const handleSceneSelect = async (filename: string) => {
-    await selectSeed(filename)
-    requestPointerLock()
-  }
-
-  const handleClipboardUploadAndSelect = async () => {
-    const uploaded = await handleClipboardUpload()
-    if (uploaded.length === 1) {
-      await handleSceneSelect(uploaded[0])
-    }
-  }
 
   const handleResetAndResume = () => {
     reset()
@@ -104,7 +95,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               pinnedScenes={pinnedScenes}
               thumbnails={thumbnails}
               selectCooldown={selectCooldown}
-              onSceneSelect={handleSceneSelect}
+              onSceneSelect={selectScene}
               onTogglePin={togglePinnedScene}
               onRemoveScene={removeScene}
               onResetAndResume={handleResetAndResume}
@@ -131,12 +122,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               selectCooldown={selectCooldown}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
-              onSceneSelect={handleSceneSelect}
+              onSceneSelect={selectScene}
               onTogglePin={togglePinnedScene}
               onRemoveScene={removeScene}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={handleClipboardUploadAndSelect}
+              onClipboardUpload={pasteScene}
               onBack={() => setView(PAUSE_VIEW.MAIN)}
             />
           </motion.div>

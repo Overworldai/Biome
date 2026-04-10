@@ -311,6 +311,8 @@ const ja = {
           sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
+          generateSceneSafetyRejected:
+            'シーン生成が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           sceneEditEmptyPrompt: 'プロンプトが空です',
           sceneEditModelNotLoaded:
             'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',

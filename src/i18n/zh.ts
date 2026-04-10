@@ -302,6 +302,7 @@ const zh = {
           timeoutWaitingForSeed: '等待初始种子超时',
           sceneEditModelLoadFailed: '场景编辑模型加载失败',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
+          generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
           sceneEditEmptyPrompt: '提示词为空',
           sceneEditModelNotLoaded: '场景编辑模型未加载。请在实验性功能设置中启用场景编辑。',
           sceneEditAlreadyInProgress: '场景编辑已在进行中',

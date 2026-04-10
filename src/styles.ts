@@ -20,3 +20,9 @@ export const SETTINGS_MUTED_TEXT = `${SETTINGS_LABEL_BASE} text-text-muted`
 
 /** Styled scrollbar class for scrollable panels and dropdowns */
 export const STYLED_SCROLLBAR = 'styled-scrollbar'
+
+/** Full-width view heading (pause, scenes, settings) */
+export const VIEW_HEADING = `${HEADING_BASE} text-heading text-text-primary font-normal text-left`
+
+/** Muted subtitle below a view heading */
+export const VIEW_DESCRIPTION = 'm-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left'

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
-import { HEADING_BASE, SETTINGS_MUTED_TEXT } from '../styles'
+import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
@@ -486,12 +486,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   return (
     <div className="absolute inset-0 z-[9] pointer-events-auto">
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
-        <h2 className={`${HEADING_BASE} text-heading text-text-primary font-normal text-left`}>
-          {t('app.settings.title')}
-        </h2>
-        <p className="m-0 font-serif text-caption text-text-muted max-w-[103.12cqh] text-left">
-          {t('app.settings.subtitle')}
-        </p>
+        <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
+        <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
         <div
           className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
         >
