@@ -39,5 +39,10 @@ out/
 .vercel
 .env*.local
 
+# CoreML generated models
+*.mlpackage
+*.mlmodelc
+*.mlmodel
+
 # Biome server seeds cache when running dev mode
 world_engine/
