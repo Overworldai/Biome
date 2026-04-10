@@ -27,6 +27,8 @@ class VideoRecorder:
         self._client_host = client_host
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+        self._path: Path | None = None
+        self._frame_count = 0
 
     @property
     def is_active(self) -> bool:
@@ -37,6 +39,8 @@ class VideoRecorder:
         self.end_segment()
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = VIDEO_DIR / f"rollout_{ts}.mp4"
+        self._path = path
+        self._frame_count = 0
         try:
             self._proc = subprocess.Popen(
                 [
@@ -66,6 +70,7 @@ class VideoRecorder:
             for frame in frames:
                 try:
                     self._proc.stdin.write(frame.tobytes())
+                    self._frame_count += 1
                 except (BrokenPipeError, OSError):
                     break
 
@@ -73,6 +78,8 @@ class VideoRecorder:
         """Finalize the current video, if one is active."""
         if self._proc is None:
             return
+        path = self._path
+        frame_count = self._frame_count
         try:
             if self._proc.stdin and not self._proc.stdin.closed:
                 self._proc.stdin.close()
@@ -93,3 +100,13 @@ class VideoRecorder:
                 pass
         finally:
             self._proc = None
+            self._path = None
+            self._frame_count = 0
+
+        # Clean up empty recordings (e.g. model loaded then immediately paused)
+        if frame_count == 0 and path is not None:
+            try:
+                path.unlink(missing_ok=True)
+                logger.info(f"[{self._client_host}] Removed empty video: {path}")
+            except Exception:
+                pass

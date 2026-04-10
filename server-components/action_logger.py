@@ -76,6 +76,7 @@ class ActionLogger:
         self._f = None
         self._lock = threading.Lock()
         self._frame_id = 0
+        self._path: Path | None = None
 
     @property
     def is_active(self) -> bool:
@@ -88,6 +89,7 @@ class ActionLogger:
         """Open a fresh file, resetting the frame counter."""
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = ACTION_LOG_DIR / f"action_stream_{ts}.ndjson"
+        self._path = path
         self._f = open(path, "w")
         self._frame_id = 0
         logger.info(f"[{self._client_host}] Action stream -> {path}")
@@ -95,8 +97,17 @@ class ActionLogger:
     def end_segment(self) -> None:
         """Write session_end and close the current file, if one is open."""
         if self._f is not None and not self._f.closed:
+            frame_count = self._frame_id
+            path = self._path
             self._write(SessionEndEvent(**self._base(), type="session_end"))
             self._f.close()
+            # Clean up empty recordings (e.g. model loaded then immediately paused)
+            if frame_count == 0 and path is not None:
+                try:
+                    path.unlink(missing_ok=True)
+                    logger.info(f"[{self._client_host}] Removed empty action stream: {path}")
+                except Exception:
+                    pass
 
     # -- writing ----------------------------------------------------------
 

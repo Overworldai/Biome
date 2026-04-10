@@ -238,7 +238,10 @@ const ja = {
           frameTimelineDescription: 'スロットごとのタイミングを含むフレーム補間パイプラインを表示します。',
           actionLogging: 'アクションログ',
           actionLoggingDescription:
-            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。'
+            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
+          videoRecording: '動画録画',
+          videoRecordingDescription:
+            'サーバーフレームをMP4動画ファイルに録画します。OSの一時ディレクトリに書き込まれます。'
         },
         credits: {
           title: 'クレジット'

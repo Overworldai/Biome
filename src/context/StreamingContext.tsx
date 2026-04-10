@@ -256,6 +256,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         seed_filename: seedFilename,
         scene_edit: settings.experimental?.scene_edit_enabled ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
+        video_recording: settings.debug_overlays?.video_recording ?? false,
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
@@ -272,6 +273,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings?.cap_inference_fps,
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
+    settings.debug_overlays?.video_recording,
     sendInit,
     setInitMetrics,
     setPlaceholderFrame
@@ -284,13 +286,20 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isConnected, setPlaceholderFrame])
 
-  // Live-toggle action logging during streaming without a full re-bootstrap
+  // Live-toggle action logging / video recording during streaming without a full re-bootstrap
   useEffect(() => {
     if (!isStreaming || !isConnected) return
-    sendInit({ action_logging: settings.debug_overlays?.action_logging ?? false }).catch((err) =>
-      log.error('Failed to toggle action logging:', err)
-    )
-  }, [isStreaming, isConnected, settings.debug_overlays?.action_logging, sendInit])
+    sendInit({
+      action_logging: settings.debug_overlays?.action_logging ?? false,
+      video_recording: settings.debug_overlays?.video_recording ?? false
+    }).catch((err) => log.error('Failed to toggle action logging / video recording:', err))
+  }, [
+    isStreaming,
+    isConnected,
+    settings.debug_overlays?.action_logging,
+    settings.debug_overlays?.video_recording,
+    sendInit
+  ])
 
   // Live-toggle inference FPS cap during streaming without a full re-bootstrap
   useEffect(() => {

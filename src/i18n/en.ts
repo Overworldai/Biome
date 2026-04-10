@@ -239,7 +239,9 @@ const en = {
           frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
           actionLogging: 'Action Logging',
           actionLoggingDescription:
-            "Record all inputs to a file on the server for replay. Written to the OS's temp directory."
+            "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
+          videoRecording: 'Video Recording',
+          videoRecordingDescription: "Record server frames to an MP4 video file. Written to the OS's temp directory."
         },
         credits: {
           title: 'Credits'

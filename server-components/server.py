@@ -793,7 +793,7 @@ async def websocket_endpoint(websocket: WebSocket):
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
         seed_loaded=a new seed was loaded in this call."""
-        nonlocal scene_edit_requested, action_logging_requested, action_logger, cap_inference_fps
+        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, action_logger, video_recorder, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
@@ -805,6 +805,8 @@ async def websocket_endpoint(websocket: WebSocket):
             scene_edit_requested = msg["scene_edit"]
         if "action_logging" in msg:
             action_logging_requested = msg["action_logging"]
+        if "video_recording" in msg:
+            video_recording_requested = msg["video_recording"]
         if "cap_inference_fps" in msg:
             cap_inference_fps = msg["cap_inference_fps"]
 
@@ -819,19 +821,24 @@ async def websocket_endpoint(websocket: WebSocket):
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
                 )
+                logger.info(f"[{client_host}] Action logging enabled")
+            elif not action_logging_requested and action_logger is not None:
+                action_logger.end_segment()
+                action_logger = None
+                logger.info(f"[{client_host}] Action logging disabled")
+
+            if video_recording_requested and video_recorder is None:
                 video_recorder = VideoRecorder(client_host)
                 video_recorder.new_segment(
                     width=world_engine.seed_target_size[1],
                     height=world_engine.seed_target_size[0],
                     fps=int(world_engine.inference_fps),
                 )
-                logger.info(f"[{client_host}] Action logging enabled")
-            elif not action_logging_requested and action_logger is not None:
-                action_logger.end_segment()
-                action_logger = None
+                logger.info(f"[{client_host}] Video recording enabled")
+            elif not video_recording_requested and video_recorder is not None:
                 video_recorder.end_segment()
                 video_recorder = None
-                logger.info(f"[{client_host}] Action logging disabled")
+                logger.info(f"[{client_host}] Video recording disabled")
 
         # Model delta — reload if model URI or quantization changed.
         # The engine must be loaded before the seed so that seed_target_size
@@ -862,6 +869,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     scene_edit_requested = False
     action_logging_requested = False
+    video_recording_requested = False
     cap_inference_fps = True
     action_logger: ActionLogger | None = None
     video_recorder: VideoRecorder | None = None
@@ -984,7 +992,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Ready for game loop")
 
         action_logger = ActionLogger(client_host) if action_logging_requested else None
-        video_recorder = VideoRecorder(client_host) if action_logging_requested else None
+        video_recorder = VideoRecorder(client_host) if video_recording_requested else None
 
         def _video_recorder_new_segment() -> None:
             if video_recorder is not None:

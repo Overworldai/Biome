@@ -230,7 +230,9 @@ const zh = {
           frameTimeline: '帧时间线',
           frameTimelineDescription: '显示帧插值管线及每个槽位的计时。',
           actionLogging: '操作日志',
-          actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。'
+          actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。',
+          videoRecording: '视频录制',
+          videoRecordingDescription: '将服务器帧录制为MP4视频文件。写入操作系统的临时目录。'
         },
         credits: {
           title: '鸣谢'
