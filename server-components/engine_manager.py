@@ -9,6 +9,8 @@ import base64
 import gc
 import io
 import logging
+import platform
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -21,6 +23,26 @@ try:
     import simplejpeg
 except ImportError:
     simplejpeg = None
+
+
+# ============================================================================
+# Platform detection
+# ============================================================================
+
+def _detect_platform() -> str:
+    """Detect the compute platform: 'mlx' (Apple Silicon), 'cuda', or 'cpu'."""
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        try:
+            import mlx.core  # noqa: F401
+            return "mlx"
+        except ImportError:
+            pass
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+PLATFORM = _detect_platform()
 
 from progress_stages import (
     SESSION_INIT_FRAME,
@@ -45,7 +67,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_N_FRAMES = 4096
-DEVICE = "cuda"
+DEVICE = "cuda" if PLATFORM == "cuda" else "cpu"
 JPEG_QUALITY = 85
 
 # Model-specific runtime configuration.
@@ -143,13 +165,16 @@ class WorldEngineManager:
         self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._progress_callback = None
         self._progress_loop = None
+        self.platform = PLATFORM
         # Prevent concurrent model loads from overlapping across websocket sessions.
         self._model_load_lock = asyncio.Lock()
-        # Single-threaded executor for CUDA operations to maintain thread-local storage
-        # This is critical for CUDA graphs which must run in the same thread they were compiled in
+        # Single-threaded executor for engine operations.
+        # On CUDA this is critical for CUDA graphs which must run in the same thread
+        # they were compiled in. On MLX it serializes Metal command buffer submission.
         self.cuda_executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="cuda-thread"
+            max_workers=1, thread_name_prefix="engine-thread"
         )
+        logger.info(f"[ENGINE] Detected platform: {self.platform}")
 
     def set_progress_callback(self, callback, loop=None):
         """Set a progress callback and event loop for cross-thread reporting."""
@@ -216,6 +241,9 @@ class WorldEngineManager:
     def _free_cuda_memory_sync(self):
         """Best-effort cleanup of CUDA allocations and compiled graph caches."""
         gc.collect()
+        if self.platform == "mlx":
+            # MLX manages its own memory pool; nothing to do here.
+            return
         if not torch.cuda.is_available():
             return
 
@@ -253,6 +281,10 @@ class WorldEngineManager:
         self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._free_cuda_memory_sync()
 
+    def _seed_device(self):
+        """Device for seed tensors: CPU for MLX (VAE handles placement), DEVICE for CUDA."""
+        return "cpu" if self.platform == "mlx" else DEVICE
+
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
         """Synchronous helper to load a seed frame from a file path."""
         try:
@@ -269,7 +301,7 @@ class WorldEngineManager:
                 align_corners=False,
             )[0]
             frame = (
-                frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
+                frame.to(dtype=torch.uint8, device=self._seed_device()).permute(1, 2, 0).contiguous()
             )
             if self.is_multiframe:
                 frame = (
@@ -305,7 +337,7 @@ class WorldEngineManager:
                 align_corners=False,
             )[0]
             frame = (
-                frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
+                frame.to(dtype=torch.uint8, device=self._seed_device()).permute(1, 2, 0).contiguous()
             )
             if self.is_multiframe:
                 frame = (
@@ -371,7 +403,13 @@ class WorldEngineManager:
             self._report_progress(SESSION_LOADING_IMPORT)
             import_start = time.perf_counter()
             from world_engine import CtrlInput as CI
-            from world_engine import WorldEngine
+
+            if self.platform == "mlx":
+                from world_engine import MLXWorldEngine
+                logger.info(f"[1/4] Using MLXWorldEngine (Apple Silicon, platform={self.platform})")
+            else:
+                from world_engine import WorldEngine
+                logger.info(f"[1/4] Using WorldEngine (platform={self.platform})")
 
             self.CtrlInput = CI
             logger.info(
@@ -381,43 +419,62 @@ class WorldEngineManager:
             self._report_progress(SESSION_LOADING_MODEL)
             logger.info(f"[2/4] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
-            logger.info(f"      Device: {DEVICE}")
+            logger.info(f"      Platform: {self.platform}")
             logger.info(f"      Prompt: {self.current_prompt[:60]}...")
 
             model_start = time.perf_counter()
-            dtype_attempts = [torch.bfloat16, torch.float16]
             new_engine = None
             last_error = None
             selected_dtype = None
 
-            for dtype in dtype_attempts:
+            if self.platform == "mlx":
+                # MLX always uses int8 "speed" profile regardless of client quant setting.
                 try:
-                    logger.info(f"[2/4] Attempting load with dtype={dtype}")
+                    logger.info(f"[2/4] Loading MLXWorldEngine (int8_profile='speed')")
 
-                    def _create_engine():
-                        return WorldEngine(
+                    def _create_mlx_engine():
+                        return MLXWorldEngine(
                             requested_model,
-                            device=DEVICE,
-                            quant=requested_quant,
-                            dtype=dtype,
+                            int8_profile="speed",
+                            ane_vae=True,
                         )
 
-                    new_engine = await self._run_on_cuda_thread(_create_engine)
-                    selected_dtype = dtype
-                    break
-                except torch.OutOfMemoryError as e:
-                    last_error = e
-                    logger.warning(
-                        f"[2/4] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
-                    )
-                    await self._run_on_cuda_thread(self._unload_engine_sync)
-                    self._log_cuda_memory("after OOM cleanup")
+                    new_engine = await self._run_on_cuda_thread(_create_mlx_engine)
+                    selected_dtype = "float16 (MLX)"
                 except Exception as e:
                     last_error = e
-                    # Clear partially-allocated model state after failed initialization.
+                    logger.error(f"[2/4] MLXWorldEngine load failed: {e}", exc_info=True)
                     await self._run_on_cuda_thread(self._unload_engine_sync)
-                    self._log_cuda_memory("after failed load cleanup")
-                    break
+            else:
+                # CUDA/CPU engine with dtype fallback
+                dtype_attempts = [torch.bfloat16, torch.float16]
+                for dtype in dtype_attempts:
+                    try:
+                        logger.info(f"[2/4] Attempting load with dtype={dtype}")
+
+                        def _create_engine():
+                            return WorldEngine(
+                                requested_model,
+                                device=DEVICE,
+                                quant=requested_quant,
+                                dtype=dtype,
+                            )
+
+                        new_engine = await self._run_on_cuda_thread(_create_engine)
+                        selected_dtype = dtype
+                        break
+                    except torch.OutOfMemoryError as e:
+                        last_error = e
+                        logger.warning(
+                            f"[2/4] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
+                        )
+                        await self._run_on_cuda_thread(self._unload_engine_sync)
+                        self._log_cuda_memory("after OOM cleanup")
+                    except Exception as e:
+                        last_error = e
+                        await self._run_on_cuda_thread(self._unload_engine_sync)
+                        self._log_cuda_memory("after failed load cleanup")
+                        break
 
             if new_engine is None:
                 raise (
@@ -566,37 +623,35 @@ class WorldEngineManager:
         """
         Recover from CUDA errors by clearing caches and resetting compilation.
         This is needed when CUDA graphs become corrupted.
+        On MLX, simply reset the engine state.
         """
-        logger.warning("[CUDA RECOVERY] Attempting to recover from CUDA error...")
+        logger.warning("[ENGINE RECOVERY] Attempting to recover from engine error...")
 
-        def clear_cuda():
-            # Synchronize to ensure all operations are complete
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+        if self.platform != "mlx":
+            def clear_cuda():
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                torch._dynamo.reset()
+                logger.info("[ENGINE RECOVERY] CUDA caches cleared and dynamo reset")
 
-            # Clear CUDA caches
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            # Clear compiled functions cache (this clears corrupted CUDA graphs)
-            torch._dynamo.reset()
-
-            logger.info("[CUDA RECOVERY] CUDA caches cleared and dynamo reset")
+            try:
+                await self._run_on_cuda_thread(clear_cuda)
+            except Exception as e:
+                logger.error(f"[ENGINE RECOVERY] Failed to clear CUDA caches: {e}", exc_info=True)
+                return False
 
         try:
-            await self._run_on_cuda_thread(clear_cuda)
-
-            # Reset engine state after clearing CUDA caches
             await self.reset_state()
-
-            logger.info("[CUDA RECOVERY] Recovery complete - engine ready")
+            logger.info("[ENGINE RECOVERY] Recovery complete - engine ready")
             return True
         except Exception as e:
-            logger.error(f"[CUDA RECOVERY] Failed to recover: {e}", exc_info=True)
+            logger.error(f"[ENGINE RECOVERY] Failed to recover: {e}", exc_info=True)
             return False
 
     async def warmup(self):
-        """Perform initial warmup to compile CUDA graphs."""
+        """Perform initial warmup. On CUDA this compiles CUDA graphs; on MLX it warms the Metal pipeline."""
         if self.engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
@@ -634,8 +689,9 @@ class WorldEngineManager:
                 logger.info("[5/5] Step 3: Skipping prompt conditioning...")
 
             self._report_progress(SESSION_WARMUP_COMPILE)
+            warmup_label = "warming Metal pipeline" if self.platform == "mlx" else "compiling CUDA graphs"
             logger.info(
-                "[5/5] Step 4: Generating first frame (compiling CUDA graphs)..."
+                f"[5/5] Step 4: Generating first frame ({warmup_label})..."
             )
             gen_start = time.perf_counter()
             _ = self.engine.gen_frame(
@@ -647,9 +703,10 @@ class WorldEngineManager:
 
             return time.perf_counter() - warmup_start
 
+        warmup_label = "Metal pipeline" if self.platform == "mlx" else "CUDA graphs"
         logger.info("=" * 60)
         logger.info(
-            "[5/5] WARMUP - First client connected, initializing CUDA graphs..."
+            f"[5/5] WARMUP - First client connected, initializing {warmup_label}..."
         )
         logger.info("=" * 60)
 

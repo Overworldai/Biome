@@ -3,7 +3,7 @@ name = "biome-server"
 version = "1.0.1"
 requires-python = "==3.12.*"
 dependencies = [
-  "world-engine @ https://github.com/Overworldai/world_engine/archive/refs/tags/1.5.3.zip",
+  "world-engine @ https://github.com/Overworldai/world_engine/archive/6fbe09ff9e4fddc931fe781aad1c340c0c819036.zip",
   "torch==2.10.0",
   "torchvision==0.25.0",
   "pillow==12.2.0",
@@ -15,14 +15,15 @@ dependencies = [
   "transformers==5.5.0",
   "timm==1.0.26",
   "py-cpuinfo==9.0.0",
-  "nvidia-ml-py==13.595.45",
+  "nvidia-ml-py==13.595.45; sys_platform != 'darwin'",
   "simplejpeg==1.9.0",
   "diffusers==0.37.1",
   "accelerate==1.12.0",
   "peft==0.18.1",
-  "bitsandbytes==0.49.2",
-  "llama-cpp-python==0.3.33",
-  "gguf==0.18.0",
+  "bitsandbytes==0.49.2; sys_platform != 'darwin'",
+  "llama-cpp-python==0.3.33; sys_platform != 'darwin'",
+  "gguf==0.18.0; sys_platform != 'darwin'",
+  "mlx>=0.31.0; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]
@@ -33,6 +34,7 @@ index-strategy = "unsafe-best-match"
 environments = [
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
   "sys_platform == 'win32' and platform_machine == 'AMD64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 override-dependencies = [
   "triton==3.6.0; sys_platform == 'linux'",
@@ -40,12 +42,17 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
+]
+torchvision = [
+  { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
+]
 llama-cpp-python = [
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-linux-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-win-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
+mlx = { git = "https://github.com/ml-explore/mlx.git", branch = "main" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

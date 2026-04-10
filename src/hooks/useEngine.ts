@@ -18,7 +18,7 @@ export type UseEngineResult = {
   checkServerRunning: () => Promise<boolean>
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
-  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<{ ok: boolean; available_quants?: string[] }>
   isReady: boolean
   isServerRunning: boolean
   serverPort: number | null
@@ -157,7 +157,7 @@ export const useEngine = (): UseEngineResult => {
     try {
       return await invoke('probe-server-health', healthUrl, timeoutMs)
     } catch {
-      return false
+      return { ok: false }
     }
   }, [])
 

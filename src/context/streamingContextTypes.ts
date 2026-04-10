@@ -64,6 +64,8 @@ export type StreamingContextValue = {
   openSeedsDir: () => Promise<void>
   seedsDir: string | null
   selectSeed: (filename: string) => Promise<void>
+  serverAvailableQuants: readonly string[] | null
+  setServerAvailableQuants: (quants: readonly string[] | null) => void
   wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   wsLogs: string[]
   wsAllLogs: string[]
