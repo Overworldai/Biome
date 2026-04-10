@@ -5,7 +5,6 @@ import { useStreaming } from '../context/StreamingContext'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT } from '../styles'
 import type { SceneEditPhase } from '../context/sceneEditMachine'
 import { RpcError } from '../lib/wsRpc'
-import type { TranslationKey } from '../i18n'
 
 const SceneEditOverlay = () => {
   const { t } = useTranslation()
@@ -86,7 +85,7 @@ const SceneEditOverlay = () => {
     } catch (err) {
       let msg: string
       if (err instanceof RpcError && err.errorId) {
-        msg = t(err.errorId as TranslationKey, { defaultValue: err.message })
+        msg = t(err.errorId, { defaultValue: err.message })
       } else {
         msg = err instanceof Error ? err.message : String(err)
       }
