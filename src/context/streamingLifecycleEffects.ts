@@ -44,6 +44,7 @@ type CreateHandlersArgs = {
   lastAppliedModelRef: { current: string | null }
   exitPointerLock: () => void
   sendPause: (paused: boolean) => void
+  resume: () => void
 }
 
 type LifecycleEffectHandlers = {
@@ -67,7 +68,8 @@ export const createStreamingLifecycleEffectHandlers = ({
   states,
   lastAppliedModelRef,
   exitPointerLock,
-  sendPause
+  sendPause,
+  resume
 }: CreateHandlersArgs): LifecycleEffectHandlers => {
   return {
     suppressedIntentionalWarmError: () => {
@@ -114,10 +116,7 @@ export const createStreamingLifecycleEffectHandlers = ({
       setPausedAt(null)
     },
     resumeOnPointerLock: () => {
-      setSettingsOpen(false)
-      setIsPaused(false)
-      setPausedAt(null)
-      sendPause(false)
+      resume()
       log.info('Pointer locked - settings closed, resumed')
     },
     pauseOnPointerUnlock: () => {

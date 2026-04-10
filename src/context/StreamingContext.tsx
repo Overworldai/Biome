@@ -462,6 +462,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     checkEngineStatus
   ])
 
+  const resume = useCallback(() => {
+    setSettingsOpen(false)
+    setIsPaused(false)
+    setPausedAt(null)
+    sendPause(false)
+  }, [sendPause])
+
   useEffect(() => {
     const { effects } = lifecycleState
     const handlers = createStreamingLifecycleEffectHandlers({
@@ -481,7 +488,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       states,
       lastAppliedModelRef,
       exitPointerLock,
-      sendPause
+      sendPause,
+      resume
     })
 
     runStreamingLifecycleEffects({ effects, handlers })
@@ -494,7 +502,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     disconnect,
     settings?.engine_model,
     exitPointerLock,
-    sendPause
+    sendPause,
+    resume
   ])
 
   // Render frames to canvas using createImageBitmap for off-main-thread decoding.
@@ -795,6 +804,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     cancelConnection,
     prepareReturnToMainMenu,
     reset,
+    resume,
     requestPointerLock,
     exitPointerLock,
     registerContainerRef,
