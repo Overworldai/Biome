@@ -30,10 +30,11 @@ class ToolCall:
 _TOOL_CALL_RE = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.DOTALL)
 # Matches <function=name> or <function name="name">
 _FUNCTION_RE = re.compile(r'<function(?:=|\s+name=")([^">]+)"?>')
-# Matches <parameter=name>value</parameter>
-_PARAMETER_RE = re.compile(r"<parameter=([^>]+)>(.*?)</parameter>", re.DOTALL)
+# Matches <parameter=name>value</close_tag> — tolerates missing "=" (e.g.
+# <parameter>name>) and wrong closing tags (e.g. </instruction>).
+_PARAMETER_RE = re.compile(r"<parameter[>=]([^>]+)>(.*?)</[^>]+>", re.DOTALL)
 # Matches a truncated final parameter: <parameter=name>value (no closing tag)
-_TRUNCATED_PARAM_RE = re.compile(r"<parameter=([^>]+)>([^<]+)$", re.DOTALL)
+_TRUNCATED_PARAM_RE = re.compile(r"<parameter[>=]([^>]+)>([^<]+)$", re.DOTALL)
 
 
 def parse_tool_calls(text: str) -> list[ToolCall]:
