@@ -388,6 +388,18 @@ app.add_middleware(
 # ============================================================================
 
 
+def _get_server_info() -> dict:
+    """Return server platform and available quantization options."""
+    plat = world_engine.platform if world_engine else "unknown"
+    if plat == "mlx":
+        available_quants = ["intw8a8"]
+    elif plat == "cuda":
+        available_quants = ["none", "fp8w8a8", "intw8a8"]
+    else:
+        available_quants = ["none"]
+    return {"platform": plat, "available_quants": available_quants}
+
+
 @app.get("/health")
 async def health():
     """Health check for Biome backend."""
@@ -401,6 +413,7 @@ async def health():
                 "has_seed": world_engine is not None and world_engine.seed_frame is not None,
             },
             "safety": {"loaded": safety_checker is not None and safety_checker.model is not None},
+            **_get_server_info(),
         }
     )
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
@@ -24,10 +24,6 @@ import WorldEngineSection from './WorldEngineSection'
 import EngineInstallModal from './EngineInstallModal'
 import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
 import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
-
-const isMac = navigator.platform.startsWith('Mac')
-/** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
-const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
 
 type MenuModelOption = {
   id: string
@@ -71,9 +67,20 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     nukeAndReinstallEngine,
     isStreaming,
     mouseSensitivity,
-    setMouseSensitivity
+    setMouseSensitivity,
+    serverAvailableQuants,
+    setServerAvailableQuants
   } = useStreaming()
   const volume = useVolumeControls()
+
+  /** Use server-reported quants when available; fall back to client-side platform detection. */
+  const effectiveQuantOptions = useMemo(() => {
+    if (serverAvailableQuants) {
+      return QUANT_OPTIONS.filter((q) => serverAvailableQuants.includes(q))
+    }
+    const isMac = navigator.platform.startsWith('Mac')
+    return isMac ? QUANT_OPTIONS.filter((q) => q === 'intw8a8') : [...QUANT_OPTIONS]
+  }, [serverAvailableQuants])
 
   const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
 
@@ -100,6 +107,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showCredits, setShowCredits] = useState(false)
 
   const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
+
+  // Clamp selected quant if the server no longer supports it (e.g. switched from CUDA to MLX server)
+  useEffect(() => {
+    if (effectiveQuantOptions.length > 0 && !effectiveQuantOptions.includes(menuQuant)) {
+      setMenuQuant(effectiveQuantOptions[0] as QuantOption)
+    }
+  }, [effectiveQuantOptions, menuQuant])
+
   const [menuCapInferenceFps, setMenuCapInferenceFps] = useState(() => settings.cap_inference_fps ?? true)
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
@@ -148,11 +163,13 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       setServerUrlStatus('loading')
       try {
         const normalizedUrl = normalizeServerUrl(menuServerUrl)
-        const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+        const healthUrl = toHealthUrl(normalizedUrl)
+        const result = await invoke('probe-server-health', healthUrl, 5000)
         if (cancelled) return
-        if (ok) {
+        if (result.ok) {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
+          if (result.available_quants) setServerAvailableQuants(result.available_quants)
         } else {
           setServerUrlStatus('error')
         }
@@ -267,10 +284,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
     setServerUrlStatus('loading')
     try {
-      const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
-      if (ok) {
+      const healthUrl = toHealthUrl(normalizedUrl)
+      const result = await invoke('probe-server-health', healthUrl, 5000)
+      if (result.ok) {
         setServerUrlStatus('valid')
         setLastValidatedServerUrl(normalizedUrl)
+        if (result.available_quants) setServerAvailableQuants(result.available_quants)
       } else {
         setServerUrlStatus('error')
         setShowServerErrorModal(true)
@@ -285,6 +304,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuEngineMode(mode)
     setServerUrlStatus('idle')
     setLastValidatedServerUrl('')
+    setServerAvailableQuants(null)
   }
 
   const handleWorldModelChange = (model: string) => {
@@ -582,7 +602,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 hint={t('app.settings.performance.quantizationDescription')}
               >
                 <SettingsSelect
-                  options={availableQuantOptions.map((q) => ({
+                  options={effectiveQuantOptions.map((q) => ({
                     value: q,
                     label: `app.settings.quantization.${q}` as const
                   }))}

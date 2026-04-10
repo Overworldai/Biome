@@ -124,6 +124,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [isFreshInstall, setIsFreshInstall] = useState(false)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
+  const [serverAvailableQuants, setServerAvailableQuants] = useState<readonly string[] | null>(null)
   const [scrollActive, setScrollActive] = useState({ up: false, down: false })
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -768,6 +769,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     openSeedsDir,
     seedsDir,
     selectSeed,
+
+    // Server capabilities
+    serverAvailableQuants,
+    setServerAvailableQuants,
 
     // WS RPC
     wsRequest,
