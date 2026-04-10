@@ -494,6 +494,59 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
 
 
 
+def _run_generate_scene_on_generator(prompt: str) -> dict:
+    """Generate a new scene from a text prompt and load it as the current seed.
+
+    Runs on the generator thread.  Uses the inpainting pipeline with a blank
+    canvas so the VLM can still sanitise the prompt.
+    """
+    import time as _time
+    from image_gen import SafetyRejectionError, GENERATE_SCENE_SAFETY_MESSAGE_ID
+
+    t0 = _time.perf_counter()
+
+    generated = image_gen._generate_scene_sync(
+        prompt, world_engine.seed_target_size
+    )
+
+    # Safety check on the generated image
+    from PIL import Image
+    generated_np = world_engine._tensor_to_numpy(generated)
+    generated_pil = Image.fromarray(generated_np)
+    safety_result = safety_checker.check_pil_image(generated_pil)
+    if not safety_result["is_safe"]:
+        logger.warning(
+            f"[GENERATE_SCENE] Safety checker rejected generated image: {safety_result['scores']}"
+        )
+        raise SafetyRejectionError(GENERATE_SCENE_SAFETY_MESSAGE_ID)
+
+    # Expand to full temporal_compression for multiframe models
+    if world_engine.is_multiframe:
+        generated = (
+            generated.unsqueeze(0)
+            .expand(world_engine.temporal_compression, -1, -1, -1)
+            .contiguous()
+        )
+
+    # Reset engine with the generated frame as the new seed.
+    # Unlike scene_edit, this is a new world — update original_seed_frame
+    # so that "reset" returns to the generated scene, not the old seed.
+    world_engine.seed_frame = generated
+    world_engine.original_seed_frame = generated
+
+    def _reset_with_frame():
+        world_engine.engine.reset()
+        world_engine.engine.append_frame(generated)
+        if world_engine.has_prompt_conditioning:
+            world_engine.engine.set_prompt(world_engine.current_prompt)
+
+    world_engine.cuda_executor.submit(_reset_with_frame).result()
+
+    elapsed_ms = (_time.perf_counter() - t0) * 1000
+    logger.info(f"[GENERATE_SCENE] Complete in {elapsed_ms:.0f}ms")
+    return {"elapsed_ms": round(elapsed_ms)}
+
+
 def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     from image_gen import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
     from image_gen import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
@@ -999,6 +1052,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # after the current gen_frame, runs inpainting on the last subframe,
         # appends the result, and resolves the future with preview data.
         scene_edit_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
+        generate_scene_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
         last_generated_cpu_frames = None  # Most recent CPU numpy frames for scene editing (list)
         ctrl_state = {
             "buttons": set(),
@@ -1102,7 +1156,7 @@ async def websocket_endpoint(websocket: WebSocket):
             init_req_id = None
 
         async def receiver() -> None:
-            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request
+            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request
             while running:
                 try:
                     raw = await websocket.receive_text()
@@ -1172,6 +1226,30 @@ async def websocket_endpoint(websocket: WebSocket):
                                 if "success" not in result:
                                     result = {"success": True, "data": result}
                                 queue_send({"type": "response", "req_id": req_id, **result})
+                        elif msg_type == "generate_scene":
+                            # generate_scene: like scene_edit but with a blank
+                            # canvas — generates a new seed from a text prompt.
+                            prompt = msg.get("prompt", "").strip()
+                            if not prompt:
+                                result = {"success": False, "error_id": "app.server.error.sceneEditEmptyPrompt"}
+                            elif image_gen is None or not image_gen.is_loaded:
+                                result = {"success": False, "error_id": "app.server.error.sceneEditModelNotLoaded"}
+                            elif scene_edit_request is not None or generate_scene_request is not None:
+                                result = {"success": False, "error_id": "app.server.error.sceneEditAlreadyInProgress"}
+                            else:
+                                import concurrent.futures
+                                fut = concurrent.futures.Future()
+                                generate_scene_request = {"prompt": prompt, "future": fut}
+                                try:
+                                    data = await asyncio.wrap_future(fut)
+                                    result = {"success": True, "data": data}
+                                except Exception as e:
+                                    error_id = getattr(e, "message_id", None)
+                                    if error_id:
+                                        result = {"success": False, "error_id": error_id}
+                                    else:
+                                        result = {"success": False, "error": str(e)}
+                            queue_send({"type": "response", "req_id": msg["req_id"], **result})
                         else:
                             result = await dispatch_request(msg, websocket)
                             req_id = msg["req_id"]
@@ -1261,7 +1339,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     break
 
         def generator() -> None:
-            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, last_generated_cpu_frames
+            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request, last_generated_cpu_frames
 
             def run_coro(coro):
                 return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
@@ -1308,6 +1386,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     if not _gen_was_paused:
                         _action_logger_end_segment()
                         _gen_was_paused = True
+
+                    # Handle generate_scene while paused (it's triggered from
+                    # the pause menu, so the generator must process it here).
+                    if generate_scene_request is not None:
+                        req = generate_scene_request
+                        generate_scene_request = None
+                        try:
+                            data = _run_generate_scene_on_generator(req["prompt"])
+                            session.perceptual_frame_count = 0
+                            req["future"].set_result(data)
+                            # Send the generated seed as a single frame so the
+                            # pause overlay background updates to show the new scene.
+                            seed = world_engine.seed_frame
+                            if seed.dim() == 4:
+                                seed = seed[0]  # First subframe for multiframe models
+                            seed_jpeg = world_engine.frame_to_jpeg(seed)
+                            queue_send(build_binary_frame(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0))
+                        except Exception as e:
+                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
+                            req["future"].set_exception(e)
+
                     time.sleep(0.01)
                     next_frame_time = 0.0
                     continue
@@ -1365,6 +1464,20 @@ async def websocket_endpoint(websocket: WebSocket):
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
+                            req["future"].set_exception(e)
+
+                    # Handle pending generate_scene — creates a new seed from
+                    # a text prompt (blank canvas + inpainting pipeline).
+                    if generate_scene_request is not None:
+                        req = generate_scene_request
+                        generate_scene_request = None
+                        _flush_pending()
+                        try:
+                            data = _run_generate_scene_on_generator(req["prompt"])
+                            session.perceptual_frame_count = 0
+                            req["future"].set_result(data)
+                        except Exception as e:
+                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                             req["future"].set_exception(e)
 
                     with ctrl_lock:

@@ -257,6 +257,10 @@ const zh = {
           unpinScene: '取消固定场景',
           pinScene: '固定场景',
           removeScene: '删除场景'
+        },
+        generateScene: {
+          divider: '或',
+          placeholder: '你想玩什么？'
         }
       },
       scenes: {

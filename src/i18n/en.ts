@@ -266,6 +266,10 @@ const en = {
           unpinScene: 'Unpin scene',
           pinScene: 'Pin scene',
           removeScene: 'Remove scene'
+        },
+        generateScene: {
+          divider: 'or',
+          placeholder: 'What do you want to play?'
         }
       },
       scenes: {

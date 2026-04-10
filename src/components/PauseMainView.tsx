@@ -1,12 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
 import SocialCtaRow from './SocialCtaRow'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
-import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
+import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
+import { useSettings } from '../hooks/useSettings'
 
 interface PauseMainViewProps {
   pinnedScenes: SeedRecord[]
@@ -21,6 +22,9 @@ interface PauseMainViewProps {
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
   showUnlockHint: boolean
+  generateState: 'idle' | 'loading' | 'error'
+  generateError: string | null
+  onGenerateScene: (prompt: string) => void
 }
 
 const PauseMainView = ({
@@ -35,17 +39,26 @@ const PauseMainView = ({
   requestPointerLock,
   showPauseLockoutTimer,
   pauseLockoutSecondsText,
-  showUnlockHint
+  showUnlockHint,
+  generateState,
+  generateError,
+  onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
+  const { settings } = useSettings()
+  const sceneEditEnabled = settings.experimental?.scene_edit_enabled ?? false
+  const isGenerating = generateState === 'loading'
   const suffix = ALLOW_USER_SCENES ? t('app.pause.pinnedScenes.uploadSuffix') : t('app.pause.pinnedScenes.pinSuffix')
   const pinnedSceneIds = useMemo(() => pinnedScenes.map((s) => s.filename), [pinnedScenes])
+  const [promptText, setPromptText] = useState('')
 
   return (
     <div className="absolute inset-0 p-[3.8%_4%]">
       <SocialCtaRow />
 
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col">
+      <section
+        className={`absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
+      >
         <h2 className={VIEW_HEADING}>{t('app.pause.pinnedScenes.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.pause.pinnedScenes.description', { suffix })}</p>
         <SceneGrid
@@ -76,6 +89,42 @@ const PauseMainView = ({
             </div>
           }
         />
+        {sceneEditEnabled && (
+          <>
+            <div className="flex items-center gap-[1.5cqh] mt-[2cqh]">
+              <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
+              <span className="font-serif text-caption text-text-muted">{t('app.pause.generateScene.divider')}</span>
+              <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
+            </div>
+            <div className="mt-[1.5cqh] relative">
+              {generateState === 'error' && generateError && (
+                <p className="m-0 font-serif text-caption text-red-400 mb-[0.8cqh]">{generateError}</p>
+              )}
+              <input
+                type="text"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                disabled={isGenerating}
+                placeholder={t('app.pause.generateScene.placeholder')}
+                className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full outline-none focus:ring-1 focus:ring-border-medium disabled:opacity-50`}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const trimmed = promptText.trim()
+                    if (trimmed && !isGenerating) {
+                      onGenerateScene(trimmed)
+                    }
+                  }
+                }}
+                onKeyUp={(e) => e.stopPropagation()}
+              />
+              {isGenerating && (
+                <div className="absolute right-[1.2cqh] top-1/2 -translate-y-1/2 h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary" />
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       <ViewLabel>
@@ -94,20 +143,34 @@ const PauseMainView = ({
       </ViewLabel>
 
       <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
-        <MenuButton variant="secondary" label="app.buttons.reset" className="w-full px-0" onClick={onResetAndResume} />
+        <MenuButton
+          variant="secondary"
+          label="app.buttons.reset"
+          className="w-full px-0"
+          onClick={onResetAndResume}
+          disabled={isGenerating}
+        />
         <MenuButton
           variant="secondary"
           label="app.buttons.scenes"
           className="w-full px-0"
           onClick={() => onNavigate('scenes')}
+          disabled={isGenerating}
         />
         <MenuButton
           variant="secondary"
           label="app.buttons.settings"
           className="w-full px-0"
           onClick={() => onNavigate('settings')}
+          disabled={isGenerating}
         />
-        <MenuButton variant="primary" label="app.buttons.resume" className="w-full px-0" onClick={requestPointerLock} />
+        <MenuButton
+          variant="primary"
+          label="app.buttons.resume"
+          className="w-full px-0"
+          onClick={requestPointerLock}
+          disabled={isGenerating}
+        />
       </div>
     </div>
   )

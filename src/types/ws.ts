@@ -68,7 +68,16 @@ export type SceneEditResponse = {
   edit_prompt?: string
 }
 
-export type ClientRpcRequest = CheckSeedSafetyRequest | SceneEditRequest
+export type GenerateSceneRequest = {
+  type: 'generate_scene'
+  req_id: string
+  prompt: string
+}
+export type GenerateSceneResponse = {
+  elapsed_ms: number
+}
+
+export type ClientRpcRequest = CheckSeedSafetyRequest | SceneEditRequest | GenerateSceneRequest
 
 // ── Server → Client: Push messages ─────────────────────────────────────────
 
