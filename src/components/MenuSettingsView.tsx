@@ -105,9 +105,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
     () => settings.experimental?.scene_edit_enabled ?? false
   )
-  const [menuCpuQuantize, setMenuCpuQuantize] = useState(
-    () => settings.experimental?.cpu_quantize ?? false
-  )
+  const [menuCpuQuantize, setMenuCpuQuantize] = useState(() => settings.experimental?.cpu_quantize ?? false)
   const [menuPerformanceStats, setMenuPerformanceStats] = useState(() => settings.debug_overlays.performance_stats)
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
