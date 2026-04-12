@@ -161,6 +161,9 @@ const goose = {
           quantization: 'Feather compression',
           quantizationDescription:
             'Plucks a few feathers for faster waddling with less nest space, at the cost of some plumage quality.\nFirst INT8 plucking takes 1-2 hours while the goose optimizes its molt - this is a one-time cost.',
+          cpuOffload: 'Nest on land first',
+          cpuOffloadDescription:
+            'Builds the goose on land before sending it to the pond. Essential for ponds with limited space.',
           capInferenceFps: 'Cap honk rate',
           capInferenceFpsDescription:
             "Limits the waddling rate to the flock's trained pace. Turning this off may result in the goose waddling faster than intended."

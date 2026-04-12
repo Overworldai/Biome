@@ -159,6 +159,8 @@ const ja = {
           quantization: '量子化',
           quantizationDescription:
             'モデルの精度を下げて推論速度を向上させ、メモリ使用量を削減します。画質がわずかに低下します。\nINT8量子化の初回使用時は、推論カーネルの最適化に1-2時間かかる場合がありますが、これは一度だけのコストです。',
+          cpuOffload: 'CPUモデル読み込み',
+          cpuOffloadDescription: 'モデルをCPU上で構築してからGPUに転送します。VRAM不足のシステムでは必須です。',
           capInferenceFps: '推論FPSを制限',
           capInferenceFpsDescription:
             'モデルの学習フレームレートに合わせて生成速度を制限します。オフにすると、ゲーム速度が意図より速くなる場合があります。'
