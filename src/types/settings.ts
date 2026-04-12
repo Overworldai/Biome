@@ -62,9 +62,10 @@ export const settingsSchema = z.object({
     .default(DEFAULT_AUDIO),
   experimental: z
     .object({
-      scene_edit_enabled: z.boolean().default(false)
+      scene_edit_enabled: z.boolean().default(false),
+      cpu_quantize: z.boolean().default(false)
     })
-    .default({ scene_edit_enabled: false }),
+    .default({ scene_edit_enabled: false, cpu_quantize: false }),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),

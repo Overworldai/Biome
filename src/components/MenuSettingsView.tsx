@@ -105,6 +105,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
     () => settings.experimental?.scene_edit_enabled ?? false
   )
+  const [menuCpuQuantize, setMenuCpuQuantize] = useState(() => settings.experimental?.cpu_quantize ?? false)
   const [menuPerformanceStats, setMenuPerformanceStats] = useState(() => settings.debug_overlays.performance_stats)
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
@@ -231,6 +232,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuQuant(settings.engine_quant ?? 'none')
     setMenuKeybindings({ ...settings.keybindings })
     setMenuSceneEditEnabled(settings.experimental?.scene_edit_enabled ?? false)
+    setMenuCpuQuantize(settings.experimental?.cpu_quantize ?? false)
     setMenuPerformanceStats(settings.debug_overlays.performance_stats)
     setMenuInputOverlay(settings.debug_overlays.input)
     setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
@@ -363,7 +365,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
       experimental: {
-        scene_edit_enabled: menuSceneEditEnabled
+        scene_edit_enabled: menuSceneEditEnabled,
+        cpu_quantize: menuCpuQuantize
       },
       debug_overlays: {
         performance_stats: menuPerformanceStats,
@@ -684,6 +687,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               description="app.settings.experimental.sceneEditDescription"
               checked={menuSceneEditEnabled}
               onChange={setMenuSceneEditEnabled}
+            />
+            <SettingsCheckbox
+              label="app.settings.experimental.cpuQuantize"
+              description="app.settings.experimental.cpuQuantizeDescription"
+              checked={menuCpuQuantize}
+              onChange={setMenuCpuQuantize}
             />
           </SettingsSection>
 

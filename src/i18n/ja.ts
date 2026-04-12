@@ -225,7 +225,10 @@ const ja = {
           description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
           sceneEdit: 'シーン編集',
           sceneEditDescription:
-            'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
+            'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。',
+          cpuQuantize: 'CPU量子化',
+          cpuQuantizeDescription:
+            'GPUに移動する前にCPUでモデルをビルド・量子化します。VRAMが少ない（8GB未満）システムに必須です。'
         },
         debugMetrics: {
           title: 'デバッグメトリクス',

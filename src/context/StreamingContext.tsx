@@ -255,6 +255,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         seed_image_data: imageData,
         seed_filename: seedFilename,
         scene_edit: settings.experimental?.scene_edit_enabled ?? false,
+        cpu_quantize: settings.experimental?.cpu_quantize ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
@@ -271,6 +272,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings?.engine_quant,
     settings?.cap_inference_fps,
     settings.experimental?.scene_edit_enabled,
+    settings.experimental?.cpu_quantize,
     settings.debug_overlays?.action_logging,
     sendInit,
     setInitMetrics,
