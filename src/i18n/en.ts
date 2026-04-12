@@ -226,7 +226,10 @@ const en = {
           description: 'want to try some rough ideas that might change or disappear?',
           sceneEdit: 'Scene Edit',
           sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.',
+          cpuQuantize: 'CPU Quantize',
+          cpuQuantizeDescription:
+            'Build and quantize the model on CPU before moving to GPU. Essential for systems with low VRAM (<8GB).'
         },
         debugMetrics: {
           title: 'Debug Metrics',

@@ -227,7 +227,10 @@ const goose = {
           description: 'want to try some half-baked eggs that might hatch or roll away?',
           sceneEdit: 'Pond edit',
           sceneEditDescription:
-            'Honk a key during waddling to edit the pond with a text quack using a local image edit model. Requires 8-10 GB additional nest space.'
+            'Honk a key during waddling to edit the pond with a text quack using a local image edit model. Requires 8-10 GB additional nest space.',
+          cpuQuantize: 'CPU Quantize honk',
+          cpuQuantizeDescription:
+            'Build and quantize on CPU before GPU. Essential for low VRAM ponds.'
         },
         debugMetrics: {
           title: 'Goose telemetry',

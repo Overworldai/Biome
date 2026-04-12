@@ -218,7 +218,9 @@ const zh = {
           title: '实验性功能',
           description: '想尝试一些可能会改变或消失的粗略想法吗？',
           sceneEdit: '场景编辑',
-          sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
+          sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。',
+          cpuQuantize: 'CPU量化',
+          cpuQuantizeDescription: '在移动到GPU之前在CPU上构建和量化模型。对于低VRAM（<8GB）系统至关重要。'
         },
         debugMetrics: {
           title: '调试指标',
