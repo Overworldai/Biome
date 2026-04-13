@@ -2,6 +2,7 @@ import en from './en'
 import goose from './goose'
 import ja from './ja'
 import zh from './zh'
+import he from './he'
 
 /**
  * Recursively maps an object type so that every leaf `string` becomes `string`
@@ -16,6 +17,6 @@ type KeyShape<T> = {
 /** All locale files must have the same key structure as en.ts (the source of truth). */
 type ExpectedShape = KeyShape<typeof en>
 
-export const resources: Record<string, ExpectedShape> = { en, goose, ja, zh }
+export const resources: Record<string, ExpectedShape> = { en, goose, ja, zh, he }
 
 export type TranslationResources = typeof resources
