@@ -532,6 +532,20 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const drawTick = () => {
       const now = performance.now()
+      // Defense-in-depth: if the queue has grown well beyond one batch worth
+      // of lead (e.g. rAF was paused while the window was backgrounded), drop
+      // the oldest bitmaps and snap the scheduling cursor back to now so new
+      // frames display live instead of replaying stale history.
+      const tc = frameTemporalCompressionRef.current
+      const maxQueue = Math.max(tc * 2, 8)
+      if (bitmapQueueRef.current.length > maxQueue) {
+        const keep = Math.max(tc, 4)
+        const dropCount = bitmapQueueRef.current.length - keep
+        for (let i = 0; i < dropCount; i++) {
+          bitmapQueueRef.current.shift()!.bitmap.close()
+        }
+        lastScheduledAtRef.current = 0
+      }
       const item = bitmapQueueRef.current[0]
       if (item && now >= item.displayAt) {
         bitmapQueueRef.current.shift()
@@ -583,7 +597,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         // batch), otherwise chain after the previously reserved slot.  The slot
         // reservation (lastScheduledAtRef) always advances by genMs so that
         // subsequent frames in the same batch are evenly spaced.
-        const displayAt = Math.max(lastScheduledAtRef.current, now)
+        //
+        // Cap the forward lead: if the server bursts frames faster than the
+        // reported genMs (warmup, model switch, backgrounded window) the cursor
+        // can drift far into the future and latency accumulates without bound
+        // (Overworldai/Biome#79).  Allow up to ~2 batches of lead, so intra-
+        // batch spacing still works, but snap back if we overshoot.
+        const batchMs = Math.max(temporalCompression * genMs, 16)
+        const maxLeadMs = Math.max(2 * batchMs, 100)
+        const cappedBase = Math.min(lastScheduledAtRef.current, now + maxLeadMs)
+        const displayAt = Math.max(cappedBase, now)
         lastScheduledAtRef.current = displayAt + genMs
 
         const batchIndex = capturedFrameId % temporalCompression
