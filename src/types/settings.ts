@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
-export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh', 'goose'] as const
+export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh', 'goose', 'he'] as const
 export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
 export type QuantOption = (typeof QUANT_OPTIONS)[number]
 
