@@ -24,7 +24,7 @@ export class TranslatableError extends Error {
 }
 
 export const FALLBACK_LOCALE = 'en' as const
-export const SUPPORTED_LOCALES = ['en', 'ja', 'zh', 'goose'] as const
+export const SUPPORTED_LOCALES = ['en', 'ja', 'zh', 'goose', 'he'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
 /** Native-script display names for the language picker. Not translated — each language is always shown in its own script. */
@@ -32,14 +32,16 @@ export const LOCALE_DISPLAY_NAMES: Record<SupportedLocale, string> = {
   en: 'English',
   ja: '日本語',
   zh: '中文',
-  goose: 'English (Goose)'
+  goose: 'English (Goose)',
+  he: 'עברית'
 }
 
 const LOCALE_MAP: Record<string, SupportedLocale> = {
   en: 'en',
   ja: 'ja',
   zh: 'zh',
-  goose: 'goose'
+  goose: 'goose',
+  he: 'he'
 }
 
 /** Whether the given locale setting enables goose mode. */
