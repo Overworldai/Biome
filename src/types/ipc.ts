@@ -82,7 +82,10 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
-  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'probe-server-health': {
+    args: [healthUrl: string, timeoutMs?: number]
+    return: { ok: boolean; available_quants?: string[] }
+  }
 
   // Seeds
   'list-seeds': { args: []; return: SeedFileRecord[] }

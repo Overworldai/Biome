@@ -17,7 +17,10 @@ type WarmConnectionOptions = {
   isServerRunning: boolean
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
-  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+  probeServerHealthViaMain: (
+    healthUrl: string,
+    timeoutMs?: number
+  ) => Promise<{ ok: boolean; available_quants?: string[] }>
   checkEngineStatus: () => Promise<{
     uv_installed?: boolean
     repo_cloned?: boolean
@@ -46,13 +49,16 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 const probeServerHealth = async (
   wsUrl: string,
-  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+  probeServerHealthViaMain: (
+    healthUrl: string,
+    timeoutMs?: number
+  ) => Promise<{ ok: boolean; available_quants?: string[] }>
 ): Promise<boolean> => {
   const healthUrl = toHealthUrl(wsUrl)
 
   for (let attempt = 1; attempt <= CONNECTIVITY_RETRIES; attempt++) {
-    const ok = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
-    if (ok) return true
+    const result = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
+    if (result.ok) return true
 
     if (attempt < CONNECTIVITY_RETRIES) {
       await delay(CONNECTIVITY_RETRY_DELAY_MS)
@@ -68,7 +74,10 @@ const probeServerHealth = async (
  */
 const waitForHealthy = async (
   wsUrl: string,
-  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>,
+  probeServerHealthViaMain: (
+    healthUrl: string,
+    timeoutMs?: number
+  ) => Promise<{ ok: boolean; available_quants?: string[] }>,
   isCancelled: () => boolean,
   log: { info: (...args: unknown[]) => void }
 ): Promise<void> => {
@@ -78,8 +87,8 @@ const waitForHealthy = async (
 
   while (Date.now() < deadline) {
     if (isCancelled()) return
-    const ok = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
-    if (ok) {
+    const result = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
+    if (result.ok) {
       log.info('Server health check passed')
       return
     }

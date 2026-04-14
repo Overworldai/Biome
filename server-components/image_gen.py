@@ -157,8 +157,8 @@ def _pil_to_data_uri(image: Image.Image) -> str:
 class ImageGenManager:
     """Manages FLUX.2 Klein (editing) + Qwen3.5 (vision-language) for scene editing."""
 
-    def __init__(self, cuda_executor):
-        self.cuda_executor = cuda_executor
+    def __init__(self, engine_executor):
+        self.engine_executor = engine_executor
         self.pipeline = None
         self.vlm = None  # llama_cpp.Llama instance
         self._loaded = False
@@ -167,21 +167,21 @@ class ImageGenManager:
     def is_loaded(self):
         return self._loaded
 
-    async def _run_on_cuda_thread(self, fn):
-        """Run callable on the dedicated CUDA thread."""
+    async def _run_on_engine_thread(self, fn):
+        """Run callable on the dedicated engine thread."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self.cuda_executor, fn)
+        return await loop.run_in_executor(self.engine_executor, fn)
 
     async def warmup(self):
         """Load both the VLM and editing model to GPU."""
         logger.info(f"[SCENE_EDIT] Loading VLM {VLM_GGUF_REPO}/{VLM_GGUF_FILE}...")
         t0 = time.perf_counter()
-        await self._run_on_cuda_thread(self._load_vlm_sync)
+        await self._run_on_engine_thread(self._load_vlm_sync)
         logger.info(f"[SCENE_EDIT] VLM loaded in {time.perf_counter() - t0:.1f}s")
 
         logger.info(f"[SCENE_EDIT] Loading editing model {EDIT_MODEL_ID}...")
         t1 = time.perf_counter()
-        await self._run_on_cuda_thread(self._load_edit_sync)
+        await self._run_on_engine_thread(self._load_edit_sync)
         logger.info(f"[SCENE_EDIT] Editing model loaded in {time.perf_counter() - t1:.1f}s")
 
         self._loaded = True
@@ -378,7 +378,7 @@ class ImageGenManager:
         """
         if not self._loaded:
             raise RuntimeError("Editing models not loaded")
-        return await self._run_on_cuda_thread(
+        return await self._run_on_engine_thread(
             lambda: self._inpaint_sync(frame_numpy, prompt, seed_target_size)
         )
 

@@ -189,17 +189,20 @@ export function registerServerIpc(): void {
     })
   })
 
-  ipcMain.handle('probe-server-health', async (_event, healthUrl: string, timeoutMs?: number) => {
-    const timeout = Math.max(500, Math.min(10000, Number(timeoutMs ?? 2500)))
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
+  ipcMain.handle(
+    'probe-server-health',
+    async (_event, healthUrl: string, timeoutMs?: number): Promise<{ ok: boolean; available_quants?: string[] }> => {
+      const timeout = Math.max(500, Math.min(10000, Number(timeoutMs ?? 2500)))
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeout)
 
-    try {
-      const response = await fetch(healthUrl, {
-        method: 'GET',
-        signal: controller.signal
-      })
-      if (response.ok) {
+      try {
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          signal: controller.signal
+        })
+        if (!response.ok) return { ok: false }
+
         // Mark local managed server ready only when probe matches the running local server.
         try {
           const parsed = new URL(healthUrl)
@@ -211,12 +214,24 @@ export function registerServerIpc(): void {
         } catch {
           // Ignore URL parse issues for readiness marking; fetch result is still returned.
         }
+
+        // Parse available_quants from health response when present
+        try {
+          const data = (await response.json()) as Record<string, unknown>
+          const quants = data.available_quants
+          if (Array.isArray(quants)) {
+            return { ok: true, available_quants: quants as string[] }
+          }
+        } catch {
+          // JSON parse failure is non-fatal — server is healthy, just no extra data
+        }
+
+        return { ok: true }
+      } catch {
+        return { ok: false }
+      } finally {
+        clearTimeout(timer)
       }
-      return response.ok
-    } catch {
-      return false
-    } finally {
-      clearTimeout(timer)
     }
-  })
+  )
 }
