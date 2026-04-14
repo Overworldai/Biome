@@ -52,7 +52,7 @@ llama-cpp-python = [
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-linux-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-win-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
-mlx = { git = "https://github.com/ml-explore/mlx.git", branch = "main" }
+mlx = { url = "https://github.com/ml-explore/mlx/archive/435f0b6cdb8ecdce952d8abe69ca05e441dd1b4f.zip" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

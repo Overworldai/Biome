@@ -108,8 +108,7 @@ else:
 # Reduce CUDA allocator fragmentation during repeated model loads/switches.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-# Platform flag — set after WorldEngineManager is created, used to guard CUDA-only code paths.
-_is_mlx = False
+from devices import IS_MLX, PLATFORM, available_quants, safety_device
 
 try:
     import pynvml  # type: ignore[import-not-found]
@@ -288,7 +287,7 @@ def _broadcast_startup_stage(stage: Stage) -> None:
 
 async def _heavy_init() -> None:
     """Run heavy startup work (safety warmup, seed validation) in background."""
-    global world_engine, image_gen, safety_checker, safety_hash_cache, startup_complete, startup_error, _is_mlx
+    global world_engine, image_gen, safety_checker, safety_hash_cache, startup_complete, startup_error
 
     try:
         _broadcast_startup_stage(STARTUP_BEGIN)
@@ -297,17 +296,16 @@ async def _heavy_init() -> None:
         logger.info("Initializing WorldEngine...")
         _broadcast_startup_stage(STARTUP_ENGINE_MANAGER)
         world_engine = WorldEngineManager()
-        _is_mlx = world_engine.platform == "mlx"
 
         from image_gen import ImageGenManager
-        image_gen = ImageGenManager(world_engine.cuda_executor)
+        image_gen = ImageGenManager(world_engine.engine_executor)
 
         logger.info("Initializing Safety Checker...")
         _broadcast_startup_stage(STARTUP_SAFETY_CHECKER)
         safety_checker = SafetyChecker()
-        safety_device = "cpu" if world_engine.platform == "mlx" else "cuda"
-        await asyncio.to_thread(safety_checker.load_resident, safety_device)
-        logger.info(f"Safety Checker loaded on {safety_device}")
+        _safety_dev = safety_device()
+        await asyncio.to_thread(safety_checker.load_resident, _safety_dev)
+        logger.info(f"Safety Checker loaded on {_safety_dev}")
         _broadcast_startup_stage(STARTUP_SAFETY_READY)
 
         # Load hash-based safety cache
@@ -390,14 +388,7 @@ app.add_middleware(
 
 def _get_server_info() -> dict:
     """Return server platform and available quantization options."""
-    plat = world_engine.platform if world_engine else "unknown"
-    if plat == "mlx":
-        available_quants = ["intw8a8"]
-    elif plat == "cuda":
-        available_quants = ["none", "fp8w8a8", "intw8a8"]
-    else:
-        available_quants = ["none"]
-    return {"platform": plat, "available_quants": available_quants}
+    return {"platform": PLATFORM, "available_quants": available_quants()}
 
 
 @app.get("/health")
@@ -575,14 +566,14 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
             if world_engine.has_prompt_conditioning:
                 world_engine.engine.set_prompt(world_engine.current_prompt)
 
-        world_engine.cuda_executor.submit(_reset_with_frame).result()
+        world_engine.engine_executor.submit(_reset_with_frame).result()
     else:
         # Append repeatedly to strengthen the edit in the KV cache
         def _append_repeated(f=inpainted):
             for _ in range(SCENE_EDIT_APPEND_COUNT):
                 world_engine.engine.append_frame(f)
 
-        world_engine.cuda_executor.submit(_append_repeated).result()
+        world_engine.engine_executor.submit(_append_repeated).result()
 
     return {
         "original_jpeg_b64": original_b64,
@@ -822,9 +813,9 @@ async def websocket_endpoint(websocket: WebSocket):
         seed_filename = msg.get("seed_filename")
         quant = msg.get("quant")
 
-        # Update flags
+        # Update flags (scene edit is unavailable on MLX — inpainting deps are CUDA-only)
         if "scene_edit" in msg:
-            scene_edit_requested = msg["scene_edit"]
+            scene_edit_requested = msg["scene_edit"] and not IS_MLX
         if "action_logging" in msg:
             action_logging_requested = msg["action_logging"]
         if "cap_inference_fps" in msg:
@@ -1071,7 +1062,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # One-time NVML init for GPU utilization queries (same backend as nvidia-smi)
         _nvml_handle = None
-        if not _is_mlx and pynvml is not None:
+        if not IS_MLX and pynvml is not None:
             try:
                 pynvml.nvmlInit()
                 _nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(
@@ -1080,45 +1071,48 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
 
-        def _update_gpu_metrics() -> None:
-            try:
-                if _is_mlx:
-                    # On Apple Silicon, unified memory is shared — report process RSS as an approximation
-                    try:
-                        import resource
-                        rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)  # macOS returns bytes
-                        _cached_gpu_metrics.update({
-                            "vram_used_mb": round(rss_mb, 0),
-                            "vram_total_mb": -1.0,
-                            "vram_percent": -1.0,
-                            "gpu_util_percent": -1.0,
-                        })
-                    except Exception:
-                        pass
-                    return
+        def _update_mlx_metrics() -> None:
+            """Apple Silicon: unified memory — report process RSS as an approximation."""
+            import resource
+            rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)  # macOS returns bytes
+            _cached_gpu_metrics.update({
+                "vram_used_mb": round(rss_mb, 0),
+                "vram_total_mb": -1.0,
+                "vram_percent": -1.0,
+                "gpu_util_percent": -1.0,
+            })
 
-                if torch.cuda.is_available():
-                    vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
-                    vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
-                    vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
-                else:
-                    vram_used = vram_total = vram_pct = -1
-                gpu_util = -1
+        def _update_cuda_metrics() -> None:
+            """CUDA: query torch and NVML for VRAM / utilization stats."""
+            if torch.cuda.is_available():
+                vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
+                vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+                vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
+            else:
+                vram_used = vram_total = vram_pct = -1
+            gpu_util = -1
+            try:
+                gpu_util = torch.cuda.utilization()
+            except Exception:
+                pass
+            if gpu_util < 0 and _nvml_handle is not None:
                 try:
-                    gpu_util = torch.cuda.utilization()
+                    gpu_util = pynvml.nvmlDeviceGetUtilizationRates(_nvml_handle).gpu
                 except Exception:
                     pass
-                if gpu_util < 0 and _nvml_handle is not None:
-                    try:
-                        gpu_util = pynvml.nvmlDeviceGetUtilizationRates(_nvml_handle).gpu
-                    except Exception:
-                        pass
-                _cached_gpu_metrics.update({
-                    "vram_used_mb": round(vram_used, 0),
-                    "vram_total_mb": round(vram_total, 0),
-                    "vram_percent": round(vram_pct, 1),
-                    "gpu_util_percent": gpu_util,
-                })
+            _cached_gpu_metrics.update({
+                "vram_used_mb": round(vram_used, 0),
+                "vram_total_mb": round(vram_total, 0),
+                "vram_percent": round(vram_pct, 1),
+                "gpu_util_percent": gpu_util,
+            })
+
+        def _update_gpu_metrics() -> None:
+            try:
+                if IS_MLX:
+                    _update_mlx_metrics()
+                else:
+                    _update_cuda_metrics()
             except Exception:
                 pass  # metrics are best-effort
 
@@ -1456,7 +1450,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # Submit inference to CUDA thread (non-blocking) so we can
                     # overlap JPEG encoding of the previous batch with GPU work.
-                    gpu_future = world_engine.cuda_executor.submit(
+                    gpu_future = world_engine.engine_executor.submit(
                         lambda c=ctrl: world_engine.engine.gen_frame(ctrl=c)
                     )
 
@@ -1467,7 +1461,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     result = gpu_future.result()
                     t_infer = time.perf_counter()
 
-                    if not _is_mlx and torch.cuda.is_available():
+                    if not IS_MLX and torch.cuda.is_available():
                         torch.cuda.synchronize()
                     t_sync = time.perf_counter()
 
@@ -1488,22 +1482,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Stash this batch's CPU frames for deferred JPEG encoding
                     _flush_pending.work = (cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync)
 
-                except Exception as cuda_err:
+                except Exception as gpu_err:
                     _flush_pending.work = None
 
-                    error_msg = str(cuda_err)
-                    _recoverable_keywords = ["cuda", "cublas", "graph capture", "offset increment"]
-                    if _is_mlx:
-                        _recoverable_keywords.extend(["metal", "mlx", "command buffer"])
-                    is_cuda_error = any(
-                        keyword in error_msg.lower()
-                        for keyword in _recoverable_keywords
+                    error_msg = str(gpu_err)
+                    _gpu_error_hints = ["cuda", "cublas", "graph capture", "offset increment"]
+                    if IS_MLX:
+                        _gpu_error_hints.extend(["metal", "mlx", "command buffer"])
+                    is_recoverable_gpu_error = any(
+                        hint in error_msg.lower()
+                        for hint in _gpu_error_hints
                     )
 
-                    if is_cuda_error:
-                        logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
+                    if is_recoverable_gpu_error:
+                        logger.error(f"[{client_host}] GPU error detected: {gpu_err}")
                         try:
-                            recovery_success = run_coro(world_engine.recover_from_cuda_error())
+                            recovery_success = run_coro(world_engine.recover_from_gpu_error())
                         except Exception:
                             recovery_success = False
 
@@ -1512,10 +1506,10 @@ async def websocket_endpoint(websocket: WebSocket):
                                 {
                                     "type": "status",
                                     "stage": "session.reset",
-                                    "message": "Recovered from CUDA error - engine reset",
+                                    "message": "Recovered from GPU error - engine reset",
                                 }
                             )
-                            logger.info(f"[{client_host}] Successfully recovered from CUDA error")
+                            logger.info(f"[{client_host}] Successfully recovered from GPU error")
                         else:
                             queue_send(
                                 {
@@ -1523,12 +1517,12 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "message_id": "app.server.error.cudaRecoveryFailed",
                                 }
                             )
-                            logger.error(f"[{client_host}] Failed to recover from CUDA error")
+                            logger.error(f"[{client_host}] Failed to recover from GPU error")
                             running = False
                             break
                     else:
-                        logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
-                        queue_send({"type": "error", "message": str(cuda_err)})
+                        logger.error(f"[{client_host}] Generation error: {gpu_err}", exc_info=True)
+                        queue_send({"type": "error", "message": str(gpu_err)})
                         running = False
                         break
 

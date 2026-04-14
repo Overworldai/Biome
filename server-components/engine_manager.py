@@ -9,8 +9,6 @@ import base64
 import gc
 import io
 import logging
-import platform
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -25,24 +23,7 @@ except ImportError:
     simplejpeg = None
 
 
-# ============================================================================
-# Platform detection
-# ============================================================================
-
-def _detect_platform() -> str:
-    """Detect the compute platform: 'mlx' (Apple Silicon), 'cuda', or 'cpu'."""
-    if sys.platform == "darwin" and platform.machine() == "arm64":
-        try:
-            import mlx.core  # noqa: F401
-            return "mlx"
-        except ImportError:
-            pass
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
-PLATFORM = _detect_platform()
+from devices import PLATFORM, DEVICE, seed_device
 
 from progress_stages import (
     SESSION_INIT_FRAME,
@@ -67,7 +48,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_N_FRAMES = 4096
-DEVICE = "cuda" if PLATFORM == "cuda" else "cpu"
 JPEG_QUALITY = 85
 
 # Model-specific runtime configuration.
@@ -171,7 +151,7 @@ class WorldEngineManager:
         # Single-threaded executor for engine operations.
         # On CUDA this is critical for CUDA graphs which must run in the same thread
         # they were compiled in. On MLX it serializes Metal command buffer submission.
-        self.cuda_executor = ThreadPoolExecutor(
+        self.engine_executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="engine-thread"
         )
         logger.info(f"[ENGINE] Detected platform: {self.platform}")
@@ -233,13 +213,13 @@ class WorldEngineManager:
 
         return cfg
 
-    async def _run_on_cuda_thread(self, fn):
-        """Run callable on the dedicated CUDA thread."""
+    async def _run_on_engine_thread(self, fn):
+        """Run callable on the dedicated engine thread."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self.cuda_executor, fn)
+        return await loop.run_in_executor(self.engine_executor, fn)
 
-    def _free_cuda_memory_sync(self):
-        """Best-effort cleanup of CUDA allocations and compiled graph caches."""
+    def _free_engine_memory_sync(self):
+        """Best-effort cleanup of GPU allocations and compiled graph caches."""
         gc.collect()
         if self.platform == "mlx":
             # MLX manages its own memory pool; nothing to do here.
@@ -279,11 +259,11 @@ class WorldEngineManager:
         self.is_multiframe = self.temporal_compression > 1
         self.seed_target_size = self.cfg["seed_target_size"]
         self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
-        self._free_cuda_memory_sync()
+        self._free_engine_memory_sync()
 
     def _seed_device(self):
-        """Device for seed tensors: CPU for MLX (VAE handles placement), DEVICE for CUDA."""
-        return "cpu" if self.platform == "mlx" else DEVICE
+        """Device for seed tensors (delegated to devices.py)."""
+        return seed_device()
 
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
         """Synchronous helper to load a seed frame from a file path."""
@@ -316,7 +296,7 @@ class WorldEngineManager:
 
     async def load_seed_from_file(self, file_path: str) -> torch.Tensor:
         """Load a seed frame from a file path (async wrapper)."""
-        return await self._run_on_cuda_thread(
+        return await self._run_on_engine_thread(
             lambda: self._load_seed_from_file_sync(file_path)
         )
 
@@ -352,7 +332,7 @@ class WorldEngineManager:
 
     async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor:
         """Load a seed frame from base64 encoded data (async wrapper)."""
-        return await self._run_on_cuda_thread(
+        return await self._run_on_engine_thread(
             lambda: self._load_seed_from_base64_sync(base64_data)
         )
 
@@ -387,13 +367,13 @@ class WorldEngineManager:
                         f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}"
                     )
                 self._log_cuda_memory("before unload")
-                await self._run_on_cuda_thread(self._unload_engine_sync)
+                await self._run_on_engine_thread(self._unload_engine_sync)
                 self._log_cuda_memory("after unload")
 
             # Always run a pre-load cleanup pass. This helps release residual allocations
             # from previous failed loads and reduces allocator fragmentation.
             self._log_cuda_memory("before pre-load cleanup")
-            await self._run_on_cuda_thread(self._free_cuda_memory_sync)
+            await self._run_on_engine_thread(self._free_engine_memory_sync)
             self._log_cuda_memory("after pre-load cleanup")
 
             logger.info("=" * 60)
@@ -439,12 +419,12 @@ class WorldEngineManager:
                             ane_vae=True,
                         )
 
-                    new_engine = await self._run_on_cuda_thread(_create_mlx_engine)
+                    new_engine = await self._run_on_engine_thread(_create_mlx_engine)
                     selected_dtype = "float16 (MLX)"
                 except Exception as e:
                     last_error = e
                     logger.error(f"[2/4] MLXWorldEngine load failed: {e}", exc_info=True)
-                    await self._run_on_cuda_thread(self._unload_engine_sync)
+                    await self._run_on_engine_thread(self._unload_engine_sync)
             else:
                 # CUDA/CPU engine with dtype fallback
                 dtype_attempts = [torch.bfloat16, torch.float16]
@@ -460,7 +440,7 @@ class WorldEngineManager:
                                 dtype=dtype,
                             )
 
-                        new_engine = await self._run_on_cuda_thread(_create_engine)
+                        new_engine = await self._run_on_engine_thread(_create_engine)
                         selected_dtype = dtype
                         break
                     except torch.OutOfMemoryError as e:
@@ -468,11 +448,11 @@ class WorldEngineManager:
                         logger.warning(
                             f"[2/4] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
                         )
-                        await self._run_on_cuda_thread(self._unload_engine_sync)
+                        await self._run_on_engine_thread(self._unload_engine_sync)
                         self._log_cuda_memory("after OOM cleanup")
                     except Exception as e:
                         last_error = e
-                        await self._run_on_cuda_thread(self._unload_engine_sync)
+                        await self._run_on_engine_thread(self._unload_engine_sync)
                         self._log_cuda_memory("after failed load cleanup")
                         break
 
@@ -548,7 +528,7 @@ class WorldEngineManager:
         """Generate next frame using WorldEngine."""
         if self.engine is None:
             raise RuntimeError("WorldEngine is not loaded")
-        frame = await self._run_on_cuda_thread(
+        frame = await self._run_on_engine_thread(
             lambda: self.engine.gen_frame(ctrl=ctrl_input)
         )
         return frame
@@ -562,12 +542,12 @@ class WorldEngineManager:
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
-        await self._run_on_cuda_thread(self.engine.reset)
+        await self._run_on_engine_thread(self.engine.reset)
         logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.append_frame()...")
-        await self._run_on_cuda_thread(
+        await self._run_on_engine_thread(
             lambda: self.engine.append_frame(self.seed_frame)
         )
         logger.info(
@@ -576,7 +556,7 @@ class WorldEngineManager:
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.set_prompt()...")
-        await self._run_on_cuda_thread(
+        await self._run_on_engine_thread(
             lambda: self.engine.set_prompt(self.current_prompt)
         )
         logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
@@ -591,13 +571,13 @@ class WorldEngineManager:
         self._report_progress(SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
-        await self._run_on_cuda_thread(self.engine.reset)
+        await self._run_on_engine_thread(self.engine.reset)
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
-        await self._run_on_cuda_thread(
+        await self._run_on_engine_thread(
             lambda: self.engine.append_frame(self.seed_frame)
         )
         logger.info(
@@ -608,7 +588,7 @@ class WorldEngineManager:
         if self.has_prompt_conditioning:
             t0 = time.perf_counter()
             logger.info("[INIT] Starting engine.set_prompt()...")
-            await self._run_on_cuda_thread(
+            await self._run_on_engine_thread(
                 lambda: self.engine.set_prompt(self.current_prompt)
             )
             logger.info(
@@ -619,15 +599,15 @@ class WorldEngineManager:
                 f"[INIT] No prompt conditioning enabled, skipping engine.set_prompt()"
             )
 
-    async def recover_from_cuda_error(self):
+    async def recover_from_gpu_error(self):
         """
-        Recover from CUDA errors by clearing caches and resetting compilation.
-        This is needed when CUDA graphs become corrupted.
-        On MLX, simply reset the engine state.
+        Recover from GPU errors by clearing caches and resetting compilation.
+        On CUDA, this clears compiled graph caches that may be corrupted.
+        On MLX, simply resets the engine state.
         """
         logger.warning("[ENGINE RECOVERY] Attempting to recover from engine error...")
 
-        if self.platform != "mlx":
+        if self.platform == "cuda":
             def clear_cuda():
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
@@ -637,7 +617,7 @@ class WorldEngineManager:
                 logger.info("[ENGINE RECOVERY] CUDA caches cleared and dynamo reset")
 
             try:
-                await self._run_on_cuda_thread(clear_cuda)
+                await self._run_on_engine_thread(clear_cuda)
             except Exception as e:
                 logger.error(f"[ENGINE RECOVERY] Failed to clear CUDA caches: {e}", exc_info=True)
                 return False
@@ -710,7 +690,7 @@ class WorldEngineManager:
         )
         logger.info("=" * 60)
 
-        warmup_time = await self._run_on_cuda_thread(do_warmup)
+        warmup_time = await self._run_on_engine_thread(do_warmup)
 
         logger.info("=" * 60)
         logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")
