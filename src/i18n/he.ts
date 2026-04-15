@@ -8,6 +8,7 @@ const he = {
         later: 'אחר כך',
         quit: 'יציאה',
         reconnect: 'התחבר מחדש',
+        returnToMainMenu: 'חזרה לתפריט הראשי',
         close: 'סגור',
         cancel: 'ביטול',
         back: 'חזרה',
@@ -29,6 +30,7 @@ const he = {
         hideLogs: 'הסתר לוגים',
         abort: 'בטל',
         aborting: 'מבטל...',
+        copy: 'העתק',
         pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה'
       },
@@ -103,8 +105,8 @@ const he = {
           reproductionSteps: 'שלבי שחזור',
           recentLogs: 'לוגים אחרונים',
           fullDiagnostics: 'דיאגנוסטיקה מלאה',
-          fullDiagnosticsCopied: 'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
-          fullDiagnosticsPaste: 'לחץ על "העתק דוח" באפליקציה והדבק למטה את JSON הדיאגנוסטיקה.',
+          fullDiagnosticsCopiedHint: 'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
+          fullDiagnosticsCopyHint: 'לחץ על "העתק דוח" באפליקציה והדבק למטה את JSON הדיאגנוסטיקה.',
           pasteDiagnosticsJson: '<הדבק כאן את JSON הדיאגנוסטיקה המלא>',
           saveDiagnosticsJson: 'שמור את JSON הדיאגנוסטיקה לקובץ',
           copying: 'מעתיק...',
@@ -234,7 +236,11 @@ const he = {
           frameTimelineDescription: 'הצג את צינור האינטרפולציה של הפריימים עם תזמון לכל שלב.',
           actionLogging: 'רישום פעולות',
           actionLoggingDescription:
-            'הקלט את כל הקלטים לקובץ בשרת לצורך ניגון חוזר. נשמר בתיקיית ה-temp של מערכת ההפעלה.'
+            'הקלט את כל הקלטים לקובץ בשרת לצורך ניגון חוזר. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
+          diagnostics: 'דיאגנוסטיקה',
+          diagnosticsDescription: 'העתק מידע דיאגנוסטי ללוח לצורך דיווחי באגים.',
+          copiedToClipboard: 'הועתק ללוח',
+          copyFailed: 'ההעתקה נכשלה'
         },
         credits: {
           title: 'קרדיטים'
@@ -302,9 +308,9 @@ const he = {
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
         error: {
-          serverStartupFailed: 'הפעלת השרת נכשלה',
+          serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
-          sceneEditModelLoadFailed: 'טעינת מודל עריכת הסצנה נכשלה',
+          sceneEditModelLoadFailed: 'טעינת מודל עריכת הסצנה נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           sceneEditEmptyPrompt: 'פרומפט ריק',

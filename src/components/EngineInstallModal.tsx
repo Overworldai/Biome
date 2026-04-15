@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '../bridge'
+import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { useStreaming } from '../context/StreamingContext'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
@@ -12,7 +13,7 @@ type EngineInstallModalProps = {
 
 const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
   const { t } = useTranslation()
-  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup } = useStreaming()
+  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup, connection } = useStreaming()
   const { logs: installLogs, clear: clearInstallLogs } = useEngineLogs(true)
   const [isExportingInstallDiagnostics, setIsExportingInstallDiagnostics] = useState(false)
   const [isAbortingInstall, setIsAbortingInstall] = useState(false)
@@ -25,21 +26,19 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     }
   }, [engineSetupInProgress, clearInstallLogs])
 
-  const buildDiagnosticsPayload = useCallback(async () => {
-    const meta = await invoke('get-runtime-diagnostics-meta')
-    const system = await invoke('get-system-diagnostics')
-    return {
-      generated_at: new Date().toISOString(),
-      runtime: meta,
-      system,
-      install_state: {
-        engine_setup_in_progress: engineSetupInProgress,
-        setup_progress: setupProgress,
-        engine_setup_error: engineSetupError
-      },
-      logs: installLogs
-    }
-  }, [engineSetupError, engineSetupInProgress, installLogs, setupProgress])
+  const buildPayload = useCallback(
+    () =>
+      buildDiagnosticsPayload({
+        connection,
+        error: {
+          message: engineSetupError,
+          stage: setupProgress,
+          in_progress: engineSetupInProgress
+        },
+        logs: installLogs
+      }),
+    [connection, engineSetupError, engineSetupInProgress, installLogs, setupProgress]
+  )
 
   const handleExportInstallDiagnostics = async () => {
     if (isExportingInstallDiagnostics) return
@@ -47,7 +46,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     setIsExportingInstallDiagnostics(true)
     setInstallExportStatus(null)
     try {
-      const report = await buildDiagnosticsPayload()
+      const report = await buildPayload()
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
       if (result.canceled) {
@@ -98,7 +97,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                 : t('app.dialogs.install.complete')
           }
           errorMessage={engineSetupError}
-          buildDiagnosticsPayload={buildDiagnosticsPayload}
+          buildDiagnosticsPayload={buildPayload}
           showExportAction={!engineSetupInProgress && !!engineSetupError}
           onExportAction={() => void handleExportInstallDiagnostics()}
           isExportingAction={isExportingInstallDiagnostics}

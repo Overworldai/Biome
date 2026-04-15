@@ -8,6 +8,7 @@ const zh = {
         later: '稍后',
         quit: '退出',
         reconnect: '重新连接',
+        returnToMainMenu: '返回主菜单',
         close: '关闭',
         cancel: '取消',
         back: '返回',
@@ -29,6 +30,7 @@ const zh = {
         hideLogs: '隐藏日志',
         abort: '中止',
         aborting: '正在中止...',
+        copy: '复制',
         pasteImageFromClipboard: '从剪贴板粘贴图片',
         browseForImageFile: '浏览图片文件'
       },
@@ -102,8 +104,8 @@ const zh = {
           reproductionSteps: '复现步骤',
           recentLogs: '最近日志',
           fullDiagnostics: '完整诊断信息',
-          fullDiagnosticsCopied: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
-          fullDiagnosticsPaste: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
+          fullDiagnosticsCopiedHint: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
+          fullDiagnosticsCopyHint: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
           pasteDiagnosticsJson: '<请在此粘贴完整诊断 JSON>',
           saveDiagnosticsJson: '将诊断 JSON 保存到文件',
           copying: '复制中...',
@@ -230,7 +232,11 @@ const zh = {
           frameTimeline: '帧时间线',
           frameTimelineDescription: '显示帧插值管线及每个槽位的计时。',
           actionLogging: '操作日志',
-          actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。'
+          actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。',
+          diagnostics: '诊断信息',
+          diagnosticsDescription: '将诊断信息复制到剪贴板，用于错误报告。',
+          copiedToClipboard: '已复制到剪贴板',
+          copyFailed: '复制失败'
         },
         credits: {
           title: '鸣谢'
@@ -298,9 +304,9 @@ const zh = {
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
         error: {
-          serverStartupFailed: '服务器启动失败',
+          serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
-          sceneEditModelLoadFailed: '场景编辑模型加载失败',
+          sceneEditModelLoadFailed: '场景编辑模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
           generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
           sceneEditEmptyPrompt: '提示词为空',

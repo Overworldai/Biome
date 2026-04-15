@@ -86,7 +86,7 @@ Server `error` and `warning` push messages use **translation keys** so the clien
 ```
 
 - `message_id` — a fully-qualified i18n key (e.g. `app.server.error.cudaRecoveryFailed`). The server must send the **full key path** so it's searchable across the codebase.
-- `message` — optional raw detail string (e.g. an exception message). When both `message_id` and `message` are present, the client displays them as `"Localised label: raw detail"`.
+- `message` — optional raw detail string (e.g. an exception message). When both `message_id` and `message` are present, `message` is forwarded as the `message` interpolation param to the translation key. Keys that want to surface the detail include `{{message}}` in their string (e.g. `serverStartupFailed: 'Server startup failed: {{message}}'`); keys that don't just ignore it. This keeps composed error text explicit per-key.
 - `params` — optional interpolation parameters for the translation key (e.g. `{"filename": "seed.jpg"}`).
 
 RPC error responses use the same convention with `error_id` instead of `error`:

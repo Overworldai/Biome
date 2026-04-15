@@ -8,6 +8,7 @@ const ja = {
         later: '後で',
         quit: '終了',
         reconnect: '再接続',
+        returnToMainMenu: 'メインメニューに戻る',
         close: '閉じる',
         cancel: 'キャンセル',
         back: '戻る',
@@ -29,6 +30,7 @@ const ja = {
         hideLogs: 'ログを隠す',
         abort: '中止',
         aborting: '中止中...',
+        copy: 'コピー',
         pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
         browseForImageFile: '画像ファイルを選択'
       },
@@ -106,9 +108,9 @@ const ja = {
           reproductionSteps: '再現手順',
           recentLogs: '最近のログ',
           fullDiagnostics: '完全な診断情報',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             '完全な診断 JSON はクリップボードにコピーされています。送信前に下へ貼り付けてください。',
-          fullDiagnosticsPaste: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
+          fullDiagnosticsCopyHint: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
           pasteDiagnosticsJson: '<完全な診断 JSON をここに貼り付けてください>',
           saveDiagnosticsJson: '診断 JSON をファイルに保存',
           copying: 'コピー中...',
@@ -238,7 +240,11 @@ const ja = {
           frameTimelineDescription: 'スロットごとのタイミングを含むフレーム補間パイプラインを表示します。',
           actionLogging: 'アクションログ',
           actionLoggingDescription:
-            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。'
+            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
+          diagnostics: '診断情報',
+          diagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
+          copiedToClipboard: 'クリップボードにコピーしました',
+          copyFailed: 'コピーに失敗しました'
         },
         credits: {
           title: 'クレジット'
@@ -306,9 +312,9 @@ const ja = {
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
         error: {
-          serverStartupFailed: 'サーバーの起動に失敗しました',
+          serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
-          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
+          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           generateSceneSafetyRejected:

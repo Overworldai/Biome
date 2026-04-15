@@ -144,6 +144,9 @@ try:
 
     logger.info(f"torch {torch.__version__} imported")
 
+    import system_info as system_info_module
+    system_info_module.initialize()
+
     logger.info("Importing torchvision...")
     import torchvision
 
@@ -174,6 +177,15 @@ try:
 except Exception as e:
     logger.fatal(f"Import failed: {e}", exc_info=True)
     sys.exit(1)
+
+
+def _error_payload(**fields) -> dict:
+    """Build an error push payload with an attached snapshot of ephemeral
+    state (RAM/VRAM/GPU util at error time).  Every outgoing `error` message
+    should go through this so bug reports capture what the server was
+    actually doing at the failure point."""
+    return {"type": "error", "snapshot": system_info_module.capture_error_snapshot(), **fields}
+
 
 # ============================================================================
 # Global Module Instances
@@ -652,11 +664,18 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_startup_waiters.remove(startup_queue)
 
     if startup_error:
-        await websocket.send_text(json.dumps({"type": "error", "message_id": "app.server.error.serverStartupFailed", "message": str(startup_error)}))
+        await websocket.send_text(json.dumps(_error_payload(message_id="app.server.error.serverStartupFailed", message=str(startup_error))))
         log_tail_task.cancel()
         TeeStream.unregister_client(log_queue)
         await websocket.close()
         return
+
+    # Push system info immediately so the client has the hardware identity
+    # even if the session crashes during init (e.g. CUDA graph compilation).
+    await websocket.send_text(json.dumps({
+        "type": "system_info",
+        **system_info_module.system_info,
+    }))
 
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
@@ -899,9 +918,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except asyncio.TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
-                await send_json(
-                    {"type": "error", "message_id": "app.server.error.timeoutWaitingForSeed"}
-                )
+                await send_json(_error_payload(message_id="app.server.error.timeoutWaitingForSeed"))
                 return
 
         # Wire progress callback so engine_manager reports granular stages
@@ -932,7 +949,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Inpainting warmup failed: {e}", exc_info=True)
-                await send_json({"type": "error", "message_id": "app.server.error.sceneEditModelLoadFailed", "message": str(e)})
+                await send_json(_error_payload(message_id="app.server.error.sceneEditModelLoadFailed", message=str(e)))
                 if init_req_id:
                     await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.sceneEditModelLoadFailed"})
                 return
@@ -945,11 +962,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 err_str = str(e)
                 if "compute capability" in err_str or "scaled_mm" in err_str:
                     logger.error(f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}")
-                    await send_json({
-                        "type": "error",
-                        "message_id": "app.server.error.quantUnsupportedGpu",
-                        "params": {"quant": world_engine.quant or "unknown"},
-                    })
+                    await send_json(_error_payload(
+                        message_id="app.server.error.quantUnsupportedGpu",
+                        params={"quant": world_engine.quant or "unknown"},
+                    ))
                     return
                 raise
 
@@ -1012,17 +1028,6 @@ async def websocket_endpoint(websocket: WebSocket):
         frame_ready = asyncio.Event()
         main_loop = asyncio.get_running_loop()
 
-        # Cache device names — queried once per session (both can be slow)
-        try:
-            import cpuinfo
-            _metrics_cpu_name = cpuinfo.get_cpu_info().get("brand_raw") or None
-        except Exception:
-            _metrics_cpu_name = None
-        try:
-            _metrics_gpu_name = (torch.cuda.get_device_name(0) if torch.cuda.is_available() else None) or None
-        except Exception:
-            _metrics_gpu_name = None
-
         def queue_send(payload: dict | bytes) -> None:
             try:
                 frame_queue.put_nowait(payload)
@@ -1030,52 +1035,17 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
 
-        # Cached GPU metrics, updated each latent pass and embedded in frame headers
+        # Cached dynamic GPU metrics, updated each latent pass and embedded in
+        # frame headers.  Static identifiers (GPU/CPU name, VRAM total) live
+        # in system_info and are sent once via the init response.
         _cached_gpu_metrics = {
-            "vram_used_mb": -1.0,
-            "vram_total_mb": -1.0,
-            "vram_percent": -1.0,
-            "gpu_util_percent": -1.0,
+            "vram_used_bytes": -1,
+            "gpu_util_percent": -1,
         }
 
-        # One-time NVML init for GPU utilization queries (same backend as nvidia-smi)
-        _nvml_handle = None
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-            _nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(
-                torch.cuda.current_device() if torch.cuda.is_available() else 0
-            )
-        except Exception:
-            pass
-
         def _update_gpu_metrics() -> None:
-            try:
-                if torch.cuda.is_available():
-                    vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
-                    vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
-                    vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
-                else:
-                    vram_used = vram_total = vram_pct = -1
-                gpu_util = -1
-                try:
-                    gpu_util = torch.cuda.utilization()
-                except Exception:
-                    pass
-                if gpu_util < 0 and _nvml_handle is not None:
-                    try:
-                        import pynvml
-                        gpu_util = pynvml.nvmlDeviceGetUtilizationRates(_nvml_handle).gpu
-                    except Exception:
-                        pass
-                _cached_gpu_metrics.update({
-                    "vram_used_mb": round(vram_used, 0),
-                    "vram_total_mb": round(vram_total, 0),
-                    "vram_percent": round(vram_pct, 1),
-                    "gpu_util_percent": gpu_util,
-                })
-            except Exception:
-                pass  # metrics are best-effort
+            _cached_gpu_metrics["vram_used_bytes"] = system_info_module.get_vram_used_bytes()
+            _cached_gpu_metrics["gpu_util_percent"] = system_info_module.get_gpu_util_percent()
 
         def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float, temporal_compression: int = 1, profile: dict | None = None) -> bytes:
             header_data = {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms, "temporal_compression": temporal_compression}
@@ -1085,19 +1055,21 @@ async def websocket_endpoint(websocket: WebSocket):
             header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
             return struct.pack("<I", len(header)) + header + jpeg
 
+        def build_init_response_data() -> dict:
+            from engine_manager import DEFAULT_INFERENCE_FPS
+            return {
+                "model": getattr(world_engine, 'model_uri', "") or "",
+                "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
+                "system_info": dict(system_info_module.system_info),
+            }
+
         # Respond to init RPC with session metrics
         if init_req_id:
-            from engine_manager import DEFAULT_INFERENCE_FPS
             await send_json({
                 "type": "response",
                 "req_id": init_req_id,
                 "success": True,
-                "data": {
-                    "gpu_name": _metrics_gpu_name,
-                    "cpu_name": _metrics_cpu_name,
-                    "model": getattr(world_engine, 'model_uri', "") or "",
-                    "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
-                },
+                "data": build_init_response_data(),
             })
             init_req_id = None
 
@@ -1113,18 +1085,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         if msg_type == "init":
                             # init RPC: apply deltas and respond with metrics
                             ready, new_seed = await handle_init(msg, is_game_loop=True)
-                            from engine_manager import DEFAULT_INFERENCE_FPS
                             if ready:
                                 queue_send({
                                     "type": "response",
                                     "req_id": msg["req_id"],
                                     "success": True,
-                                    "data": {
-                                        "gpu_name": _metrics_gpu_name,
-                                        "cpu_name": _metrics_cpu_name,
-                                        "model": getattr(world_engine, 'model_uri', "") or "",
-                                        "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
-                                    },
+                                    "data": build_init_response_data(),
                                 })
                             else:
                                 queue_send({
@@ -1469,18 +1435,13 @@ async def websocket_endpoint(websocket: WebSocket):
                             )
                             logger.info(f"[{client_host}] Successfully recovered from CUDA error")
                         else:
-                            queue_send(
-                                {
-                                    "type": "error",
-                                    "message_id": "app.server.error.cudaRecoveryFailed",
-                                }
-                            )
+                            queue_send(_error_payload(message_id="app.server.error.cudaRecoveryFailed"))
                             logger.error(f"[{client_host}] Failed to recover from CUDA error")
                             running = False
                             break
                     else:
                         logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
-                        queue_send({"type": "error", "message": str(cuda_err)})
+                        queue_send(_error_payload(message=str(cuda_err)))
                         running = False
                         break
 
@@ -1516,7 +1477,7 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             logger.error(f"[{client_host}] Error: {e}", exc_info=True)
             try:
-                await send_json({"type": "error", "message": str(e)})
+                await send_json(_error_payload(message=str(e)))
             except Exception:
                 pass
     finally:

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
+import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/useSettings'
 import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
@@ -70,6 +71,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setupEngine,
     nukeAndReinstallEngine,
     isStreaming,
+    connection,
     mouseSensitivity,
     setMouseSensitivity
   } = useStreaming()
@@ -109,6 +111,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
   const [menuActionLogging, setMenuActionLogging] = useState(() => settings.debug_overlays.action_logging)
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null)
 
   const configServerUrl = settings.server_url
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
@@ -463,6 +466,27 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     }
   }
 
+  const handleCopyDiagnostics = useCallback(async () => {
+    setDiagnosticsStatus(null)
+    try {
+      const isServerMode = configEngineMode === ENGINE_MODES.SERVER
+      const payload = await buildDiagnosticsPayload({
+        connection,
+        error: { message: null },
+        logs: [],
+        session: {
+          engineMode: isServerMode ? 'server' : 'standalone',
+          requestedModel: configWorldModel ?? null,
+          requestedQuant: settings.engine_quant ?? null
+        }
+      })
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+      setDiagnosticsStatus(t('app.settings.debugMetrics.copiedToClipboard'))
+    } catch {
+      setDiagnosticsStatus(t('app.settings.debugMetrics.copyFailed'))
+    }
+  }, [connection, configEngineMode, configWorldModel, settings.engine_quant, t])
+
   return (
     <div className="absolute inset-0 z-[9] pointer-events-auto">
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
@@ -689,6 +713,24 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
           <SettingsSection title="app.settings.debugMetrics.title" description="app.settings.debugMetrics.description">
             <div className="flex flex-col gap-[1cqh]">
+              <SettingsRow
+                label={t('app.settings.debugMetrics.diagnostics')}
+                hint={t('app.settings.debugMetrics.diagnosticsDescription')}
+                align="start"
+              >
+                <div className="flex items-center gap-[1.2cqh]">
+                  <Button
+                    variant="secondary"
+                    autoShrinkLabel
+                    label="app.buttons.copy"
+                    className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                    onClick={() => void handleCopyDiagnostics()}
+                  />
+                  {diagnosticsStatus && (
+                    <span className={`font-serif text-[2cqh] ${SETTINGS_MUTED_TEXT}`}>{diagnosticsStatus}</span>
+                  )}
+                </div>
+              </SettingsRow>
               <SettingsCheckbox
                 label="app.settings.debugMetrics.performanceStats"
                 description="app.settings.debugMetrics.performanceStatsDescription"

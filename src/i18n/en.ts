@@ -8,6 +8,7 @@ const en = {
         later: 'Later',
         quit: 'Quit',
         reconnect: 'Reconnect',
+        returnToMainMenu: 'Return to Main Menu',
         close: 'Close',
         cancel: 'Cancel',
         back: 'Back',
@@ -29,6 +30,7 @@ const en = {
         hideLogs: 'Hide Logs',
         abort: 'Abort',
         aborting: 'Aborting...',
+        copy: 'Copy',
         pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file'
       },
@@ -107,9 +109,9 @@ const en = {
           reproductionSteps: 'Reproduction steps',
           recentLogs: 'Recent logs',
           fullDiagnostics: 'Full diagnostics',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.',
-          fullDiagnosticsPaste: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
           pasteDiagnosticsJson: '<paste full diagnostics JSON here>',
           saveDiagnosticsJson: 'Save diagnostics JSON to file',
           copying: 'Copying...',
@@ -239,7 +241,11 @@ const en = {
           frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
           actionLogging: 'Action Logging',
           actionLoggingDescription:
-            "Record all inputs to a file on the server for replay. Written to the OS's temp directory."
+            "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
+          diagnostics: 'Diagnostics',
+          diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
+          copiedToClipboard: 'Copied to clipboard',
+          copyFailed: 'Failed to copy'
         },
         credits: {
           title: 'Credits'
@@ -307,9 +313,9 @@ const en = {
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
         error: {
-          serverStartupFailed: 'Server startup failed',
+          serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load',
+          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
           sceneEditEmptyPrompt: 'Empty prompt',

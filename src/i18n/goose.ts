@@ -8,6 +8,7 @@ const goose = {
         later: 'Honk later',
         quit: 'Fly away',
         reconnect: 'Waddle back',
+        returnToMainMenu: 'Back to the nest',
         close: 'Hiss',
         cancel: 'Squawk',
         back: 'Waddle back',
@@ -29,6 +30,7 @@ const goose = {
         hideLogs: 'Hide honks',
         abort: 'Flee!',
         aborting: 'Fleeing...',
+        copy: 'Honk',
         pasteImageFromClipboard: 'Peck image from clipboard',
         browseForImageFile: 'Forage for image file'
       },
@@ -108,9 +110,9 @@ const goose = {
           reproductionSteps: 'Honk-by-honk replay',
           recentLogs: 'Recent honks',
           fullDiagnostics: 'Full droppings',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full droppings JSON has been copied to clipboard. Paste below before submitting your honk.',
-          fullDiagnosticsPaste: 'Click "Copy honk report" in-app and paste droppings JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy honk report" in-app and paste droppings JSON below.',
           pasteDiagnosticsJson: '<paste full droppings JSON here>',
           saveDiagnosticsJson: 'Save droppings JSON to nest',
           copying: 'Pecking...',
@@ -241,7 +243,11 @@ const goose = {
           frameTimelineDescription: 'Show the feather interpolation pipeline with per-egg timing.',
           actionLogging: 'Migration log',
           actionLoggingDescription:
-            "Record all pecks and waddles to a file on the pond server for replay. Honked to the OS's temp nest."
+            "Record all pecks and waddles to a file on the pond server for replay. Honked to the OS's temp nest.",
+          diagnostics: 'Honknostics',
+          diagnosticsDescription: 'Copy honknostic information to the clipboard for flock reports.',
+          copiedToClipboard: 'Honked to clipboard',
+          copyFailed: 'Honk failed'
         },
         credits: {
           title: 'The flock'
@@ -309,9 +315,9 @@ const goose = {
         noOpenPort: 'No open pond found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'The goose is not honking back at {{url}}',
         error: {
-          serverStartupFailed: 'The goose failed to wake up',
+          serverStartupFailed: 'The goose failed to wake up: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for bread crumb',
-          sceneEditModelLoadFailed: 'Pond edit model failed to load',
+          sceneEditModelLoadFailed: 'Pond edit model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Pond edit rejected: the honk did not pass the fox safety check.',
           generateSceneSafetyRejected: 'Pond creation rejected: the honk did not pass the fox safety check.',
           sceneEditEmptyPrompt: 'Empty quack',
