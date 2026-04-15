@@ -355,6 +355,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineError,
         hasReceivedFrame,
         socketReady: isReady,
+        // Init is considered complete once applyInitResponse has set model.
+        // Used to gate the LOADING → STREAMING transition so an error between
+        // session.ready and the init response doesn't leak us into streaming.
+        initCompleted: connection.model !== null,
         isPointerLocked,
         settingsOpen,
         isPaused,

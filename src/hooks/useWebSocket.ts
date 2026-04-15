@@ -314,7 +314,9 @@ export const useWebSocket = (): WebSocketHook => {
       wsRef.current = null
       setConnectionState('disconnected')
       setIsReady(false)
-      setStatusStage(null)
+      // Preserve statusStage across close so a bug report captures where the
+      // server was in its init flow (e.g. "session.inpainting_load") when it
+      // died.  It's overwritten by the next session's status messages on reconnect.
       setFrame(null)
       setHasRealFrame(false)
       setFrameId(0)

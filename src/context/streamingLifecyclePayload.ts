@@ -12,6 +12,7 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
   socketReady: boolean
+  initCompleted: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
   isPaused: boolean
@@ -39,6 +40,7 @@ export const buildStreamingLifecycleSyncPayload = (
     engineError: args.engineError,
     hasReceivedFrame: args.hasReceivedFrame,
     socketReady: args.socketReady,
+    initCompleted: args.initCompleted,
     isPointerLocked: args.isPointerLocked,
     settingsOpen: args.settingsOpen,
     isPaused: args.isPaused,

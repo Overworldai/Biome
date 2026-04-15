@@ -161,7 +161,13 @@ export const streamingLifecycleReducer = (
     next.lastTeardownPortalState = portalState
   }
 
-  const canTransitionToStreaming = inLoadingState && connectionState === 'connected' && socketReady && hasReceivedFrame
+  // Wait for the init RPC response (`initCompleted`) as well as `session.ready`
+  // + first frame.  The server sends the seed frame and session.ready stage
+  // *before* the init response lands, so without this guard a crash between
+  // session.ready and init response would transition us into STREAMING with
+  // stale state (Overworldai/Biome#79 follow-up).
+  const canTransitionToStreaming =
+    inLoadingState && connectionState === 'connected' && socketReady && hasReceivedFrame && initCompleted
 
   if (canTransitionToStreaming && !next.streamingTransitionRequested) {
     next.effects.transitionToStreaming = true
