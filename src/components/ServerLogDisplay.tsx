@@ -50,7 +50,8 @@ const ServerLogDisplay = ({
   onExportAction,
   isExportingAction = false,
   exportActionLabel,
-  actionStatus = null
+  actionStatus = null,
+  primaryAction = null
 }: {
   errorMessage?: string | null
   showProgress?: boolean
@@ -64,6 +65,10 @@ const ServerLogDisplay = ({
   isExportingAction?: boolean
   exportActionLabel?: TranslationKey
   actionStatus?: string | null
+  /** Rendered at the far right of the footer action row.  Use for the one
+   *  primary CTA of the surrounding screen (e.g. "Return to Main Menu") so
+   *  all report/help buttons are secondary and the primary stands out. */
+  primaryAction?: ReactNode
 }) => {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -264,7 +269,7 @@ const ServerLogDisplay = ({
             </div>
             <div className="flex items-center gap-[0.8cqh]">
               <Button
-                variant="primary"
+                variant={primaryAction ? 'secondary' : 'primary'}
                 autoShrinkLabel
                 label={isOpeningIssue ? 'app.loading.terminal.opening' : 'app.buttons.reportOnGithub'}
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -273,13 +278,14 @@ const ServerLogDisplay = ({
                 title={t('app.loading.terminal.openPrefilledIssueOnGithub')}
               />
               <Button
-                variant="primary"
+                variant={primaryAction ? 'secondary' : 'primary'}
                 autoShrinkLabel
                 label="app.buttons.askOnDiscord"
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
                 title={t('app.loading.terminal.askForHelpInDiscord')}
               />
+              {primaryAction}
             </div>
           </div>
         </div>
