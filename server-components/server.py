@@ -591,7 +591,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool, "quant": str|null}
+            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool, "quant": str|null, "cpu_offload": bool}
             {"type": "reset"}
             {"type": "pause"}
             {"type": "resume"}
@@ -798,6 +798,7 @@ async def websocket_endpoint(websocket: WebSocket):
         seed_data = msg.get("seed_image_data")
         seed_filename = msg.get("seed_filename")
         quant = msg.get("quant")
+        cpu_offload = msg.get("cpu_offload", False)
 
         # Update flags
         if "scene_edit" in msg:
@@ -832,7 +833,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if model_uri and (model_uri != getattr(world_engine, "model_uri", None) or quant_changed):
             logger.info(f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri} (quant={quant})")
             world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
-            await world_engine.load_engine(model_uri, quant=quant)
+            await world_engine.load_engine(model_uri, quant=quant, cpu_offload=cpu_offload)
             world_engine.set_progress_callback(None)
             world_engine.seed_frame = None
             session.perceptual_frame_count = 0

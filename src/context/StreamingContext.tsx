@@ -246,9 +246,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       // Set lastAppliedModel before await to prevent the lifecycle machine from
       // seeing a model mismatch during the re-render triggered by setInitMetrics.
       const quant = settings.engine_quant ?? 'none'
+      const cpuOffload = settings.cpu_offload ?? false
       lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
-        ? `${selectedModel}+scene_edit+${quant}`
-        : `${selectedModel}+${quant}`
+        ? `${selectedModel}+scene_edit+${quant}+cpu${cpuOffload ? '1' : '0'}`
+        : `${selectedModel}+${quant}+cpu${cpuOffload ? '1' : '0'}`
 
       const metrics = await sendInit({
         model: selectedModel,
@@ -257,6 +258,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         scene_edit: settings.experimental?.scene_edit_enabled ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
         quant: quant !== 'none' ? quant : null,
+        cpu_offload: cpuOffload,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
       setInitMetrics(metrics)
@@ -269,6 +271,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isConnected,
     settings?.engine_model,
     settings?.engine_quant,
+    settings?.cpu_offload,
     settings?.cap_inference_fps,
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
@@ -360,7 +363,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         isPaused,
         sceneEditActive: sceneEditGrace,
         sceneEditEnabled: settings.experimental?.scene_edit_enabled,
-        engineQuant: settings.engine_quant
+        engineQuant: settings.engine_quant,
+        cpuOffload: settings.cpu_offload
       })
     })
   }, [
@@ -369,6 +373,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     error,
     settings?.engine_model,
     settings?.engine_quant,
+    settings?.cpu_offload,
     settings.experimental?.scene_edit_enabled,
     engineError,
     hasReceivedFrame,

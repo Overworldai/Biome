@@ -18,17 +18,19 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   sceneEditActive: boolean
   sceneEditEnabled?: boolean
   engineQuant?: string
+  cpuOffload?: boolean
 }
 
 export const buildStreamingLifecycleSyncPayload = (
   args: BuildStreamingLifecycleSyncPayloadArgs
 ): StreamingLifecycleSyncPayload => {
-  // Encode scene_edit_enabled and quant into the model key so toggling
-  // either triggers the same intentional-reconnect flow as switching models.
+  // Encode scene_edit_enabled, quant, and cpu_offload into the model key so
+  // toggling any of them triggers the same intentional-reconnect flow as
+  // switching models.
   const baseModel = args.engineModel || DEFAULT_WORLD_ENGINE_MODEL
   const quant = args.engineQuant ?? 'none'
   let selectedModel = args.sceneEditEnabled ? `${baseModel}+scene_edit` : baseModel
-  selectedModel = `${selectedModel}+${quant}`
+  selectedModel = `${selectedModel}+${quant}+cpu${args.cpuOffload ? '1' : '0'}`
 
   return {
     portalState: args.portalState,

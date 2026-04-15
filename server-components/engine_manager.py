@@ -324,7 +324,7 @@ class WorldEngineManager:
             lambda: self._load_seed_from_base64_sync(base64_data)
         )
 
-    async def load_engine(self, model_uri: str, quant: str | None = None):
+    async def load_engine(self, model_uri: str, quant: str | None = None, cpu_offload: bool = False):
         """Initialize or switch the WorldEngine model.
 
         model_uri is required — the server does not have a default model.
@@ -400,6 +400,7 @@ class WorldEngineManager:
                             device=DEVICE,
                             quant=requested_quant,
                             dtype=dtype,
+                            cpu_offload=cpu_offload,
                         )
 
                     new_engine = await self._run_on_cuda_thread(_create_engine)

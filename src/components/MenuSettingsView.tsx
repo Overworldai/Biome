@@ -100,6 +100,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showCredits, setShowCredits] = useState(false)
 
   const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
+  const [menuCpuOffload, setMenuCpuOffload] = useState(() => settings.cpu_offload ?? false)
   const [menuCapInferenceFps, setMenuCapInferenceFps] = useState(() => settings.cap_inference_fps ?? true)
   const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
@@ -229,6 +230,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
     setMenuServerUrl(configServerUrl)
     setMenuQuant(settings.engine_quant ?? 'none')
+    setMenuCpuOffload(settings.cpu_offload ?? false)
     setMenuKeybindings({ ...settings.keybindings })
     setMenuSceneEditEnabled(settings.experimental?.scene_edit_enabled ?? false)
     setMenuPerformanceStats(settings.debug_overlays.performance_stats)
@@ -358,6 +360,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       engine_mode: engineModeValue,
       engine_model: menuWorldModel,
       engine_quant: menuQuant,
+      cpu_offload: menuCpuOffload,
       cap_inference_fps: menuCapInferenceFps,
       mouse_sensitivity: streamingValue,
       keybindings: menuKeybindings,
@@ -382,6 +385,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuServerUrl,
     menuWorldModel,
     menuQuant,
+    menuCpuOffload,
     menuCapInferenceFps,
     menuKeybindings,
     menuSceneEditEnabled,
@@ -397,13 +401,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
   const hasQuantChanged = menuQuant !== (settings.engine_quant ?? 'none')
+  const hasCpuOffloadChanged = menuCpuOffload !== (settings.cpu_offload ?? false)
 
   const handleBackClick = useCallback(async () => {
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowServerErrorModal(true)
       return
     }
-    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged || hasQuantChanged)) {
+    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged || hasQuantChanged || hasCpuOffloadChanged)) {
       setShowModeSwitchModal(true)
       return
     }
@@ -416,6 +421,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     isStreaming,
     hasEngineModeChanged,
     hasWorldModelChanged,
+    hasQuantChanged,
+    hasCpuOffloadChanged,
     applyDraftSettings,
     onBack
   ])
@@ -586,6 +593,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                   onChange={(v) => setMenuQuant(v as QuantOption)}
                 />
               </SettingsRow>
+              <SettingsCheckbox
+                label="app.settings.performance.cpuOffload"
+                description="app.settings.performance.cpuOffloadDescription"
+                checked={menuCpuOffload}
+                onChange={setMenuCpuOffload}
+              />
               <SettingsCheckbox
                 label="app.settings.performance.capInferenceFps"
                 description="app.settings.performance.capInferenceFpsDescription"
