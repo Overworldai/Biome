@@ -56,8 +56,7 @@ const he = {
         },
         fixInPlace: {
           title: 'לתקן במקום?',
-          description:
-            'זה יסנכרן מחדש את תלויות המנוע בלי למחוק דבר. בדרך כלל זה מספיק כדי לפתור בעיות אחרי עדכון.'
+          description: 'זה יסנכרן מחדש את תלויות המנוע בלי למחוק דבר. בדרך כלל זה מספיק כדי לפתור בעיות אחרי עדכון.'
         },
         totalReinstall: {
           title: 'התקנה מחדש מלאה?',
@@ -66,13 +65,11 @@ const he = {
         },
         applyEngineChanges: {
           title: 'להחיל שינויים במנוע?',
-          description:
-            'שינוי מצב המנוע או מודל העולם יקטע את הסשן הנוכחי שלך ויחיל את כל ההגדרות הממתינות.'
+          description: 'שינוי מצב המנוע או מודל העולם יקטע את הסשן הנוכחי שלך ויחיל את כל ההגדרות הממתינות.'
         },
         serverUnreachable: {
           title: 'אי אפשר להגיע לשרת',
-          withUrl:
-            'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.',
+          withUrl: 'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.',
           noUrl: 'יש להזין כתובת שרת לפני שיוצאים מההגדרות.',
           withUrlSecure:
             'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.\n\nHTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.',
@@ -85,8 +82,7 @@ const he = {
         connecting: 'מתחבר...',
         starting: 'מפעיל...',
         firstTimeSetup: 'הגדרה ראשונית',
-        firstTimeSetupDescription:
-          'זה ייקח 10–30 דקות בזמן שהרכיבים יורדו ויעברו אופטימיזציה למערכת שלך.',
+        firstTimeSetupDescription: 'זה ייקח 10–30 דקות בזמן שהרכיבים יורדו ויעברו אופטימיזציה למערכת שלך.',
         firstTimeSetupHint: 'בינתיים אפשר ללכת להכין קפה.',
         exportCanceled: 'ייצוא בוטל',
         diagnosticsExported: 'הדיאגנוסטיקה יוצאה',
@@ -107,8 +103,7 @@ const he = {
           reproductionSteps: 'שלבי שחזור',
           recentLogs: 'לוגים אחרונים',
           fullDiagnostics: 'דיאגנוסטיקה מלאה',
-          fullDiagnosticsCopied:
-            'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
+          fullDiagnosticsCopied: 'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
           fullDiagnosticsPaste: 'לחץ על "העתק דוח" באפליקציה והדבק למטה את JSON הדיאגנוסטיקה.',
           pasteDiagnosticsJson: '<הדבק כאן את JSON הדיאגנוסטיקה המלא>',
           saveDiagnosticsJson: 'שמור את JSON הדיאגנוסטיקה לקובץ',
@@ -316,8 +311,7 @@ const he = {
           sceneEditModelNotLoaded: 'מודל עריכת הסצנה לא נטען. הפעל את Scene Edit בהגדרות הניסיוניות.',
           sceneEditAlreadyInProgress: 'עריכת סצנה כבר מתבצעת',
           contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
-          quantUnsupportedGpu:
-            'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
+          quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
           cudaRecoveryFailed: 'שגיאת CUDA — השחזור נכשל. נא להתחבר מחדש.'
         },
         warning: {
