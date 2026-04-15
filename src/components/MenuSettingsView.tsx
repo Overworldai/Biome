@@ -481,9 +481,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         }
       })
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
-      setDiagnosticsStatus(t('app.settings.debugMetrics.diagnosticsCopied'))
+      setDiagnosticsStatus(t('app.settings.debugMetrics.copiedToClipboard'))
     } catch {
-      setDiagnosticsStatus(t('app.settings.debugMetrics.diagnosticsCopyFailed'))
+      setDiagnosticsStatus(t('app.settings.debugMetrics.copyFailed'))
     }
   }, [connection, configEngineMode, configWorldModel, settings.engine_quant, t])
 
@@ -714,8 +714,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           <SettingsSection title="app.settings.debugMetrics.title" description="app.settings.debugMetrics.description">
             <div className="flex flex-col gap-[1cqh]">
               <SettingsRow
-                label={t('app.settings.debugMetrics.copyDiagnostics')}
-                hint={t('app.settings.debugMetrics.copyDiagnosticsDescription')}
+                label={t('app.settings.debugMetrics.diagnostics')}
+                hint={t('app.settings.debugMetrics.diagnosticsDescription')}
                 align="start"
               >
                 <div className="flex items-center gap-[1.2cqh]">

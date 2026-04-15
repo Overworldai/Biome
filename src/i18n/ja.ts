@@ -108,9 +108,9 @@ const ja = {
           reproductionSteps: '再現手順',
           recentLogs: '最近のログ',
           fullDiagnostics: '完全な診断情報',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             '完全な診断 JSON はクリップボードにコピーされています。送信前に下へ貼り付けてください。',
-          fullDiagnosticsPaste: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
+          fullDiagnosticsCopyHint: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
           pasteDiagnosticsJson: '<完全な診断 JSON をここに貼り付けてください>',
           saveDiagnosticsJson: '診断 JSON をファイルに保存',
           copying: 'コピー中...',
@@ -241,10 +241,10 @@ const ja = {
           actionLogging: 'アクションログ',
           actionLoggingDescription:
             'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
-          copyDiagnostics: '診断情報',
-          copyDiagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
-          diagnosticsCopied: 'クリップボードにコピーしました',
-          diagnosticsCopyFailed: 'コピーに失敗しました'
+          diagnostics: '診断情報',
+          diagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
+          copiedToClipboard: 'クリップボードにコピーしました',
+          copyFailed: 'コピーに失敗しました'
         },
         credits: {
           title: 'クレジット'

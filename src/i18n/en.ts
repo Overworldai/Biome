@@ -109,9 +109,9 @@ const en = {
           reproductionSteps: 'Reproduction steps',
           recentLogs: 'Recent logs',
           fullDiagnostics: 'Full diagnostics',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.',
-          fullDiagnosticsPaste: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
           pasteDiagnosticsJson: '<paste full diagnostics JSON here>',
           saveDiagnosticsJson: 'Save diagnostics JSON to file',
           copying: 'Copying...',
@@ -242,10 +242,10 @@ const en = {
           actionLogging: 'Action Logging',
           actionLoggingDescription:
             "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
-          copyDiagnostics: 'Diagnostics',
-          copyDiagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
-          diagnosticsCopied: 'Copied to clipboard',
-          diagnosticsCopyFailed: 'Failed to copy'
+          diagnostics: 'Diagnostics',
+          diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
+          copiedToClipboard: 'Copied to clipboard',
+          copyFailed: 'Failed to copy'
         },
         credits: {
           title: 'Credits'

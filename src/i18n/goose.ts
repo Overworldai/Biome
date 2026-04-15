@@ -110,9 +110,9 @@ const goose = {
           reproductionSteps: 'Honk-by-honk replay',
           recentLogs: 'Recent honks',
           fullDiagnostics: 'Full droppings',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full droppings JSON has been copied to clipboard. Paste below before submitting your honk.',
-          fullDiagnosticsPaste: 'Click "Copy honk report" in-app and paste droppings JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy honk report" in-app and paste droppings JSON below.',
           pasteDiagnosticsJson: '<paste full droppings JSON here>',
           saveDiagnosticsJson: 'Save droppings JSON to nest',
           copying: 'Pecking...',
@@ -244,10 +244,10 @@ const goose = {
           actionLogging: 'Migration log',
           actionLoggingDescription:
             "Record all pecks and waddles to a file on the pond server for replay. Honked to the OS's temp nest.",
-          copyDiagnostics: 'Honknostics',
-          copyDiagnosticsDescription: 'Copy honknostic information to the clipboard for flock reports.',
-          diagnosticsCopied: 'Honked to clipboard',
-          diagnosticsCopyFailed: 'Honk failed'
+          diagnostics: 'Honknostics',
+          diagnosticsDescription: 'Copy honknostic information to the clipboard for flock reports.',
+          copiedToClipboard: 'Honked to clipboard',
+          copyFailed: 'Honk failed'
         },
         credits: {
           title: 'The flock'

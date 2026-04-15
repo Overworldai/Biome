@@ -105,8 +105,8 @@ const he = {
           reproductionSteps: 'שלבי שחזור',
           recentLogs: 'לוגים אחרונים',
           fullDiagnostics: 'דיאגנוסטיקה מלאה',
-          fullDiagnosticsCopied: 'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
-          fullDiagnosticsPaste: 'לחץ על "העתק דוח" באפליקציה והדבק למטה את JSON הדיאגנוסטיקה.',
+          fullDiagnosticsCopiedHint: 'קובץ ה-JSON המלא של הדיאגנוסטיקה הועתק ללוח. הדבק אותו למטה לפני השליחה.',
+          fullDiagnosticsCopyHint: 'לחץ על "העתק דוח" באפליקציה והדבק למטה את JSON הדיאגנוסטיקה.',
           pasteDiagnosticsJson: '<הדבק כאן את JSON הדיאגנוסטיקה המלא>',
           saveDiagnosticsJson: 'שמור את JSON הדיאגנוסטיקה לקובץ',
           copying: 'מעתיק...',
@@ -237,10 +237,10 @@ const he = {
           actionLogging: 'רישום פעולות',
           actionLoggingDescription:
             'הקלט את כל הקלטים לקובץ בשרת לצורך ניגון חוזר. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
-          copyDiagnostics: 'דיאגנוסטיקה',
-          copyDiagnosticsDescription: 'העתק מידע דיאגנוסטי ללוח לצורך דיווחי באגים.',
-          diagnosticsCopied: 'הועתק ללוח',
-          diagnosticsCopyFailed: 'ההעתקה נכשלה'
+          diagnostics: 'דיאגנוסטיקה',
+          diagnosticsDescription: 'העתק מידע דיאגנוסטי ללוח לצורך דיווחי באגים.',
+          copiedToClipboard: 'הועתק ללוח',
+          copyFailed: 'ההעתקה נכשלה'
         },
         credits: {
           title: 'קרדיטים'

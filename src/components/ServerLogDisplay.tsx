@@ -168,8 +168,8 @@ const ServerLogDisplay = ({
         '',
         `## ${t('app.loading.terminal.fullDiagnostics')}`,
         copiedDiagnostics
-          ? `- ${t('app.loading.terminal.fullDiagnosticsCopied')}`
-          : `- ${t('app.loading.terminal.fullDiagnosticsPaste')}`,
+          ? `- ${t('app.loading.terminal.fullDiagnosticsCopiedHint')}`
+          : `- ${t('app.loading.terminal.fullDiagnosticsCopyHint')}`,
         '',
         '```json',
         t('app.loading.terminal.pasteDiagnosticsJson'),

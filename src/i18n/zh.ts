@@ -104,8 +104,8 @@ const zh = {
           reproductionSteps: '复现步骤',
           recentLogs: '最近日志',
           fullDiagnostics: '完整诊断信息',
-          fullDiagnosticsCopied: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
-          fullDiagnosticsPaste: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
+          fullDiagnosticsCopiedHint: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
+          fullDiagnosticsCopyHint: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
           pasteDiagnosticsJson: '<请在此粘贴完整诊断 JSON>',
           saveDiagnosticsJson: '将诊断 JSON 保存到文件',
           copying: '复制中...',
@@ -233,10 +233,10 @@ const zh = {
           frameTimelineDescription: '显示帧插值管线及每个槽位的计时。',
           actionLogging: '操作日志',
           actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。',
-          copyDiagnostics: '诊断信息',
-          copyDiagnosticsDescription: '将诊断信息复制到剪贴板，用于错误报告。',
-          diagnosticsCopied: '已复制到剪贴板',
-          diagnosticsCopyFailed: '复制失败'
+          diagnostics: '诊断信息',
+          diagnosticsDescription: '将诊断信息复制到剪贴板，用于错误报告。',
+          copiedToClipboard: '已复制到剪贴板',
+          copyFailed: '复制失败'
         },
         credits: {
           title: '鸣谢'
