@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import stripAnsi from 'strip-ansi'
 import { createLogger } from '../utils/logger'
 import { WsRpcClient } from '../lib/wsRpc'
 import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
-import type { TranslationKey } from '../i18n'
+import { TranslatableError, type TranslationKey } from '../i18n'
 import type { InitMessage, InitResponse, ServerErrorSnapshot, ServerSystemInfo } from '../types/ws'
 
 const log = createLogger('WebSocket')
@@ -52,7 +51,7 @@ const emptyConnection = (): ServerConnection => ({
 type WebSocketHook = {
   connectionState: ConnectionState
   statusStage: StageId | null
-  error: string | null
+  error: TranslatableError | null
   frame: Blob | string | null
   hasRealFrame: boolean
   frameId: number
@@ -82,11 +81,10 @@ type WebSocketHook = {
 }
 
 export const useWebSocket = (): WebSocketHook => {
-  const { t } = useTranslation()
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
   const [frame, setFrame] = useState<Blob | string | null>(null)
   const [frameId, setFrameId] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<TranslatableError | null>(null)
   const [genTime, setGenTime] = useState<number | null>(null)
   const [latentGenMs, setLatentGenMs] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
@@ -107,19 +105,20 @@ export const useWebSocket = (): WebSocketHook => {
   const [temporalCompression, setTemporalCompression] = useState(1)
   const rpcRef = useRef(new WsRpcClient())
   const resolveServerMessage = useCallback(
-    (msg: Record<string, unknown>, fallbackKey: TranslationKey): string => {
+    (msg: Record<string, unknown>, fallbackKey: TranslationKey): TranslatableError => {
       const messageId = msg.message_id as string | undefined
       const detail = msg.message as string | undefined
       if (messageId) {
         const key = messageId as TranslationKey
         const params = (msg.params as Record<string, string>) ?? {}
-        const resolved = t(key, { defaultValue: '', ...params })
-        if (resolved) return detail ? `${resolved}: ${detail}` : resolved
+        // Forward raw detail as `message` param — keys that include
+        // `{{message}}` surface it; keys that don't just ignore it.
+        return new TranslatableError(key, detail ? { ...params, message: detail } : params)
       }
       const message = detail ?? JSON.stringify(msg)
-      return String(t(fallbackKey, { defaultValue: fallbackKey, message }))
+      return new TranslatableError(fallbackKey, { message })
     },
-    [t]
+    []
   )
 
   const appendLog = useCallback((line: string) => {
@@ -141,7 +140,7 @@ export const useWebSocket = (): WebSocketHook => {
     }
 
     if (!endpointUrl) {
-      setError(t('app.server.noEndpointUrl'))
+      setError(new TranslatableError('app.server.noEndpointUrl'))
       return
     }
 
@@ -159,7 +158,7 @@ export const useWebSocket = (): WebSocketHook => {
     } catch (err) {
       isConnectingRef.current = false
       setConnectionState('error')
-      setError(err instanceof Error ? err.message : t('app.server.invalidWebsocketEndpoint'))
+      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint'))
       return
     }
 
@@ -169,7 +168,7 @@ export const useWebSocket = (): WebSocketHook => {
     } catch (err) {
       isConnectingRef.current = false
       setConnectionState('error')
-      setError(err instanceof Error ? err.message : t('app.server.websocketConnectionFailed'))
+      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed'))
       return
     }
     wsRef.current = ws
@@ -303,7 +302,7 @@ export const useWebSocket = (): WebSocketHook => {
     ws.onerror = () => {
       if (wsRef.current !== ws) return
       isConnectingRef.current = false
-      setError(t('app.server.websocketError'))
+      setError(new TranslatableError('app.server.websocketError'))
       setConnectionState('error')
     }
 

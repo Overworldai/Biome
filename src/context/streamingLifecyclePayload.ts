@@ -6,7 +6,7 @@ import type { StreamingLifecycleSyncPayload } from './streamingLifecycleMachine'
 type BuildStreamingLifecycleSyncPayloadArgs = {
   portalState: PortalState
   connectionState: string
-  transportError: string | null
+  transportError: TranslatableError | null
   engineModel?: string | null
   lastAppliedModel: string | null
   engineError: TranslatableError | null

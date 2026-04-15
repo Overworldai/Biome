@@ -9,7 +9,7 @@ export const STREAMING_LIFECYCLE_EVENT = {
 } as const
 
 export type StreamingLifecycleEffects = {
-  loadingFailureError: { transportError: string } | { key: TranslationKey } | null
+  loadingFailureError: { transportError: TranslatableError } | { key: TranslationKey } | null
   connectionLost: boolean
   clearConnectionLost: boolean
   engineErrorDismissed: boolean
@@ -73,12 +73,13 @@ export const initialStreamingLifecycleState: StreamingLifecycleState = {
 export type StreamingLifecycleSyncPayload = {
   portalState: PortalState
   connectionState: string
-  transportError: string | null
+  transportError: TranslatableError | null
   selectedModel: string
   lastAppliedModel: string | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
   socketReady: boolean
+  initCompleted: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
   isPaused: boolean
@@ -105,6 +106,7 @@ export const streamingLifecycleReducer = (
     engineError,
     hasReceivedFrame,
     socketReady,
+    initCompleted,
     isPointerLocked,
     settingsOpen,
     isPaused,

@@ -12,7 +12,7 @@ export type StreamingStats = {
 export type StreamingContextValue = {
   connectionState: string
   connectionLost: boolean
-  error: string | null
+  error: TranslatableError | null
   isConnected: boolean
   isVideoReady: boolean
   isReady: boolean

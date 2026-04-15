@@ -8,6 +8,7 @@ const ja = {
         later: '後で',
         quit: '終了',
         reconnect: '再接続',
+        returnToMainMenu: 'メインメニューに戻る',
         close: '閉じる',
         cancel: 'キャンセル',
         back: '戻る',
@@ -311,9 +312,9 @@ const ja = {
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
         error: {
-          serverStartupFailed: 'サーバーの起動に失敗しました',
+          serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
-          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
+          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           generateSceneSafetyRejected:

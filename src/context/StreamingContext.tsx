@@ -377,6 +377,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineError,
     hasReceivedFrame,
     isReady,
+    connection.model,
     isPointerLocked,
     settingsOpen,
     isPaused,

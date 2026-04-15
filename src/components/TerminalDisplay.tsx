@@ -34,11 +34,12 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const logsPanelHeight = '36cqh'
 
-  const errorDetail = engineError
+  const activeError = engineError ?? error
+  const errorDetail = activeError
     ? String(
-        t(engineError.translationKey, { defaultValue: engineError.translationKey, ...engineError.translationParams })
+        t(activeError.translationKey, { defaultValue: activeError.translationKey, ...activeError.translationParams })
       )
-    : error
+    : null
 
   // Extract the first non-empty line from the error for the inline display
   const errorFirstLine = useMemo(() => {
@@ -85,12 +86,11 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   }
 
   const buildPayload = useCallback(() => {
-    const activeError = errorDetail
-    const logs = activeError ? [...activeLogs, `[ERROR] ${activeError}`] : activeLogs
+    const logs = errorDetail ? [...activeLogs, `[ERROR] ${errorDetail}`] : activeLogs
     return buildDiagnosticsPayload({
       connection,
       error: {
-        message: activeError,
+        message: errorDetail,
         stage: statusStage,
         progress_percent: progressPercent,
         connection_state: connectionState
