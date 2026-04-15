@@ -3,9 +3,15 @@ name = "biome-server"
 version = "1.0.1"
 requires-python = "==3.12.*"
 dependencies = [
-  "world-engine @ https://github.com/Overworldai/world_engine/archive/refs/tags/1.5.3.zip",
-  "torch==2.10.0",
-  "torchvision==0.25.0",
+  "world-engine @ https://github.com/Overworldai/world_engine/archive/refs/heads/python3.11.zip",
+  # torch/torchvision are pulled in transitively by world-engine, but we must list
+  # them directly so that [tool.uv.sources] below routes them through the cu128
+  # index. uv only applies `sources` overrides to direct dependencies — transitive
+  # deps resolve against regular indexes, and since our cu128 index is marked
+  # `explicit = true`, torch would otherwise fall back to PyPI (which serves the
+  # default cu130 build). Keep these pins in sync with world-engine.
+  "torch==2.11.0",
+  "torchvision==0.26.0",
   "pillow==12.2.0",
   "fastapi==0.135.3",
   "uvicorn==0.44.0",
