@@ -204,12 +204,14 @@ Other components use prop-level `raw` prefixes for escape hatches:
 
 ### Adding a new language
 
-1. Create `src/i18n/{code}.ts` with the same key structure as `en.ts` (`resources.ts` enforces this at compile time)
-2. Import it in `src/i18n/resources.ts` and add it to the `resources` object
-3. Add the locale code to `SUPPORTED_LOCALES`, `LOCALE_DISPLAY_NAMES`, and `LOCALE_MAP` in `src/i18n/index.ts`
-4. Add the locale code to the `AppLocale` type in `src/types/settings.ts`
+`LOCALE_DISPLAY_NAMES` in `src/i18n/locales.ts` is the canonical locale registry — everything else (`SupportedLocale`, `SUPPORTED_LOCALES`, `LOCALE_OPTIONS`, `AppLocale`) is derived from it.
 
-Language display names (e.g. "English", "日本語", "中文") are **not** translation keys — they live in `LOCALE_DISPLAY_NAMES` in `src/i18n/index.ts` and always appear in their native script regardless of the current locale. Only the "System Default" option is translated.
+1. Create `src/i18n/{code}.ts` with the same key structure as `en.ts`, then import it in `src/i18n/resources.ts` and add it to the `resources` object.
+2. Add an entry to `LOCALE_DISPLAY_NAMES` in `src/i18n/locales.ts` mapping the code to its native-script name. Insert new locales **before** `goose` — `goose` is a novelty/Easter-egg locale and should always be last in the picker.
+
+`resources` is typed `Record<SupportedLocale, ExpectedShape>`, so `tsc` will flag step 2 if step 1 is missed (and vice versa).
+
+Language display names (e.g. "English", "日本語", "中文") are **not** translation keys — they always appear in their native script regardless of the current locale. Only the "System Default" option is translated.
 
 ### Error handling and `TranslatableError`
 
