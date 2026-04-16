@@ -32,7 +32,8 @@ const en = {
         aborting: 'Aborting...',
         copy: 'Copy',
         pasteImageFromClipboard: 'Paste image from clipboard',
-        browseForImageFile: 'Browse for image file'
+        browseForImageFile: 'Browse for image file',
+        delete: 'Delete'
       },
       dialogs: {
         updateAvailable: {
@@ -70,6 +71,11 @@ const en = {
           title: 'Apply Engine Changes?',
           description:
             'Changing engine mode or world model will interrupt your current session and apply all pending settings.'
+        },
+        deleteModelCache: {
+          title: 'Delete Model Cache?',
+          description:
+            'This will delete the locally cached files for {{modelId}}. The model will need to be re-downloaded before it can be used again.'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -181,7 +187,8 @@ const en = {
           checking: 'checking...',
           modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
-          couldNotCheckModel: 'Could not check model'
+          couldNotCheckModel: 'Could not check model',
+          deleteLocalCache: 'Delete local cache'
         },
         volume: {
           title: 'Volume',

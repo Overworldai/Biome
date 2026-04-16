@@ -221,6 +221,7 @@ export type IpcCommandMap = {
   'list-waypoint-models': { args: []; return: string[] }
   'list-model-availability': { args: [modelIds: string[]]; return: ModelAvailability[] }
   'get-models-info': { args: [modelIds: string[], serverUrl?: string]; return: ModelInfo[] }
+  'delete-cached-model': { args: [modelId: string]; return: void }
 
   // Engine
   'check-engine-status': { args: [source?: string]; return: EngineStatus }

@@ -9,6 +9,7 @@ type SettingsSelectOptionBase = {
   value: string
   prefix?: string
   deletable?: boolean
+  cacheDeletable?: boolean
 }
 
 type SettingsSelectOption = SettingsSelectOptionBase &
@@ -19,12 +20,14 @@ type SettingsSelectProps = {
   value: string
   onChange: (value: string) => void
   onDelete?: (value: string) => void
+  onCacheDelete?: (value: string) => void
   disabled?: boolean
   allowCustom?: boolean
   onCustomBlur?: (value: string) => void
   rawCustomPrefix?: string
   customLabel?: TranslationKey
   deleteLabel?: TranslationKey
+  cacheDeleteLabel?: TranslationKey
 }
 
 const OptionContent = ({ displayLabel, prefix }: { displayLabel: string; prefix?: string }) => (
@@ -39,12 +42,14 @@ const SettingsSelect = ({
   value,
   onChange,
   onDelete,
+  onCacheDelete,
   disabled,
   allowCustom,
   onCustomBlur,
   rawCustomPrefix,
   customLabel,
-  deleteLabel
+  deleteLabel,
+  cacheDeleteLabel
 }: SettingsSelectProps) => {
   const { t } = useTranslation()
   const resolveLabel = (option: SettingsSelectOption) => (option.label ? t(option.label) : option.rawLabel)
@@ -142,7 +147,7 @@ const SettingsSelect = ({
               >
                 <button
                   type="button"
-                  className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${option.deletable && onDelete ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
+                  className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
                   onMouseEnter={playHover}
                   onClick={() => {
                     playClick()
@@ -152,6 +157,29 @@ const SettingsSelect = ({
                 >
                   <OptionContent displayLabel={resolveLabel(option)} prefix={option.prefix} />
                 </button>
+                {option.cacheDeletable && onCacheDelete && (
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                    onMouseEnter={playHover}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      playClick()
+                      onCacheDelete(option.value)
+                    }}
+                    title={cacheDeleteLabel ? t(cacheDeleteLabel) : undefined}
+                  >
+                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 14 16" fill="none">
+                      <path
+                        d="M1 4h12M5 4V2.5A1.5 1.5 0 016.5 1h1A1.5 1.5 0 019 2.5V4m1.5 0v9a1.5 1.5 0 01-1.5 1.5H5A1.5 1.5 0 013.5 13V4h7z"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                )}
                 {option.deletable && onDelete && (
                   <button
                     type="button"

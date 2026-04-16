@@ -32,7 +32,8 @@ const zh = {
         aborting: '正在中止...',
         copy: '复制',
         pasteImageFromClipboard: '从剪贴板粘贴图片',
-        browseForImageFile: '浏览图片文件'
+        browseForImageFile: '浏览图片文件',
+        delete: '删除'
       },
       dialogs: {
         updateAvailable: {
@@ -68,6 +69,10 @@ const zh = {
         applyEngineChanges: {
           title: '应用引擎更改？',
           description: '更改引擎模式或世界模型会中断当前会话，并应用所有待保存设置。'
+        },
+        deleteModelCache: {
+          title: '删除模型缓存？',
+          description: '这将删除 {{modelId}} 的本地缓存文件。再次使用前需要重新下载该模型。'
         },
         serverUnreachable: {
           title: '无法连接到服务器',
@@ -174,7 +179,8 @@ const zh = {
           checking: '检查中...',
           modelNotFound: '未找到模型',
           couldNotLoadModelList: '无法加载模型列表',
-          couldNotCheckModel: '无法检查模型'
+          couldNotCheckModel: '无法检查模型',
+          deleteLocalCache: '删除本地缓存'
         },
         volume: {
           title: '音量',

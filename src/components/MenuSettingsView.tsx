@@ -98,6 +98,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showFixModal, setShowFixModal] = useState(false)
   const [showNukeModal, setShowNukeModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
+  const [showDeleteCacheModal, setShowDeleteCacheModal] = useState<string | null>(null)
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
 
@@ -332,6 +333,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     },
     [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
   )
+
+  const handleConfirmDeleteCache = useCallback(async () => {
+    if (!showDeleteCacheModal) return
+    const modelId = showDeleteCacheModal
+    setShowDeleteCacheModal(null)
+    await invoke('delete-cached-model', modelId)
+    setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
+  }, [showDeleteCacheModal])
 
   const handleLocaleChange = useCallback(
     (locale: AppLocale) => {
@@ -572,16 +581,19 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 ]
                   .filter(Boolean)
                   .join(' · '),
-                deletable: savedCustomModels.includes(model.id)
+                deletable: savedCustomModels.includes(model.id) && model.isLocal !== true,
+                cacheDeletable: model.isLocal === true
               }))}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
               onDelete={handleDeleteCustomModel}
+              onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}
               customLabel="app.settings.worldModel.custom"
               deleteLabel="app.settings.worldModel.removeCustomModel"
+              cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
               rawCustomPrefix={
                 customModelStatus.state === 'loading'
                   ? t('app.settings.worldModel.checking')
@@ -829,6 +841,17 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           }}
           confirmLabel="app.buttons.editUrl"
           cancelLabel="app.buttons.revert"
+        />
+      )}
+
+      {showDeleteCacheModal && (
+        <ConfirmModal
+          title="app.dialogs.deleteModelCache.title"
+          description="app.dialogs.deleteModelCache.description"
+          descriptionParams={{ modelId: showDeleteCacheModal }}
+          onCancel={() => setShowDeleteCacheModal(null)}
+          onConfirm={() => void handleConfirmDeleteCache()}
+          confirmLabel="app.buttons.delete"
         />
       )}
 

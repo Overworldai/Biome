@@ -32,7 +32,8 @@ const goose = {
         aborting: 'Fleeing...',
         copy: 'Honk',
         pasteImageFromClipboard: 'Peck image from clipboard',
-        browseForImageFile: 'Forage for image file'
+        browseForImageFile: 'Forage for image file',
+        delete: 'Pluck'
       },
       dialogs: {
         updateAvailable: {
@@ -71,6 +72,11 @@ const goose = {
           title: 'Ruffle your feathers?',
           description:
             'Changing goose mode or pond model will interrupt your current waddle and apply all pending honks.'
+        },
+        deleteModelCache: {
+          title: 'Pluck goose feathers?',
+          description:
+            'This will pluck all locally cached feathers for {{modelId}}. The goose will need to regrow them before it can waddle again.'
         },
         serverUnreachable: {
           title: 'Pond not found',
@@ -182,7 +188,8 @@ const goose = {
           checking: 'sniffing...',
           modelNotFound: 'Goose not found',
           couldNotLoadModelList: 'Could not find the flock',
-          couldNotCheckModel: 'Could not inspect goose'
+          couldNotCheckModel: 'Could not inspect goose',
+          deleteLocalCache: 'Pluck local feathers'
         },
         volume: {
           title: 'Loudness',
