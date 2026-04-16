@@ -274,6 +274,10 @@ const goose = {
           unpinScene: 'Leave pond',
           pinScene: 'Claim pond',
           removeScene: 'Abandon pond'
+        },
+        generateScene: {
+          divider: 'or',
+          placeholder: 'Where shall the goose waddle?'
         }
       },
       scenes: {

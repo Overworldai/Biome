@@ -271,6 +271,10 @@ const ja = {
           unpinScene: '固定を外す',
           pinScene: '固定する',
           removeScene: 'シーンを削除'
+        },
+        generateScene: {
+          divider: 'または',
+          placeholder: '何をプレイしたいですか？'
         }
       },
       scenes: {
