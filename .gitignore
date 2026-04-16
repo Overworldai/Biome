@@ -41,3 +41,13 @@ out/
 
 # Biome server seeds cache when running dev mode
 world_engine/
+
+# AppImage post-processing: downloaded tools (linuxdeploy, appimagetool) and
+# the bundled Zig toolchain extracted for packaging. Populated on Linux
+# builds by scripts/appimage-prepare-assets.mjs.
+build/appimage/.cache/
+build/appimage/toolchain/
+
+# Logs produced from inside the appimage-docker-desktop.sh test container's
+# /out mount. Useful for capturing AppImage stdout/stderr without docker exec.
+out/appimage-test-out/
