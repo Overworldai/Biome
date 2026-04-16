@@ -82,6 +82,32 @@ function validateDefaultPinnedScenes(): void {
   }
 }
 
+function seedFileExists(filename: string): boolean {
+  const defaultDir = getSeedsDefaultDir()
+  const uploadsDir = getSeedsUploadsDir()
+  return fs.existsSync(path.join(defaultDir, filename)) || fs.existsSync(path.join(uploadsDir, filename))
+}
+
+/** Replace any pinned scenes whose seed files no longer exist with defaults.
+ *  Returns a new settings object (and persists it) if any replacements were made. */
+function repairMissingPinnedScenes(settings: Settings, settingsPath: string): Settings {
+  const pinned = settings.pinned_scenes
+  const missing = pinned.filter((f) => !seedFileExists(f))
+  if (missing.length === 0) return settings
+
+  const kept = pinned.filter((f) => seedFileExists(f))
+  const keptSet = new Set(kept)
+  const replacements = DEFAULT_PINNED_SCENES.filter((f) => !keptSet.has(f))
+
+  const repaired = [...kept, ...replacements].slice(0, Math.max(pinned.length, DEFAULT_PINNED_SCENES.length))
+
+  console.log(`[SETTINGS] Replaced ${missing.length} missing pinned scene(s): ${missing.join(', ')}`)
+
+  const updated = { ...settings, pinned_scenes: repaired }
+  fs.writeFileSync(settingsPath, JSON.stringify(updated, null, 2))
+  return updated
+}
+
 function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
 
@@ -98,7 +124,7 @@ function readSettingsSync(): Settings {
         // Write migrated settings
         fs.writeFileSync(settingsPath, JSON.stringify(result, null, 2))
         console.log('[SETTINGS] Migrated from config.json to settings.json')
-        return result
+        return repairMissingPinnedScenes(result, settingsPath)
       } catch (err) {
         console.warn('[SETTINGS] Failed to migrate config.json, using defaults:', err)
       }
@@ -123,7 +149,7 @@ function readSettingsSync(): Settings {
 
   const result = settingsSchema.safeParse(parsed)
   if (result.success) {
-    return result.data
+    return repairMissingPinnedScenes(result.data, settingsPath)
   }
 
   console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
