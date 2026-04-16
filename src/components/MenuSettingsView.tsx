@@ -592,8 +592,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                     ]
                       .filter(Boolean)
                       .join(' · '),
-                    deletable: isCustom && model.isLocal === true,
-                    cacheDeletable: !isCustom && model.isLocal === true,
+                    deletable: isCustom && model.isLocal === true && menuEngineMode === 'standalone',
+                    cacheDeletable: !isCustom && model.isLocal === true && menuEngineMode === 'standalone',
                     dimmed: model.isLocal === false
                   }
                 })}
