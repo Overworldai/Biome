@@ -1,4 +1,5 @@
 import { STANDALONE_PORT, localhostUrl } from '../types/settings'
+import type { ServerHealthResult } from '../types/ipc'
 import type { StageId } from '../stages'
 import { toHealthUrl, toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError } from '../i18n'
@@ -17,10 +18,7 @@ type WarmConnectionOptions = {
   isServerRunning: boolean
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
-  probeServerHealthViaMain: (
-    healthUrl: string,
-    timeoutMs?: number
-  ) => Promise<{ ok: boolean; available_quants?: string[] }>
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>
   checkEngineStatus: () => Promise<{
     uv_installed?: boolean
     repo_cloned?: boolean
@@ -33,6 +31,7 @@ type WarmConnectionOptions = {
   onServerError: (error: TranslatableError) => void
   onStage: (stageId: StageId) => void
   onFreshInstall: (isFresh: boolean) => void
+  onServerHealth: (result: ServerHealthResult) => void
   isCancelled: () => boolean
   log: { info: (...args: unknown[]) => void }
 }
@@ -49,23 +48,20 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 const probeServerHealth = async (
   wsUrl: string,
-  probeServerHealthViaMain: (
-    healthUrl: string,
-    timeoutMs?: number
-  ) => Promise<{ ok: boolean; available_quants?: string[] }>
-): Promise<boolean> => {
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>
+): Promise<ServerHealthResult> => {
   const healthUrl = toHealthUrl(wsUrl)
 
   for (let attempt = 1; attempt <= CONNECTIVITY_RETRIES; attempt++) {
     const result = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
-    if (result.ok) return true
+    if (result.ok) return result
 
     if (attempt < CONNECTIVITY_RETRIES) {
       await delay(CONNECTIVITY_RETRY_DELAY_MS)
     }
   }
 
-  return false
+  return { ok: false }
 }
 
 /**
@@ -74,10 +70,7 @@ const probeServerHealth = async (
  */
 const waitForHealthy = async (
   wsUrl: string,
-  probeServerHealthViaMain: (
-    healthUrl: string,
-    timeoutMs?: number
-  ) => Promise<{ ok: boolean; available_quants?: string[] }>,
+  probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>,
   isCancelled: () => boolean,
   log: { info: (...args: unknown[]) => void }
 ): Promise<void> => {
@@ -129,6 +122,7 @@ export const runWarmConnectionFlow = async ({
   onServerError,
   onStage,
   onFreshInstall,
+  onServerHealth,
   isCancelled,
   log
 }: WarmConnectionOptions): Promise<void> => {
@@ -213,11 +207,12 @@ export const runWarmConnectionFlow = async ({
 
   onStage('setup.connecting')
 
-  const responsive = await probeServerHealth(wsUrl, probeServerHealthViaMain)
-  if (!responsive) {
+  const health = await probeServerHealth(wsUrl, probeServerHealthViaMain)
+  if (!health.ok) {
     onServerError(new TranslatableError('app.server.notResponding', { url: toHealthUrl(wsUrl) }))
     return
   }
+  onServerHealth(health)
 
   if (isCancelled()) return
   log.info('Connecting to WebSocket endpoint:', wsUrl)

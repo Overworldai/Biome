@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { invoke } from '../bridge'
 import type { EngineStatus } from '../types/app'
+import type { ServerHealthResult } from '../types/ipc'
 import type { StageId } from '../stages'
 
 export type UseEngineResult = {
@@ -18,7 +19,7 @@ export type UseEngineResult = {
   checkServerRunning: () => Promise<boolean>
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
-  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<{ ok: boolean; available_quants?: string[] }>
+  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>
   isReady: boolean
   isServerRunning: boolean
   serverPort: number | null

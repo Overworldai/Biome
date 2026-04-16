@@ -169,7 +169,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         if (result.ok) {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
-          if (result.available_quants) setServerAvailableQuants(result.available_quants)
+          setServerAvailableQuants(result.available_quants ?? null)
         } else {
           setServerUrlStatus('error')
         }

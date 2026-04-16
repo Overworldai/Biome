@@ -16,6 +16,7 @@ import {
 } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
+import type { ServerHealthResult } from '../../src/types/ipc.js'
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -191,7 +192,7 @@ export function registerServerIpc(): void {
 
   ipcMain.handle(
     'probe-server-health',
-    async (_event, healthUrl: string, timeoutMs?: number): Promise<{ ok: boolean; available_quants?: string[] }> => {
+    async (_event, healthUrl: string, timeoutMs?: number): Promise<ServerHealthResult> => {
       const timeout = Math.max(500, Math.min(10000, Number(timeoutMs ?? 2500)))
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), timeout)

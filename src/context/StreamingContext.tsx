@@ -244,9 +244,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         setPlaceholderFrame(new Blob([bytes], { type: 'image/jpeg' }))
       }
 
+      // Clamp saved quant against what the server actually supports — covers the
+      // case where the saved value is a default ('none') that the platform rejects.
+      const savedQuant = settings.engine_quant ?? 'none'
+      const quant =
+        serverAvailableQuants && !serverAvailableQuants.includes(savedQuant)
+          ? (serverAvailableQuants[0] ?? savedQuant)
+          : savedQuant
+
       // Set lastAppliedModel before await to prevent the lifecycle machine from
       // seeing a model mismatch during the re-render triggered by setInitMetrics.
-      const quant = settings.engine_quant ?? 'none'
       lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
         ? `${selectedModel}+scene_edit+${quant}`
         : `${selectedModel}+${quant}`
@@ -273,6 +280,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings?.cap_inference_fps,
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
+    serverAvailableQuants,
     sendInit,
     setInitMetrics,
     setPlaceholderFrame
@@ -414,6 +422,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       },
       onFreshInstall: (isFresh) => {
         if (!warmFlowCancelledRef.current) setIsFreshInstall(isFresh)
+      },
+      onServerHealth: (result) => {
+        if (!warmFlowCancelledRef.current) setServerAvailableQuants(result.available_quants ?? null)
       },
       isCancelled: () => warmFlowCancelledRef.current,
       log

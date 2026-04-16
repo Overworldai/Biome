@@ -2,6 +2,11 @@ import type { EngineStatus, SeedFileRecord } from './app'
 import type { Settings } from './settings'
 import type { PortalSparksTuning } from '../lib/portalSparksTuning'
 
+export type ServerHealthResult = {
+  ok: boolean
+  available_quants?: string[]
+}
+
 export type ModelAvailability = {
   id: string
   is_local: boolean
@@ -82,10 +87,7 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
-  'probe-server-health': {
-    args: [healthUrl: string, timeoutMs?: number]
-    return: { ok: boolean; available_quants?: string[] }
-  }
+  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: ServerHealthResult }
 
   // Seeds
   'list-seeds': { args: []; return: SeedFileRecord[] }
