@@ -73,9 +73,9 @@ const en = {
             'Changing engine mode or world model will interrupt your current session and apply all pending settings.'
         },
         deleteModelCache: {
-          title: 'Delete Model Cache?',
+          title: 'Delete Model?',
           description:
-            'This will delete the locally cached files for {{modelId}}. The model will need to be re-downloaded before it can be used again.'
+            '{{modelId}} is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -188,7 +188,7 @@ const en = {
           modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
           couldNotCheckModel: 'Could not check model',
-          deleteLocalCache: 'Delete local cache'
+          deleteLocalCache: 'Delete the model'
         },
         volume: {
           title: 'Volume',

@@ -74,9 +74,9 @@ const goose = {
             'Changing goose mode or pond model will interrupt your current waddle and apply all pending honks.'
         },
         deleteModelCache: {
-          title: 'Pluck goose feathers?',
+          title: 'Pluck the goose?',
           description:
-            'This will pluck all locally cached feathers for {{modelId}}. The goose will need to regrow them before it can waddle again.'
+            '{{modelId}} is nesting on this device. Plucking it will free up nest space, but the goose will need to be re-migrated before it can waddle again.'
         },
         serverUnreachable: {
           title: 'Pond not found',
@@ -189,7 +189,7 @@ const goose = {
           modelNotFound: 'Goose not found',
           couldNotLoadModelList: 'Could not find the flock',
           couldNotCheckModel: 'Could not inspect goose',
-          deleteLocalCache: 'Pluck local feathers'
+          deleteLocalCache: 'Pluck the goose'
         },
         volume: {
           title: 'Loudness',

@@ -73,9 +73,9 @@ const ja = {
             'エンジンモードまたはワールドモデルを変更すると、現在のセッションが中断され、保留中の設定がすべて適用されます。'
         },
         deleteModelCache: {
-          title: 'モデルキャッシュを削除しますか？',
+          title: 'モデルを削除しますか？',
           description:
-            '{{modelId}} のローカルにキャッシュされたファイルが削除されます。再び使用するにはモデルを再ダウンロードする必要があります。'
+            '{{modelId}} はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
         },
         serverUnreachable: {
           title: 'サーバーに接続できません',
@@ -187,7 +187,7 @@ const ja = {
           modelNotFound: 'モデルが見つかりません',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
           couldNotCheckModel: 'モデルを確認できませんでした',
-          deleteLocalCache: 'ローカルキャッシュを削除'
+          deleteLocalCache: 'モデルを削除'
         },
         volume: {
           title: '音量',

@@ -10,6 +10,7 @@ type SettingsSelectOptionBase = {
   prefix?: string
   deletable?: boolean
   cacheDeletable?: boolean
+  dimmed?: boolean
 }
 
 type SettingsSelectOption = SettingsSelectOptionBase &
@@ -143,7 +144,7 @@ const SettingsSelect = ({
                   option.value === value
                     ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
                     : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
-                }`}
+                } ${option.dimmed ? 'opacity-50' : ''}`}
               >
                 <button
                   type="button"
@@ -169,14 +170,8 @@ const SettingsSelect = ({
                     }}
                     title={cacheDeleteLabel ? t(cacheDeleteLabel) : undefined}
                   >
-                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 14 16" fill="none">
-                      <path
-                        d="M1 4h12M5 4V2.5A1.5 1.5 0 016.5 1h1A1.5 1.5 0 019 2.5V4m1.5 0v9a1.5 1.5 0 01-1.5 1.5H5A1.5 1.5 0 013.5 13V4h7z"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                      <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   </button>
                 )}

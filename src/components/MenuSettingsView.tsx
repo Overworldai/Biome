@@ -321,8 +321,13 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
   )
 
-  const handleDeleteCustomModel = useCallback(
-    (modelId: string) => {
+  const handleConfirmDeleteCache = useCallback(async () => {
+    if (!showDeleteCacheModal) return
+    const modelId = showDeleteCacheModal
+    setShowDeleteCacheModal(null)
+    await invoke('delete-cached-model', modelId)
+    if (savedCustomModels.includes(modelId)) {
+      // Custom model: remove from cache AND from custom list
       const updated = savedCustomModels.filter((m) => m !== modelId)
       void saveSettings({ ...settings, custom_models: updated })
       setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
@@ -330,17 +335,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
         setMenuWorldModel(fallback)
       }
-    },
-    [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
-  )
-
-  const handleConfirmDeleteCache = useCallback(async () => {
-    if (!showDeleteCacheModal) return
-    const modelId = showDeleteCacheModal
-    setShowDeleteCacheModal(null)
-    await invoke('delete-cached-model', modelId)
-    setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
-  }, [showDeleteCacheModal])
+    } else {
+      // Default model: just update local status
+      setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
+    }
+  }, [showDeleteCacheModal, savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel])
 
   const handleLocaleChange = useCallback(
     (locale: AppLocale) => {
@@ -568,31 +567,37 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
           <SettingsSection title="app.settings.worldModel.title" description="app.settings.worldModel.description">
             <SettingsSelect
-              options={menuModelOptions.map((model) => ({
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === true
-                    ? t('app.settings.worldModel.local')
-                    : model.isLocal === false
-                      ? t('app.settings.worldModel.download')
-                      : null
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                deletable: savedCustomModels.includes(model.id) && model.isLocal !== true,
-                cacheDeletable: model.isLocal === true
-              }))}
+              options={menuModelOptions
+                .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
+                .map((model) => {
+                  const isCustom = savedCustomModels.includes(model.id)
+                  return {
+                    value: model.id,
+                    rawLabel: model.id.replace(/^Overworld\//, ''),
+                    prefix: [
+                      model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+                      model.isLocal === true
+                        ? t('app.settings.worldModel.local')
+                        : model.isLocal === false
+                          ? t('app.settings.worldModel.download')
+                          : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    deletable: isCustom && model.isLocal === true,
+                    cacheDeletable: !isCustom && model.isLocal === true,
+                    dimmed: model.isLocal === false
+                  }
+                })}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
-              onDelete={handleDeleteCustomModel}
+              onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
               onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}
               customLabel="app.settings.worldModel.custom"
-              deleteLabel="app.settings.worldModel.removeCustomModel"
+              deleteLabel="app.settings.worldModel.deleteLocalCache"
               cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
               rawCustomPrefix={
                 customModelStatus.state === 'loading'

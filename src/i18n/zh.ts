@@ -71,8 +71,8 @@ const zh = {
           description: '更改引擎模式或世界模型会中断当前会话，并应用所有待保存设置。'
         },
         deleteModelCache: {
-          title: '删除模型缓存？',
-          description: '这将删除 {{modelId}} 的本地缓存文件。再次使用前需要重新下载该模型。'
+          title: '删除模型？',
+          description: '{{modelId}} 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
         },
         serverUnreachable: {
           title: '无法连接到服务器',
@@ -180,7 +180,7 @@ const zh = {
           modelNotFound: '未找到模型',
           couldNotLoadModelList: '无法加载模型列表',
           couldNotCheckModel: '无法检查模型',
-          deleteLocalCache: '删除本地缓存'
+          deleteLocalCache: '删除模型'
         },
         volume: {
           title: '音量',
