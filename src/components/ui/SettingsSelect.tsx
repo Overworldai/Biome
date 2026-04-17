@@ -58,7 +58,11 @@ const SettingsSelect = ({
   const resolveLabel = (option: SettingsSelectOption) => (option.label ? t(option.label) : option.rawLabel)
   const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
-  const [isCustom, setIsCustom] = useState(() => allowCustom && !options.some((o) => o.value === value))
+  // Only start in custom mode if options have actually loaded and the value isn't in them.
+  // Otherwise we'd briefly render the custom input on mount before async-loaded options arrive.
+  const [isCustom, setIsCustom] = useState(
+    () => allowCustom === true && options.length > 0 && !options.some((o) => o.value === value)
+  )
   const [customValue, setCustomValue] = useState(value)
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -82,7 +86,7 @@ const SettingsSelect = ({
     prevOptionValuesRef.current = currentValues
     if (isNewOption) {
       setIsCustom(false)
-    } else if (!inOptions) {
+    } else if (options.length > 0 && !inOptions) {
       setIsCustom(true)
     }
   }, [allowCustom, options, value])
