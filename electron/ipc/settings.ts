@@ -89,8 +89,8 @@ function seedFileExists(filename: string): boolean {
 }
 
 /** Replace any pinned scenes whose seed files no longer exist with defaults.
- *  Returns a new settings object (and persists it) if any replacements were made. */
-function repairMissingPinnedScenes(settings: Settings, settingsPath: string): Settings {
+ *  Returns the same object if no changes, or a new object with replacements. */
+function repairMissingPinnedScenes(settings: Settings): Settings {
   const pinned = settings.pinned_scenes
   const missing = pinned.filter((f) => !seedFileExists(f))
   if (missing.length === 0) return settings
@@ -103,16 +103,11 @@ function repairMissingPinnedScenes(settings: Settings, settingsPath: string): Se
 
   console.log(`[SETTINGS] Replaced ${missing.length} missing pinned scene(s): ${missing.join(', ')}`)
 
-  const updated = { ...settings, pinned_scenes: repaired }
-  fs.writeFileSync(settingsPath, JSON.stringify(updated, null, 2))
-  return updated
+  return { ...settings, pinned_scenes: repaired }
 }
 
-function readSettingsSync(): Settings {
-  const settingsPath = getSettingsPath()
-
+function loadSettings(settingsPath: string): { settings: Settings; dirty: boolean } {
   if (!fs.existsSync(settingsPath)) {
-    // Try one-time migration from config.json
     const legacyPath = getLegacyConfigPath()
     if (fs.existsSync(legacyPath)) {
       try {
@@ -120,20 +115,13 @@ function readSettingsSync(): Settings {
         const legacyParsed = JSON.parse(legacyContent) as Record<string, unknown>
         const migrated = migrateFromLegacyConfig(legacyParsed)
         const result = settingsSchema.parse(migrated)
-
-        // Write migrated settings
-        fs.writeFileSync(settingsPath, JSON.stringify(result, null, 2))
         console.log('[SETTINGS] Migrated from config.json to settings.json')
-        return repairMissingPinnedScenes(result, settingsPath)
+        return { settings: result, dirty: true }
       } catch (err) {
         console.warn('[SETTINGS] Failed to migrate config.json, using defaults:', err)
       }
     }
-
-    // No existing files — use defaults
-    const defaults = settingsSchema.parse({})
-    fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-    return defaults
+    return { settings: settingsSchema.parse({}), dirty: true }
   }
 
   const content = fs.readFileSync(settingsPath, 'utf-8')
@@ -142,20 +130,26 @@ function readSettingsSync(): Settings {
     parsed = JSON.parse(content)
   } catch {
     console.warn('[SETTINGS] Failed to parse settings.json, using defaults')
-    const defaults = settingsSchema.parse({})
-    fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-    return defaults
+    return { settings: settingsSchema.parse({}), dirty: true }
   }
 
   const result = settingsSchema.safeParse(parsed)
   if (result.success) {
-    return repairMissingPinnedScenes(result.data, settingsPath)
+    return { settings: result.data, dirty: false }
   }
 
   console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
-  const defaults = settingsSchema.parse({})
-  fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-  return defaults
+  return { settings: settingsSchema.parse({}), dirty: true }
+}
+
+function readSettingsSync(): Settings {
+  const settingsPath = getSettingsPath()
+  const { settings, dirty } = loadSettings(settingsPath)
+  const repaired = repairMissingPinnedScenes(settings)
+  if (dirty || repaired !== settings) {
+    fs.writeFileSync(settingsPath, JSON.stringify(repaired, null, 2))
+  }
+  return repaired
 }
 
 export function registerSettingsIpc(): void {
