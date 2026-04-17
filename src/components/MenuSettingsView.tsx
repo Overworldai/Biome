@@ -860,6 +860,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           title="app.dialogs.deleteModelCache.title"
           description="app.dialogs.deleteModelCache.description"
           descriptionParams={{ modelId: showDeleteCacheModal }}
+          descriptionComponents={{ bold: <span className="text-white" /> }}
           onCancel={() => setShowDeleteCacheModal(null)}
           onConfirm={() => void handleConfirmDeleteCache()}
           confirmLabel="app.buttons.delete"

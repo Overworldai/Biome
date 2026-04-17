@@ -72,7 +72,7 @@ const zh = {
         },
         deleteModelCache: {
           title: '删除模型？',
-          description: '{{modelId}} 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
+          description: '<bold>{{modelId}}</bold> 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
         },
         serverUnreachable: {
           title: '无法连接到服务器',

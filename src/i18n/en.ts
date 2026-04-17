@@ -75,7 +75,7 @@ const en = {
         deleteModelCache: {
           title: 'Delete Model?',
           description:
-            '{{modelId}} is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
+            '<bold>{{modelId}}</bold> is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
         serverUnreachable: {
           title: 'Server Unreachable',

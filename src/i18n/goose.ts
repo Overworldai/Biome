@@ -76,7 +76,7 @@ const goose = {
         deleteModelCache: {
           title: 'Pluck the goose?',
           description:
-            '{{modelId}} is nesting on this device. Plucking it will free up nest space, but the goose will need to be re-migrated before it can waddle again.'
+            '<bold>{{modelId}}</bold> is nesting on this device. Plucking it will free up nest space, but the goose will need to be re-migrated before it can waddle again.'
         },
         serverUnreachable: {
           title: 'Pond not found',
