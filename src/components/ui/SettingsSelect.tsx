@@ -247,8 +247,6 @@ const SettingsSelect = ({
             className="flex items-center justify-center w-[3.56cqh] bg-surface-btn-primary cursor-pointer border-none"
             onClick={() => {
               setIsCustom(false)
-              setCustomValue(options[0]?.value ?? '')
-              onChange(options[0]?.value ?? '')
               openDropdown()
             }}
           >
