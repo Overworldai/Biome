@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStreaming } from '../context/StreamingContext'
+import type { InputCode } from '../types/input'
 
 // QWERTY keyboard layout (simple labels) — copied verbatim from owl-tube/app/InputDisplay/constants.ts
 const KEYBOARD_LAYOUT = [
@@ -14,7 +15,7 @@ const KEYBOARD_LAYOUT = [
 /** Maps a keyboard-layout label to the set of `InputCode`s that should light it up
  *  when pressed. Labels not listed here are resolved via the letter/digit/function-key
  *  rules in `layoutLabelToInputCodes`. */
-const LAYOUT_LABEL_TO_INPUT_CODES: Record<string, readonly string[]> = {
+const LAYOUT_LABEL_TO_INPUT_CODES: Record<string, readonly InputCode[]> = {
   Esc: ['Escape'],
   Backspace: ['Backspace'],
   Tab: ['Tab'],
@@ -38,7 +39,7 @@ const LAYOUT_LABEL_TO_INPUT_CODES: Record<string, readonly string[]> = {
   '/': ['Slash']
 }
 
-const layoutLabelToInputCodes = (label: string): readonly string[] => {
+const layoutLabelToInputCodes = (label: string): readonly InputCode[] => {
   if (label in LAYOUT_LABEL_TO_INPUT_CODES) return LAYOUT_LABEL_TO_INPUT_CODES[label]
   if (/^[A-Z]$/.test(label)) return [`Key${label}`]
   if (/^\d$/.test(label)) return [`Digit${label}`]
@@ -71,7 +72,7 @@ const Key = ({ label, isPressed, width = U }: KeyProps) => (
 )
 
 type VirtualKeyboardProps = {
-  pressedKeys: Set<string>
+  pressedKeys: Set<InputCode>
 }
 
 const VirtualKeyboard = ({ pressedKeys }: VirtualKeyboardProps) => {
@@ -103,7 +104,7 @@ const VirtualKeyboard = ({ pressedKeys }: VirtualKeyboardProps) => {
 }
 
 type VirtualMouseProps = {
-  mouseButtons: Set<string>
+  mouseButtons: Set<InputCode>
   mouseDelta: { dx: number; dy: number }
   scrollActive: { up: boolean; down: boolean }
 }

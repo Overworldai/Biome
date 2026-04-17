@@ -2,6 +2,7 @@ import type { EngineStatus } from '../types/app'
 import type { StageId } from '../stages'
 import type { TranslatableError } from '../i18n'
 import type { ServerConnection } from '../hooks/useWebSocket'
+import type { InputCode } from '../types/input'
 import type { SceneEditState, SceneEditEvent } from './sceneEditMachine'
 
 export type StreamingStats = {
@@ -72,11 +73,11 @@ export type StreamingContextValue = {
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
   /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
-  pressedKeys: Set<string>
+  pressedKeys: Set<InputCode>
   /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */
-  mouseButtons: Set<string>
+  mouseButtons: Set<InputCode>
   /** Gamepad `InputCode`s currently held down (e.g. `'GamepadA'`, `'GamepadLeftStickUp'`). */
-  pressedGamepad: Set<string>
+  pressedGamepad: Set<InputCode>
   scrollActive: { up: boolean; down: boolean }
   isPointerLocked: boolean
   pointerLockBlockedSeq: number

@@ -26,6 +26,7 @@ import SettingsCheckbox from './ui/SettingsCheckbox'
 import SettingsKeybind, { controlLabel } from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
 import { CONTROLS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
+import type { InputCode } from '../types/input'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
@@ -74,7 +75,13 @@ function formatBytes(bytes: number): string {
 }
 
 type KeybindRowProps =
-  | { label: string; value: string; onChange: (code: string) => void; warning?: string | null; fixedLabel?: never }
+  | {
+      label: string
+      value: InputCode
+      onChange: (code: InputCode) => void
+      warning?: string | null
+      fixedLabel?: never
+    }
   | { label: string; fixedLabel: string; value?: never; onChange?: never; warning?: never }
 
 const KeybindRow = (props: KeybindRowProps) => {

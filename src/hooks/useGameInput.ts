@@ -1,21 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type RefObject } from 'react'
 import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings } from '../types/settings'
+import type { InputCode, ServerCode } from '../types/input'
 import i18n from '../i18n'
-
-// ─── String types ────────────────────────────────────────────────────────────
-// Two distinct kinds of strings flow through this module. They're both plain
-// `string` for ergonomics (avoids casts at DOM boundaries), but the aliases
-// document intent at every declaration.
-
-/** A physical input identifier we RECEIVE from the user. Drawn from:
- *  - Keyboard: DOM `KeyboardEvent.code` values (`'KeyW'`, `'Space'`, `'Escape'`, `'ArrowUp'`).
- *  - Mouse: synthetic codes translated from `MouseEvent.button` (see `MOUSE_CODES`).
- *  - Gamepad: synthetic codes from polled state (see `GAMEPAD_CODES`). */
-export type InputCode = string
-
-/** A canonical code we SEND to the model in `control.buttons[]`
- *  (e.g. `'W'`, `'SPACE'`, `'SHIFT'`, `'MOUSE_LEFT'`). */
-export type ServerCode = string
 
 // ─── Control definitions (rebindable actions + display-only entries) ─────────
 

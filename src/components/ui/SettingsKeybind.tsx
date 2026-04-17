@@ -2,9 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
 import { type Control, MOUSE_CODES } from '../../hooks/useGameInput'
+import type { DisplayLabel, InputCode } from '../../types/input'
 import i18n from '../../i18n'
 
-const MOUSE_CODE_LABELS: Record<string, string> = {
+const MOUSE_CODE_LABELS: Record<InputCode, DisplayLabel> = {
   [MOUSE_CODES.LEFT]: 'Left Click',
   [MOUSE_CODES.MIDDLE]: 'Middle Click',
   [MOUSE_CODES.RIGHT]: 'Right Click',
@@ -12,7 +13,7 @@ const MOUSE_CODE_LABELS: Record<string, string> = {
   [MOUSE_CODES.FORWARD]: 'Mouse Forward'
 }
 
-const MOUSE_BUTTON_TO_CODE: Record<number, string> = {
+const MOUSE_BUTTON_TO_CODE: Record<number, InputCode> = {
   0: MOUSE_CODES.LEFT,
   1: MOUSE_CODES.MIDDLE,
   2: MOUSE_CODES.RIGHT,
@@ -20,11 +21,11 @@ const MOUSE_BUTTON_TO_CODE: Record<number, string> = {
   4: MOUSE_CODES.FORWARD
 }
 
-export const keyCodeToLabel = (code: string): string => {
+export const keyCodeToLabel = (code: InputCode): DisplayLabel => {
   if (code in MOUSE_CODE_LABELS) return MOUSE_CODE_LABELS[code]
   if (code.startsWith('Key')) return code.slice(3)
   if (code.startsWith('Digit')) return code.slice(5)
-  const map: Record<string, string> = {
+  const map: Record<InputCode, DisplayLabel> = {
     Backquote: '`',
     Minus: '-',
     Equal: '=',
@@ -55,8 +56,8 @@ export const keyCodeToLabel = (code: string): string => {
 }
 
 type SettingsKeybindProps = {
-  value: string
-  onChange?: (code: string) => void
+  value: InputCode
+  onChange?: (code: InputCode) => void
   disabled?: boolean
 }
 

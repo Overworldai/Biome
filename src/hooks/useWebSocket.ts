@@ -6,6 +6,7 @@ import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError, type TranslationKey } from '../i18n'
 import type { InitMessage, InitResponse, ServerErrorSnapshot, ServerSystemInfo } from '../types/ws'
+import type { ServerCode } from '../types/input'
 
 const log = createLogger('WebSocket')
 const MAX_VISIBLE_LOG_LINES = 500
@@ -356,7 +357,7 @@ export const useWebSocket = (): WebSocketHook => {
     setHasRealFrame(false)
   }, [])
 
-  const sendControl = useCallback((buttons: string[] = [], mouseDx = 0, mouseDy = 0) => {
+  const sendControl = useCallback((buttons: ServerCode[] = [], mouseDx = 0, mouseDy = 0) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const ts = performance.now()
       wsRef.current.send(JSON.stringify({ type: 'control', buttons, mouse_dx: mouseDx, mouse_dy: mouseDy, ts }))
