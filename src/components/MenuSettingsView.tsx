@@ -570,15 +570,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               options={[...menuModelOptions]
                 .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
                 .sort((a, b) => {
-                  // 1. Currently selected model first
-                  if (a.id === menuWorldModel) return -1
-                  if (b.id === menuWorldModel) return 1
-                  // 2. Downloaded before undownloaded
+                  // 1. Downloaded before undownloaded
                   if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1
-                  // 3. Default models before custom
+                  // 2. Default models before custom
                   if (savedCustomModels.includes(a.id) !== savedCustomModels.includes(b.id))
                     return savedCustomModels.includes(a.id) ? 1 : -1
-                  // 4. Alphabetical
+                  // 3. Alphabetical
                   return a.id.localeCompare(b.id)
                 })
                 .map((model) => {
@@ -601,6 +598,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
               onChange={handleWorldModelChange}
               onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
               onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              hideSelectedInDropdown
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}

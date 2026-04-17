@@ -29,6 +29,7 @@ type SettingsSelectProps = {
   customLabel?: TranslationKey
   deleteLabel?: TranslationKey
   cacheDeleteLabel?: TranslationKey
+  hideSelectedInDropdown?: boolean
 }
 
 const OptionContent = ({ displayLabel, prefix }: { displayLabel: string; prefix?: string }) => (
@@ -50,7 +51,8 @@ const SettingsSelect = ({
   rawCustomPrefix,
   customLabel,
   deleteLabel,
-  cacheDeleteLabel
+  cacheDeleteLabel,
+  hideSelectedInDropdown
 }: SettingsSelectProps) => {
   const { t } = useTranslation()
   const resolveLabel = (option: SettingsSelectOption) => (option.label ? t(option.label) : option.rawLabel)
@@ -137,63 +139,65 @@ const SettingsSelect = ({
               maxHeight: window.innerHeight - dropdownRect.bottom - 8
             }}
           >
-            {options.map((option) => (
-              <div
-                key={option.value}
-                className={`flex items-center ${
-                  option.value === value
-                    ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
-                    : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
-                } ${option.dimmed ? 'opacity-50' : ''}`}
-              >
-                <button
-                  type="button"
-                  className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
-                  onMouseEnter={playHover}
-                  onClick={() => {
-                    playClick()
-                    onChange(option.value)
-                    setIsOpen(false)
-                  }}
+            {options
+              .filter((option) => !hideSelectedInDropdown || option.value !== value)
+              .map((option) => (
+                <div
+                  key={option.value}
+                  className={`flex items-center ${
+                    option.value === value
+                      ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
+                      : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
+                  } ${option.dimmed ? 'opacity-50' : ''}`}
                 >
-                  <OptionContent displayLabel={resolveLabel(option)} prefix={option.prefix} />
-                </button>
-                {option.cacheDeletable && onCacheDelete && (
                   <button
                     type="button"
-                    className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                    className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
                     onMouseEnter={playHover}
-                    onClick={(e) => {
-                      e.stopPropagation()
+                    onClick={() => {
                       playClick()
-                      onCacheDelete(option.value)
+                      onChange(option.value)
+                      setIsOpen(false)
                     }}
-                    title={cacheDeleteLabel ? t(cacheDeleteLabel) : undefined}
                   >
-                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
-                      <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
+                    <OptionContent displayLabel={resolveLabel(option)} prefix={option.prefix} />
                   </button>
-                )}
-                {option.deletable && onDelete && (
-                  <button
-                    type="button"
-                    className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
-                    onMouseEnter={playHover}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      playClick()
-                      onDelete(option.value)
-                    }}
-                    title={deleteLabel ? t(deleteLabel) : undefined}
-                  >
-                    <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
-                      <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
+                  {option.cacheDeletable && onCacheDelete && (
+                    <button
+                      type="button"
+                      className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                      onMouseEnter={playHover}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        playClick()
+                        onCacheDelete(option.value)
+                      }}
+                      title={cacheDeleteLabel ? t(cacheDeleteLabel) : undefined}
+                    >
+                      <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                        <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  )}
+                  {option.deletable && onDelete && (
+                    <button
+                      type="button"
+                      className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                      onMouseEnter={playHover}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        playClick()
+                        onDelete(option.value)
+                      }}
+                      title={deleteLabel ? t(deleteLabel) : undefined}
+                    >
+                      <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                        <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
             {allowCustom && (
               <button
                 type="button"
