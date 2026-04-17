@@ -131,7 +131,7 @@ const SettingsSelect = ({
       ? createPortal(
           <div
             ref={dropdownRef}
-            className="fixed z-[9999] border border-border-medium border-t-0 bg-[var(--color-surface-modal)] backdrop-blur-[1.67cqh] overflow-y-auto styled-scrollbar"
+            className="fixed z-[9999] select-none border border-border-medium border-t-0 bg-[var(--color-surface-modal)] backdrop-blur-[1.67cqh] overflow-y-auto styled-scrollbar"
             style={{
               top: dropdownRect.bottom,
               left: dropdownRect.left,
