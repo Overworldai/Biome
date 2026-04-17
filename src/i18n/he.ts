@@ -196,7 +196,6 @@ const he = {
           resetScene: 'איפוס סצנה',
           sceneEdit: 'עריכת סצנה',
           conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
-          conflictWithFixed: 'מתנגש עם שליטה קבועה: {{label}}',
           resetToDefaults: 'אפס לברירת מחדל'
         },
         gamepad: {
@@ -215,9 +214,7 @@ const he = {
             pauseMenu: 'תפריט עצירה'
           }
         },
-        fixedControls: {
-          title: 'שליטה קבועה',
-          description: 'מהם המקשים המובנים?',
+        controls: {
           labels: {
             moveForward: 'התקדמות',
             moveLeft: 'תנועה שמאלה',
@@ -225,16 +222,10 @@ const he = {
             moveRight: 'תנועה ימינה',
             jump: 'קפיצה',
             sprint: 'ספרינט',
-            look: 'מבט',
             interact: 'אינטראקציה',
             primaryFire: 'ירי ראשי',
             secondaryFire: 'ירי משני',
             pauseMenu: 'תפריט עצירה'
-          },
-          values: {
-            mouse: 'עכבר',
-            leftClick: 'לחיצה שמאלית',
-            rightClick: 'לחיצה ימנית'
           }
         },
         experimental: {

@@ -23,7 +23,7 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { controlDisplay, controlLabel } from './ui/SettingsKeybind'
+import SettingsKeybind, { controlLabel } from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
 import { CONTROLS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
@@ -710,7 +710,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
-            {CONTROLS.filter((c) => c.remappable).map((ctrl) => {
+            {CONTROLS.map((ctrl) => {
               const labelKey = ctrl.labelKey as ControlBindKey
               const value = menuKeybindings.controls[labelKey]
               const otherRemappedCodes = Object.entries(menuKeybindings.controls)
@@ -781,15 +781,6 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                   fixedLabel={entry.button}
                 />
               ))}
-          </SettingsSection>
-
-          <SettingsSection
-            title="app.settings.fixedControls.title"
-            description="app.settings.fixedControls.description"
-          >
-            {CONTROLS.filter((c) => !c.remappable).map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={controlLabel(ctrl)} fixedLabel={controlDisplay(ctrl)} />
-            ))}
           </SettingsSection>
 
           <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">

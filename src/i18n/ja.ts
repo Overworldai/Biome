@@ -200,7 +200,6 @@ const ja = {
           resetScene: 'シーンをリセット',
           sceneEdit: 'シーン編集',
           conflictWithOther: '別のキー設定と重複しています',
-          conflictWithFixed: '固定コントロール「{{label}}」と重複しています',
           resetToDefaults: 'デフォルトに戻す'
         },
         gamepad: {
@@ -219,9 +218,7 @@ const ja = {
             pauseMenu: 'ポーズメニュー'
           }
         },
-        fixedControls: {
-          title: '固定コントロール',
-          description: '組み込みの操作は何ですか？',
+        controls: {
           labels: {
             moveForward: '前進',
             moveLeft: '左移動',
@@ -229,16 +226,10 @@ const ja = {
             moveRight: '右移動',
             jump: 'ジャンプ',
             sprint: 'ダッシュ',
-            look: '視点移動',
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
             pauseMenu: 'ポーズメニュー'
-          },
-          values: {
-            mouse: 'マウス',
-            leftClick: '左クリック',
-            rightClick: '右クリック'
           }
         },
         experimental: {

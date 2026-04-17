@@ -130,13 +130,7 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
 }
 
 export const controlLabel = (ctrl: Control): string => {
-  return i18n.t(`app.settings.fixedControls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
-}
-
-/** Human-readable display string for a control entry. */
-export const controlDisplay = (ctrl: Control): string => {
-  if (ctrl.code !== undefined) return keyCodeToLabel(ctrl.code)
-  return i18n.t(`app.settings.fixedControls.values.${ctrl.displayValueKey}`, { defaultValue: ctrl.displayValue })
+  return i18n.t(`app.settings.controls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
 }
 
 export default SettingsKeybind

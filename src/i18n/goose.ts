@@ -202,7 +202,6 @@ const goose = {
           resetScene: 'Shake off',
           sceneEdit: 'Pond edit',
           conflictWithOther: 'This peck clashes with another peck',
-          conflictWithFixed: 'This peck clashes with built-in instinct: {{label}}',
           resetToDefaults: 'Back to nesting defaults'
         },
         gamepad: {
@@ -221,9 +220,7 @@ const goose = {
             pauseMenu: 'Tuck head under wing'
           }
         },
-        fixedControls: {
-          title: 'Built-in instincts',
-          description: 'what can a goose do?',
+        controls: {
           labels: {
             moveForward: 'Waddle forward',
             moveLeft: 'Waddle left',
@@ -231,16 +228,10 @@ const goose = {
             moveRight: 'Waddle right',
             jump: 'Flap',
             sprint: 'Charge',
-            look: 'Crane neck',
             interact: 'Peck',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
             pauseMenu: 'Tuck head under wing'
-          },
-          values: {
-            mouse: 'Neck',
-            leftClick: 'Left peck',
-            rightClick: 'Right peck'
           }
         },
         experimental: {

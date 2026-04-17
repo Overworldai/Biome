@@ -194,7 +194,6 @@ const zh = {
           resetScene: '重置场景',
           sceneEdit: '场景编辑',
           conflictWithOther: '与另一个按键绑定冲突',
-          conflictWithFixed: '与固定操作冲突：{{label}}',
           resetToDefaults: '恢复默认'
         },
         gamepad: {
@@ -213,9 +212,7 @@ const zh = {
             pauseMenu: '暂停菜单'
           }
         },
-        fixedControls: {
-          title: '固定操作',
-          description: '内置操作有哪些？',
+        controls: {
           labels: {
             moveForward: '前进',
             moveLeft: '向左移动',
@@ -223,16 +220,10 @@ const zh = {
             moveRight: '向右移动',
             jump: '跳跃',
             sprint: '冲刺',
-            look: '视角移动',
             interact: '交互',
             primaryFire: '主射击',
             secondaryFire: '副射击',
             pauseMenu: '暂停菜单'
-          },
-          values: {
-            mouse: '鼠标',
-            leftClick: '左键单击',
-            rightClick: '右键单击'
           }
         },
         experimental: {

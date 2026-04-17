@@ -3,71 +3,49 @@ import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings } from '../t
 import i18n from '../i18n'
 
 // ─── String types ────────────────────────────────────────────────────────────
-// Three distinct kinds of strings flow through this module. They're all plain
+// Two distinct kinds of strings flow through this module. They're both plain
 // `string` for ergonomics (avoids casts at DOM boundaries), but the aliases
 // document intent at every declaration.
 
 /** A physical input identifier we RECEIVE from the user. Drawn from:
  *  - Keyboard: DOM `KeyboardEvent.code` values (`'KeyW'`, `'Space'`, `'Escape'`, `'ArrowUp'`).
  *  - Mouse: synthetic codes translated from `MouseEvent.button` (see `MOUSE_CODES`).
- *  - Gamepad (future): synthetic codes in the same namespace. */
+ *  - Gamepad: synthetic codes from polled state (see `GAMEPAD_CODES`). */
 export type InputCode = string
 
 /** A canonical code we SEND to the model in `control.buttons[]`
  *  (e.g. `'W'`, `'SPACE'`, `'SHIFT'`, `'MOUSE_LEFT'`). */
 export type ServerCode = string
 
-/** A human-readable label displayed in the settings UI (e.g. `'W'`, `'Space'`, `'Left Click'`).
- *  Produced by `keyCodeToLabel` in `SettingsKeybind.tsx`; declared here for clarity. */
-export type DisplayLabel = string
-
 // ─── Control definitions (rebindable actions + display-only entries) ─────────
 
-/** Game controls — the single source of truth for display/bindings.
- *  Entries with `code` are remappable keybindings; `code` is the default binding the user
- *  sees out-of-the-box. The actual live binding is looked up in user `keybindings.controls`.
- *  Non-remappable entries (currently just "Look") use `displayValue` for a display-only
- *  string in the settings UI.
- *  `label` is the stable internal identifier; `labelKey` and `displayValueKey` are i18n keys. */
+/** A remappable game control. `code` is the default input binding the user sees
+ *  out-of-the-box; the live binding is looked up in user `keybindings.controls`.
+ *  `label` is the stable internal identifier; `labelKey` is the i18n key. */
 export type Control = {
   label: string
   labelKey: string
-} & (
-  | { code: InputCode; remappable?: boolean; displayValue?: never; displayValueKey?: never }
-  | { code?: never; remappable?: never; displayValue: DisplayLabel; displayValueKey: string }
-)
+  code: InputCode
+}
 
 export const CONTROLS: readonly Control[] = [
-  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW', remappable: true },
-  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA', remappable: true },
-  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS', remappable: true },
-  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD', remappable: true },
-  { label: 'Jump', labelKey: 'jump', code: 'Space', remappable: true },
-  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft', remappable: true },
-  { label: 'Look', labelKey: 'look', displayValue: 'Mouse', displayValueKey: 'mouse' },
-  { label: 'Interact', labelKey: 'interact', code: 'KeyE', remappable: true },
-  { label: 'Primary Fire', labelKey: 'primaryFire', code: 'MouseLeft', remappable: true },
-  { label: 'Secondary Fire', labelKey: 'secondaryFire', code: 'MouseRight', remappable: true },
-  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape', remappable: true }
+  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW' },
+  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA' },
+  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS' },
+  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD' },
+  { label: 'Jump', labelKey: 'jump', code: 'Space' },
+  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft' },
+  { label: 'Interact', labelKey: 'interact', code: 'KeyE' },
+  { label: 'Primary Fire', labelKey: 'primaryFire', code: 'MouseLeft' },
+  { label: 'Secondary Fire', labelKey: 'secondaryFire', code: 'MouseRight' },
+  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape' }
 ]
 
-/** Non-remappable control codes — empty now, kept as a hook for future additions. */
-const NON_REMAPPABLE_CODE_TO_LABEL = new Map<InputCode, string>(
-  CONTROLS.flatMap((ctrl) => (ctrl.code && !ctrl.remappable ? [[ctrl.code, ctrl.label] as const] : []))
-)
-
-/** Returns a localized warning if `code` conflicts with any code in `otherCodes`, or with a non-remappable game control. */
+/** Returns a localized warning if `code` conflicts with any code in `otherCodes`. */
 export const getKeybindConflict = (code: InputCode, otherCodes: InputCode[]): string | null => {
   if (otherCodes.includes(code)) {
     return i18n.t('app.settings.keybindings.conflictWithOther', {
       defaultValue: 'Conflicts with another keybinding'
-    })
-  }
-  const fixedLabel = NON_REMAPPABLE_CODE_TO_LABEL.get(code)
-  if (fixedLabel) {
-    return i18n.t('app.settings.keybindings.conflictWithFixed', {
-      label: fixedLabel,
-      defaultValue: `Conflicts with fixed control: ${fixedLabel}`
     })
   }
   return null
@@ -281,15 +259,13 @@ export const useGameInput = (
     delete map[keybindings.reset_scene]
     delete map[keybindings.scene_edit]
 
-    // Clear default codes for all remappable actions (semantics: user rebind replaces default).
+    // Clear default codes for all actions (semantics: user rebind replaces default).
     for (const ctrl of CONTROLS) {
-      if (!ctrl.remappable || !ctrl.code) continue
       delete map[ctrl.code]
     }
 
-    // Bind user's chosen input code → canonical server code for each remappable action.
+    // Bind user's chosen input code → canonical server code for each action.
     for (const ctrl of CONTROLS) {
-      if (!ctrl.remappable || !ctrl.code) continue
       if (CALLBACK_ACTIONS.has(ctrl.labelKey as ControlBindKey)) continue
       const serverCode = CODE_MAP[ctrl.code]
       if (!serverCode) continue
