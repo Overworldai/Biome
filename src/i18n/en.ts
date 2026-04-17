@@ -201,7 +201,8 @@ const en = {
           resetScene: 'Reset Scene',
           sceneEdit: 'Scene Edit',
           conflictWithOther: 'Conflicts with another keybinding',
-          conflictWithFixed: 'Conflicts with fixed control: {{label}}'
+          conflictWithFixed: 'Conflicts with fixed control: {{label}}',
+          resetToDefaults: 'Reset to Defaults'
         },
         fixedControls: {
           title: 'Fixed Controls',

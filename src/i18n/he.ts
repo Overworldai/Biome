@@ -196,7 +196,8 @@ const he = {
           resetScene: 'איפוס סצנה',
           sceneEdit: 'עריכת סצנה',
           conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
-          conflictWithFixed: 'מתנגש עם שליטה קבועה: {{label}}'
+          conflictWithFixed: 'מתנגש עם שליטה קבועה: {{label}}',
+          resetToDefaults: 'אפס לברירת מחדל'
         },
         fixedControls: {
           title: 'שליטה קבועה',

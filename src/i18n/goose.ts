@@ -202,7 +202,8 @@ const goose = {
           resetScene: 'Shake off',
           sceneEdit: 'Pond edit',
           conflictWithOther: 'This peck clashes with another peck',
-          conflictWithFixed: 'This peck clashes with built-in instinct: {{label}}'
+          conflictWithFixed: 'This peck clashes with built-in instinct: {{label}}',
+          resetToDefaults: 'Back to nesting defaults'
         },
         fixedControls: {
           title: 'Built-in instincts',

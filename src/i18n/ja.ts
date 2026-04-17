@@ -200,7 +200,8 @@ const ja = {
           resetScene: 'シーンをリセット',
           sceneEdit: 'シーン編集',
           conflictWithOther: '別のキー設定と重複しています',
-          conflictWithFixed: '固定コントロール「{{label}}」と重複しています'
+          conflictWithFixed: '固定コントロール「{{label}}」と重複しています',
+          resetToDefaults: 'デフォルトに戻す'
         },
         fixedControls: {
           title: '固定コントロール',

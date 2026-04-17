@@ -6,6 +6,7 @@ import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/useSettings'
 import {
+  DEFAULT_KEYBINDINGS,
   ENGINE_MODES,
   QUANT_OPTIONS,
   type AppLocale,
@@ -36,6 +37,15 @@ import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
+
+const hasCustomKeybindings = (kb: Keybindings): boolean => {
+  if (kb.reset_scene !== DEFAULT_KEYBINDINGS.reset_scene) return true
+  if (kb.scene_edit !== DEFAULT_KEYBINDINGS.scene_edit) return true
+  for (const key of Object.keys(DEFAULT_KEYBINDINGS.controls) as ControlBindKey[]) {
+    if (kb.controls[key] !== DEFAULT_KEYBINDINGS.controls[key]) return true
+  }
+  return false
+}
 
 type MenuModelOption = {
   id: string
@@ -725,6 +735,19 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                   ...Object.values(menuKeybindings.controls)
                 ])}
               />
+            )}
+            {hasCustomKeybindings(menuKeybindings) && (
+              <div className="flex justify-end mt-[0.8cqh]">
+                <Button
+                  variant="secondary"
+                  autoShrinkLabel
+                  label="app.settings.keybindings.resetToDefaults"
+                  className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                  onClick={() =>
+                    setMenuKeybindings({ ...DEFAULT_KEYBINDINGS, controls: { ...DEFAULT_KEYBINDINGS.controls } })
+                  }
+                />
+              </div>
             )}
           </SettingsSection>
 

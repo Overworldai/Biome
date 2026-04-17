@@ -194,7 +194,8 @@ const zh = {
           resetScene: '重置场景',
           sceneEdit: '场景编辑',
           conflictWithOther: '与另一个按键绑定冲突',
-          conflictWithFixed: '与固定操作冲突：{{label}}'
+          conflictWithFixed: '与固定操作冲突：{{label}}',
+          resetToDefaults: '恢复默认'
         },
         fixedControls: {
           title: '固定操作',
