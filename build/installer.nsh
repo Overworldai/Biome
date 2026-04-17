@@ -1,3 +1,17 @@
+Function .onVerifyInstDir
+  # Reject installs under Program Files — the app writes to $INSTDIR at runtime
+  # (uv, world_engine/, HF cache) and those paths require admin rights to write.
+  StrLen $R0 "$PROGRAMFILES"
+  StrCpy $R1 "$INSTDIR" $R0
+  StrCmp $R1 "$PROGRAMFILES" 0 +2
+    Abort
+
+  StrLen $R0 "$PROGRAMFILES64"
+  StrCpy $R1 "$INSTDIR" $R0
+  StrCmp $R1 "$PROGRAMFILES64" 0 +2
+    Abort
+FunctionEnd
+
 !macro customRemoveFiles
   StrCpy $R1 "$PLUGINSDIR\biome-hf-cache-backup"
 

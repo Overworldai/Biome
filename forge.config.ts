@@ -29,6 +29,7 @@ const config: ForgeConfig = {
         },
         nsis: {
           oneClick: false,
+          perMachine: false,
           allowToChangeInstallationDirectory: true,
           uninstallDisplayName: 'Biome',
           license: 'licensing/EULA.txt',
