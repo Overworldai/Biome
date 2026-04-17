@@ -224,6 +224,10 @@ const SettingsSelect = ({
           <input
             ref={inputRef}
             type="text"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
             className={`flex-1 min-w-0 bg-transparent border-none outline-none break-words ${SETTINGS_CONTROL_TEXT}`}
             value={customValue}
             onChange={(e) => setCustomValue(e.target.value)}
