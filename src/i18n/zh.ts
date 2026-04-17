@@ -192,7 +192,9 @@ const zh = {
           title: '按键绑定',
           description: '你想使用哪些按键？',
           resetScene: '重置场景',
-          sceneEdit: '场景编辑'
+          sceneEdit: '场景编辑',
+          conflictWithOther: '与另一个按键绑定冲突',
+          conflictWithFixed: '与固定操作冲突：{{label}}'
         },
         fixedControls: {
           title: '固定操作',

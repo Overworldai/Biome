@@ -27,9 +27,25 @@ export const DEFAULT_PINNED_SCENES = [
   'sunken_city_depths.jpg'
 ]
 
+export const DEFAULT_CONTROL_BINDS = {
+  moveForward: 'KeyW',
+  moveLeft: 'KeyA',
+  moveBack: 'KeyS',
+  moveRight: 'KeyD',
+  jump: 'Space',
+  sprint: 'ShiftLeft',
+  interact: 'KeyE',
+  primaryFire: 'MouseLeft',
+  secondaryFire: 'MouseRight',
+  pauseMenu: 'Escape'
+} as const
+
+export type ControlBindKey = keyof typeof DEFAULT_CONTROL_BINDS
+
 export const DEFAULT_KEYBINDINGS = {
   reset_scene: 'KeyU',
-  scene_edit: 'KeyQ'
+  scene_edit: 'KeyQ',
+  controls: DEFAULT_CONTROL_BINDS
 } as const
 
 export const DEFAULT_AUDIO = {
@@ -51,7 +67,21 @@ export const settingsSchema = z.object({
   keybindings: z
     .object({
       reset_scene: z.string().default('KeyU'),
-      scene_edit: z.string().default('KeyQ')
+      scene_edit: z.string().default('KeyQ'),
+      controls: z
+        .object({
+          moveForward: z.string().default(DEFAULT_CONTROL_BINDS.moveForward),
+          moveLeft: z.string().default(DEFAULT_CONTROL_BINDS.moveLeft),
+          moveBack: z.string().default(DEFAULT_CONTROL_BINDS.moveBack),
+          moveRight: z.string().default(DEFAULT_CONTROL_BINDS.moveRight),
+          jump: z.string().default(DEFAULT_CONTROL_BINDS.jump),
+          sprint: z.string().default(DEFAULT_CONTROL_BINDS.sprint),
+          interact: z.string().default(DEFAULT_CONTROL_BINDS.interact),
+          primaryFire: z.string().default(DEFAULT_CONTROL_BINDS.primaryFire),
+          secondaryFire: z.string().default(DEFAULT_CONTROL_BINDS.secondaryFire),
+          pauseMenu: z.string().default(DEFAULT_CONTROL_BINDS.pauseMenu)
+        })
+        .default(DEFAULT_CONTROL_BINDS)
     })
     .default(DEFAULT_KEYBINDINGS),
   audio: z

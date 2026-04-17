@@ -340,7 +340,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     containerRef,
     handleReset,
     settings.keybindings,
-    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null
+    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null,
+    exitPointerLock
   )
 
   useEffect(() => {

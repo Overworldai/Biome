@@ -198,7 +198,9 @@ const ja = {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
           resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集'
+          sceneEdit: 'シーン編集',
+          conflictWithOther: '別のキー設定と重複しています',
+          conflictWithFixed: '固定コントロール「{{label}}」と重複しています'
         },
         fixedControls: {
           title: '固定コントロール',

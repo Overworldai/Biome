@@ -199,7 +199,9 @@ const en = {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
           resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          sceneEdit: 'Scene Edit',
+          conflictWithOther: 'Conflicts with another keybinding',
+          conflictWithFixed: 'Conflicts with fixed control: {{label}}'
         },
         fixedControls: {
           title: 'Fixed Controls',

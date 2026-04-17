@@ -1,81 +1,141 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type RefObject } from 'react'
-import { DEFAULT_KEYBINDINGS, type Keybindings } from '../types/settings'
+import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings } from '../types/settings'
+import i18n from '../i18n'
 
-/** Fixed game controls — the single source of truth for non-rebindable bindings.
- *  Entries with `code` are real keyboard keys (used for conflict detection).
- *  Entries with `displayValue` are display-only (mouse, clicks).
-  `label` is the stable internal identifier used elsewhere in input logic.
-  `labelKey` and `displayValueKey` are the i18n keys used by the settings UI.
-  That keeps the fixed-control definitions as the single source of truth while
-  letting display text be localized without hardcoding lookup tables in the view. */
-export type FixedControl = {
+// ─── String types ────────────────────────────────────────────────────────────
+// Three distinct kinds of strings flow through this module. They're all plain
+// `string` for ergonomics (avoids casts at DOM boundaries), but the aliases
+// document intent at every declaration.
+
+/** A physical input identifier we RECEIVE from the user. Drawn from:
+ *  - Keyboard: DOM `KeyboardEvent.code` values (`'KeyW'`, `'Space'`, `'Escape'`, `'ArrowUp'`).
+ *  - Mouse: synthetic codes translated from `MouseEvent.button` (see `MOUSE_CODES`).
+ *  - Gamepad (future): synthetic codes in the same namespace. */
+export type InputCode = string
+
+/** A canonical code we SEND to the model in `control.buttons[]`
+ *  (e.g. `'W'`, `'SPACE'`, `'SHIFT'`, `'MOUSE_LEFT'`). */
+export type ServerCode = string
+
+/** A human-readable label displayed in the settings UI (e.g. `'W'`, `'Space'`, `'Left Click'`).
+ *  Produced by `keyCodeToLabel` in `SettingsKeybind.tsx`; declared here for clarity. */
+export type DisplayLabel = string
+
+// ─── Control definitions (rebindable actions + display-only entries) ─────────
+
+/** Game controls — the single source of truth for display/bindings.
+ *  Entries with `code` are remappable keybindings; `code` is the default binding the user
+ *  sees out-of-the-box. The actual live binding is looked up in user `keybindings.controls`.
+ *  Non-remappable entries (currently just "Look") use `displayValue` for a display-only
+ *  string in the settings UI.
+ *  `label` is the stable internal identifier; `labelKey` and `displayValueKey` are i18n keys. */
+export type Control = {
   label: string
   labelKey: string
 } & (
-  | { code: string; displayValue?: never; displayValueKey?: never }
-  | { code?: never; displayValue: string; displayValueKey: string }
+  | { code: InputCode; remappable?: boolean; displayValue?: never; displayValueKey?: never }
+  | { code?: never; remappable?: never; displayValue: DisplayLabel; displayValueKey: string }
 )
 
-export const FIXED_CONTROLS: readonly FixedControl[] = [
-  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW' },
-  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA' },
-  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS' },
-  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD' },
-  { label: 'Jump', labelKey: 'jump', code: 'Space' },
-  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft' },
+export const CONTROLS: readonly Control[] = [
+  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW', remappable: true },
+  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA', remappable: true },
+  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS', remappable: true },
+  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD', remappable: true },
+  { label: 'Jump', labelKey: 'jump', code: 'Space', remappable: true },
+  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft', remappable: true },
   { label: 'Look', labelKey: 'look', displayValue: 'Mouse', displayValueKey: 'mouse' },
-  { label: 'Interact', labelKey: 'interact', code: 'KeyE' },
-  { label: 'Primary Fire', labelKey: 'primaryFire', displayValue: 'Left Click', displayValueKey: 'leftClick' },
-  {
-    label: 'Secondary Fire',
-    labelKey: 'secondaryFire',
-    displayValue: 'Right Click',
-    displayValueKey: 'rightClick'
-  },
-  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape' }
+  { label: 'Interact', labelKey: 'interact', code: 'KeyE', remappable: true },
+  { label: 'Primary Fire', labelKey: 'primaryFire', code: 'MouseLeft', remappable: true },
+  { label: 'Secondary Fire', labelKey: 'secondaryFire', code: 'MouseRight', remappable: true },
+  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape', remappable: true }
 ]
 
-const FIXED_CODE_TO_LABEL = new Map(
-  FIXED_CONTROLS.flatMap((ctrl) => (ctrl.code ? [[ctrl.code, ctrl.label] as const] : []))
+/** Non-remappable control codes — empty now, kept as a hook for future additions. */
+const NON_REMAPPABLE_CODE_TO_LABEL = new Map<InputCode, string>(
+  CONTROLS.flatMap((ctrl) => (ctrl.code && !ctrl.remappable ? [[ctrl.code, ctrl.label] as const] : []))
 )
 
-/** Returns a warning if `code` conflicts with any code in `otherCodes`, or with a fixed game control. */
-export const getKeybindConflict = (code: string, otherCodes: string[]): string | null => {
-  if (otherCodes.includes(code)) return 'Conflicts with another keybinding'
-  const fixedLabel = FIXED_CODE_TO_LABEL.get(code)
-  if (fixedLabel) return `Conflicts with fixed control: ${fixedLabel}`
+/** Returns a localized warning if `code` conflicts with any code in `otherCodes`, or with a non-remappable game control. */
+export const getKeybindConflict = (code: InputCode, otherCodes: InputCode[]): string | null => {
+  if (otherCodes.includes(code)) {
+    return i18n.t('app.settings.keybindings.conflictWithOther', {
+      defaultValue: 'Conflicts with another keybinding'
+    })
+  }
+  const fixedLabel = NON_REMAPPABLE_CODE_TO_LABEL.get(code)
+  if (fixedLabel) {
+    return i18n.t('app.settings.keybindings.conflictWithFixed', {
+      label: fixedLabel,
+      defaultValue: `Conflicts with fixed control: ${fixedLabel}`
+    })
+  }
   return null
 }
 
-export const KEY_MAP: Record<string, string> = {}
+// ─── InputCode registry ──────────────────────────────────────────────────────
+
+/** Synthetic `InputCode`s for mouse buttons (keyboard codes come from the DOM). */
+export const MOUSE_CODES = {
+  LEFT: 'MouseLeft',
+  MIDDLE: 'MouseMiddle',
+  RIGHT: 'MouseRight',
+  BACK: 'MouseBack',
+  FORWARD: 'MouseForward'
+} as const
+
+/** `MouseEvent.button` index → `InputCode`. */
+const MOUSE_BUTTON_TO_CODE: Record<number, InputCode> = {
+  0: MOUSE_CODES.LEFT,
+  1: MOUSE_CODES.MIDDLE,
+  2: MOUSE_CODES.RIGHT,
+  3: MOUSE_CODES.BACK,
+  4: MOUSE_CODES.FORWARD
+}
+
+// ─── Default passthrough map: InputCode → ServerCode ───────────────────────
+// Grouped by input source. User rebindings mutate a copy of this at runtime.
+
+/** Every `InputCode` the model recognises, mapped to the `ServerCode` it emits. */
+export const CODE_MAP: Record<InputCode, ServerCode> = {}
+
+// Keyboard
 for (let i = 65; i <= 90; i++) {
   const letter = String.fromCharCode(i)
-  KEY_MAP[`Key${letter}`] = letter
+  CODE_MAP[`Key${letter}`] = letter
 }
 for (let i = 0; i <= 9; i++) {
-  KEY_MAP[`Digit${i}`] = `${i}`
+  CODE_MAP[`Digit${i}`] = `${i}`
 }
-KEY_MAP.ArrowUp = 'UP'
-KEY_MAP.ArrowDown = 'DOWN'
-KEY_MAP.ArrowLeft = 'LEFT'
-KEY_MAP.ArrowRight = 'RIGHT'
-KEY_MAP.ShiftLeft = 'SHIFT'
-KEY_MAP.ShiftRight = 'SHIFT'
-KEY_MAP.ControlLeft = 'CTRL'
-KEY_MAP.ControlRight = 'CTRL'
-KEY_MAP.AltLeft = 'ALT'
-KEY_MAP.AltRight = 'ALT'
-KEY_MAP.Space = 'SPACE'
-KEY_MAP.Tab = 'TAB'
-KEY_MAP.Enter = 'ENTER'
+Object.assign(CODE_MAP, {
+  ArrowUp: 'UP',
+  ArrowDown: 'DOWN',
+  ArrowLeft: 'LEFT',
+  ArrowRight: 'RIGHT',
+  ShiftLeft: 'SHIFT',
+  ShiftRight: 'SHIFT',
+  ControlLeft: 'CTRL',
+  ControlRight: 'CTRL',
+  AltLeft: 'ALT',
+  AltRight: 'ALT',
+  Space: 'SPACE',
+  Tab: 'TAB',
+  Enter: 'ENTER'
+} satisfies Record<InputCode, ServerCode>)
 
-const MOUSE_BUTTONS: Record<number, string> = {
-  0: 'MOUSE_LEFT',
-  1: 'MOUSE_MIDDLE',
-  2: 'MOUSE_RIGHT',
-  3: 'MOUSE_X1',
-  4: 'MOUSE_X2'
-}
+// Mouse
+Object.assign(CODE_MAP, {
+  [MOUSE_CODES.LEFT]: 'MOUSE_LEFT',
+  [MOUSE_CODES.MIDDLE]: 'MOUSE_MIDDLE',
+  [MOUSE_CODES.RIGHT]: 'MOUSE_RIGHT',
+  [MOUSE_CODES.BACK]: 'MOUSE_X1',
+  [MOUSE_CODES.FORWARD]: 'MOUSE_X2'
+} satisfies Record<InputCode, ServerCode>)
+
+// Gamepad: reserved for issue #76.
+
+/** Actions that emit no server code and instead invoke a callback when their binding is pressed. */
+const CALLBACK_ACTIONS = new Set<ControlBindKey>(['pauseMenu'])
 
 const isEditableTarget = (target: EventTarget | null) =>
   target instanceof HTMLInputElement ||
@@ -83,11 +143,11 @@ const isEditableTarget = (target: EventTarget | null) =>
   (target as HTMLElement)?.isContentEditable
 
 type UseGameInputResult = {
-  pressedKeys: Set<string>
-  mouseButtons: Set<string>
+  pressedKeys: Set<ServerCode>
+  mouseButtons: Set<ServerCode>
   mouseDelta: { dx: number; dy: number }
   isPointerLocked: boolean
-  getInputState: () => { buttons: string[]; mouseDx: number; mouseDy: number }
+  getInputState: () => { buttons: ServerCode[]; mouseDx: number; mouseDy: number }
 }
 
 export const useGameInput = (
@@ -95,27 +155,52 @@ export const useGameInput = (
   containerRef: RefObject<HTMLElement | null> | null = null,
   onReset: (() => void) | null = null,
   keybindings: Keybindings = DEFAULT_KEYBINDINGS,
-  onSceneEdit?: (() => void) | null
+  onSceneEdit?: (() => void) | null,
+  onPauseMenu?: (() => void) | null
 ): UseGameInputResult => {
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set())
-  const [mouseButtons, setMouseButtons] = useState<Set<string>>(new Set())
+  const [pressedKeys, setPressedKeys] = useState<Set<ServerCode>>(new Set())
+  const [mouseButtons, setMouseButtons] = useState<Set<ServerCode>>(new Set())
   const [mouseDelta] = useState({ dx: 0, dy: 0 })
   const [isPointerLocked, setIsPointerLocked] = useState(false)
 
   const mouseDeltaAccum = useRef({ dx: 0, dy: 0 })
   const scrollAccum = useRef(0)
 
-  const effectiveKeyMap = useMemo(() => {
-    const map = { ...KEY_MAP }
+  /** Effective `InputCode` → `ServerCode` map after applying user rebindings.
+   *  For each remappable action we: (a) remove its default input code from the
+   *  passthrough map (so the default no longer emits the canonical server code
+   *  after a rebind), and (b) bind the user-chosen input code to the action's
+   *  canonical server code. pauseMenu has no canonical server code and is
+   *  handled via callback, not through this map. */
+  const effectiveCodeMap = useMemo(() => {
+    const map = { ...CODE_MAP }
+
+    // Reset/scene-edit are callback keybindings; free their codes from passthroughs.
     delete map[keybindings.reset_scene]
     delete map[keybindings.scene_edit]
+
+    // Clear default codes for all remappable actions (semantics: user rebind replaces default).
+    for (const ctrl of CONTROLS) {
+      if (!ctrl.remappable || !ctrl.code) continue
+      delete map[ctrl.code]
+    }
+
+    // Bind user's chosen input code → canonical server code for each remappable action.
+    for (const ctrl of CONTROLS) {
+      if (!ctrl.remappable || !ctrl.code) continue
+      if (CALLBACK_ACTIONS.has(ctrl.labelKey as ControlBindKey)) continue
+      const serverCode = CODE_MAP[ctrl.code]
+      if (!serverCode) continue
+      const userCode = keybindings.controls[ctrl.labelKey as ControlBindKey]
+      if (!userCode) continue
+      map[userCode] = serverCode
+    }
+
     return map
-  }, [keybindings.reset_scene, keybindings.scene_edit])
+  }, [keybindings.reset_scene, keybindings.scene_edit, keybindings.controls])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.code === 'Escape') return
-
       // When game input is active, capture Ctrl/Alt as game buttons.
       // When inactive, allow system shortcuts (Ctrl+C, Ctrl+V, etc.) through.
       if (!enabled && (e.ctrlKey || e.metaKey)) return
@@ -133,58 +218,83 @@ export const useGameInput = (
         e.preventDefault()
         return
       }
+      if (e.code === keybindings.controls.pauseMenu) {
+        onPauseMenu?.()
+        // Don't preventDefault Escape — the browser still exits pointer lock natively,
+        // which is the expected path when pauseMenu is kept at its default.
+        if (e.code !== 'Escape') e.preventDefault()
+        return
+      }
+      if (e.code === 'Escape') return
       if (e.code === 'Tab' && e.altKey) return
 
-      const button = effectiveKeyMap[e.code]
-      if (button) {
+      const serverCode = effectiveCodeMap[e.code]
+      if (serverCode) {
         e.preventDefault()
-        setPressedKeys((prev) => new Set([...prev, button]))
+        setPressedKeys((prev) => new Set([...prev, serverCode]))
       }
     },
-    [enabled, onReset, onSceneEdit, keybindings.reset_scene, keybindings.scene_edit, effectiveKeyMap]
+    [
+      enabled,
+      onReset,
+      onSceneEdit,
+      onPauseMenu,
+      keybindings.reset_scene,
+      keybindings.scene_edit,
+      keybindings.controls.pauseMenu,
+      effectiveCodeMap
+    ]
   )
 
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
       if (!enabled) return
-      const button = effectiveKeyMap[e.code]
-      if (button) {
+      const serverCode = effectiveCodeMap[e.code]
+      if (serverCode) {
         e.preventDefault()
         setPressedKeys((prev) => {
           const next = new Set(prev)
-          next.delete(button)
+          next.delete(serverCode)
           return next
         })
       }
     },
-    [enabled, effectiveKeyMap]
+    [enabled, effectiveCodeMap]
   )
 
   const handleMouseDown = useCallback(
     (e: MouseEvent) => {
       if (!enabled) return
-      const button = MOUSE_BUTTONS[e.button]
-      if (button) {
-        setMouseButtons((prev) => new Set([...prev, button]))
+      const inputCode = MOUSE_BUTTON_TO_CODE[e.button]
+      if (!inputCode) return
+      if (inputCode === keybindings.controls.pauseMenu) {
+        onPauseMenu?.()
+        return
+      }
+      const serverCode = effectiveCodeMap[inputCode]
+      if (serverCode) {
+        setMouseButtons((prev) => new Set([...prev, serverCode]))
       }
     },
-    [enabled]
+    [enabled, onPauseMenu, keybindings.controls.pauseMenu, effectiveCodeMap]
   )
 
   const handleMouseUp = useCallback(
     (e: MouseEvent) => {
       if (!enabled) return
-      const button = MOUSE_BUTTONS[e.button]
-      if (button) {
+      const inputCode = MOUSE_BUTTON_TO_CODE[e.button]
+      if (!inputCode) return
+      const serverCode = effectiveCodeMap[inputCode]
+      if (serverCode) {
         setMouseButtons((prev) => {
           const next = new Set(prev)
-          next.delete(button)
+          next.delete(serverCode)
           return next
         })
       }
     },
-    [enabled]
+    [enabled, effectiveCodeMap]
   )
 
   const handleMouseMove = useCallback(

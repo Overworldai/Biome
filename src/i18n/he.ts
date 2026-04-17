@@ -194,7 +194,9 @@ const he = {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',
           resetScene: 'איפוס סצנה',
-          sceneEdit: 'עריכת סצנה'
+          sceneEdit: 'עריכת סצנה',
+          conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
+          conflictWithFixed: 'מתנגש עם שליטה קבועה: {{label}}'
         },
         fixedControls: {
           title: 'שליטה קבועה',

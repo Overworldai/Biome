@@ -200,7 +200,9 @@ const goose = {
           title: 'Beak bindings',
           description: 'which keys do you want to peck?',
           resetScene: 'Shake off',
-          sceneEdit: 'Pond edit'
+          sceneEdit: 'Pond edit',
+          conflictWithOther: 'This peck clashes with another peck',
+          conflictWithFixed: 'This peck clashes with built-in instinct: {{label}}'
         },
         fixedControls: {
           title: 'Built-in instincts',

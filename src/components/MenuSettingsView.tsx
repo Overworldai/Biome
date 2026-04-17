@@ -5,7 +5,14 @@ import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
+import {
+  ENGINE_MODES,
+  QUANT_OPTIONS,
+  type AppLocale,
+  type ControlBindKey,
+  type Keybindings,
+  type QuantOption
+} from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
@@ -15,9 +22,9 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
+import SettingsKeybind, { controlDisplay, controlLabel } from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
-import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
+import { CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
@@ -677,18 +684,46 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
+            {CONTROLS.filter((c) => c.remappable).map((ctrl) => {
+              const labelKey = ctrl.labelKey as ControlBindKey
+              const value = menuKeybindings.controls[labelKey]
+              const otherRemappedCodes = Object.entries(menuKeybindings.controls)
+                .filter(([k]) => k !== labelKey)
+                .map(([, v]) => v)
+              const otherCodes = [menuKeybindings.reset_scene, menuKeybindings.scene_edit, ...otherRemappedCodes]
+              return (
+                <KeybindRow
+                  key={ctrl.label}
+                  label={controlLabel(ctrl)}
+                  value={value}
+                  onChange={(code) =>
+                    setMenuKeybindings((prev) => ({
+                      ...prev,
+                      controls: { ...prev.controls, [labelKey]: code }
+                    }))
+                  }
+                  warning={getKeybindConflict(value, otherCodes)}
+                />
+              )
+            })}
             <KeybindRow
               label={t('app.settings.keybindings.resetScene')}
               value={menuKeybindings.reset_scene}
               onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
-              warning={getKeybindConflict(menuKeybindings.reset_scene, [menuKeybindings.scene_edit])}
+              warning={getKeybindConflict(menuKeybindings.reset_scene, [
+                menuKeybindings.scene_edit,
+                ...Object.values(menuKeybindings.controls)
+              ])}
             />
             {menuSceneEditEnabled && (
               <KeybindRow
                 label={t('app.settings.keybindings.sceneEdit')}
                 value={menuKeybindings.scene_edit}
                 onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, scene_edit: code }))}
-                warning={getKeybindConflict(menuKeybindings.scene_edit, [menuKeybindings.reset_scene])}
+                warning={getKeybindConflict(menuKeybindings.scene_edit, [
+                  menuKeybindings.reset_scene,
+                  ...Object.values(menuKeybindings.controls)
+                ])}
               />
             )}
           </SettingsSection>
@@ -697,8 +732,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             title="app.settings.fixedControls.title"
             description="app.settings.fixedControls.description"
           >
-            {FIXED_CONTROLS.map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
+            {CONTROLS.filter((c) => !c.remappable).map((ctrl) => (
+              <KeybindRow key={ctrl.label} label={controlLabel(ctrl)} fixedLabel={controlDisplay(ctrl)} />
             ))}
           </SettingsSection>
 
