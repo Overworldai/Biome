@@ -11,13 +11,39 @@ const KEYBOARD_LAYOUT = [
   ['Ctrl', 'Win', 'Alt', 'Space', 'Alt', 'Win', 'Ctrl']
 ]
 
-// Maps Biome's uppercase key names → keyboard layout labels
-const BIOME_TO_LAYOUT: Record<string, string> = {
-  SHIFT: 'Shift',
-  CTRL: 'Ctrl',
-  SPACE: 'Space',
-  ENTER: 'Enter',
-  TAB: 'Tab'
+/** Maps a keyboard-layout label to the set of `InputCode`s that should light it up
+ *  when pressed. Labels not listed here are resolved via the letter/digit/function-key
+ *  rules in `layoutLabelToInputCodes`. */
+const LAYOUT_LABEL_TO_INPUT_CODES: Record<string, readonly string[]> = {
+  Esc: ['Escape'],
+  Backspace: ['Backspace'],
+  Tab: ['Tab'],
+  Caps: ['CapsLock'],
+  Enter: ['Enter'],
+  Shift: ['ShiftLeft', 'ShiftRight'],
+  Ctrl: ['ControlLeft', 'ControlRight'],
+  Alt: ['AltLeft', 'AltRight'],
+  Win: ['MetaLeft', 'MetaRight'],
+  Space: ['Space'],
+  '`': ['Backquote'],
+  '-': ['Minus'],
+  '=': ['Equal'],
+  '[': ['BracketLeft'],
+  ']': ['BracketRight'],
+  '\\': ['Backslash'],
+  ';': ['Semicolon'],
+  "'": ['Quote'],
+  ',': ['Comma'],
+  '.': ['Period'],
+  '/': ['Slash']
+}
+
+const layoutLabelToInputCodes = (label: string): readonly string[] => {
+  if (label in LAYOUT_LABEL_TO_INPUT_CODES) return LAYOUT_LABEL_TO_INPUT_CODES[label]
+  if (/^[A-Z]$/.test(label)) return [`Key${label}`]
+  if (/^\d$/.test(label)) return [`Digit${label}`]
+  if (/^F\d+$/.test(label)) return [label] // F1..F12
+  return []
 }
 
 const KEY_PRESSED = 'bg-white text-black border-white scale-105'
@@ -49,13 +75,8 @@ type VirtualKeyboardProps = {
 }
 
 const VirtualKeyboard = ({ pressedKeys }: VirtualKeyboardProps) => {
-  const isKeyPressed = (layoutLabel: string): boolean => {
-    if (pressedKeys.has(layoutLabel)) return true
-    for (const [biomeKey, label] of Object.entries(BIOME_TO_LAYOUT)) {
-      if (label === layoutLabel && pressedKeys.has(biomeKey)) return true
-    }
-    return false
-  }
+  const isKeyPressed = (layoutLabel: string): boolean =>
+    layoutLabelToInputCodes(layoutLabel).some((code) => pressedKeys.has(code))
 
   return (
     <div
@@ -120,14 +141,14 @@ const VirtualMouse = ({ mouseButtons, mouseDelta, scrollActive }: VirtualMousePr
       {/* LMB / MMB / RMB row */}
       <div className="flex" style={{ gap: `${U * 0.11}cqh` }}>
         <div
-          className={`${KEY_BASE} ${isPressed('MOUSE_LEFT') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
+          className={`${KEY_BASE} ${isPressed('MouseLeft') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
           style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
         >
           LMB
         </div>
         <div className="relative">
           <div
-            className={`${KEY_BASE} ${isPressed('MOUSE_MIDDLE') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
+            className={`${KEY_BASE} ${isPressed('MouseMiddle') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
             style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
           >
             MMB
@@ -145,7 +166,7 @@ const VirtualMouse = ({ mouseButtons, mouseDelta, scrollActive }: VirtualMousePr
           )}
         </div>
         <div
-          className={`${KEY_BASE} ${isPressed('MOUSE_RIGHT') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
+          className={`${KEY_BASE} ${isPressed('MouseRight') ? KEY_PRESSED : KEY_UNPRESSED} rounded-t-[0.6cqh] rounded-b-none`}
           style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
         >
           RMB
@@ -154,8 +175,8 @@ const VirtualMouse = ({ mouseButtons, mouseDelta, scrollActive }: VirtualMousePr
 
       {/* X1 / X2 row */}
       <div className="flex" style={{ gap: `${U * 0.11}cqh` }}>
-        <Key label="X1" isPressed={isPressed('MOUSE_X1')} width={U * 1.2} />
-        <Key label="X2" isPressed={isPressed('MOUSE_X2')} width={U * 1.2} />
+        <Key label="X1" isPressed={isPressed('MouseBack')} width={U * 1.2} />
+        <Key label="X2" isPressed={isPressed('MouseForward')} width={U * 1.2} />
       </div>
     </div>
   )

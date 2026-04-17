@@ -71,7 +71,9 @@ export type StreamingContextValue = {
 
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
+  /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
   pressedKeys: Set<string>
+  /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */
   mouseButtons: Set<string>
   scrollActive: { up: boolean; down: boolean }
   isPointerLocked: boolean

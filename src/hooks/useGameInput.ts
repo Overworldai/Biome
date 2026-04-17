@@ -143,8 +143,10 @@ const isEditableTarget = (target: EventTarget | null) =>
   (target as HTMLElement)?.isContentEditable
 
 type UseGameInputResult = {
-  pressedKeys: Set<ServerCode>
-  mouseButtons: Set<ServerCode>
+  /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
+  pressedKeys: Set<InputCode>
+  /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */
+  mouseButtons: Set<InputCode>
   mouseDelta: { dx: number; dy: number }
   isPointerLocked: boolean
   getInputState: () => { buttons: ServerCode[]; mouseDx: number; mouseDy: number }
@@ -158,8 +160,8 @@ export const useGameInput = (
   onSceneEdit?: (() => void) | null,
   onPauseMenu?: (() => void) | null
 ): UseGameInputResult => {
-  const [pressedKeys, setPressedKeys] = useState<Set<ServerCode>>(new Set())
-  const [mouseButtons, setMouseButtons] = useState<Set<ServerCode>>(new Set())
+  const [pressedKeys, setPressedKeys] = useState<Set<InputCode>>(new Set())
+  const [mouseButtons, setMouseButtons] = useState<Set<InputCode>>(new Set())
   const [mouseDelta] = useState({ dx: 0, dy: 0 })
   const [isPointerLocked, setIsPointerLocked] = useState(false)
 
@@ -228,10 +230,10 @@ export const useGameInput = (
       if (e.code === 'Escape') return
       if (e.code === 'Tab' && e.altKey) return
 
-      const serverCode = effectiveCodeMap[e.code]
-      if (serverCode) {
+      // Store the physical InputCode; translation to ServerCode happens in getInputState.
+      if (effectiveCodeMap[e.code]) {
         e.preventDefault()
-        setPressedKeys((prev) => new Set([...prev, serverCode]))
+        setPressedKeys((prev) => new Set([...prev, e.code]))
       }
     },
     [
@@ -250,12 +252,11 @@ export const useGameInput = (
     (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
       if (!enabled) return
-      const serverCode = effectiveCodeMap[e.code]
-      if (serverCode) {
+      if (effectiveCodeMap[e.code]) {
         e.preventDefault()
         setPressedKeys((prev) => {
           const next = new Set(prev)
-          next.delete(serverCode)
+          next.delete(e.code)
           return next
         })
       }
@@ -272,9 +273,8 @@ export const useGameInput = (
         onPauseMenu?.()
         return
       }
-      const serverCode = effectiveCodeMap[inputCode]
-      if (serverCode) {
-        setMouseButtons((prev) => new Set([...prev, serverCode]))
+      if (effectiveCodeMap[inputCode]) {
+        setMouseButtons((prev) => new Set([...prev, inputCode]))
       }
     },
     [enabled, onPauseMenu, keybindings.controls.pauseMenu, effectiveCodeMap]
@@ -285,11 +285,10 @@ export const useGameInput = (
       if (!enabled) return
       const inputCode = MOUSE_BUTTON_TO_CODE[e.button]
       if (!inputCode) return
-      const serverCode = effectiveCodeMap[inputCode]
-      if (serverCode) {
+      if (effectiveCodeMap[inputCode]) {
         setMouseButtons((prev) => {
           const next = new Set(prev)
-          next.delete(serverCode)
+          next.delete(inputCode)
           return next
         })
       }
@@ -332,7 +331,16 @@ export const useGameInput = (
   }, [])
 
   const getInputState = useCallback(() => {
-    const buttons = [...pressedKeys, ...mouseButtons]
+    // Translate held InputCodes → ServerCodes for the server.
+    const buttons: ServerCode[] = []
+    for (const code of pressedKeys) {
+      const serverCode = effectiveCodeMap[code]
+      if (serverCode) buttons.push(serverCode)
+    }
+    for (const code of mouseButtons) {
+      const serverCode = effectiveCodeMap[code]
+      if (serverCode) buttons.push(serverCode)
+    }
     if (scrollAccum.current < 0) buttons.push('SCROLL_UP')
     else if (scrollAccum.current > 0) buttons.push('SCROLL_DOWN')
     scrollAccum.current = 0
@@ -340,7 +348,7 @@ export const useGameInput = (
     const dy = mouseDeltaAccum.current.dy
     mouseDeltaAccum.current = { dx: 0, dy: 0 }
     return { buttons, mouseDx: dx, mouseDy: dy }
-  }, [pressedKeys, mouseButtons])
+  }, [pressedKeys, mouseButtons, effectiveCodeMap])
 
   useEffect(() => {
     document.addEventListener('pointerlockchange', handlePointerLockChange)
