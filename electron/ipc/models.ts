@@ -160,6 +160,19 @@ async function getModelInfoFromServer(serverUrl: string, modelId: string): Promi
   }
 }
 
+function deleteCachedModel(repoId: string): void {
+  const hubDir = getHfHubCacheDir()
+  const modelDirName = `models--${repoId.replace('/', '--')}`
+  const modelDir = path.join(hubDir, modelDirName)
+
+  if (!fs.existsSync(modelDir)) return
+
+  // HF hub cache uses symlinks inside snapshots/ that point to ../blobs/.
+  // Removing the whole model directory (blobs + snapshots + refs) is safe
+  // because each model gets its own isolated directory.
+  fs.rmSync(modelDir, { recursive: true, force: true })
+}
+
 export function registerModelsIpc(): void {
   ipcMain.handle('list-waypoint-models', async () => {
     return listWaypointModels()
@@ -200,5 +213,9 @@ export function registerModelsIpc(): void {
         ? result.value
         : { id: deduped[i], size_bytes: null, exists: true, error: 'Fetch failed' }
     )
+  })
+
+  ipcMain.handle('delete-cached-model', (_event, modelId: string) => {
+    deleteCachedModel(modelId)
   })
 }
