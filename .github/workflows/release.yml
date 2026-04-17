@@ -24,15 +24,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Linux: same setup script used by the Docker build image.
+      - name: Set up build environment
+        if: runner.os == 'Linux'
+        run: sudo ./build/appimage/setup-build-env.sh
+
+      # Windows: no shared script yet; native setup.
       - name: Setup Node.js
+        if: runner.os == 'Windows'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install squashfs-tools (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y squashfs-tools
 
       - name: Install dependencies
         run: npm ci
