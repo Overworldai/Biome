@@ -197,6 +197,22 @@ const zh = {
           conflictWithFixed: '与固定操作冲突：{{label}}',
           resetToDefaults: '恢复默认'
         },
+        gamepad: {
+          title: '手柄',
+          description: '连接的手柄如何映射到游戏操作？（目前为固定）',
+          descriptionDisconnected: '连接手柄即可查看操作映射！',
+          labels: {
+            move: '移动',
+            look: '视角',
+            jump: '跳跃',
+            crouch: '蹲下',
+            interact: '交互',
+            sprint: '冲刺',
+            primaryFire: '主射击',
+            secondaryFire: '副射击',
+            pauseMenu: '暂停菜单'
+          }
+        },
         fixedControls: {
           title: '固定操作',
           description: '内置操作有哪些？',

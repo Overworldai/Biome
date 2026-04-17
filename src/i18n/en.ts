@@ -204,6 +204,22 @@ const en = {
           conflictWithFixed: 'Conflicts with fixed control: {{label}}',
           resetToDefaults: 'Reset to Defaults'
         },
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how does a connected gamepad map to game actions? (fixed for now)',
+          descriptionDisconnected: 'connect a gamepad to see the control scheme!',
+          labels: {
+            move: 'Move',
+            look: 'Look',
+            jump: 'Jump',
+            crouch: 'Crouch',
+            interact: 'Interact',
+            sprint: 'Sprint',
+            primaryFire: 'Primary Fire',
+            secondaryFire: 'Secondary Fire',
+            pauseMenu: 'Pause Menu'
+          }
+        },
         fixedControls: {
           title: 'Fixed Controls',
           description: 'what are the built-in controls?',

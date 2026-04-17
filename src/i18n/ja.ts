@@ -203,6 +203,22 @@ const ja = {
           conflictWithFixed: '固定コントロール「{{label}}」と重複しています',
           resetToDefaults: 'デフォルトに戻す'
         },
+        gamepad: {
+          title: 'ゲームパッド',
+          description: '接続されたゲームパッドはどのアクションに対応しますか？（現在は固定）',
+          descriptionDisconnected: 'ゲームパッドを接続すると操作一覧が表示されます！',
+          labels: {
+            move: '移動',
+            look: '視点',
+            jump: 'ジャンプ',
+            crouch: 'しゃがむ',
+            interact: '操作',
+            sprint: 'ダッシュ',
+            primaryFire: 'メイン射撃',
+            secondaryFire: 'サブ射撃',
+            pauseMenu: 'ポーズメニュー'
+          }
+        },
         fixedControls: {
           title: '固定コントロール',
           description: '組み込みの操作は何ですか？',

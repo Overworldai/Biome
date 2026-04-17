@@ -205,6 +205,22 @@ const goose = {
           conflictWithFixed: 'This peck clashes with built-in instinct: {{label}}',
           resetToDefaults: 'Back to nesting defaults'
         },
+        gamepad: {
+          title: 'Wing controller',
+          description: 'how does a controller map to goose actions?',
+          descriptionDisconnected: 'bring a controller within honking distance!',
+          labels: {
+            move: 'Waddle',
+            look: 'Crane neck',
+            jump: 'Flap',
+            crouch: 'Crouch',
+            interact: 'Peck',
+            sprint: 'Charge',
+            primaryFire: 'Honk',
+            secondaryFire: 'Hiss',
+            pauseMenu: 'Tuck head under wing'
+          }
+        },
         fixedControls: {
           title: 'Built-in instincts',
           description: 'what can a goose do?',

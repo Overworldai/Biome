@@ -75,6 +75,8 @@ export type StreamingContextValue = {
   pressedKeys: Set<string>
   /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */
   mouseButtons: Set<string>
+  /** Gamepad `InputCode`s currently held down (e.g. `'GamepadA'`, `'GamepadLeftStickUp'`). */
+  pressedGamepad: Set<string>
   scrollActive: { up: boolean; down: boolean }
   isPointerLocked: boolean
   pointerLockBlockedSeq: number

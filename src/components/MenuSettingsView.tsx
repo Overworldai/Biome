@@ -25,7 +25,7 @@ import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
 import SettingsKeybind, { controlDisplay, controlLabel } from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
-import { CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
+import { CONTROLS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
@@ -37,6 +37,21 @@ import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
+
+/** Gamepad control scheme — fixed mapping for display in settings (issue #76).
+ *  Action labels are resolved via `app.settings.gamepad.labels.*`. Button labels
+ *  are the hardware names shown verbatim. */
+const GAMEPAD_SCHEME: readonly { labelKey: string; button: string }[] = [
+  { labelKey: 'move', button: 'Left Stick' },
+  { labelKey: 'look', button: 'Right Stick' },
+  { labelKey: 'jump', button: 'A' },
+  { labelKey: 'crouch', button: 'B' },
+  { labelKey: 'interact', button: 'X' },
+  { labelKey: 'sprint', button: 'L3' },
+  { labelKey: 'secondaryFire', button: 'LT' },
+  { labelKey: 'primaryFire', button: 'RT' },
+  { labelKey: 'pauseMenu', button: 'Start' }
+]
 
 const hasCustomKeybindings = (kb: Keybindings): boolean => {
   if (kb.reset_scene !== DEFAULT_KEYBINDINGS.reset_scene) return true
@@ -82,6 +97,7 @@ type MenuSettingsViewProps = {
 const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
+  const gamepadConnected = useGamepadConnected()
   const {
     engineStatus,
     checkEngineStatus,
@@ -749,6 +765,22 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 />
               </div>
             )}
+          </SettingsSection>
+
+          <SettingsSection
+            title="app.settings.gamepad.title"
+            description={
+              gamepadConnected ? 'app.settings.gamepad.description' : 'app.settings.gamepad.descriptionDisconnected'
+            }
+          >
+            {gamepadConnected &&
+              GAMEPAD_SCHEME.map((entry) => (
+                <KeybindRow
+                  key={entry.labelKey}
+                  label={t(`app.settings.gamepad.labels.${entry.labelKey}`, { defaultValue: entry.labelKey })}
+                  fixedLabel={entry.button}
+                />
+              ))}
           </SettingsSection>
 
           <SettingsSection
