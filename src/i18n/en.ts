@@ -206,11 +206,27 @@ const en = {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
           resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          sceneEdit: 'Scene Edit',
+          conflictWithOther: 'Conflicts with another keybinding',
+          resetToDefaults: 'Reset to Defaults'
         },
-        fixedControls: {
-          title: 'Fixed Controls',
-          description: 'what are the built-in controls?',
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how does a connected gamepad map to game actions? (fixed for now)',
+          descriptionDisconnected: 'connect a gamepad to see the control scheme!',
+          labels: {
+            move: 'Move',
+            look: 'Look',
+            jump: 'Jump',
+            crouch: 'Crouch',
+            interact: 'Interact',
+            sprint: 'Sprint',
+            primaryFire: 'Primary Fire',
+            secondaryFire: 'Secondary Fire',
+            pauseMenu: 'Pause Menu'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Move Forward',
             moveLeft: 'Move Left',
@@ -218,16 +234,10 @@ const en = {
             moveRight: 'Move Right',
             jump: 'Jump',
             sprint: 'Sprint',
-            look: 'Look',
             interact: 'Interact',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
             pauseMenu: 'Pause Menu'
-          },
-          values: {
-            mouse: 'Mouse',
-            leftClick: 'Left Click',
-            rightClick: 'Right Click'
           }
         },
         experimental: {

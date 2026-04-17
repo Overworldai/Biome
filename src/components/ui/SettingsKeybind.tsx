@@ -1,13 +1,31 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
-import type { FixedControl } from '../../hooks/useGameInput'
+import { type Control, MOUSE_CODES } from '../../hooks/useGameInput'
+import type { DisplayLabel, InputCode } from '../../types/input'
 import i18n from '../../i18n'
 
-export const keyCodeToLabel = (code: string): string => {
+const MOUSE_CODE_LABELS: Record<InputCode, DisplayLabel> = {
+  [MOUSE_CODES.LEFT]: 'Left Click',
+  [MOUSE_CODES.MIDDLE]: 'Middle Click',
+  [MOUSE_CODES.RIGHT]: 'Right Click',
+  [MOUSE_CODES.BACK]: 'Mouse Back',
+  [MOUSE_CODES.FORWARD]: 'Mouse Forward'
+}
+
+const MOUSE_BUTTON_TO_CODE: Record<number, InputCode> = {
+  0: MOUSE_CODES.LEFT,
+  1: MOUSE_CODES.MIDDLE,
+  2: MOUSE_CODES.RIGHT,
+  3: MOUSE_CODES.BACK,
+  4: MOUSE_CODES.FORWARD
+}
+
+export const keyCodeToLabel = (code: InputCode): DisplayLabel => {
+  if (code in MOUSE_CODE_LABELS) return MOUSE_CODE_LABELS[code]
   if (code.startsWith('Key')) return code.slice(3)
   if (code.startsWith('Digit')) return code.slice(5)
-  const map: Record<string, string> = {
+  const map: Record<InputCode, DisplayLabel> = {
     Backquote: '`',
     Minus: '-',
     Equal: '=',
@@ -22,6 +40,7 @@ export const keyCodeToLabel = (code: string): string => {
     Space: 'Space',
     Tab: 'Tab',
     Enter: 'Enter',
+    Escape: 'Esc',
     ArrowUp: 'Up',
     ArrowDown: 'Down',
     ArrowLeft: 'Left',
@@ -37,8 +56,8 @@ export const keyCodeToLabel = (code: string): string => {
 }
 
 type SettingsKeybindProps = {
-  value: string
-  onChange?: (code: string) => void
+  value: InputCode
+  onChange?: (code: InputCode) => void
   disabled?: boolean
 }
 
@@ -66,6 +85,9 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
       e.stopPropagation()
 
       if (e.code === 'Escape') {
+        // Cancel listening (user hit Esc to abort). If they want to *bind* Esc,
+        // they can click the button again and... there's no way to bind Esc via
+        // keyboard without this abort. Acceptable: Esc is reserved for cancel.
         setListening(false)
         return
       }
@@ -74,8 +96,23 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
       setListening(false)
     }
 
+    const handleMouseDown = (e: MouseEvent) => {
+      const code = MOUSE_BUTTON_TO_CODE[e.button]
+      if (!code) return
+      // Ignore left-click on the button itself (that's how the user entered listening).
+      if (e.button === 0 && e.target === buttonRef.current) return
+      e.preventDefault()
+      e.stopPropagation()
+      onChange?.(code)
+      setListening(false)
+    }
+
     window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('mousedown', handleMouseDown, true)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('mousedown', handleMouseDown, true)
+    }
   }, [listening, onChange])
 
   return (
@@ -93,15 +130,8 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
   )
 }
 
-export const fixedControlLabel = (ctrl: FixedControl): string => {
-  return i18n.t(`app.settings.fixedControls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
-}
-
-/** Human-readable display string for a fixed control entry. */
-export const fixedControlDisplay = (ctrl: FixedControl): string => {
-  const displayValue = ctrl.displayValue ?? keyCodeToLabel(ctrl.code)
-  if (!ctrl.displayValueKey) return displayValue
-  return i18n.t(`app.settings.fixedControls.values.${ctrl.displayValueKey}`, { defaultValue: displayValue })
+export const controlLabel = (ctrl: Control): string => {
+  return i18n.t(`app.settings.controls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
 }
 
 export default SettingsKeybind

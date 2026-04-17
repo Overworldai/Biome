@@ -10,9 +10,12 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
+import { useSettings } from '../hooks/useSettings'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { requestPointerLock, reset, wsRequest } = useStreaming()
+  const { settings } = useSettings()
+  const pauseMenuCode = settings.keybindings.controls.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)
@@ -45,7 +48,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Escape is always a safety-escape; the user's configured pauseMenu key also re-locks.
+      if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
       if (view === PAUSE_VIEW.SCENES) {
@@ -57,7 +61,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, requestPointerLock])
+  }, [isActive, view, requestPointerLock, pauseMenuCode])
 
   const handleResetAndResume = () => {
     reset()

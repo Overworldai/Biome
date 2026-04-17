@@ -335,12 +335,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     dispatchSceneEdit({ type: 'OPEN' })
   }, [exitPointerLock])
 
-  const { pressedKeys, mouseButtons, getInputState, isPointerLocked } = useGameInput(
+  const { pressedKeys, mouseButtons, pressedGamepad, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
     containerRef,
     handleReset,
     settings.keybindings,
-    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null
+    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null,
+    exitPointerLock
   )
 
   useEffect(() => {
@@ -819,6 +820,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Input state
     pressedKeys,
     mouseButtons,
+    pressedGamepad,
     scrollActive,
     isPointerLocked,
     pointerLockBlockedSeq,

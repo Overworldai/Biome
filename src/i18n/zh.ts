@@ -198,11 +198,27 @@ const zh = {
           title: '按键绑定',
           description: '你想使用哪些按键？',
           resetScene: '重置场景',
-          sceneEdit: '场景编辑'
+          sceneEdit: '场景编辑',
+          conflictWithOther: '与另一个按键绑定冲突',
+          resetToDefaults: '恢复默认'
         },
-        fixedControls: {
-          title: '固定操作',
-          description: '内置操作有哪些？',
+        gamepad: {
+          title: '手柄',
+          description: '连接的手柄如何映射到游戏操作？（目前为固定）',
+          descriptionDisconnected: '连接手柄即可查看操作映射！',
+          labels: {
+            move: '移动',
+            look: '视角',
+            jump: '跳跃',
+            crouch: '蹲下',
+            interact: '交互',
+            sprint: '冲刺',
+            primaryFire: '主射击',
+            secondaryFire: '副射击',
+            pauseMenu: '暂停菜单'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前进',
             moveLeft: '向左移动',
@@ -210,16 +226,10 @@ const zh = {
             moveRight: '向右移动',
             jump: '跳跃',
             sprint: '冲刺',
-            look: '视角移动',
             interact: '交互',
             primaryFire: '主射击',
             secondaryFire: '副射击',
             pauseMenu: '暂停菜单'
-          },
-          values: {
-            mouse: '鼠标',
-            leftClick: '左键单击',
-            rightClick: '右键单击'
           }
         },
         experimental: {

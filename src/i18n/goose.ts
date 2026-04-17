@@ -207,11 +207,27 @@ const goose = {
           title: 'Beak bindings',
           description: 'which keys do you want to peck?',
           resetScene: 'Shake off',
-          sceneEdit: 'Pond edit'
+          sceneEdit: 'Pond edit',
+          conflictWithOther: 'This peck clashes with another peck',
+          resetToDefaults: 'Back to nesting defaults'
         },
-        fixedControls: {
-          title: 'Built-in instincts',
-          description: 'what can a goose do?',
+        gamepad: {
+          title: 'Wing controller',
+          description: 'how does a controller map to goose actions?',
+          descriptionDisconnected: 'bring a controller within honking distance!',
+          labels: {
+            move: 'Waddle',
+            look: 'Crane neck',
+            jump: 'Flap',
+            crouch: 'Crouch',
+            interact: 'Peck',
+            sprint: 'Charge',
+            primaryFire: 'Honk',
+            secondaryFire: 'Hiss',
+            pauseMenu: 'Tuck head under wing'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Waddle forward',
             moveLeft: 'Waddle left',
@@ -219,16 +235,10 @@ const goose = {
             moveRight: 'Waddle right',
             jump: 'Flap',
             sprint: 'Charge',
-            look: 'Crane neck',
             interact: 'Peck',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
             pauseMenu: 'Tuck head under wing'
-          },
-          values: {
-            mouse: 'Neck',
-            leftClick: 'Left peck',
-            rightClick: 'Right peck'
           }
         },
         experimental: {

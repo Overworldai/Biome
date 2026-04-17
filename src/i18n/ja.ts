@@ -205,11 +205,27 @@ const ja = {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
           resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集'
+          sceneEdit: 'シーン編集',
+          conflictWithOther: '別のキー設定と重複しています',
+          resetToDefaults: 'デフォルトに戻す'
         },
-        fixedControls: {
-          title: '固定コントロール',
-          description: '組み込みの操作は何ですか？',
+        gamepad: {
+          title: 'ゲームパッド',
+          description: '接続されたゲームパッドはどのアクションに対応しますか？（現在は固定）',
+          descriptionDisconnected: 'ゲームパッドを接続すると操作一覧が表示されます！',
+          labels: {
+            move: '移動',
+            look: '視点',
+            jump: 'ジャンプ',
+            crouch: 'しゃがむ',
+            interact: '操作',
+            sprint: 'ダッシュ',
+            primaryFire: 'メイン射撃',
+            secondaryFire: 'サブ射撃',
+            pauseMenu: 'ポーズメニュー'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前進',
             moveLeft: '左移動',
@@ -217,16 +233,10 @@ const ja = {
             moveRight: '右移動',
             jump: 'ジャンプ',
             sprint: 'ダッシュ',
-            look: '視点移動',
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
             pauseMenu: 'ポーズメニュー'
-          },
-          values: {
-            mouse: 'マウス',
-            leftClick: '左クリック',
-            rightClick: '右クリック'
           }
         },
         experimental: {

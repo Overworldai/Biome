@@ -201,11 +201,27 @@ const he = {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',
           resetScene: 'איפוס סצנה',
-          sceneEdit: 'עריכת סצנה'
+          sceneEdit: 'עריכת סצנה',
+          conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
+          resetToDefaults: 'אפס לברירת מחדל'
         },
-        fixedControls: {
-          title: 'שליטה קבועה',
-          description: 'מהם המקשים המובנים?',
+        gamepad: {
+          title: 'גיימפד',
+          description: 'איך גיימפד מחובר ממופה לפעולות במשחק? (קבוע לעת עתה)',
+          descriptionDisconnected: 'חבר גיימפד כדי לראות את מיפוי הבקרות!',
+          labels: {
+            move: 'תנועה',
+            look: 'מבט',
+            jump: 'קפיצה',
+            crouch: 'כפיפה',
+            interact: 'אינטראקציה',
+            sprint: 'ספרינט',
+            primaryFire: 'ירי ראשי',
+            secondaryFire: 'ירי משני',
+            pauseMenu: 'תפריט עצירה'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'התקדמות',
             moveLeft: 'תנועה שמאלה',
@@ -213,16 +229,10 @@ const he = {
             moveRight: 'תנועה ימינה',
             jump: 'קפיצה',
             sprint: 'ספרינט',
-            look: 'מבט',
             interact: 'אינטראקציה',
             primaryFire: 'ירי ראשי',
             secondaryFire: 'ירי משני',
             pauseMenu: 'תפריט עצירה'
-          },
-          values: {
-            mouse: 'עכבר',
-            leftClick: 'לחיצה שמאלית',
-            rightClick: 'לחיצה ימנית'
           }
         },
         experimental: {
