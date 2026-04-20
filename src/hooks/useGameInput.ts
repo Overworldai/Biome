@@ -190,10 +190,12 @@ Object.assign(CODE_MAP, {
   [GAMEPAD_CODES.RT]: 'MOUSE_LEFT', // shoot / primary fire
   [GAMEPAD_CODES.L3]: 'SHIFT', // sprint (click left stick)
   [GAMEPAD_CODES.R3]: 'CTRL', // crouch (click right stick, CoD-style)
-  [GAMEPAD_CODES.DPAD_UP]: 'UP',
-  [GAMEPAD_CODES.DPAD_DOWN]: 'DOWN',
-  [GAMEPAD_CODES.DPAD_LEFT]: 'LEFT',
-  [GAMEPAD_CODES.DPAD_RIGHT]: 'RIGHT',
+  // D-pad mirrors the left stick's WASD mapping — tapping dpad ↑ is
+  // equivalent to flicking the left stick up.
+  [GAMEPAD_CODES.DPAD_UP]: 'W',
+  [GAMEPAD_CODES.DPAD_DOWN]: 'S',
+  [GAMEPAD_CODES.DPAD_LEFT]: 'A',
+  [GAMEPAD_CODES.DPAD_RIGHT]: 'D',
   [GAMEPAD_CODES.LEFT_STICK_UP]: 'W',
   [GAMEPAD_CODES.LEFT_STICK_DOWN]: 'S',
   [GAMEPAD_CODES.LEFT_STICK_LEFT]: 'A',
