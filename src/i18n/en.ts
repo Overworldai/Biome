@@ -133,6 +133,13 @@ const en = {
       settings: {
         title: 'Settings',
         subtitle: 'Tweak your world to your liking.',
+        tabs: {
+          general: 'General',
+          engine: 'Engine',
+          keyboard: 'Keyboard',
+          gamepad: 'Gamepad',
+          debug: 'Debug'
+        },
         language: {
           title: 'Language',
           description: 'which language should Biome use?',
@@ -203,7 +210,7 @@ const en = {
           sensitivity: 'sensitivity'
         },
         gamepadSensitivity: {
-          title: 'Gamepad Sensitivity',
+          title: 'Look Sensitivity',
           description: 'how much should the camera move when you move the right stick?',
           sensitivity: 'sensitivity'
         },
@@ -256,7 +263,7 @@ const en = {
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
         debugMetrics: {
-          title: 'Debug Metrics',
+          title: 'Metrics',
           description: "want to see what's happening under the hood?",
           performanceStats: 'Performance Stats',
           performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',

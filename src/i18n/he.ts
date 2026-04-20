@@ -128,6 +128,13 @@ const he = {
       settings: {
         title: 'הגדרות',
         subtitle: 'התאם את העולם שלך בדיוק כמו שאתה אוהב.',
+        tabs: {
+          general: 'כללי',
+          engine: 'מנוע',
+          keyboard: 'מקלדת',
+          gamepad: 'גיימפד',
+          debug: 'דיבוג'
+        },
         language: {
           title: 'שפה',
           description: 'באיזו שפה Biome צריך להשתמש?',
@@ -198,7 +205,7 @@ const he = {
           sensitivity: 'רגישות'
         },
         gamepadSensitivity: {
-          title: 'רגישות גיימפד',
+          title: 'רגישות מבט',
           description: 'כמה המצלמה צריכה לזוז כשאתה מזיז את הסטיק הימני?',
           sensitivity: 'רגישות'
         },
@@ -251,7 +258,7 @@ const he = {
             'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
         },
         debugMetrics: {
-          title: 'מדדי דיבוג',
+          title: 'מדדים',
           description: 'רוצה לראות מה קורה מאחורי הקלעים?',
           performanceStats: 'סטטיסטיקות ביצועים',
           performanceStatsDescription: 'הצג FPS, זמן פריים, שימוש ב-GPU, VRAM וגרפי השהיה.',

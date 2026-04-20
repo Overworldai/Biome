@@ -126,6 +126,13 @@ const zh = {
       settings: {
         title: '设置',
         subtitle: '按你的喜好调整这个世界。',
+        tabs: {
+          general: '常规',
+          engine: '引擎',
+          keyboard: '键盘',
+          gamepad: '手柄',
+          debug: '调试'
+        },
         language: {
           title: '语言',
           description: 'Biome 应该使用哪种语言？',
@@ -195,7 +202,7 @@ const zh = {
           sensitivity: '灵敏度'
         },
         gamepadSensitivity: {
-          title: '手柄灵敏度',
+          title: '视角灵敏度',
           description: '移动右摇杆时，镜头应该移动多少？',
           sensitivity: '灵敏度'
         },
@@ -247,7 +254,7 @@ const zh = {
           sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
         },
         debugMetrics: {
-          title: '调试指标',
+          title: '指标',
           description: '想看看底层正在发生什么吗？',
           performanceStats: '性能统计',
           performanceStatsDescription: '显示FPS、帧时间、GPU使用率、显存和延迟的迷你图。',

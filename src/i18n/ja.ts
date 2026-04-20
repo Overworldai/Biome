@@ -132,6 +132,13 @@ const ja = {
       settings: {
         title: '設定',
         subtitle: '世界を好みに合わせて調整します。',
+        tabs: {
+          general: '一般',
+          engine: 'エンジン',
+          keyboard: 'キーボード',
+          gamepad: 'ゲームパッド',
+          debug: 'デバッグ'
+        },
         language: {
           title: '言語',
           description: 'Biome で使用する言語はどれですか？',
@@ -202,7 +209,7 @@ const ja = {
           sensitivity: '感度'
         },
         gamepadSensitivity: {
-          title: 'ゲームパッド感度',
+          title: '視点感度',
           description: '右スティックの移動に対してカメラをどれだけ動かしますか？',
           sensitivity: '感度'
         },
@@ -255,7 +262,7 @@ const ja = {
             'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
         },
         debugMetrics: {
-          title: 'デバッグメトリクス',
+          title: 'メトリクス',
           description: '内部で何が起きているか見ますか？',
           performanceStats: '性能統計',
           performanceStatsDescription: 'FPS、フレーム時間、GPU使用率、VRAM、レイテンシのスパークラインを表示します。',

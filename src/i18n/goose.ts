@@ -134,6 +134,13 @@ const goose = {
       settings: {
         title: 'Settings',
         subtitle: 'Tweak your world to your liking.',
+        tabs: {
+          general: 'General',
+          engine: 'Engine',
+          keyboard: 'Peck',
+          gamepad: 'Gamepad',
+          debug: 'Debug'
+        },
         language: {
           title: 'Language',
           description: 'which language should Biome speak?',
@@ -204,7 +211,7 @@ const goose = {
           sensitivity: 'sensitivity'
         },
         gamepadSensitivity: {
-          title: 'Gamepad Sensitivity',
+          title: 'Look Sensitivity',
           description: 'how quick should the goose swivel when you honk the stick?',
           sensitivity: 'sensitivity'
         },
@@ -257,7 +264,7 @@ const goose = {
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
         debugMetrics: {
-          title: 'Debug Metrics',
+          title: 'Metrics',
           description: 'want to see what the goose is thinking?',
           performanceStats: 'Performance Stats',
           performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',
