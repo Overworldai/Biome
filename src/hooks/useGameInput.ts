@@ -37,7 +37,7 @@ export const GAME_ACTIONS: readonly GameAction[] = [
   { id: 'move', gamepad: { button: 'Left Stick' } },
   { id: 'look', gamepad: { button: 'Right Stick' } },
   { id: 'jump', keyboard: { bindKey: 'jump', defaultCode: 'Space' }, gamepad: { button: 'A' } },
-  { id: 'crouch', keyboard: { bindKey: 'crouch', defaultCode: 'ControlLeft' }, gamepad: { button: 'B' } },
+  { id: 'crouch', keyboard: { bindKey: 'crouch', defaultCode: 'ControlLeft' }, gamepad: { button: 'R3' } },
   { id: 'sprint', keyboard: { bindKey: 'sprint', defaultCode: 'ShiftLeft' }, gamepad: { button: 'L3' } },
   { id: 'interact', keyboard: { bindKey: 'interact', defaultCode: 'KeyE' }, gamepad: { button: 'X' } },
   { id: 'primaryFire', keyboard: { bindKey: 'primaryFire', defaultCode: 'MouseLeft' }, gamepad: { button: 'RT' } },
@@ -185,11 +185,11 @@ Object.assign(CODE_MAP, {
 // Gamepad (fixed mapping per issue #76 — no user remapping for the initial release)
 Object.assign(CODE_MAP, {
   [GAMEPAD_CODES.A]: 'SPACE', // jump
-  [GAMEPAD_CODES.B]: 'CTRL', // crouch
   [GAMEPAD_CODES.X]: 'E', // interact
   [GAMEPAD_CODES.LT]: 'MOUSE_RIGHT', // zoom / secondary fire
   [GAMEPAD_CODES.RT]: 'MOUSE_LEFT', // shoot / primary fire
   [GAMEPAD_CODES.L3]: 'SHIFT', // sprint (click left stick)
+  [GAMEPAD_CODES.R3]: 'CTRL', // crouch (click right stick, CoD-style)
   [GAMEPAD_CODES.DPAD_UP]: 'UP',
   [GAMEPAD_CODES.DPAD_DOWN]: 'DOWN',
   [GAMEPAD_CODES.DPAD_LEFT]: 'LEFT',
@@ -198,7 +198,6 @@ Object.assign(CODE_MAP, {
   [GAMEPAD_CODES.LEFT_STICK_DOWN]: 'S',
   [GAMEPAD_CODES.LEFT_STICK_LEFT]: 'A',
   [GAMEPAD_CODES.LEFT_STICK_RIGHT]: 'D'
-  // Y / LB / RB / Back / R3: intentionally unmapped.
 } satisfies Record<InputCode, ServerCode>)
 
 /** Actions that emit no server code and instead invoke a callback when their binding is pressed. */
