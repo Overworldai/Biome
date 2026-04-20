@@ -23,9 +23,9 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { controlLabel } from './ui/SettingsKeybind'
+import SettingsKeybind from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
-import { CONTROLS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
+import { GAME_ACTIONS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
 import type { InputCode } from '../types/input'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
@@ -39,28 +39,9 @@ const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
 
-/** Gamepad control scheme — fixed mapping for display in settings (issue #76).
- *  Action labels are resolved via `app.settings.gamepad.labels.*`. Button labels
- *  are the hardware names shown verbatim. */
-const GAMEPAD_SCHEME: readonly { labelKey: string; button: string; sceneEditOnly?: boolean }[] = [
-  { labelKey: 'move', button: 'Left Stick' },
-  { labelKey: 'look', button: 'Right Stick' },
-  { labelKey: 'jump', button: 'A' },
-  { labelKey: 'crouch', button: 'B' },
-  { labelKey: 'interact', button: 'X' },
-  { labelKey: 'sceneEdit', button: 'Y', sceneEditOnly: true },
-  { labelKey: 'sprint', button: 'L3' },
-  { labelKey: 'secondaryFire', button: 'LT' },
-  { labelKey: 'primaryFire', button: 'RT' },
-  { labelKey: 'resetScene', button: 'Back' },
-  { labelKey: 'pauseMenu', button: 'Start' }
-]
-
 const hasCustomKeybindings = (kb: Keybindings): boolean => {
-  if (kb.reset_scene !== DEFAULT_KEYBINDINGS.reset_scene) return true
-  if (kb.scene_edit !== DEFAULT_KEYBINDINGS.scene_edit) return true
-  for (const key of Object.keys(DEFAULT_KEYBINDINGS.controls) as ControlBindKey[]) {
-    if (kb.controls[key] !== DEFAULT_KEYBINDINGS.controls[key]) return true
+  for (const key of Object.keys(DEFAULT_KEYBINDINGS) as ControlBindKey[]) {
+    if (kb[key] !== DEFAULT_KEYBINDINGS[key]) return true
   }
   return false
 }
@@ -742,47 +723,23 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
-            {CONTROLS.map((ctrl) => {
-              const labelKey = ctrl.labelKey as ControlBindKey
-              const value = menuKeybindings.controls[labelKey]
-              const otherRemappedCodes = Object.entries(menuKeybindings.controls)
-                .filter(([k]) => k !== labelKey)
-                .map(([, v]) => v)
-              const otherCodes = [menuKeybindings.reset_scene, menuKeybindings.scene_edit, ...otherRemappedCodes]
-              return (
-                <KeybindRow
-                  key={ctrl.label}
-                  label={controlLabel(ctrl)}
-                  value={value}
-                  onChange={(code) =>
-                    setMenuKeybindings((prev) => ({
-                      ...prev,
-                      controls: { ...prev.controls, [labelKey]: code }
-                    }))
-                  }
-                  warning={getKeybindConflict(value, otherCodes)}
-                />
-              )
-            })}
-            <KeybindRow
-              label={t('app.settings.keybindings.resetScene')}
-              value={menuKeybindings.reset_scene}
-              onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
-              warning={getKeybindConflict(menuKeybindings.reset_scene, [
-                menuKeybindings.scene_edit,
-                ...Object.values(menuKeybindings.controls)
-              ])}
-            />
-            {menuSceneEditEnabled && (
-              <KeybindRow
-                label={t('app.settings.keybindings.sceneEdit')}
-                value={menuKeybindings.scene_edit}
-                onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, scene_edit: code }))}
-                warning={getKeybindConflict(menuKeybindings.scene_edit, [
-                  menuKeybindings.reset_scene,
-                  ...Object.values(menuKeybindings.controls)
-                ])}
-              />
+            {GAME_ACTIONS.filter((a) => a.keyboard !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
+              (action) => {
+                const bindKey = action.keyboard!.bindKey
+                const value = menuKeybindings[bindKey]
+                const otherCodes = Object.entries(menuKeybindings)
+                  .filter(([k]) => k !== bindKey)
+                  .map(([, v]) => v)
+                return (
+                  <KeybindRow
+                    key={action.id}
+                    label={t(`app.settings.controls.labels.${action.id}`, { defaultValue: action.id })}
+                    value={value}
+                    onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, [bindKey]: code }))}
+                    warning={getKeybindConflict(value, otherCodes)}
+                  />
+                )
+              }
             )}
             {hasCustomKeybindings(menuKeybindings) && (
               <div className="flex justify-end mt-[0.8cqh]">
@@ -791,9 +748,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                   autoShrinkLabel
                   label="app.settings.keybindings.resetToDefaults"
                   className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
-                  onClick={() =>
-                    setMenuKeybindings({ ...DEFAULT_KEYBINDINGS, controls: { ...DEFAULT_KEYBINDINGS.controls } })
-                  }
+                  onClick={() => setMenuKeybindings({ ...DEFAULT_KEYBINDINGS })}
                 />
               </div>
             )}
@@ -806,13 +761,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             }
           >
             {gamepadConnected &&
-              GAMEPAD_SCHEME.filter((entry) => !entry.sceneEditOnly || menuSceneEditEnabled).map((entry) => (
-                <KeybindRow
-                  key={entry.labelKey}
-                  label={t(`app.settings.gamepad.labels.${entry.labelKey}`, { defaultValue: entry.labelKey })}
-                  fixedLabel={entry.button}
-                />
-              ))}
+              GAME_ACTIONS.filter((a) => a.gamepad !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
+                (action) => (
+                  <KeybindRow
+                    key={action.id}
+                    label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
+                    fixedLabel={action.gamepad!.button}
+                  />
+                )
+              )}
           </SettingsSection>
 
           <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">

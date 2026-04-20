@@ -197,8 +197,6 @@ const zh = {
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',
-          resetScene: '重置场景',
-          sceneEdit: '场景编辑',
           conflictWithOther: '与另一个按键绑定冲突',
           resetToDefaults: '恢复默认'
         },
@@ -232,7 +230,9 @@ const zh = {
             interact: '交互',
             primaryFire: '主射击',
             secondaryFire: '副射击',
-            pauseMenu: '暂停菜单'
+            pauseMenu: '暂停菜单',
+            resetScene: '重置场景',
+            sceneEdit: '场景编辑'
           }
         },
         experimental: {

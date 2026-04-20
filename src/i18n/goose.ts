@@ -206,8 +206,6 @@ const goose = {
         keybindings: {
           title: 'Keybindings',
           description: 'which keys do you want to peck?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit',
           conflictWithOther: 'Conflicts with another peck',
           resetToDefaults: 'Reset to Defaults'
         },
@@ -241,7 +239,9 @@ const goose = {
             interact: 'Peck',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
-            pauseMenu: 'Pause Menu'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Fresh Pond',
+            sceneEdit: 'Scene Edit'
           }
         },
         experimental: {

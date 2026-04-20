@@ -205,8 +205,6 @@ const en = {
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit',
           conflictWithOther: 'Conflicts with another keybinding',
           resetToDefaults: 'Reset to Defaults'
         },
@@ -240,7 +238,9 @@ const en = {
             interact: 'Interact',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
-            pauseMenu: 'Pause Menu'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Reset Scene',
+            sceneEdit: 'Scene Edit'
           }
         },
         experimental: {

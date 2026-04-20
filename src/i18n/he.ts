@@ -200,8 +200,6 @@ const he = {
         keybindings: {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',
-          resetScene: 'איפוס סצנה',
-          sceneEdit: 'עריכת סצנה',
           conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
           resetToDefaults: 'אפס לברירת מחדל'
         },
@@ -235,7 +233,9 @@ const he = {
             interact: 'אינטראקציה',
             primaryFire: 'ירי ראשי',
             secondaryFire: 'ירי משני',
-            pauseMenu: 'תפריט עצירה'
+            pauseMenu: 'תפריט עצירה',
+            resetScene: 'איפוס סצנה',
+            sceneEdit: 'עריכת סצנה'
           }
         },
         experimental: {

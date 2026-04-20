@@ -27,7 +27,7 @@ export const DEFAULT_PINNED_SCENES = [
   'sunken_city_depths.jpg'
 ]
 
-export const DEFAULT_CONTROL_BINDS = {
+export const DEFAULT_KEYBINDINGS = {
   moveForward: 'KeyW',
   moveLeft: 'KeyA',
   moveBack: 'KeyS',
@@ -38,16 +38,12 @@ export const DEFAULT_CONTROL_BINDS = {
   interact: 'KeyE',
   primaryFire: 'MouseLeft',
   secondaryFire: 'MouseRight',
-  pauseMenu: 'Escape'
+  pauseMenu: 'Escape',
+  resetScene: 'KeyU',
+  sceneEdit: 'KeyQ'
 } as const
 
-export type ControlBindKey = keyof typeof DEFAULT_CONTROL_BINDS
-
-export const DEFAULT_KEYBINDINGS = {
-  reset_scene: 'KeyU',
-  scene_edit: 'KeyQ',
-  controls: DEFAULT_CONTROL_BINDS
-} as const
+export type ControlBindKey = keyof typeof DEFAULT_KEYBINDINGS
 
 export const DEFAULT_AUDIO = {
   master_volume: 1.0,
@@ -67,23 +63,19 @@ export const settingsSchema = z.object({
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
   keybindings: z
     .object({
-      reset_scene: z.string().default('KeyU'),
-      scene_edit: z.string().default('KeyQ'),
-      controls: z
-        .object({
-          moveForward: z.string().default(DEFAULT_CONTROL_BINDS.moveForward),
-          moveLeft: z.string().default(DEFAULT_CONTROL_BINDS.moveLeft),
-          moveBack: z.string().default(DEFAULT_CONTROL_BINDS.moveBack),
-          moveRight: z.string().default(DEFAULT_CONTROL_BINDS.moveRight),
-          jump: z.string().default(DEFAULT_CONTROL_BINDS.jump),
-          crouch: z.string().default(DEFAULT_CONTROL_BINDS.crouch),
-          sprint: z.string().default(DEFAULT_CONTROL_BINDS.sprint),
-          interact: z.string().default(DEFAULT_CONTROL_BINDS.interact),
-          primaryFire: z.string().default(DEFAULT_CONTROL_BINDS.primaryFire),
-          secondaryFire: z.string().default(DEFAULT_CONTROL_BINDS.secondaryFire),
-          pauseMenu: z.string().default(DEFAULT_CONTROL_BINDS.pauseMenu)
-        })
-        .default(DEFAULT_CONTROL_BINDS)
+      moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),
+      moveLeft: z.string().default(DEFAULT_KEYBINDINGS.moveLeft),
+      moveBack: z.string().default(DEFAULT_KEYBINDINGS.moveBack),
+      moveRight: z.string().default(DEFAULT_KEYBINDINGS.moveRight),
+      jump: z.string().default(DEFAULT_KEYBINDINGS.jump),
+      crouch: z.string().default(DEFAULT_KEYBINDINGS.crouch),
+      sprint: z.string().default(DEFAULT_KEYBINDINGS.sprint),
+      interact: z.string().default(DEFAULT_KEYBINDINGS.interact),
+      primaryFire: z.string().default(DEFAULT_KEYBINDINGS.primaryFire),
+      secondaryFire: z.string().default(DEFAULT_KEYBINDINGS.secondaryFire),
+      pauseMenu: z.string().default(DEFAULT_KEYBINDINGS.pauseMenu),
+      resetScene: z.string().default(DEFAULT_KEYBINDINGS.resetScene),
+      sceneEdit: z.string().default(DEFAULT_KEYBINDINGS.sceneEdit)
     })
     .default(DEFAULT_KEYBINDINGS),
   audio: z

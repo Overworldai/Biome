@@ -204,8 +204,6 @@ const ja = {
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集',
           conflictWithOther: '別のキー設定と重複しています',
           resetToDefaults: 'デフォルトに戻す'
         },
@@ -239,7 +237,9 @@ const ja = {
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
-            pauseMenu: 'ポーズメニュー'
+            pauseMenu: 'ポーズメニュー',
+            resetScene: 'シーンをリセット',
+            sceneEdit: 'シーン編集'
           }
         },
         experimental: {

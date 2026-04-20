@@ -1,9 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
-import { type Control, MOUSE_CODES } from '../../hooks/useGameInput'
+import { MOUSE_CODES } from '../../hooks/useGameInput'
 import type { DisplayLabel, InputCode } from '../../types/input'
-import i18n from '../../i18n'
 
 const MOUSE_CODE_LABELS: Record<InputCode, DisplayLabel> = {
   [MOUSE_CODES.LEFT]: 'Left Click',
@@ -128,10 +127,6 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
       {listening ? 'Press a key...' : keyCodeToLabel(value)}
     </button>
   )
-}
-
-export const controlLabel = (ctrl: Control): string => {
-  return i18n.t(`app.settings.controls.labels.${ctrl.labelKey}`, { defaultValue: ctrl.label })
 }
 
 export default SettingsKeybind

@@ -15,7 +15,7 @@ import { useSettings } from '../hooks/useSettings'
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { requestPointerLock, reset, wsRequest } = useStreaming()
   const { settings } = useSettings()
-  const pauseMenuCode = settings.keybindings.controls.pauseMenu
+  const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)

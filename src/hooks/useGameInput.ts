@@ -5,28 +5,60 @@ import i18n from '../i18n'
 
 // ─── Control definitions (rebindable actions + display-only entries) ─────────
 
-/** A remappable game control. `code` is the default input binding the user sees
- *  out-of-the-box; the live binding is looked up in user `keybindings.controls`.
- *  `label` is the stable internal identifier; `labelKey` is the i18n key. */
+/** A remappable game control, used internally by `useGameInput` to build the
+ *  InputCode → ServerCode passthrough map. `labelKey` doubles as the stable id
+ *  and the i18n key under `app.settings.controls.labels.*`. */
 export type Control = {
-  label: string
-  labelKey: string
+  labelKey: ControlBindKey
   code: InputCode
 }
 
-export const CONTROLS: readonly Control[] = [
-  { label: 'Move Forward', labelKey: 'moveForward', code: 'KeyW' },
-  { label: 'Move Left', labelKey: 'moveLeft', code: 'KeyA' },
-  { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS' },
-  { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD' },
-  { label: 'Jump', labelKey: 'jump', code: 'Space' },
-  { label: 'Crouch', labelKey: 'crouch', code: 'ControlLeft' },
-  { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft' },
-  { label: 'Interact', labelKey: 'interact', code: 'KeyE' },
-  { label: 'Primary Fire', labelKey: 'primaryFire', code: 'MouseLeft' },
-  { label: 'Secondary Fire', labelKey: 'secondaryFire', code: 'MouseRight' },
-  { label: 'Pause Menu', labelKey: 'pauseMenu', code: 'Escape' }
+/** Single source of truth for the ordered list of user-facing actions. The
+ *  keybindings and gamepad settings sections both render in this order (each
+ *  filtering by `keyboard` / `gamepad` presence), so reordering here moves
+ *  the rows in both sections in lockstep. */
+export type GameAction = {
+  /** Stable id; also the i18n label key within each section's namespace. */
+  id: string
+  /** Keyboard binding — present when the action appears in the keybindings
+   *  section. `bindKey` indexes into `keybindings`. */
+  keyboard?: { bindKey: ControlBindKey; defaultCode: InputCode }
+  /** Fixed gamepad binding (hardware button label shown verbatim). */
+  gamepad?: { button: string }
+  /** Only rendered when the experimental scene-edit flag is enabled. */
+  experimental?: boolean
+}
+
+export const GAME_ACTIONS: readonly GameAction[] = [
+  { id: 'moveForward', keyboard: { bindKey: 'moveForward', defaultCode: 'KeyW' } },
+  { id: 'moveLeft', keyboard: { bindKey: 'moveLeft', defaultCode: 'KeyA' } },
+  { id: 'moveBack', keyboard: { bindKey: 'moveBack', defaultCode: 'KeyS' } },
+  { id: 'moveRight', keyboard: { bindKey: 'moveRight', defaultCode: 'KeyD' } },
+  { id: 'move', gamepad: { button: 'Left Stick' } },
+  { id: 'look', gamepad: { button: 'Right Stick' } },
+  { id: 'jump', keyboard: { bindKey: 'jump', defaultCode: 'Space' }, gamepad: { button: 'A' } },
+  { id: 'crouch', keyboard: { bindKey: 'crouch', defaultCode: 'ControlLeft' }, gamepad: { button: 'B' } },
+  { id: 'sprint', keyboard: { bindKey: 'sprint', defaultCode: 'ShiftLeft' }, gamepad: { button: 'L3' } },
+  { id: 'interact', keyboard: { bindKey: 'interact', defaultCode: 'KeyE' }, gamepad: { button: 'X' } },
+  { id: 'primaryFire', keyboard: { bindKey: 'primaryFire', defaultCode: 'MouseLeft' }, gamepad: { button: 'RT' } },
+  {
+    id: 'secondaryFire',
+    keyboard: { bindKey: 'secondaryFire', defaultCode: 'MouseRight' },
+    gamepad: { button: 'LT' }
+  },
+  { id: 'pauseMenu', keyboard: { bindKey: 'pauseMenu', defaultCode: 'Escape' }, gamepad: { button: 'Start' } },
+  { id: 'resetScene', keyboard: { bindKey: 'resetScene', defaultCode: 'KeyU' }, gamepad: { button: 'Back' } },
+  {
+    id: 'sceneEdit',
+    keyboard: { bindKey: 'sceneEdit', defaultCode: 'KeyQ' },
+    gamepad: { button: 'Y' },
+    experimental: true
+  }
 ]
+
+export const CONTROLS: readonly Control[] = GAME_ACTIONS.flatMap((a) =>
+  a.keyboard ? [{ labelKey: a.keyboard.bindKey, code: a.keyboard.defaultCode }] : []
+)
 
 /** Returns a localized warning if `code` conflicts with any code in `otherCodes`. */
 export const getKeybindConflict = (code: InputCode, otherCodes: InputCode[]): string | null => {
@@ -170,7 +202,7 @@ Object.assign(CODE_MAP, {
 } satisfies Record<InputCode, ServerCode>)
 
 /** Actions that emit no server code and instead invoke a callback when their binding is pressed. */
-const CALLBACK_ACTIONS = new Set<ControlBindKey>(['pauseMenu'])
+const CALLBACK_ACTIONS = new Set<ControlBindKey>(['pauseMenu', 'resetScene', 'sceneEdit'])
 
 const isEditableTarget = (target: EventTarget | null) =>
   target instanceof HTMLInputElement ||
@@ -237,14 +269,11 @@ export const useGameInput = (
    *  For each remappable action we: (a) remove its default input code from the
    *  passthrough map (so the default no longer emits the canonical server code
    *  after a rebind), and (b) bind the user-chosen input code to the action's
-   *  canonical server code. pauseMenu has no canonical server code and is
-   *  handled via callback, not through this map. */
+   *  canonical server code. Callback actions (pauseMenu, resetScene, sceneEdit)
+   *  have no canonical server code and are handled via callback, not through
+   *  this map. */
   const effectiveCodeMap = useMemo(() => {
     const map = { ...CODE_MAP }
-
-    // Reset/scene-edit are callback keybindings; free their codes from passthroughs.
-    delete map[keybindings.reset_scene]
-    delete map[keybindings.scene_edit]
 
     // Clear default codes for all actions (semantics: user rebind replaces default).
     for (const ctrl of CONTROLS) {
@@ -253,16 +282,16 @@ export const useGameInput = (
 
     // Bind user's chosen input code → canonical server code for each action.
     for (const ctrl of CONTROLS) {
-      if (CALLBACK_ACTIONS.has(ctrl.labelKey as ControlBindKey)) continue
+      if (CALLBACK_ACTIONS.has(ctrl.labelKey)) continue
       const serverCode = CODE_MAP[ctrl.code]
       if (!serverCode) continue
-      const userCode = keybindings.controls[ctrl.labelKey as ControlBindKey]
+      const userCode = keybindings[ctrl.labelKey]
       if (!userCode) continue
       map[userCode] = serverCode
     }
 
     return map
-  }, [keybindings.reset_scene, keybindings.scene_edit, keybindings.controls])
+  }, [keybindings])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -273,18 +302,16 @@ export const useGameInput = (
       if (e.metaKey) return
       if (isEditableTarget(e.target)) return
 
-      if (e.code === keybindings.reset_scene) {
-        onReset?.()
-        e.preventDefault()
-        return
-      }
-      if (e.code === keybindings.scene_edit) {
-        onSceneEdit?.()
-        e.preventDefault()
-        return
-      }
-      if (e.code === keybindings.controls.pauseMenu) {
-        onPauseMenu?.()
+      // Callback keybindings — route to their handler instead of emitting a server code.
+      // Ordered same as before the flat-schema refactor: reset / sceneEdit / pauseMenu.
+      const callbackHandlers: Array<[ControlBindKey, (() => void) | null | undefined]> = [
+        ['resetScene', onReset],
+        ['sceneEdit', onSceneEdit],
+        ['pauseMenu', onPauseMenu]
+      ]
+      for (const [bindKey, handler] of callbackHandlers) {
+        if (e.code !== keybindings[bindKey]) continue
+        handler?.()
         // Don't preventDefault Escape — the browser still exits pointer lock natively,
         // which is the expected path when pauseMenu is kept at its default.
         if (e.code !== 'Escape') e.preventDefault()
@@ -304,9 +331,9 @@ export const useGameInput = (
       onReset,
       onSceneEdit,
       onPauseMenu,
-      keybindings.reset_scene,
-      keybindings.scene_edit,
-      keybindings.controls.pauseMenu,
+      keybindings.resetScene,
+      keybindings.sceneEdit,
+      keybindings.pauseMenu,
       effectiveCodeMap
     ]
   )
@@ -332,7 +359,7 @@ export const useGameInput = (
       if (!enabled) return
       const inputCode = MOUSE_BUTTON_TO_CODE[e.button]
       if (!inputCode) return
-      if (inputCode === keybindings.controls.pauseMenu) {
+      if (inputCode === keybindings.pauseMenu) {
         onPauseMenu?.()
         return
       }
@@ -340,7 +367,7 @@ export const useGameInput = (
         setMouseButtons((prev) => new Set([...prev, inputCode]))
       }
     },
-    [enabled, onPauseMenu, keybindings.controls.pauseMenu, effectiveCodeMap]
+    [enabled, onPauseMenu, keybindings.pauseMenu, effectiveCodeMap]
   )
 
   const handleMouseUp = useCallback(
