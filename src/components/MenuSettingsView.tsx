@@ -569,11 +569,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       autoFocus
       className="absolute inset-0 z-[9] pointer-events-auto"
     >
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
+      <section className="absolute top-[var(--edge-top-xl)] bottom-[var(--edge-bottom)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
         <div
-          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
+          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] flex-1 min-h-0 mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
         >
           <SettingsSection title="app.settings.engineMode.title" description="app.settings.engineMode.description">
             <SettingsToggle
