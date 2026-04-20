@@ -214,7 +214,7 @@ const goose = {
         gamepad: {
           title: 'Gamepad',
           description: 'how does a connected gamepad map to goose actions? (fixed for now)',
-          descriptionDisconnected: 'bring a gamepad within honking distance!',
+          descriptionDisconnected: 'bring a gamepad within honking distance, then honk a button to wake it up!',
           labels: {
             move: 'Waddle',
             look: 'Look',

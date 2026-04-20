@@ -213,7 +213,7 @@ const en = {
         gamepad: {
           title: 'Gamepad',
           description: 'how does a connected gamepad map to game actions? (fixed for now)',
-          descriptionDisconnected: 'connect a gamepad to see the control scheme!',
+          descriptionDisconnected: 'connect a gamepad and press any button on it to see the control scheme!',
           labels: {
             move: 'Move',
             look: 'Look',

@@ -208,7 +208,7 @@ const he = {
         gamepad: {
           title: 'גיימפד',
           description: 'איך גיימפד מחובר ממופה לפעולות במשחק? (קבוע לעת עתה)',
-          descriptionDisconnected: 'חבר גיימפד כדי לראות את מיפוי הבקרות!',
+          descriptionDisconnected: 'חבר גיימפד ולחץ על כפתור כלשהו כדי לראות את מיפוי הבקרות!',
           labels: {
             move: 'תנועה',
             look: 'מבט',

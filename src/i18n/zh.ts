@@ -205,7 +205,7 @@ const zh = {
         gamepad: {
           title: '手柄',
           description: '连接的手柄如何映射到游戏操作？（目前为固定）',
-          descriptionDisconnected: '连接手柄即可查看操作映射！',
+          descriptionDisconnected: '连接手柄并按下任意按钮即可查看操作映射！',
           labels: {
             move: '移动',
             look: '视角',
