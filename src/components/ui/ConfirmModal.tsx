@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../../i18n'
 import Modal from './Modal'
 import Button from './Button'
@@ -7,6 +7,7 @@ type ConfirmModalProps = {
   title: TranslationKey
   description: TranslationKey
   descriptionParams?: Record<string, unknown>
+  descriptionComponents?: Record<string, React.ReactElement>
   onConfirm: () => void
   onCancel: () => void
   confirmLabel: TranslationKey
@@ -19,6 +20,7 @@ const ConfirmModal = ({
   title,
   description,
   descriptionParams,
+  descriptionComponents,
   onConfirm,
   onCancel,
   confirmLabel,
@@ -29,7 +31,11 @@ const ConfirmModal = ({
   return (
     <Modal title={title}>
       <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] whitespace-pre-line">
-        {t(description, descriptionParams)}
+        {descriptionComponents ? (
+          <Trans i18nKey={description} values={descriptionParams} components={descriptionComponents} />
+        ) : (
+          t(description, descriptionParams)
+        )}
       </p>
       <div className="flex flex-wrap justify-end mt-[1.4cqh] gap-[1.42cqh]">
         <Button variant="secondary" autoShrinkLabel label={cancelLabel} className={MODAL_BUTTON} onClick={onCancel} />
