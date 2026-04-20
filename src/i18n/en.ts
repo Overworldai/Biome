@@ -220,9 +220,11 @@ const en = {
             jump: 'Jump',
             crouch: 'Crouch',
             interact: 'Interact',
+            sceneEdit: 'Scene Edit',
             sprint: 'Sprint',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
+            resetScene: 'Reset Scene',
             pauseMenu: 'Pause Menu'
           }
         },
@@ -233,6 +235,7 @@ const en = {
             moveBack: 'Move Back',
             moveRight: 'Move Right',
             jump: 'Jump',
+            crouch: 'Crouch',
             sprint: 'Sprint',
             interact: 'Interact',
             primaryFire: 'Primary Fire',

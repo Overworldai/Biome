@@ -212,9 +212,11 @@ const zh = {
             jump: '跳跃',
             crouch: '蹲下',
             interact: '交互',
+            sceneEdit: '场景编辑',
             sprint: '冲刺',
             primaryFire: '主射击',
             secondaryFire: '副射击',
+            resetScene: '重置场景',
             pauseMenu: '暂停菜单'
           }
         },
@@ -225,6 +227,7 @@ const zh = {
             moveBack: '后退',
             moveRight: '向右移动',
             jump: '跳跃',
+            crouch: '蹲下',
             sprint: '冲刺',
             interact: '交互',
             primaryFire: '主射击',

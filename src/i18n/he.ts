@@ -215,9 +215,11 @@ const he = {
             jump: 'קפיצה',
             crouch: 'כפיפה',
             interact: 'אינטראקציה',
+            sceneEdit: 'עריכת סצנה',
             sprint: 'ספרינט',
             primaryFire: 'ירי ראשי',
             secondaryFire: 'ירי משני',
+            resetScene: 'איפוס סצנה',
             pauseMenu: 'תפריט עצירה'
           }
         },
@@ -228,6 +230,7 @@ const he = {
             moveBack: 'תנועה אחורה',
             moveRight: 'תנועה ימינה',
             jump: 'קפיצה',
+            crouch: 'כפיפה',
             sprint: 'ספרינט',
             interact: 'אינטראקציה',
             primaryFire: 'ירי ראשי',

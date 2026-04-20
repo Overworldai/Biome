@@ -42,15 +42,17 @@ const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8
 /** Gamepad control scheme — fixed mapping for display in settings (issue #76).
  *  Action labels are resolved via `app.settings.gamepad.labels.*`. Button labels
  *  are the hardware names shown verbatim. */
-const GAMEPAD_SCHEME: readonly { labelKey: string; button: string }[] = [
+const GAMEPAD_SCHEME: readonly { labelKey: string; button: string; sceneEditOnly?: boolean }[] = [
   { labelKey: 'move', button: 'Left Stick' },
   { labelKey: 'look', button: 'Right Stick' },
   { labelKey: 'jump', button: 'A' },
   { labelKey: 'crouch', button: 'B' },
   { labelKey: 'interact', button: 'X' },
+  { labelKey: 'sceneEdit', button: 'Y', sceneEditOnly: true },
   { labelKey: 'sprint', button: 'L3' },
   { labelKey: 'secondaryFire', button: 'LT' },
   { labelKey: 'primaryFire', button: 'RT' },
+  { labelKey: 'resetScene', button: 'Back' },
   { labelKey: 'pauseMenu', button: 'Start' }
 ]
 
@@ -804,7 +806,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             }
           >
             {gamepadConnected &&
-              GAMEPAD_SCHEME.map((entry) => (
+              GAMEPAD_SCHEME.filter((entry) => !entry.sceneEditOnly || menuSceneEditEnabled).map((entry) => (
                 <KeybindRow
                   key={entry.labelKey}
                   label={t(`app.settings.gamepad.labels.${entry.labelKey}`, { defaultValue: entry.labelKey })}

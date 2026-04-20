@@ -20,6 +20,7 @@ export const CONTROLS: readonly Control[] = [
   { label: 'Move Back', labelKey: 'moveBack', code: 'KeyS' },
   { label: 'Move Right', labelKey: 'moveRight', code: 'KeyD' },
   { label: 'Jump', labelKey: 'jump', code: 'Space' },
+  { label: 'Crouch', labelKey: 'crouch', code: 'ControlLeft' },
   { label: 'Sprint', labelKey: 'sprint', code: 'ShiftLeft' },
   { label: 'Interact', labelKey: 'interact', code: 'KeyE' },
   { label: 'Primary Fire', labelKey: 'primaryFire', code: 'MouseLeft' },
@@ -470,6 +471,8 @@ export const useGameInput = (
 
     let rafId = 0
     let prevStartDown = false
+    let prevBackDown = false
+    let prevYDown = false
     let prevSet: Set<InputCode> = new Set()
 
     const sameMembership = (a: Set<InputCode>, b: Set<InputCode>): boolean => {
@@ -482,14 +485,26 @@ export const useGameInput = (
       const gamepads = navigator.getGamepads()
       const nextSet = new Set<InputCode>()
       let startDown = false
+      let backDown = false
+      let yDown = false
 
       for (const gp of gamepads) {
         if (!gp) continue
 
         for (let i = 0; i < gp.buttons.length; i++) {
           if (!gp.buttons[i].pressed) continue
+          // Start/Back/Y are one-shot callbacks, not held inputs. Skip adding
+          // them to the pressed set so they don't flood `pressedGamepad`.
           if (i === 9) {
-            startDown = true // Start is a callback, not a held button.
+            startDown = true
+            continue
+          }
+          if (i === 8) {
+            backDown = true
+            continue
+          }
+          if (i === 3) {
+            yDown = true
             continue
           }
           const code = GAMEPAD_BUTTON_TO_CODE[i]
@@ -516,7 +531,11 @@ export const useGameInput = (
       }
 
       if (startDown && !prevStartDown) onPauseMenu?.()
+      if (backDown && !prevBackDown) onReset?.()
+      if (yDown && !prevYDown) onSceneEdit?.()
       prevStartDown = startDown
+      prevBackDown = backDown
+      prevYDown = yDown
 
       if (!sameMembership(nextSet, prevSet)) {
         prevSet = nextSet
@@ -530,7 +549,7 @@ export const useGameInput = (
     return () => {
       cancelAnimationFrame(rafId)
     }
-  }, [enabled, onPauseMenu])
+  }, [enabled, onPauseMenu, onReset, onSceneEdit])
 
   return {
     pressedKeys,

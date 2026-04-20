@@ -219,9 +219,11 @@ const ja = {
             jump: 'ジャンプ',
             crouch: 'しゃがむ',
             interact: '操作',
+            sceneEdit: 'シーン編集',
             sprint: 'ダッシュ',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
+            resetScene: 'シーンをリセット',
             pauseMenu: 'ポーズメニュー'
           }
         },
@@ -232,6 +234,7 @@ const ja = {
             moveBack: '後退',
             moveRight: '右移動',
             jump: 'ジャンプ',
+            crouch: 'しゃがむ',
             sprint: 'ダッシュ',
             interact: '操作',
             primaryFire: 'メイン射撃',

@@ -221,9 +221,11 @@ const goose = {
             jump: 'Flap',
             crouch: 'Crouch',
             interact: 'Peck',
+            sceneEdit: 'Scene Edit',
             sprint: 'Charge',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
+            resetScene: 'Fresh Pond',
             pauseMenu: 'Pause Menu'
           }
         },
@@ -234,6 +236,7 @@ const goose = {
             moveBack: 'Waddle Back',
             moveRight: 'Waddle Right',
             jump: 'Flap',
+            crouch: 'Crouch',
             sprint: 'Charge',
             interact: 'Peck',
             primaryFire: 'Honk',
