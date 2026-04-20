@@ -206,7 +206,7 @@ const goose = {
         keybindings: {
           title: 'Keybindings',
           description: 'which keys do you want to peck?',
-          conflictWithOther: 'Conflicts with another peck',
+          conflictWith: 'Already pecked by <key>"{{other}}"</key>',
           resetToDefaults: 'Reset to Defaults'
         },
         gamepad: {

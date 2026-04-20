@@ -200,7 +200,7 @@ const he = {
         keybindings: {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',
-          conflictWithOther: 'מתנגש עם הגדרת מקש אחרת',
+          conflictWith: 'מתנגש עם <key>"{{other}}"</key>',
           resetToDefaults: 'אפס לברירת מחדל'
         },
         gamepad: {

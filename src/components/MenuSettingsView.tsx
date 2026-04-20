@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
@@ -62,18 +62,19 @@ type KeybindRowProps =
       label: string
       value: InputCode
       onChange: (code: InputCode) => void
-      warning?: string | null
+      warning?: ReactNode
       fixedLabel?: never
     }
   | { label: string; fixedLabel: string; value?: never; onChange?: never; warning?: never }
 
 const KeybindRow = (props: KeybindRowProps) => {
+  const hasError = props.fixedLabel === undefined && !!props.warning
   return (
-    <SettingsRow label={props.label} hint={props.warning}>
+    <SettingsRow label={props.label} hint={props.warning} hintError={hasError}>
       {props.fixedLabel !== undefined ? (
         <SettingsKeybind value={props.fixedLabel} disabled />
       ) : (
-        <SettingsKeybind value={props.value} onChange={props.onChange} />
+        <SettingsKeybind value={props.value} onChange={props.onChange} hasError={hasError} />
       )}
     </SettingsRow>
   )
@@ -457,6 +458,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     await applyDraftSettings()
     onBack()
   }, [
+    hasKeybindConflict,
     menuEngineMode,
     menuServerUrl,
     serverUrlStatus,
@@ -740,24 +742,33 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
-            {GAME_ACTIONS.filter((a) => a.keyboard !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
-              (action) => {
-                const bindKey = action.keyboard!.bindKey
-                const value = menuKeybindings[bindKey]
-                const otherCodes = Object.entries(menuKeybindings)
-                  .filter(([k]) => k !== bindKey)
-                  .map(([, v]) => v)
-                return (
-                  <KeybindRow
-                    key={action.id}
-                    label={t(`app.settings.controls.labels.${action.id}`, { defaultValue: action.id })}
-                    value={value}
-                    onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, [bindKey]: code }))}
-                    warning={getKeybindConflict(value, otherCodes)}
-                  />
-                )
-              }
-            )}
+            {visibleKeybindActions.map((action) => {
+              const bindKey = action.keyboard!.bindKey
+              const value = menuKeybindings[bindKey]
+              const others = visibleKeybindActions
+                .filter((other) => other.keyboard!.bindKey !== bindKey)
+                .map((other) => ({
+                  code: menuKeybindings[other.keyboard!.bindKey],
+                  label: t(`app.settings.controls.labels.${other.id}`, { defaultValue: other.id })
+                }))
+              const conflict = getKeybindConflict(value, others)
+              const warning = conflict ? (
+                <Trans
+                  i18nKey="app.settings.keybindings.conflictWith"
+                  values={{ other: conflict.otherLabel }}
+                  components={{ key: <span className="font-bold text-[var(--color-error-bright)]" /> }}
+                />
+              ) : null
+              return (
+                <KeybindRow
+                  key={action.id}
+                  label={t(`app.settings.controls.labels.${action.id}`, { defaultValue: action.id })}
+                  value={value}
+                  onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, [bindKey]: code }))}
+                  warning={warning}
+                />
+              )
+            })}
             {hasCustomKeybindings(menuKeybindings) && (
               <div className="flex justify-end mt-[0.8cqh]">
                 <Button

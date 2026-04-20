@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type RefObject } from 'react'
 import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings } from '../types/settings'
 import type { InputCode, ServerCode } from '../types/input'
-import i18n from '../i18n'
 
 // ─── Control definitions (rebindable actions + display-only entries) ─────────
 
@@ -60,14 +59,15 @@ export const CONTROLS: readonly Control[] = GAME_ACTIONS.flatMap((a) =>
   a.keyboard ? [{ labelKey: a.keyboard.bindKey, code: a.keyboard.defaultCode }] : []
 )
 
-/** Returns a localized warning if `code` conflicts with any code in `otherCodes`. */
-export const getKeybindConflict = (code: InputCode, otherCodes: InputCode[]): string | null => {
-  if (otherCodes.includes(code)) {
-    return i18n.t('app.settings.keybindings.conflictWithOther', {
-      defaultValue: 'Conflicts with another keybinding'
-    })
-  }
-  return null
+/** Returns data about the first conflicting binding (or null). The caller is
+ *  responsible for rendering the localized message — typically via `<Trans>`
+ *  so the other-action label can be highlighted inline. */
+export const getKeybindConflict = (
+  code: InputCode,
+  others: readonly { code: InputCode; label: string }[]
+): { otherLabel: string } | null => {
+  const conflict = others.find((o) => o.code === code)
+  return conflict ? { otherLabel: conflict.label } : null
 }
 
 // ─── InputCode registry ──────────────────────────────────────────────────────

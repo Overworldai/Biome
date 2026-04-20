@@ -204,7 +204,7 @@ const ja = {
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          conflictWithOther: '別のキー設定と重複しています',
+          conflictWith: '<key>「{{other}}」</key>と重複しています',
           resetToDefaults: 'デフォルトに戻す'
         },
         gamepad: {

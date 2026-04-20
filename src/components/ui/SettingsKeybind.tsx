@@ -58,9 +58,10 @@ type SettingsKeybindProps = {
   value: InputCode
   onChange?: (code: InputCode) => void
   disabled?: boolean
+  hasError?: boolean
 }
 
-const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) => {
+const SettingsKeybind = ({ value, onChange, disabled, hasError }: SettingsKeybindProps) => {
   const { playHover, playClick } = useUISound()
   const [listening, setListening] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -118,7 +119,7 @@ const SettingsKeybind = ({ value, onChange, disabled }: SettingsKeybindProps) =>
     <button
       ref={buttonRef}
       type="button"
-      className={`w-full min-w-0 text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none break-words ${listening ? 'border-text-primary' : ''}`}
+      className={`w-full min-w-0 text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none break-words ${listening ? 'border-text-primary' : hasError ? 'border-error' : ''}`}
       onMouseEnter={disabled ? undefined : playHover}
       onClick={handleClick}
       onBlur={handleBlur}

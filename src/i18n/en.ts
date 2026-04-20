@@ -205,7 +205,7 @@ const en = {
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          conflictWithOther: 'Conflicts with another keybinding',
+          conflictWith: 'Conflicts with <key>"{{other}}"</key>',
           resetToDefaults: 'Reset to Defaults'
         },
         gamepad: {

@@ -197,7 +197,7 @@ const zh = {
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',
-          conflictWithOther: '与另一个按键绑定冲突',
+          conflictWith: '与<key>「{{other}}」</key>冲突',
           resetToDefaults: '恢复默认'
         },
         gamepad: {
