@@ -432,7 +432,20 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
   const hasQuantChanged = menuQuant !== (settings.engine_quant ?? 'none')
 
+  /** Keybind actions currently rendered in the UI. Experimental-only actions
+   *  (scene edit) vanish from both the render and the conflict pool when the
+   *  experimental flag is off — so the user can reuse Q while it's hidden. */
+  const visibleKeybindActions = useMemo(
+    () => GAME_ACTIONS.filter((a) => a.keyboard !== undefined && (!a.experimental || menuSceneEditEnabled)),
+    [menuSceneEditEnabled]
+  )
+  const hasKeybindConflict = useMemo(() => {
+    const codes = visibleKeybindActions.map((a) => menuKeybindings[a.keyboard!.bindKey])
+    return new Set(codes).size !== codes.length
+  }, [visibleKeybindActions, menuKeybindings])
+
   const handleBackClick = useCallback(async () => {
+    if (hasKeybindConflict) return
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowServerErrorModal(true)
       return
@@ -465,6 +478,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [handleBackClick])
 
   const handleConfirmEngineModeSwitch = async () => {
+    if (hasKeybindConflict) {
+      setShowModeSwitchModal(false)
+      return
+    }
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowModeSwitchModal(false)
       setShowServerErrorModal(true)
@@ -840,7 +857,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         <MenuButton
           variant="primary"
           label="app.buttons.back"
-          className="w-full px-0"
+          className="w-full px-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={hasKeybindConflict}
           onClick={() => {
             void handleBackClick()
           }}

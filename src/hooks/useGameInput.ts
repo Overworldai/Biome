@@ -309,8 +309,12 @@ export const useGameInput = (
         ['pauseMenu', onPauseMenu]
       ]
       for (const [bindKey, handler] of callbackHandlers) {
+        // Skip callbacks with no handler wired (e.g. sceneEdit when the experimental
+        // flag is off) — otherwise we'd swallow the key and prevent it from reaching
+        // whatever the user actually bound to that code.
+        if (!handler) continue
         if (e.code !== keybindings[bindKey]) continue
-        handler?.()
+        handler()
         // Don't preventDefault Escape — the browser still exits pointer lock natively,
         // which is the expected path when pauseMenu is kept at its default.
         if (e.code !== 'Escape') e.preventDefault()
