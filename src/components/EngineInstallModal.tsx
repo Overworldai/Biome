@@ -5,6 +5,7 @@ import { useStreaming } from '../context/StreamingContext'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
+import { FocusScope } from '../context/FocusScopeContext'
 import { useTranslation } from 'react-i18next'
 
 type EngineInstallModalProps = {
@@ -84,7 +85,11 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
+      <FocusScope
+        autoFocus
+        onCancel={engineSetupInProgress ? undefined : onClose}
+        className="w-[135.11cqh] max-w-[92vw] pointer-events-auto"
+      >
         <ServerLogDisplay
           title="app.dialogs.install.title"
           logs={installLogs}
@@ -125,12 +130,13 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
                   onClick={onClose}
                   aria-label={t('app.dialogs.install.closeInstallLogs')}
+                  data-default-focus
                 />
               </div>
             )
           }
         />
-      </div>
+      </FocusScope>
     </div>
   )
 }

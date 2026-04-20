@@ -1,11 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
 import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
+import {
+  DEFAULT_KEYBINDINGS,
+  ENGINE_MODES,
+  QUANT_OPTIONS,
+  type AppLocale,
+  type ControlBindKey,
+  type Keybindings,
+  type QuantOption
+} from '../types/settings'
 import { useStreaming } from '../context/StreamingContext'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
@@ -15,9 +23,11 @@ import SettingsSelect from './ui/SettingsSelect'
 import SettingsTextInput from './ui/SettingsTextInput'
 import SettingsSlider from './ui/SettingsSlider'
 import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
+import SettingsKeybind from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
-import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
+import { GAME_ACTIONS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
+import { FocusScope } from '../context/FocusScopeContext'
+import type { InputCode } from '../types/input'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
@@ -29,6 +39,27 @@ import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
+
+// Sensitivity slider ↔ raw settings conversion. Raw range matches the Zod
+// schema in `settings.ts` (0.1–3.0); the UI exposes this as a 10–100% slider.
+const SENSITIVITY_RAW_MIN = 0.1
+const SENSITIVITY_RAW_MAX = 3.0
+const SENSITIVITY_MENU_MIN = 10
+const SENSITIVITY_MENU_MAX = 100
+const SENSITIVITY_RAW_SPAN = SENSITIVITY_RAW_MAX - SENSITIVITY_RAW_MIN
+const SENSITIVITY_MENU_SPAN = SENSITIVITY_MENU_MAX - SENSITIVITY_MENU_MIN
+
+const sensitivityToMenu = (raw: number): number =>
+  Math.round(SENSITIVITY_MENU_MIN + ((raw - SENSITIVITY_RAW_MIN) * SENSITIVITY_MENU_SPAN) / SENSITIVITY_RAW_SPAN)
+const sensitivityFromMenu = (menu: number): number =>
+  SENSITIVITY_RAW_MIN + ((menu - SENSITIVITY_MENU_MIN) * SENSITIVITY_RAW_SPAN) / SENSITIVITY_MENU_SPAN
+
+const hasCustomKeybindings = (kb: Keybindings): boolean => {
+  for (const key of Object.keys(DEFAULT_KEYBINDINGS) as ControlBindKey[]) {
+    if (kb[key] !== DEFAULT_KEYBINDINGS[key]) return true
+  }
+  return false
+}
 
 type MenuModelOption = {
   id: string
@@ -42,16 +73,23 @@ function formatBytes(bytes: number): string {
 }
 
 type KeybindRowProps =
-  | { label: string; value: string; onChange: (code: string) => void; warning?: string | null; fixedLabel?: never }
+  | {
+      label: string
+      value: InputCode
+      onChange: (code: InputCode) => void
+      warning?: ReactNode
+      fixedLabel?: never
+    }
   | { label: string; fixedLabel: string; value?: never; onChange?: never; warning?: never }
 
 const KeybindRow = (props: KeybindRowProps) => {
+  const hasError = props.fixedLabel === undefined && !!props.warning
   return (
-    <SettingsRow label={props.label} hint={props.warning}>
+    <SettingsRow label={props.label} hint={props.warning} hintError={hasError}>
       {props.fixedLabel !== undefined ? (
         <SettingsKeybind value={props.fixedLabel} disabled />
       ) : (
-        <SettingsKeybind value={props.value} onChange={props.onChange} />
+        <SettingsKeybind value={props.value} onChange={props.onChange} hasError={hasError} />
       )}
     </SettingsRow>
   )
@@ -65,6 +103,7 @@ type MenuSettingsViewProps = {
 const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
+  const gamepadConnected = useGamepadConnected()
   const {
     engineStatus,
     checkEngineStatus,
@@ -73,11 +112,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     isStreaming,
     connection,
     mouseSensitivity,
-    setMouseSensitivity
+    setMouseSensitivity,
+    gamepadSensitivity,
+    setGamepadSensitivity
   } = useStreaming()
   const volume = useVolumeControls()
-
-  const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
@@ -88,7 +127,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   )
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
-    streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
+    sensitivityToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
+  )
+  const [menuGamepadSensitivity, setMenuGamepadSensitivity] = useState(() =>
+    sensitivityToMenu(settings.gamepad_sensitivity ?? gamepadSensitivity)
   )
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
     { id: configWorldModel, isLocal: false, sizeBytes: null }
@@ -230,7 +272,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuLocale(settings.locale)
     setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
     setMenuWorldModel(configWorldModel)
-    setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
+    setMenuMouseSensitivity(sensitivityToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
+    setMenuGamepadSensitivity(sensitivityToMenu(settings.gamepad_sensitivity ?? gamepadSensitivity))
     setMenuServerUrl(configServerUrl)
     setMenuQuant(settings.engine_quant ?? 'none')
     setMenuKeybindings({ ...settings.keybindings })
@@ -245,6 +288,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     configWorldModel,
     settings.mouse_sensitivity,
     mouseSensitivity,
+    settings.gamepad_sensitivity,
+    gamepadSensitivity,
     configServerUrl,
     settings.keybindings,
     settings.debug_overlays.performance_stats,
@@ -360,7 +405,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     }
 
     const engineModeValue = menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
-    const streamingValue = 0.1 + ((menuMouseSensitivity - 10) * 2.9) / 90
+    const mouseSensitivityValue = sensitivityFromMenu(menuMouseSensitivity)
+    const gamepadSensitivityValue = sensitivityFromMenu(menuGamepadSensitivity)
 
     await saveSettings({
       ...settings,
@@ -370,7 +416,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       engine_model: menuWorldModel,
       engine_quant: menuQuant,
       cap_inference_fps: menuCapInferenceFps,
-      mouse_sensitivity: streamingValue,
+      mouse_sensitivity: mouseSensitivityValue,
+      gamepad_sensitivity: gamepadSensitivityValue,
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
       experimental: {
@@ -383,13 +430,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         action_logging: menuActionLogging
       }
     })
-    setMouseSensitivity(streamingValue)
+    setMouseSensitivity(mouseSensitivityValue)
+    setGamepadSensitivity(gamepadSensitivityValue)
   }, [
     settings,
     menuLocale,
     configServerUrl,
     menuEngineMode,
     menuMouseSensitivity,
+    menuGamepadSensitivity,
     menuServerUrl,
     menuWorldModel,
     menuQuant,
@@ -402,14 +451,28 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuActionLogging,
     volume.getAudioSettings,
     saveSettings,
-    setMouseSensitivity
+    setMouseSensitivity,
+    setGamepadSensitivity
   ])
 
   const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
   const hasWorldModelChanged = menuWorldModel !== configWorldModel
   const hasQuantChanged = menuQuant !== (settings.engine_quant ?? 'none')
 
+  /** Keybind actions currently rendered in the UI. Experimental-only actions
+   *  (scene edit) vanish from both the render and the conflict pool when the
+   *  experimental flag is off — so the user can reuse Q while it's hidden. */
+  const visibleKeybindActions = useMemo(
+    () => GAME_ACTIONS.filter((a) => a.keyboard !== undefined && (!a.experimental || menuSceneEditEnabled)),
+    [menuSceneEditEnabled]
+  )
+  const hasKeybindConflict = useMemo(() => {
+    const codes = visibleKeybindActions.map((a) => menuKeybindings[a.keyboard!.bindKey])
+    return new Set(codes).size !== codes.length
+  }, [visibleKeybindActions, menuKeybindings])
+
   const handleBackClick = useCallback(async () => {
+    if (hasKeybindConflict) return
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowServerErrorModal(true)
       return
@@ -421,6 +484,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     await applyDraftSettings()
     onBack()
   }, [
+    hasKeybindConflict,
     menuEngineMode,
     menuServerUrl,
     serverUrlStatus,
@@ -442,6 +506,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [handleBackClick])
 
   const handleConfirmEngineModeSwitch = async () => {
+    if (hasKeybindConflict) {
+      setShowModeSwitchModal(false)
+      return
+    }
     if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
       setShowModeSwitchModal(false)
       setShowServerErrorModal(true)
@@ -496,7 +564,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [connection, configEngineMode, configWorldModel, settings.engine_quant, t])
 
   return (
-    <div className="absolute inset-0 z-[9] pointer-events-auto">
+    <FocusScope
+      onCancel={() => void handleBackClick()}
+      autoFocus
+      className="absolute inset-0 z-[9] pointer-events-auto"
+    >
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
@@ -685,6 +757,47 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             </div>
           </SettingsSection>
 
+          <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
+            {visibleKeybindActions.map((action) => {
+              const bindKey = action.keyboard!.bindKey
+              const value = menuKeybindings[bindKey]
+              const others = visibleKeybindActions
+                .filter((other) => other.keyboard!.bindKey !== bindKey)
+                .map((other) => ({
+                  code: menuKeybindings[other.keyboard!.bindKey],
+                  label: t(`app.settings.controls.labels.${other.id}`, { defaultValue: other.id })
+                }))
+              const conflict = getKeybindConflict(value, others)
+              const warning = conflict ? (
+                <Trans
+                  i18nKey="app.settings.keybindings.conflictWith"
+                  values={{ other: conflict.otherLabel }}
+                  components={{ key: <span className="font-bold text-[var(--color-error-bright)]" /> }}
+                />
+              ) : null
+              return (
+                <KeybindRow
+                  key={action.id}
+                  label={t(`app.settings.controls.labels.${action.id}`, { defaultValue: action.id })}
+                  value={value}
+                  onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, [bindKey]: code }))}
+                  warning={warning}
+                />
+              )
+            })}
+            {hasCustomKeybindings(menuKeybindings) && (
+              <div className="flex justify-end mt-[0.8cqh]">
+                <Button
+                  variant="secondary"
+                  autoShrinkLabel
+                  label="app.settings.keybindings.resetToDefaults"
+                  className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                  onClick={() => setMenuKeybindings({ ...DEFAULT_KEYBINDINGS })}
+                />
+              </div>
+            )}
+          </SettingsSection>
+
           <SettingsSection
             title="app.settings.mouseSensitivity.title"
             description="app.settings.mouseSensitivity.description"
@@ -699,30 +812,37 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             />
           </SettingsSection>
 
-          <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
-            <KeybindRow
-              label={t('app.settings.keybindings.resetScene')}
-              value={menuKeybindings.reset_scene}
-              onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
-              warning={getKeybindConflict(menuKeybindings.reset_scene, [menuKeybindings.scene_edit])}
-            />
-            {menuSceneEditEnabled && (
-              <KeybindRow
-                label={t('app.settings.keybindings.sceneEdit')}
-                value={menuKeybindings.scene_edit}
-                onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, scene_edit: code }))}
-                warning={getKeybindConflict(menuKeybindings.scene_edit, [menuKeybindings.reset_scene])}
-              />
+          <SettingsSection
+            title="app.settings.gamepad.title"
+            rawDescription={
+              gamepadConnected
+                ? t('app.settings.gamepad.description')
+                : `${t('app.settings.gamepad.description')} ${t('app.settings.gamepad.notDetectedHint')}`
+            }
+          >
+            {GAME_ACTIONS.filter((a) => a.gamepad !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
+              (action) => (
+                <KeybindRow
+                  key={action.id}
+                  label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
+                  fixedLabel={action.gamepad!.button}
+                />
+              )
             )}
           </SettingsSection>
 
           <SettingsSection
-            title="app.settings.fixedControls.title"
-            description="app.settings.fixedControls.description"
+            title="app.settings.gamepadSensitivity.title"
+            description="app.settings.gamepadSensitivity.description"
           >
-            {FIXED_CONTROLS.map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
-            ))}
+            <SettingsSlider
+              min={10}
+              max={100}
+              value={menuGamepadSensitivity}
+              onChange={setMenuGamepadSensitivity}
+              label="app.settings.gamepadSensitivity.sensitivity"
+              suffix={`${menuGamepadSensitivity}%`}
+            />
           </SettingsSection>
 
           <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
@@ -793,7 +913,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         <MenuButton
           variant="primary"
           label="app.buttons.back"
-          className="w-full px-0"
+          className="w-full px-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={hasKeybindConflict}
           onClick={() => {
             void handleBackClick()
           }}
@@ -885,7 +1006,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </div>
         </Modal>
       )}
-    </div>
+    </FocusScope>
   )
 }
 

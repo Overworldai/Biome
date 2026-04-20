@@ -28,9 +28,26 @@ export const DEFAULT_PINNED_SCENES = [
 ]
 
 export const DEFAULT_KEYBINDINGS = {
-  reset_scene: 'KeyU',
-  scene_edit: 'KeyQ'
+  moveForward: 'KeyW',
+  moveLeft: 'KeyA',
+  moveBack: 'KeyS',
+  moveRight: 'KeyD',
+  jump: 'Space',
+  crouch: 'ControlLeft',
+  sprint: 'ShiftLeft',
+  interact: 'KeyE',
+  primaryFire: 'MouseLeft',
+  secondaryFire: 'MouseRight',
+  pauseMenu: 'Escape',
+  resetScene: 'KeyU',
+  sceneEdit: 'KeyQ'
 } as const
+
+export type ControlBindKey = keyof typeof DEFAULT_KEYBINDINGS
+
+/** Shared schema for input sensitivities (mouse + gamepad). Raw value is the
+ *  multiplier applied to look deltas; the settings UI maps it to a 10–100% slider. */
+const sensitivitySchema = z.number().min(0.1).max(3.0).default(1.8)
 
 export const DEFAULT_AUDIO = {
   master_volume: 1.0,
@@ -46,12 +63,24 @@ export const settingsSchema = z.object({
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
   custom_models: z.array(z.string()).default([]),
-  mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.8),
+  mouse_sensitivity: sensitivitySchema,
+  gamepad_sensitivity: sensitivitySchema,
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
   keybindings: z
     .object({
-      reset_scene: z.string().default('KeyU'),
-      scene_edit: z.string().default('KeyQ')
+      moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),
+      moveLeft: z.string().default(DEFAULT_KEYBINDINGS.moveLeft),
+      moveBack: z.string().default(DEFAULT_KEYBINDINGS.moveBack),
+      moveRight: z.string().default(DEFAULT_KEYBINDINGS.moveRight),
+      jump: z.string().default(DEFAULT_KEYBINDINGS.jump),
+      crouch: z.string().default(DEFAULT_KEYBINDINGS.crouch),
+      sprint: z.string().default(DEFAULT_KEYBINDINGS.sprint),
+      interact: z.string().default(DEFAULT_KEYBINDINGS.interact),
+      primaryFire: z.string().default(DEFAULT_KEYBINDINGS.primaryFire),
+      secondaryFire: z.string().default(DEFAULT_KEYBINDINGS.secondaryFire),
+      pauseMenu: z.string().default(DEFAULT_KEYBINDINGS.pauseMenu),
+      resetScene: z.string().default(DEFAULT_KEYBINDINGS.resetScene),
+      sceneEdit: z.string().default(DEFAULT_KEYBINDINGS.sceneEdit)
     })
     .default(DEFAULT_KEYBINDINGS),
   audio: z

@@ -197,32 +197,50 @@ const he = {
           description: 'כמה המצלמה צריכה לזוז כשאתה מזיז את העכבר?',
           sensitivity: 'רגישות'
         },
+        gamepadSensitivity: {
+          title: 'רגישות גיימפד',
+          description: 'כמה המצלמה צריכה לזוז כשאתה מזיז את הסטיק הימני?',
+          sensitivity: 'רגישות'
+        },
         keybindings: {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',
-          resetScene: 'איפוס סצנה',
-          sceneEdit: 'עריכת סצנה'
+          conflictWith: 'מתנגש עם <key>"{{other}}"</key>',
+          resetToDefaults: 'אפס לברירת מחדל'
         },
-        fixedControls: {
-          title: 'שליטה קבועה',
-          description: 'מהם המקשים המובנים?',
+        gamepad: {
+          title: 'גיימפד',
+          description: 'איך אתה שולט במשחק עם הגיימפד?',
+          notDetectedHint: '(הגיימפד לא זוהה, נסה ללחוץ על כפתור כלשהו!)',
+          labels: {
+            move: 'תנועה',
+            look: 'מבט',
+            jump: 'קפיצה',
+            crouch: 'כפיפה',
+            interact: 'אינטראקציה',
+            sceneEdit: 'עריכת סצנה',
+            sprint: 'ספרינט',
+            primaryFire: 'ירי ראשי',
+            secondaryFire: 'ירי משני',
+            resetScene: 'איפוס סצנה',
+            pauseMenu: 'תפריט עצירה'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'התקדמות',
             moveLeft: 'תנועה שמאלה',
             moveBack: 'תנועה אחורה',
             moveRight: 'תנועה ימינה',
             jump: 'קפיצה',
+            crouch: 'כפיפה',
             sprint: 'ספרינט',
-            look: 'מבט',
             interact: 'אינטראקציה',
             primaryFire: 'ירי ראשי',
             secondaryFire: 'ירי משני',
-            pauseMenu: 'תפריט עצירה'
-          },
-          values: {
-            mouse: 'עכבר',
-            leftClick: 'לחיצה שמאלית',
-            rightClick: 'לחיצה ימנית'
+            pauseMenu: 'תפריט עצירה',
+            resetScene: 'איפוס סצנה',
+            sceneEdit: 'עריכת סצנה'
           }
         },
         experimental: {

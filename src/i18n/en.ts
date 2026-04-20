@@ -202,32 +202,50 @@ const en = {
           description: 'how much should the camera move when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Gamepad Sensitivity',
+          description: 'how much should the camera move when you move the right stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          conflictWith: 'Conflicts with <key>"{{other}}"</key>',
+          resetToDefaults: 'Reset to Defaults'
         },
-        fixedControls: {
-          title: 'Fixed Controls',
-          description: 'what are the built-in controls?',
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how do you control the game with your gamepad?',
+          notDetectedHint: '(gamepad not detected; try pressing a button!)',
+          labels: {
+            move: 'Move',
+            look: 'Look',
+            jump: 'Jump',
+            crouch: 'Crouch',
+            interact: 'Interact',
+            sceneEdit: 'Scene Edit',
+            sprint: 'Sprint',
+            primaryFire: 'Primary Fire',
+            secondaryFire: 'Secondary Fire',
+            resetScene: 'Reset Scene',
+            pauseMenu: 'Pause Menu'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Move Forward',
             moveLeft: 'Move Left',
             moveBack: 'Move Back',
             moveRight: 'Move Right',
             jump: 'Jump',
+            crouch: 'Crouch',
             sprint: 'Sprint',
-            look: 'Look',
             interact: 'Interact',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
-            pauseMenu: 'Pause Menu'
-          },
-          values: {
-            mouse: 'Mouse',
-            leftClick: 'Left Click',
-            rightClick: 'Right Click'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Reset Scene',
+            sceneEdit: 'Scene Edit'
           }
         },
         experimental: {

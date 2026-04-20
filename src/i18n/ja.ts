@@ -201,32 +201,50 @@ const ja = {
           description: 'マウス移動に対してカメラをどれだけ動かしますか？',
           sensitivity: '感度'
         },
+        gamepadSensitivity: {
+          title: 'ゲームパッド感度',
+          description: '右スティックの移動に対してカメラをどれだけ動かしますか？',
+          sensitivity: '感度'
+        },
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集'
+          conflictWith: '<key>「{{other}}」</key>と重複しています',
+          resetToDefaults: 'デフォルトに戻す'
         },
-        fixedControls: {
-          title: '固定コントロール',
-          description: '組み込みの操作は何ですか？',
+        gamepad: {
+          title: 'ゲームパッド',
+          description: 'ゲームパッドでどのように操作しますか？',
+          notDetectedHint: '（ゲームパッドが検出されません。いずれかのボタンを押してみてください！）',
+          labels: {
+            move: '移動',
+            look: '視点',
+            jump: 'ジャンプ',
+            crouch: 'しゃがむ',
+            interact: '操作',
+            sceneEdit: 'シーン編集',
+            sprint: 'ダッシュ',
+            primaryFire: 'メイン射撃',
+            secondaryFire: 'サブ射撃',
+            resetScene: 'シーンをリセット',
+            pauseMenu: 'ポーズメニュー'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前進',
             moveLeft: '左移動',
             moveBack: '後退',
             moveRight: '右移動',
             jump: 'ジャンプ',
+            crouch: 'しゃがむ',
             sprint: 'ダッシュ',
-            look: '視点移動',
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
-            pauseMenu: 'ポーズメニュー'
-          },
-          values: {
-            mouse: 'マウス',
-            leftClick: '左クリック',
-            rightClick: '右クリック'
+            pauseMenu: 'ポーズメニュー',
+            resetScene: 'シーンをリセット',
+            sceneEdit: 'シーン編集'
           }
         },
         experimental: {

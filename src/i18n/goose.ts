@@ -203,32 +203,50 @@ const goose = {
           description: 'how much should the camera turn when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Gamepad Sensitivity',
+          description: 'how quick should the goose swivel when you honk the stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'which keys do you want to peck?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          conflictWith: 'Already pecked by <key>"{{other}}"</key>',
+          resetToDefaults: 'Reset to Defaults'
         },
-        fixedControls: {
-          title: 'Fixed Controls',
-          description: 'what can a goose do?',
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how do you waddle around with your gamepad?',
+          notDetectedHint: '(no gamepad spotted; honk a button to wake it up!)',
+          labels: {
+            move: 'Waddle',
+            look: 'Look',
+            jump: 'Flap',
+            crouch: 'Crouch',
+            interact: 'Peck',
+            sceneEdit: 'Scene Edit',
+            sprint: 'Charge',
+            primaryFire: 'Honk',
+            secondaryFire: 'Hiss',
+            resetScene: 'Fresh Pond',
+            pauseMenu: 'Pause Menu'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Waddle Forward',
             moveLeft: 'Waddle Left',
             moveBack: 'Waddle Back',
             moveRight: 'Waddle Right',
             jump: 'Flap',
+            crouch: 'Crouch',
             sprint: 'Charge',
-            look: 'Look',
             interact: 'Peck',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
-            pauseMenu: 'Pause Menu'
-          },
-          values: {
-            mouse: 'Mouse',
-            leftClick: 'Left Click',
-            rightClick: 'Right Click'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Fresh Pond',
+            sceneEdit: 'Scene Edit'
           }
         },
         experimental: {

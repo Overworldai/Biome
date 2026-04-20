@@ -194,32 +194,50 @@ const zh = {
           description: '移动鼠标时，镜头应该移动多少？',
           sensitivity: '灵敏度'
         },
+        gamepadSensitivity: {
+          title: '手柄灵敏度',
+          description: '移动右摇杆时，镜头应该移动多少？',
+          sensitivity: '灵敏度'
+        },
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',
-          resetScene: '重置场景',
-          sceneEdit: '场景编辑'
+          conflictWith: '与<key>「{{other}}」</key>冲突',
+          resetToDefaults: '恢复默认'
         },
-        fixedControls: {
-          title: '固定操作',
-          description: '内置操作有哪些？',
+        gamepad: {
+          title: '手柄',
+          description: '你如何用手柄控制游戏？',
+          notDetectedHint: '（未检测到手柄，请按下任意按钮！）',
+          labels: {
+            move: '移动',
+            look: '视角',
+            jump: '跳跃',
+            crouch: '蹲下',
+            interact: '交互',
+            sceneEdit: '场景编辑',
+            sprint: '冲刺',
+            primaryFire: '主射击',
+            secondaryFire: '副射击',
+            resetScene: '重置场景',
+            pauseMenu: '暂停菜单'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前进',
             moveLeft: '向左移动',
             moveBack: '后退',
             moveRight: '向右移动',
             jump: '跳跃',
+            crouch: '蹲下',
             sprint: '冲刺',
-            look: '视角移动',
             interact: '交互',
             primaryFire: '主射击',
             secondaryFire: '副射击',
-            pauseMenu: '暂停菜单'
-          },
-          values: {
-            mouse: '鼠标',
-            leftClick: '左键单击',
-            rightClick: '右键单击'
+            pauseMenu: '暂停菜单',
+            resetScene: '重置场景',
+            sceneEdit: '场景编辑'
           }
         },
         experimental: {

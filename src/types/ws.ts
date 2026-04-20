@@ -4,6 +4,8 @@
 // Strongly typed message definitions for the client ↔ server WebSocket protocol.
 // See CONTRIBUTING.md "WebSocket Protocol" for the full specification.
 
+import type { ServerCode } from './input'
+
 // ── Client → Server: Fire-and-forget messages ──────────────────────────────
 
 /** Unified session init/update RPC.
@@ -56,7 +58,7 @@ export type InitResponse = {
 
 export type ControlMessage = {
   type: 'control'
-  buttons: string[]
+  buttons: ServerCode[]
   mouse_dx: number
   mouse_dy: number
   ts?: number

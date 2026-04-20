@@ -29,7 +29,7 @@ const ConfirmModal = ({
   const { t } = useTranslation()
 
   return (
-    <Modal title={title}>
+    <Modal title={title} onCancel={onCancel}>
       <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] whitespace-pre-line">
         {descriptionComponents ? (
           <Trans i18nKey={description} values={descriptionParams} components={descriptionComponents} />
@@ -38,7 +38,14 @@ const ConfirmModal = ({
         )}
       </p>
       <div className="flex flex-wrap justify-end mt-[1.4cqh] gap-[1.42cqh]">
-        <Button variant="secondary" autoShrinkLabel label={cancelLabel} className={MODAL_BUTTON} onClick={onCancel} />
+        <Button
+          variant="secondary"
+          autoShrinkLabel
+          label={cancelLabel}
+          className={MODAL_BUTTON}
+          onClick={onCancel}
+          data-default-focus
+        />
         <Button variant="primary" autoShrinkLabel label={confirmLabel} className={MODAL_BUTTON} onClick={onConfirm} />
       </div>
     </Modal>
