@@ -146,7 +146,10 @@ const FocusReticle = () => {
     height: rect.h,
     pointerEvents: 'none',
     opacity: visible ? 1 : 0,
-    zIndex: 9999,
+    // Must sit above modals (z-[10000]) and every other in-app layer, otherwise
+    // the focus indicator hides behind a modal's backdrop and the modal looks
+    // like it isn't receiving gamepad input even though it is.
+    zIndex: 100000,
     border: '2px solid var(--color-text-primary)',
     borderRadius: rect.radius,
     boxShadow: '0 0 12px 2px var(--color-text-primary)',
