@@ -549,20 +549,13 @@ export const useGameInput = (
 
         for (let i = 0; i < gp.buttons.length; i++) {
           if (!gp.buttons[i].pressed) continue
-          // Start/Back/Y are one-shot callbacks, not held inputs. Skip adding
-          // them to the pressed set so they don't flood `pressedGamepad`.
-          if (i === 9) {
-            startDown = true
-            continue
-          }
-          if (i === 8) {
-            backDown = true
-            continue
-          }
-          if (i === 3) {
-            yDown = true
-            continue
-          }
+          // Start/Back/Y drive edge-triggered callbacks (pause / reset / scene-edit).
+          // Flag them separately but still include them in `pressedGamepad` so the
+          // input overlay can render the held state. They have no server-code entry
+          // in `CODE_MAP`, so getInputState skips them when building `buttons[]`.
+          if (i === 9) startDown = true
+          else if (i === 8) backDown = true
+          else if (i === 3) yDown = true
           const code = GAMEPAD_BUTTON_TO_CODE[i]
           if (code) nextSet.add(code)
         }
