@@ -225,7 +225,7 @@ const ServerLogDisplay = ({
         className="
           server-log-content flex-1 overflow-y-auto px-[1.78cqh] py-[0.8cqh] font-mono text-[1.78cqh] leading-relaxed
           [scrollbar-color:rgba(255,255,255,0.34)_transparent]
-          focus:outline focus:outline-2 focus:outline-border-medium
+          focus:outline-2 focus:outline-border-medium
         "
         ref={containerRef}
         onKeyDown={(e) => {
