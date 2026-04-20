@@ -12,6 +12,7 @@ import { isGooseMode } from '../i18n'
 import RawButton from './ui/RawButton'
 import ServerLogDisplay from './ServerLogDisplay'
 import SocialCtaRow from './SocialCtaRow'
+import { FocusScope } from '../context/FocusScopeContext'
 import { useTranslation } from 'react-i18next'
 
 const INLINE_ERROR_MAX_LENGTH = 80
@@ -117,7 +118,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   ])
 
   return (
-    <>
+    <FocusScope autoFocus onCancel={onCancel} className="contents">
       {isFreshInstall && !errorDetail && (
         <div
           className="absolute z-55 left-1/2 top-1/2 flex flex-col items-center gap-[2.4cqh] pointer-events-none bg-[rgba(4,8,16,0.45)] rounded-[1.8cqh] px-[5cqh] py-[3.6cqh] transition-transform duration-300 ease-in-out"
@@ -220,9 +221,10 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             }
             void cancelConnection()
           }}
+          data-default-focus
         />
       </div>
-    </>
+    </FocusScope>
   )
 }
 

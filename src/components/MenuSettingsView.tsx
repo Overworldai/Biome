@@ -26,6 +26,7 @@ import SettingsCheckbox from './ui/SettingsCheckbox'
 import SettingsKeybind from './ui/SettingsKeybind'
 import SettingsRow from './ui/SettingsRow'
 import { GAME_ACTIONS, getKeybindConflict, useGamepadConnected } from '../hooks/useGameInput'
+import { FocusScope } from '../context/FocusScopeContext'
 import type { InputCode } from '../types/input'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
@@ -563,7 +564,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [connection, configEngineMode, configWorldModel, settings.engine_quant, t])
 
   return (
-    <div className="absolute inset-0 z-[9] pointer-events-auto">
+    <FocusScope
+      onCancel={() => void handleBackClick()}
+      autoFocus
+      className="absolute inset-0 z-[9] pointer-events-auto"
+    >
       <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
@@ -1001,7 +1006,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </div>
         </Modal>
       )}
-    </div>
+    </FocusScope>
   )
 }
 

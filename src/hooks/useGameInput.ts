@@ -331,6 +331,11 @@ export const useGameInput = (
       if (e.code === 'Escape') return
       if (e.code === 'Tab' && e.altKey) return
 
+      // When game input isn't active, don't consume keys for game passthrough —
+      // otherwise synthetic arrow-key dispatches from gamepad UI navigation get
+      // preventDefaulted here and spatial focus movement breaks.
+      if (!enabled) return
+
       // Store the physical InputCode; translation to ServerCode happens in getInputState.
       if (effectiveCodeMap[e.code]) {
         e.preventDefault()
@@ -511,9 +516,17 @@ export const useGameInput = (
     }
 
     let rafId = 0
-    let prevStartDown = false
-    let prevBackDown = false
-    let prevYDown = false
+    // Seed from the currently-held buttons so a Start press that just switched
+    // the app from paused→playing (via the UI nav layer) doesn't immediately
+    // trigger another pauseMenu on the first frame of game input.
+    const seedHeld = (idx: number): boolean => {
+      const gps = navigator.getGamepads()
+      for (const gp of gps) if (gp?.buttons[idx]?.pressed) return true
+      return false
+    }
+    let prevStartDown = seedHeld(9)
+    let prevBackDown = seedHeld(8)
+    let prevYDown = seedHeld(3)
     let prevSet: Set<InputCode> = new Set()
 
     const sameMembership = (a: Set<InputCode>, b: Set<InputCode>): boolean => {

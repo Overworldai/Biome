@@ -260,6 +260,16 @@ const SettingsSelect = ({
     )
   }
 
+  const cycleOption = useCallback(
+    (delta: 1 | -1) => {
+      if (options.length === 0) return
+      const idx = options.findIndex((o) => o.value === value)
+      const next = options[(idx + delta + options.length) % options.length]
+      if (next) onChange(next.value)
+    },
+    [options, value, onChange]
+  )
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -270,6 +280,16 @@ const SettingsSelect = ({
           if (disabled) return
           playClick()
           isOpen ? setIsOpen(false) : openDropdown()
+        }}
+        onKeyDown={(e) => {
+          if (disabled) return
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault()
+            cycleOption(-1)
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault()
+            cycleOption(1)
+          }
         }}
         disabled={disabled}
       >

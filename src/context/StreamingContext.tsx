@@ -757,6 +757,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     isStreaming,
     isPaused,
+    isUIActive: !inputEnabled,
     pausedAt,
     canUnpause,
     unlockDelayMs: UNLOCK_DELAY_MS,

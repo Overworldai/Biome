@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { TranslatableError, type TranslationKey } from '../i18n'
 import type { DiagnosticsPayload } from '../types/ipc'
 import Button from './ui/Button'
+import { findFocusables, findInDirection, focusSmooth } from '../lib/focusNavigation'
+import { getActiveScopeRoot } from '../context/FocusScopeContext'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
 const MAX_GITHUB_BODY_CHARS = 1200
@@ -209,8 +211,44 @@ const ServerLogDisplay = ({
         </div>
       )}
       <div
-        className="server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed [scrollbar-color:rgba(255,255,255,0.34)_transparent]"
+        tabIndex={0}
+        aria-label={t('app.loading.terminal.serverOutput', { defaultValue: 'Server log output' })}
+        className="server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed [scrollbar-color:rgba(255,255,255,0.34)_transparent] focus:outline focus:outline-2 focus:outline-[var(--color-border-medium)]"
         ref={containerRef}
+        onKeyDown={(e) => {
+          // Allow gamepad d-pad (dispatched as arrow keys) to scroll the log pane.
+          // At scroll boundaries and on Escape, release focus so the user can
+          // navigate back out instead of getting stuck inside the logs.
+          const el = e.currentTarget
+          const moveOut = (direction: 'up' | 'down') => {
+            const target = findInDirection(el, findFocusables(getActiveScopeRoot()), direction)
+            if (target) focusSmooth(target)
+            else el.blur()
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            moveOut('up')
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            if (el.scrollTop <= 0) {
+              e.preventDefault()
+              moveOut('up')
+              return
+            }
+            e.preventDefault()
+            el.scrollBy({ top: -el.clientHeight * 0.25, behavior: 'smooth' })
+          } else if (e.key === 'ArrowDown') {
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
+              e.preventDefault()
+              moveOut('down')
+              return
+            }
+            e.preventDefault()
+            el.scrollBy({ top: el.clientHeight * 0.25, behavior: 'smooth' })
+          }
+        }}
       >
         {logs.length === 0 ? (
           <div className="italic text-text-muted">{t('app.loading.terminal.waitingForServerOutput')}</div>

@@ -50,14 +50,35 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
     [onChange, valueFromEvent]
   )
 
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Arrow Left/Right adjust the value and prevent default so gamepad nav
+      // (which dispatches these keys) treats the input as consumed.
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        onChange(Math.max(min, value - 1))
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        onChange(Math.min(max, value + 1))
+      }
+    },
+    [onChange, value, min, max]
+  )
+
   return (
     <div className="flex flex-col items-start">
       <div
         ref={trackRef}
-        className={`relative w-full ${SETTINGS_CONTROL_BASE} cursor-pointer leading-[1.2] p-[0.275cqh_1.42cqh] text-[1.33cqh] ${SETTINGS_OUTLINE_HOVER}`}
+        role="slider"
+        tabIndex={0}
+        aria-valuenow={value}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        className={`relative w-full ${SETTINGS_CONTROL_BASE} cursor-pointer leading-[1.2] p-[0.275cqh_1.42cqh] text-[1.33cqh] ${SETTINGS_OUTLINE_HOVER} focus:outline-none`}
         onMouseEnter={playHover}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onKeyDown={handleKeyDown}
       >
         <div
           className="absolute inset-0 bg-surface-btn-primary pointer-events-none"
