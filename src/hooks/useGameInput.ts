@@ -208,6 +208,13 @@ const isEditableTarget = (target: EventTarget | null) =>
   target instanceof HTMLTextAreaElement ||
   (target as HTMLElement)?.isContentEditable
 
+/** Accumulated pointer delta from one input source (mouse or gamepad stick) for the current frame. */
+export type LookDelta = { dx: number; dy: number }
+
+/** Fresh zero delta. Accumulators mutate `.dx` / `.dy` in place, so each owner
+ *  needs its own object — a shared frozen constant would alias across slots. */
+const zeroLookDelta = (): LookDelta => ({ dx: 0, dy: 0 })
+
 type UseGameInputResult = {
   /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
   pressedKeys: Set<InputCode>
@@ -215,9 +222,9 @@ type UseGameInputResult = {
   mouseButtons: Set<InputCode>
   /** Gamepad `InputCode`s currently held down (buttons + stick directions). */
   pressedGamepad: Set<InputCode>
-  mouseDelta: { dx: number; dy: number }
+  mouseDelta: LookDelta
   isPointerLocked: boolean
-  getInputState: () => { buttons: ServerCode[]; mouseDx: number; mouseDy: number }
+  getInputState: () => { buttons: ServerCode[]; mouse: LookDelta; gamepad: LookDelta }
 }
 
 /** Reflects whether any gamepad is currently connected.
@@ -258,10 +265,11 @@ export const useGameInput = (
   const [pressedKeys, setPressedKeys] = useState<Set<InputCode>>(new Set())
   const [mouseButtons, setMouseButtons] = useState<Set<InputCode>>(new Set())
   const [pressedGamepad, setPressedGamepad] = useState<Set<InputCode>>(new Set())
-  const [mouseDelta] = useState({ dx: 0, dy: 0 })
+  const [mouseDelta] = useState(zeroLookDelta())
   const [isPointerLocked, setIsPointerLocked] = useState(false)
 
-  const mouseDeltaAccum = useRef({ dx: 0, dy: 0 })
+  const mouseDeltaAccum = useRef<LookDelta>(zeroLookDelta())
+  const gamepadDeltaAccum = useRef<LookDelta>(zeroLookDelta())
   const scrollAccum = useRef(0)
 
   /** Effective `InputCode` → `ServerCode` map after applying user rebindings.
@@ -413,14 +421,16 @@ export const useGameInput = (
     if (!locked) {
       setPressedKeys(new Set())
       setMouseButtons(new Set())
-      mouseDeltaAccum.current = { dx: 0, dy: 0 }
+      mouseDeltaAccum.current = zeroLookDelta()
+      gamepadDeltaAccum.current = zeroLookDelta()
     }
   }, [containerRef])
 
   const handleBlur = useCallback(() => {
     setPressedKeys(new Set())
     setMouseButtons(new Set())
-    mouseDeltaAccum.current = { dx: 0, dy: 0 }
+    mouseDeltaAccum.current = zeroLookDelta()
+    gamepadDeltaAccum.current = zeroLookDelta()
   }, [])
 
   const getInputState = useCallback(() => {
@@ -443,10 +453,11 @@ export const useGameInput = (
     if (scrollAccum.current < 0) buttons.add('SCROLL_UP')
     else if (scrollAccum.current > 0) buttons.add('SCROLL_DOWN')
     scrollAccum.current = 0
-    const dx = mouseDeltaAccum.current.dx
-    const dy = mouseDeltaAccum.current.dy
-    mouseDeltaAccum.current = { dx: 0, dy: 0 }
-    return { buttons: [...buttons], mouseDx: dx, mouseDy: dy }
+    const mouse = mouseDeltaAccum.current
+    const gamepad = gamepadDeltaAccum.current
+    mouseDeltaAccum.current = zeroLookDelta()
+    gamepadDeltaAccum.current = zeroLookDelta()
+    return { buttons: [...buttons], mouse, gamepad }
   }, [pressedKeys, mouseButtons, pressedGamepad, effectiveCodeMap])
 
   useEffect(() => {
@@ -553,10 +564,10 @@ export const useGameInput = (
         const rsX = gp.axes[2] ?? 0
         const rsY = gp.axes[3] ?? 0
         if (Math.abs(rsX) > GAMEPAD_DEAD_ZONE) {
-          mouseDeltaAccum.current.dx += rsX * GAMEPAD_LOOK_SENSITIVITY
+          gamepadDeltaAccum.current.dx += rsX * GAMEPAD_LOOK_SENSITIVITY
         }
         if (Math.abs(rsY) > GAMEPAD_DEAD_ZONE) {
-          mouseDeltaAccum.current.dy += rsY * GAMEPAD_LOOK_SENSITIVITY
+          gamepadDeltaAccum.current.dy += rsY * GAMEPAD_LOOK_SENSITIVITY
         }
       }
 

@@ -202,6 +202,11 @@ const en = {
           description: 'how much should the camera move when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Gamepad Sensitivity',
+          description: 'how much should the camera move when you move the right stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',

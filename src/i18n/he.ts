@@ -197,6 +197,11 @@ const he = {
           description: 'כמה המצלמה צריכה לזוז כשאתה מזיז את העכבר?',
           sensitivity: 'רגישות'
         },
+        gamepadSensitivity: {
+          title: 'רגישות גיימפד',
+          description: 'כמה המצלמה צריכה לזוז כשאתה מזיז את הסטיק הימני?',
+          sensitivity: 'רגישות'
+        },
         keybindings: {
           title: 'מקשי שליטה',
           description: 'באילו מקשים אתה רוצה להשתמש?',

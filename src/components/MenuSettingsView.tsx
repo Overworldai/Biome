@@ -39,6 +39,20 @@ const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
 
+// Sensitivity slider ↔ raw settings conversion. Raw range matches the Zod
+// schema in `settings.ts` (0.1–3.0); the UI exposes this as a 10–100% slider.
+const SENSITIVITY_RAW_MIN = 0.1
+const SENSITIVITY_RAW_MAX = 3.0
+const SENSITIVITY_MENU_MIN = 10
+const SENSITIVITY_MENU_MAX = 100
+const SENSITIVITY_RAW_SPAN = SENSITIVITY_RAW_MAX - SENSITIVITY_RAW_MIN
+const SENSITIVITY_MENU_SPAN = SENSITIVITY_MENU_MAX - SENSITIVITY_MENU_MIN
+
+const sensitivityToMenu = (raw: number): number =>
+  Math.round(SENSITIVITY_MENU_MIN + ((raw - SENSITIVITY_RAW_MIN) * SENSITIVITY_MENU_SPAN) / SENSITIVITY_RAW_SPAN)
+const sensitivityFromMenu = (menu: number): number =>
+  SENSITIVITY_RAW_MIN + ((menu - SENSITIVITY_MENU_MIN) * SENSITIVITY_RAW_SPAN) / SENSITIVITY_MENU_SPAN
+
 const hasCustomKeybindings = (kb: Keybindings): boolean => {
   for (const key of Object.keys(DEFAULT_KEYBINDINGS) as ControlBindKey[]) {
     if (kb[key] !== DEFAULT_KEYBINDINGS[key]) return true
@@ -97,11 +111,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     isStreaming,
     connection,
     mouseSensitivity,
-    setMouseSensitivity
+    setMouseSensitivity,
+    gamepadSensitivity,
+    setGamepadSensitivity
   } = useStreaming()
   const volume = useVolumeControls()
-
-  const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
@@ -112,7 +126,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   )
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
-    streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
+    sensitivityToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
+  )
+  const [menuGamepadSensitivity, setMenuGamepadSensitivity] = useState(() =>
+    sensitivityToMenu(settings.gamepad_sensitivity ?? gamepadSensitivity)
   )
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
     { id: configWorldModel, isLocal: false, sizeBytes: null }
@@ -254,7 +271,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     setMenuLocale(settings.locale)
     setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
     setMenuWorldModel(configWorldModel)
-    setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
+    setMenuMouseSensitivity(sensitivityToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
+    setMenuGamepadSensitivity(sensitivityToMenu(settings.gamepad_sensitivity ?? gamepadSensitivity))
     setMenuServerUrl(configServerUrl)
     setMenuQuant(settings.engine_quant ?? 'none')
     setMenuKeybindings({ ...settings.keybindings })
@@ -269,6 +287,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     configWorldModel,
     settings.mouse_sensitivity,
     mouseSensitivity,
+    settings.gamepad_sensitivity,
+    gamepadSensitivity,
     configServerUrl,
     settings.keybindings,
     settings.debug_overlays.performance_stats,
@@ -384,7 +404,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     }
 
     const engineModeValue = menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
-    const streamingValue = 0.1 + ((menuMouseSensitivity - 10) * 2.9) / 90
+    const mouseSensitivityValue = sensitivityFromMenu(menuMouseSensitivity)
+    const gamepadSensitivityValue = sensitivityFromMenu(menuGamepadSensitivity)
 
     await saveSettings({
       ...settings,
@@ -394,7 +415,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       engine_model: menuWorldModel,
       engine_quant: menuQuant,
       cap_inference_fps: menuCapInferenceFps,
-      mouse_sensitivity: streamingValue,
+      mouse_sensitivity: mouseSensitivityValue,
+      gamepad_sensitivity: gamepadSensitivityValue,
       keybindings: menuKeybindings,
       audio: volume.getAudioSettings(),
       experimental: {
@@ -407,13 +429,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         action_logging: menuActionLogging
       }
     })
-    setMouseSensitivity(streamingValue)
+    setMouseSensitivity(mouseSensitivityValue)
+    setGamepadSensitivity(gamepadSensitivityValue)
   }, [
     settings,
     menuLocale,
     configServerUrl,
     menuEngineMode,
     menuMouseSensitivity,
+    menuGamepadSensitivity,
     menuServerUrl,
     menuWorldModel,
     menuQuant,
@@ -426,7 +450,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     menuActionLogging,
     volume.getAudioSettings,
     saveSettings,
-    setMouseSensitivity
+    setMouseSensitivity,
+    setGamepadSensitivity
   ])
 
   const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
@@ -727,20 +752,6 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             </div>
           </SettingsSection>
 
-          <SettingsSection
-            title="app.settings.mouseSensitivity.title"
-            description="app.settings.mouseSensitivity.description"
-          >
-            <SettingsSlider
-              min={10}
-              max={100}
-              value={menuMouseSensitivity}
-              onChange={setMenuMouseSensitivity}
-              label="app.settings.mouseSensitivity.sensitivity"
-              suffix={`${menuMouseSensitivity}%`}
-            />
-          </SettingsSection>
-
           <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
             {visibleKeybindActions.map((action) => {
               const bindKey = action.keyboard!.bindKey
@@ -783,6 +794,20 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </SettingsSection>
 
           <SettingsSection
+            title="app.settings.mouseSensitivity.title"
+            description="app.settings.mouseSensitivity.description"
+          >
+            <SettingsSlider
+              min={10}
+              max={100}
+              value={menuMouseSensitivity}
+              onChange={setMenuMouseSensitivity}
+              label="app.settings.mouseSensitivity.sensitivity"
+              suffix={`${menuMouseSensitivity}%`}
+            />
+          </SettingsSection>
+
+          <SettingsSection
             title="app.settings.gamepad.title"
             rawDescription={
               gamepadConnected
@@ -799,6 +824,20 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
                 />
               )
             )}
+          </SettingsSection>
+
+          <SettingsSection
+            title="app.settings.gamepadSensitivity.title"
+            description="app.settings.gamepadSensitivity.description"
+          >
+            <SettingsSlider
+              min={10}
+              max={100}
+              value={menuGamepadSensitivity}
+              onChange={setMenuGamepadSensitivity}
+              label="app.settings.gamepadSensitivity.sensitivity"
+              suffix={`${menuGamepadSensitivity}%`}
+            />
           </SettingsSection>
 
           <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">

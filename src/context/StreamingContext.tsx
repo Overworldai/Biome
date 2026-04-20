@@ -113,6 +113,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [sceneEditGrace, setSceneEditGrace] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(() => settings.mouse_sensitivity ?? 1.0)
+  const [gamepadSensitivity, setGamepadSensitivity] = useState(() => settings.gamepad_sensitivity ?? 1.0)
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
@@ -637,7 +638,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const tick = () => {
-      const { buttons, mouseDx, mouseDy } = getInputState()
+      const { buttons, mouse, gamepad } = getInputState()
       const scrollUp = buttons.includes('SCROLL_UP')
       const scrollDown = buttons.includes('SCROLL_DOWN')
       if (scrollUp || scrollDown) {
@@ -645,7 +646,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
         scrollTimeoutRef.current = setTimeout(() => setScrollActive({ up: false, down: false }), 150)
       }
-      sendControl(buttons, Math.round(mouseDx * mouseSensitivity), Math.round(mouseDy * mouseSensitivity))
+      const dx = mouse.dx * mouseSensitivity + gamepad.dx * gamepadSensitivity
+      const dy = mouse.dy * mouseSensitivity + gamepad.dy * gamepadSensitivity
+      sendControl(buttons, Math.round(dx), Math.round(dy))
       inputLoopRef.current = requestAnimationFrame(tick)
     }
     inputLoopRef.current = requestAnimationFrame(tick)
@@ -660,7 +663,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         scrollTimeoutRef.current = null
       }
     }
-  }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
+  }, [inputEnabled, getInputState, sendControl, mouseSensitivity, gamepadSensitivity])
 
   // Ref registration callbacks
   const registerContainerRef = useCallback((element: HTMLDivElement | null) => {
@@ -816,6 +819,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
+    gamepadSensitivity,
+    setGamepadSensitivity,
 
     // Input state
     pressedKeys,

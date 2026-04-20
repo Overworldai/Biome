@@ -194,6 +194,11 @@ const zh = {
           description: '移动鼠标时，镜头应该移动多少？',
           sensitivity: '灵敏度'
         },
+        gamepadSensitivity: {
+          title: '手柄灵敏度',
+          description: '移动右摇杆时，镜头应该移动多少？',
+          sensitivity: '灵敏度'
+        },
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',

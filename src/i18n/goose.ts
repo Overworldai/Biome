@@ -203,6 +203,11 @@ const goose = {
           description: 'how much should the camera turn when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Gamepad Sensitivity',
+          description: 'how quick should the goose swivel when you honk the stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'which keys do you want to peck?',

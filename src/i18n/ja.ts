@@ -201,6 +201,11 @@ const ja = {
           description: 'マウス移動に対してカメラをどれだけ動かしますか？',
           sensitivity: '感度'
         },
+        gamepadSensitivity: {
+          title: 'ゲームパッド感度',
+          description: '右スティックの移動に対してカメラをどれだけ動かしますか？',
+          sensitivity: '感度'
+        },
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',

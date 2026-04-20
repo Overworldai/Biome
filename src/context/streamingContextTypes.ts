@@ -72,6 +72,8 @@ export type StreamingContextValue = {
 
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
+  gamepadSensitivity: number
+  setGamepadSensitivity: (value: number) => void
   /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
   pressedKeys: Set<InputCode>
   /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */

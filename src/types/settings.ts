@@ -45,6 +45,10 @@ export const DEFAULT_KEYBINDINGS = {
 
 export type ControlBindKey = keyof typeof DEFAULT_KEYBINDINGS
 
+/** Shared schema for input sensitivities (mouse + gamepad). Raw value is the
+ *  multiplier applied to look deltas; the settings UI maps it to a 10–100% slider. */
+const sensitivitySchema = z.number().min(0.1).max(3.0).default(1.8)
+
 export const DEFAULT_AUDIO = {
   master_volume: 1.0,
   sfx_volume: 0.5,
@@ -59,7 +63,8 @@ export const settingsSchema = z.object({
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
   custom_models: z.array(z.string()).default([]),
-  mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.8),
+  mouse_sensitivity: sensitivitySchema,
+  gamepad_sensitivity: sensitivitySchema,
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
   keybindings: z
     .object({
