@@ -29,8 +29,13 @@ const SceneGrid = ({
   before,
   emptyState
 }: SceneGridProps) => (
-  <div className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] max-h-[62cqh] mt-[1.1cqh] ${className ?? ''}`}>
-    <div className="grid grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh] w-full">
+  <div
+    className={`
+      styled-scrollbar mt-[1.1cqh] max-h-[62cqh] overflow-y-auto pr-[0.8cqh]
+      ${className ?? ''}
+    `}
+  >
+    <div className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
       {before}
       {/* `display: contents` wrapper so the default-focus marker only covers
           scene tiles (not the user-scenes "paste / browse" buttons in `before`)

@@ -100,7 +100,7 @@ const PauseScenesView = ({
 
   return (
     <div
-      className="absolute inset-0 p-[3.8%_4%] z-[2]"
+      className="absolute inset-0 z-2 p-[3.8%_4%]"
       {...(ALLOW_USER_SCENES
         ? {
             onDragEnter: handleDragEnter,
@@ -112,7 +112,10 @@ const PauseScenesView = ({
     >
       {ALLOW_USER_SCENES && isDragActive && (
         <div
-          className="absolute inset-[2.4cqh] z-[20] border border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)] pointer-events-none grid place-items-center"
+          className="
+            pointer-events-none absolute inset-[2.4cqh] z-20 grid place-items-center border
+            border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)]
+          "
           aria-hidden="true"
         >
           <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
@@ -120,15 +123,13 @@ const PauseScenesView = ({
           </span>
         </div>
       )}
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[92%] z-[3] flex flex-col">
+      <section className="absolute top-(--edge-top-xl) left-(--edge-left) z-3 flex w-[92%] flex-col">
         <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
         <p className={VIEW_DESCRIPTION}>
           {t('app.pause.scenes.description', { count: seeds.length })}
           {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
         </p>
-        {uploadError && (
-          <p className="m-0 mt-[0.6cqh] font-serif text-caption text-[var(--color-error-bright)]">{uploadError}</p>
-        )}
+        {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (
           <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
         )}
@@ -141,24 +142,35 @@ const PauseScenesView = ({
           onSelect={onSceneSelect}
           onTogglePin={onTogglePin}
           onRemove={onRemoveScene}
-          className="relative z-[4]"
+          className="relative z-4"
           before={
             ALLOW_USER_SCENES && (
               <div
-                className={`relative w-full aspect-video border border-[rgba(245,249,255,0.84)] bg-[rgba(248,248,245,0.14)] p-0 overflow-hidden grid grid-cols-2 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
+                className={`
+                  relative grid aspect-video w-full grid-cols-2 overflow-hidden border border-[rgba(245,249,255,0.84)]
+                  bg-[rgba(248,248,245,0.14)] p-0
+                  ${uploadingImage ? 'pointer-events-none opacity-60' : ''}
+                `}
               >
                 <span
-                  className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-[rgba(245,249,255,0.4)] pointer-events-none z-[1]"
+                  className="
+                    pointer-events-none absolute inset-y-0 left-1/2 z-1 w-px -translate-x-1/2 bg-[rgba(245,249,255,0.4)]
+                  "
                   aria-hidden="true"
                 />
                 <RawSettingsButton
                   variant="secondary"
-                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  className="
+                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
+                    hover:outline-0!
+                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
+                    active:bg-surface-btn-hover active:text-text-inverse
+                  "
                   onClick={() => void onClipboardUpload()}
                   title={t('app.buttons.pasteImageFromClipboard')}
                 >
                   <svg
-                    className="w-[2.67cqh] h-[2.67cqh]"
+                    className="h-[2.67cqh] w-[2.67cqh]"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -171,12 +183,17 @@ const PauseScenesView = ({
                 </RawSettingsButton>
                 <RawSettingsButton
                   variant="secondary"
-                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  className="
+                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
+                    hover:outline-0!
+                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
+                    active:bg-surface-btn-hover active:text-text-inverse
+                  "
                   onClick={() => fileInputRef.current?.click()}
                   title={t('app.buttons.browseForImageFile')}
                 >
                   <svg
-                    className="w-[2.67cqh] h-[2.67cqh]"
+                    className="h-[2.67cqh] w-[2.67cqh]"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -195,7 +212,7 @@ const PauseScenesView = ({
       <MenuButton
         variant="primary"
         label="app.buttons.back"
-        className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w px-0"
+        className="absolute right-(--edge-right) bottom-(--edge-bottom) w-btn-w px-0"
         onClick={onBack}
       />
     </div>

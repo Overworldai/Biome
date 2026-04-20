@@ -31,14 +31,20 @@ const VideoContainer = () => {
   return (
     <div
       ref={containerRef}
-      className={`video-container absolute inset-0 z-0 overflow-visible bg-black flex items-center justify-center ${cursorClass}`}
+      className={`
+        video-container absolute inset-0 z-0 flex items-center justify-center overflow-visible bg-black
+        ${cursorClass}
+      `}
       onClick={handleContainerClick}
     >
       <canvas
         ref={handleCanvasRef}
         width={1280}
         height={720}
-        className={`absolute inset-0 w-full h-full object-cover pointer-events-none select-none ${isPaused ? 'saturate-[0.62] brightness-[0.8]' : ''}`}
+        className={`
+          pointer-events-none absolute inset-0 size-full object-cover select-none
+          ${isPaused ? 'brightness-[0.8] saturate-[0.62]' : ''}
+        `}
       />
     </div>
   )

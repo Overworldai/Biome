@@ -77,9 +77,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
         else requestPointerLock()
       }}
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      className={`
+        absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
+        ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
+      `}
     >
-      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
         {view === PAUSE_VIEW.SETTINGS ? (
           <motion.div

@@ -361,10 +361,10 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
         <SettingsSection
           title="app.settings.serverUrl.title"
           rawDescription={
-            <span className="inline-flex items-center gap-[0.71cqh] flex-wrap">
+            <span className="inline-flex flex-wrap items-center gap-[0.71cqh]">
               {t('app.settings.serverUrl.descriptionPrefix')} ·{' '}
               <a
-                className="underline cursor-pointer text-inherit"
+                className="cursor-pointer text-inherit underline"
                 onClick={() =>
                   window.open(
                     'https://github.com/Overworldai/Biome/blob/main/server-components/README.md',
@@ -379,13 +379,23 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
               {serverUrlStatus === 'valid' && (
                 <>
                   {` · ${t('app.settings.serverUrl.connected')}`}
-                  <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+                  <span
+                    className="
+                      inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)]
+                      shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]
+                    "
+                  />
                 </>
               )}
               {serverUrlStatus === 'error' && (
                 <>
                   {` · ${t('app.settings.serverUrl.unreachable')}`}
-                  <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+                  <span
+                    className="
+                      inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)]
+                      shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]
+                    "
+                  />
                 </>
               )}
             </span>
@@ -457,7 +467,14 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
           }
         />
         {menuModelsError && (
-          <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0.35cqh_0_0.8cqh]`}>{menuModelsError}</p>
+          <p
+            className={`
+              ${SETTINGS_MUTED_TEXT}
+              m-[0.35cqh_0_0.8cqh] text-left
+            `}
+          >
+            {menuModelsError}
+          </p>
         )}
       </SettingsSection>
 

@@ -65,7 +65,13 @@ const FrameTimelineOverlay = () => {
 
   return (
     <div
-      className={`absolute top-[1.5cqh] right-[1.5cqh] z-10 pointer-events-none ${OVERLAY_BG} ${OVERLAY_BORDER} rounded-[0.4cqh] p-[1cqh] ${OVERLAY_TEXT}`}
+      className={`
+        pointer-events-none absolute top-[1.5cqh] right-[1.5cqh] z-10
+        ${OVERLAY_BG}
+        ${OVERLAY_BORDER}
+        rounded-[0.4cqh] p-[1cqh]
+        ${OVERLAY_TEXT}
+      `}
     >
       <div style={{ color: COLOR_LABEL }} className="mb-[0.6cqh] text-center">
         FRAME TIMELINE
@@ -95,7 +101,7 @@ const FrameTimelineOverlay = () => {
                 {slot.label}
               </div>
               <div
-                className="tabular-nums text-center"
+                className="text-center tabular-nums"
                 style={{ fontSize: '1.4cqh', lineHeight: '1.8cqh', color, minWidth: '5cqh' }}
               >
                 {timeLabel}

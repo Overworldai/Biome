@@ -45,7 +45,7 @@ const PauseMainView = ({
     <div className="absolute inset-0 p-[3.8%_4%]">
       <SocialCtaRow />
 
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col">
+      <section className="absolute top-(--edge-top-xl) left-(--edge-left) flex w-[77%] flex-col">
         <h2 className={VIEW_HEADING}>{t('app.pause.pinnedScenes.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.pause.pinnedScenes.description', { suffix })}</p>
         <SceneGrid
@@ -59,11 +59,14 @@ const PauseMainView = ({
           onRemove={onRemoveScene}
           emptyState={
             <div
-              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
+              className="
+                relative grid aspect-video w-full cursor-default place-items-center overflow-hidden rounded-card border
+                border-dashed border-border-subtle bg-surface-btn-secondary p-0
+              "
               aria-hidden="true"
             >
               <svg
-                className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
+                className="h-[36%] w-[36%] text-[rgba(245,249,255,0.5)]"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -82,18 +85,22 @@ const PauseMainView = ({
         <span className="inline-flex items-end gap-[1.42cqh]">
           <span>{t('app.pause.title')}</span>
           <span
-            className={`self-end font-serif text-[2.13cqh] leading-[1.0] tracking-[0.03em] text-[rgba(245,249,255,0.62)] transition-opacity duration-120 ${
-              showPauseLockoutTimer
-                ? 'opacity-100 [animation:pauseUnlockHintPulse_1200ms_ease-out_forwards]'
-                : 'opacity-0'
-            }`}
+            className={`
+              self-end font-serif text-[2.13cqh] leading-none tracking-[0.03em] text-[rgba(245,249,255,0.62)]
+              transition-opacity duration-120
+              ${
+                showPauseLockoutTimer
+                  ? 'animate-[pauseUnlockHintPulse_1200ms_ease-out_forwards] opacity-100'
+                  : 'opacity-0'
+              }
+            `}
           >
             {showPauseLockoutTimer ? t('app.pause.unlockIn', { seconds: pauseLockoutSecondsText }) : ''}
           </span>
         </span>
       </ViewLabel>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex w-btn-w flex-col gap-[1.1cqh]">
         <MenuButton variant="secondary" label="app.buttons.reset" className="w-full px-0" onClick={onResetAndResume} />
         <MenuButton
           variant="secondary"

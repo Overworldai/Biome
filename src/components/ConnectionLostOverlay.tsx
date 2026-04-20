@@ -44,10 +44,19 @@ const ConnectionLostOverlay = () => {
 
   return (
     <div
-      className={`connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90 backdrop-blur-[0.56cqh] ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
+      className={`
+        connection-lost-overlay absolute inset-0 z-200 flex items-center justify-center bg-darkest/90
+        backdrop-blur-[0.56cqh]
+        ${connectionLost ? 'active pointer-events-auto visible opacity-100' : 'pointer-events-none invisible opacity-0'}
+      `}
     >
-      <div className="border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] w-[115cqh] max-w-[92vw] p-[3cqh_2.84cqh] flex flex-col items-center gap-[2.2cqh] animate-[connectionLostFadeIn_0.4s_ease-out]">
-        <div className="w-[8.5cqh] h-[8.5cqh] text-error-muted animate-[connectionLostPulse_2s_ease-in-out_infinite]">
+      <div
+        className="
+          flex w-[115cqh] max-w-[92vw] animate-[connectionLostFadeIn_0.4s_ease-out] flex-col items-center gap-[2.2cqh]
+          border border-border-medium bg-surface-modal p-[3cqh_2.84cqh] text-(--color-text-primary)
+        "
+      >
+        <div className="h-[8.5cqh] w-[8.5cqh] animate-[connectionLostPulse_2s_ease-in-out_infinite] text-error-muted">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -55,7 +64,7 @@ const ConnectionLostOverlay = () => {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-full h-full"
+            className="size-full"
           >
             <line x1="1" y1="1" x2="23" y2="23" />
             <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
@@ -66,19 +75,23 @@ const ConnectionLostOverlay = () => {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <div className="flex flex-col items-center gap-[0.4cqh] w-full">
-          <h3 className="m-0 font-serif font-medium text-[3.91cqh]">{t('app.dialogs.connectionLost.title')}</h3>
+        <div className="flex w-full flex-col items-center gap-[0.4cqh]">
+          <h3 className="m-0 font-serif text-[3.91cqh] font-medium">{t('app.dialogs.connectionLost.title')}</h3>
           {errorDetail ? (
-            <p className="m-0 font-serif text-[var(--color-error-bright)] text-[2.4cqh] text-center leading-[1.3] break-words w-full">
+            <p
+              className="
+                m-0 w-full text-center font-serif text-[2.4cqh] leading-[1.3] wrap-break-word text-error-bright
+              "
+            >
               {errorDetail}
             </p>
           ) : (
-            <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] text-center">
+            <p className="m-0 text-center font-serif text-[2.4cqh] text-text-modal-muted">
               {t('app.dialogs.connectionLost.description')}
             </p>
           )}
         </div>
-        <div className="w-full h-[28cqh]">
+        <div className="h-[28cqh] w-full">
           <ServerLogDisplay
             errorMessage={errorDetail}
             logs={wsLogs}
@@ -88,7 +101,7 @@ const ConnectionLostOverlay = () => {
                 variant="primary"
                 autoShrinkLabel
                 label="app.buttons.returnToMainMenu"
-                className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
+                className="px-[1.4cqh] py-[0.4cqh] text-[2.13cqh]"
                 onClick={handleReturnToMainMenu}
               />
             }

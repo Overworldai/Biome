@@ -22,7 +22,13 @@ const WindowControlButton = ({
     <button
       type="button"
       tabIndex={-1}
-      className={`flex items-center justify-center w-[35px] h-6 m-0 p-0 rounded-sm text-[14px] leading-none cursor-pointer bg-surface-btn-secondary text-text-primary font-serif border border-border-light outline-0 transition-[background-color,color,border-color] duration-[160ms] ease-in-out ${hoverBg} hover:border-transparent`}
+      className={`
+        m-0 flex h-6 w-[35px] cursor-pointer items-center justify-center rounded-sm border border-border-light
+        bg-surface-btn-secondary p-0 font-serif text-[14px] leading-none text-text-primary outline-0
+        transition-[background-color,color,border-color] duration-160 ease-in-out
+        ${hoverBg}
+        hover:border-transparent
+      `}
       onClick={onClick}
       aria-label={t(label)}
       style={noDragRegionStyle}
@@ -45,18 +51,31 @@ const WindowControls = () => {
   const hidden = isStreaming && !isPaused
 
   return (
-    <div className="absolute top-0 left-0 right-0 h-10 z-[9998]" style={dragRegionStyle}>
+    <div className="absolute inset-x-0 top-0 z-9998 h-10" style={dragRegionStyle}>
       <div
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-          hidden ? 'opacity-0' : 'opacity-50'
-        }`}
+        className={`
+          pointer-events-none absolute inset-0 transition-opacity duration-300
+          ${hidden ? 'opacity-0' : 'opacity-50'}
+        `}
       >
-        <div className="h-full w-full bg-[linear-gradient(to_bottom,rgba(7,10,18,0.42)_0%,rgba(7,10,18,0.2)_38%,rgba(7,10,18,0)_100%)]" />
+        <div
+          className="
+            size-full bg-[linear-gradient(to_bottom,rgba(7,10,18,0.42)_0%,rgba(7,10,18,0.2)_38%,rgba(7,10,18,0)_100%)]
+          "
+        />
       </div>
       <div
-        className={`absolute top-1.5 right-1.5 z-[9999] flex flex-row gap-1 transition-opacity duration-300 ${
-          hidden ? 'opacity-0 pointer-events-none' : 'opacity-50 hover:opacity-100 pointer-events-auto'
-        }`}
+        className={`
+          absolute top-1.5 right-1.5 z-9999 flex flex-row gap-1 transition-opacity duration-300
+          ${
+            hidden
+              ? 'pointer-events-none opacity-0'
+              : `
+                pointer-events-auto opacity-50
+                hover:opacity-100
+              `
+          }
+        `}
         style={noDragRegionStyle}
       >
         <WindowControlButton onClick={minimize} label="app.window.minimize">

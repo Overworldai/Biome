@@ -87,7 +87,10 @@ type KeyProps = {
 
 const Key = ({ label, state, width = U }: KeyProps) => (
   <div
-    className={`${KEY_BASE} ${keyStateClass(state)}`}
+    className={`
+      ${KEY_BASE}
+      ${keyStateClass(state)}
+    `}
     style={{ width: `${width}cqh`, height: `${U}cqh`, fontSize: `${U * 0.5}cqh` }}
   >
     <span className="truncate" style={{ padding: `0 ${U * 0.06}cqh` }}>
@@ -111,7 +114,7 @@ const VirtualKeyboard = ({ pressedKeys, simulatedCodes }: VirtualKeyboardProps) 
 
   return (
     <div
-      className="absolute bottom-[1.5cqh] left-[1.5cqh] z-10 pointer-events-none flex flex-col"
+      className="pointer-events-none absolute bottom-[1.5cqh] left-[1.5cqh] z-10 flex flex-col"
       style={{ gap: `${U * 0.11}cqh` }}
     >
       {KEYBOARD_LAYOUT.map((row, rowIdx) => (
@@ -161,15 +164,15 @@ const VirtualMouse = ({ mouseButtons, simulatedCodes, mouseDelta, gamepadDelta, 
 
   return (
     <div
-      className="absolute bottom-[1.5cqh] right-[1.5cqh] z-10 pointer-events-none flex flex-col items-center"
+      className="pointer-events-none absolute right-[1.5cqh] bottom-[1.5cqh] z-10 flex flex-col items-center"
       style={{ gap: `${U * 0.15}cqh` }}
     >
       {/* Movement arrow */}
-      <div className="relative flex items-center justify-center w-[18cqh] h-[18cqh]">
+      <div className="relative flex h-[18cqh] w-[18cqh] items-center justify-center">
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-gray-800/80 w-[18cqh] h-[18cqh]" />
+          <div className="h-[18cqh] w-[18cqh] rounded-full bg-gray-800/80" />
         </div>
-        <svg width="100%" height="100%" viewBox="-50 -50 100 100" className="overflow-visible relative z-10">
+        <svg width="100%" height="100%" viewBox="-50 -50 100 100" className="relative z-10 overflow-visible">
           {physical.length > 0.1 && (
             <g transform={`rotate(${physical.angle})`}>
               <line x1="0" y1="0" x2={physical.length} y2="0" stroke="#d1d5db" strokeWidth="3" strokeLinecap="round" />
@@ -195,20 +198,28 @@ const VirtualMouse = ({ mouseButtons, simulatedCodes, mouseDelta, gamepadDelta, 
       {/* LMB / MMB / RMB row */}
       <div className="flex" style={{ gap: `${U * 0.11}cqh` }}>
         <div
-          className={`${KEY_BASE} ${keyStateClass(stateFor('MouseLeft'))} rounded-t-[0.6cqh] rounded-b-none`}
+          className={`
+            ${KEY_BASE}
+            ${keyStateClass(stateFor('MouseLeft'))}
+            rounded-t-[0.6cqh] rounded-b-none
+          `}
           style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
         >
           LMB
         </div>
         <div className="relative">
           <div
-            className={`${KEY_BASE} ${keyStateClass(stateFor('MouseMiddle'))} rounded-t-[0.6cqh] rounded-b-none`}
+            className={`
+              ${KEY_BASE}
+              ${keyStateClass(stateFor('MouseMiddle'))}
+              rounded-t-[0.6cqh] rounded-b-none
+            `}
             style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
           >
             MMB
           </div>
           {(scrollActive.up || scrollActive.down) && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <svg width="100%" height="100%" viewBox="0 0 20 40" className="overflow-visible">
                 {scrollActive.up ? (
                   <polygon points="10,5 5,12 15,12" fill="#d1d5db" stroke="#6b7280" strokeWidth="1" />
@@ -220,7 +231,11 @@ const VirtualMouse = ({ mouseButtons, simulatedCodes, mouseDelta, gamepadDelta, 
           )}
         </div>
         <div
-          className={`${KEY_BASE} ${keyStateClass(stateFor('MouseRight'))} rounded-t-[0.6cqh] rounded-b-none`}
+          className={`
+            ${KEY_BASE}
+            ${keyStateClass(stateFor('MouseRight'))}
+            rounded-t-[0.6cqh] rounded-b-none
+          `}
           style={{ width: `${U * 1.2}cqh`, height: `${U * 1.2}cqh`, fontSize: `${U * 0.5}cqh` }}
         >
           RMB

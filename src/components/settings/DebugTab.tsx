@@ -77,11 +77,18 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
                 variant="secondary"
                 autoShrinkLabel
                 label="app.buttons.copy"
-                className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                className="px-[1.4cqh] py-[0.2cqh] text-[2cqh]"
                 onClick={() => void handleCopyDiagnostics()}
               />
               {diagnosticsStatus && (
-                <span className={`font-serif text-[2cqh] ${SETTINGS_MUTED_TEXT}`}>{diagnosticsStatus}</span>
+                <span
+                  className={`
+                    font-serif text-[2cqh]
+                    ${SETTINGS_MUTED_TEXT}
+                  `}
+                >
+                  {diagnosticsStatus}
+                </span>
               )}
             </div>
           </SettingsRow>

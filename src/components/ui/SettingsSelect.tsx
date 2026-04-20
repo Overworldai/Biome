@@ -32,8 +32,8 @@ type SettingsSelectProps = {
 }
 
 const OptionContent = ({ displayLabel, prefix }: { displayLabel: string; prefix?: string }) => (
-  <span className="flex items-start justify-between gap-[1cqh] w-full min-w-0">
-    <span className="min-w-0 break-words">{displayLabel}</span>
+  <span className="flex w-full min-w-0 items-start justify-between gap-[1cqh]">
+    <span className="min-w-0 wrap-break-word">{displayLabel}</span>
     {prefix ? <span className="shrink-0 text-[rgba(238,244,252,0.45)] lowercase">{prefix}</span> : <span />}
   </span>
 )
@@ -128,22 +128,34 @@ const SettingsSelect = ({
   const dropdownMenu = isOpen ? (
     <div
       ref={dropdownRef}
-      className="absolute left-0 top-full w-full z-[9999] max-h-[40cqh] select-none border border-border-medium border-t-0 bg-[rgba(2,4,8,0.78)] backdrop-blur-[1.67cqh] overflow-y-auto styled-scrollbar"
+      className="
+        styled-scrollbar absolute top-full left-0 z-9999 max-h-[40cqh] w-full overflow-y-auto border border-t-0
+        border-border-medium bg-[rgba(2,4,8,0.78)] backdrop-blur-[1.67cqh] select-none
+      "
     >
       {options
         .filter((option) => !hideSelectedInDropdown || option.value !== value)
         .map((option) => (
           <div
             key={option.value}
-            className={`flex items-center ${
-              option.value === value
-                ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
-                : 'bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]'
-            } ${option.dimmed ? 'opacity-50' : ''}`}
+            className={`
+              flex items-center
+              ${
+                option.value === value
+                  ? 'bg-[rgba(245,251,255,0.15)] text-text-primary'
+                  : `
+                    bg-transparent text-text-modal-muted
+                    hover:bg-[rgba(245,251,255,0.08)]
+                  `
+              }
+              ${option.dimmed ? 'opacity-50' : ''}
+            `}
           >
             <button
               type="button"
-              className={`flex-1 min-w-0 font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'} text-[2.67cqh] bg-transparent text-inherit`}
+              className={`
+                min-w-0 flex-1 cursor-pointer rounded-none border-none p-[0.55cqh_1.42cqh] font-serif outline-none
+                ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'} bg-transparent text-[2.67cqh] text-inherit`}
               onMouseEnter={playHover}
               onClick={() => {
                 playClick()
@@ -156,7 +168,11 @@ const SettingsSelect = ({
             {option.cacheDeletable && onCacheDelete && (
               <button
                 type="button"
-                className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                className="
+                  flex h-full w-[3.56cqh] cursor-pointer items-center justify-center border-none bg-transparent
+                  text-[rgba(238,244,252,0.45)] transition-colors
+                  hover:text-[rgba(255,120,80,0.95)]
+                "
                 onMouseEnter={playHover}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -165,7 +181,7 @@ const SettingsSelect = ({
                 }}
                 title={cacheDeleteLabel ? t(cacheDeleteLabel) : undefined}
               >
-                <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 10" fill="none">
                   <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
@@ -173,7 +189,11 @@ const SettingsSelect = ({
             {option.deletable && onDelete && (
               <button
                 type="button"
-                className="flex items-center justify-center w-[3.56cqh] h-full bg-transparent border-none cursor-pointer text-[rgba(238,244,252,0.45)] hover:text-[rgba(255,120,80,0.95)] transition-colors"
+                className="
+                  flex h-full w-[3.56cqh] cursor-pointer items-center justify-center border-none bg-transparent
+                  text-[rgba(238,244,252,0.45)] transition-colors
+                  hover:text-[rgba(255,120,80,0.95)]
+                "
                 onMouseEnter={playHover}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -182,7 +202,7 @@ const SettingsSelect = ({
                 }}
                 title={deleteLabel ? t(deleteLabel) : undefined}
               >
-                <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 10" fill="none">
                   <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
@@ -192,7 +212,11 @@ const SettingsSelect = ({
       {allowCustom && (
         <button
           type="button"
-          className="w-full font-serif cursor-pointer rounded-none border-none outline-none p-[0.55cqh_1.42cqh] pr-[4.98cqh] text-[2.67cqh] bg-transparent text-[var(--color-text-modal-muted)] hover:bg-[rgba(245,251,255,0.08)]"
+          className="
+            w-full cursor-pointer rounded-none border-none bg-transparent p-[0.55cqh_1.42cqh] pr-[4.98cqh] font-serif
+            text-[2.67cqh] text-text-modal-muted outline-none
+            hover:bg-[rgba(245,251,255,0.08)]
+          "
           onClick={() => {
             setIsCustom(true)
             setIsOpen(false)
@@ -208,7 +232,12 @@ const SettingsSelect = ({
     return (
       <div ref={containerRef} className="relative">
         <div
-          className={`w-full flex items-stretch rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${SETTINGS_OUTLINE_HOVER}`}
+          className={`
+            flex w-full items-stretch rounded-none
+            ${SETTINGS_CONTROL_BASE}
+            p-0
+            ${SETTINGS_OUTLINE_HOVER}
+          `}
         >
           <input
             ref={inputRef}
@@ -217,7 +246,10 @@ const SettingsSelect = ({
             autoCorrect="off"
             autoCapitalize="off"
             autoComplete="off"
-            className={`flex-1 min-w-0 bg-transparent border-none outline-none break-words ${SETTINGS_CONTROL_TEXT}`}
+            className={`
+              min-w-0 flex-1 border-none bg-transparent wrap-break-word outline-none
+              ${SETTINGS_CONTROL_TEXT}
+            `}
             value={customValue}
             onChange={(e) => setCustomValue(e.target.value)}
             onPaste={(e) => {
@@ -238,19 +270,23 @@ const SettingsSelect = ({
             autoFocus
           />
           {rawCustomPrefix && (
-            <span className="flex items-center pr-[1cqh] text-[rgba(238,244,252,0.45)] lowercase text-[2.67cqh] font-serif text-right">
+            <span
+              className="
+                flex items-center pr-[1cqh] text-right font-serif text-[2.67cqh] text-[rgba(238,244,252,0.45)] lowercase
+              "
+            >
               {rawCustomPrefix}
             </span>
           )}
           <button
             type="button"
-            className="flex items-center justify-center w-[3.56cqh] bg-surface-btn-primary cursor-pointer border-none"
+            className="flex w-[3.56cqh] cursor-pointer items-center justify-center border-none bg-surface-btn-primary"
             onClick={() => {
               setIsCustom(false)
               openDropdown()
             }}
           >
-            <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 6" fill="none">
+            <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 6" fill="none">
               <path d="M0 0L5 6L10 0H0Z" fill="rgba(10,14,24,0.95)" />
             </svg>
           </button>
@@ -274,7 +310,19 @@ const SettingsSelect = ({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        className={`w-full flex items-stretch rounded-none ${SETTINGS_CONTROL_BASE} p-0 ${disabled ? 'opacity-40 cursor-not-allowed' : `cursor-pointer ${SETTINGS_OUTLINE_HOVER}`}`}
+        className={`
+          flex w-full items-stretch rounded-none
+          ${SETTINGS_CONTROL_BASE}
+          p-0
+          ${
+            disabled
+              ? 'cursor-not-allowed opacity-40'
+              : `
+                cursor-pointer
+                ${SETTINGS_OUTLINE_HOVER}
+              `
+          }
+        `}
         onMouseEnter={disabled ? undefined : playHover}
         onClick={() => {
           if (disabled) return
@@ -293,15 +341,20 @@ const SettingsSelect = ({
         }}
         disabled={disabled}
       >
-        <span className={`flex-1 min-w-0 break-words ${SETTINGS_CONTROL_TEXT}`}>
+        <span
+          className={`
+            min-w-0 flex-1 wrap-break-word
+            ${SETTINGS_CONTROL_TEXT}
+          `}
+        >
           {selectedOption ? (
             <OptionContent displayLabel={resolveLabel(selectedOption)} prefix={selectedOption.prefix} />
           ) : (
             value
           )}
         </span>
-        <span className="flex items-center justify-center w-[3.56cqh] bg-surface-btn-primary">
-          <svg className="w-[1.42cqh] h-[1.42cqh]" viewBox="0 0 10 6" fill="none">
+        <span className="flex w-[3.56cqh] items-center justify-center bg-surface-btn-primary">
+          <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 6" fill="none">
             <path d="M0 0L5 6L10 0H0Z" fill="rgba(10,14,24,0.95)" />
           </svg>
         </span>

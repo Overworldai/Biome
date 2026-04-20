@@ -16,7 +16,10 @@ const BTN_UNPRESSED = 'bg-black/50 border-white/20 text-white/40'
 type BtnProps = { label: string; pressed: boolean; w?: number; h?: number }
 const Btn = ({ label, pressed, w = 1, h = 1 }: BtnProps) => (
   <div
-    className={`${BTN_BASE} ${pressed ? BTN_PRESSED : BTN_UNPRESSED}`}
+    className={`
+      ${BTN_BASE}
+      ${pressed ? BTN_PRESSED : BTN_UNPRESSED}
+    `}
     style={{ width: `${U * w}cqh`, height: `${U * h}cqh`, fontSize: `${U * 0.45}cqh` }}
   >
     {label}
@@ -54,16 +57,16 @@ const Stick = ({ x, y, pressed }: StickProps) => {
 type DpadProps = { pressed: (code: InputCode) => boolean }
 const Dpad = ({ pressed }: DpadProps) => (
   <div className="relative" style={{ width: `${U * 2.2}cqh`, height: `${U * 2.2}cqh` }}>
-    <div className="absolute left-1/2 top-0 -translate-x-1/2">
+    <div className="absolute top-0 left-1/2 -translate-x-1/2">
       <Btn label="↑" pressed={pressed(GAMEPAD_CODES.DPAD_UP)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute left-0 top-1/2 -translate-y-1/2">
+    <div className="absolute top-1/2 left-0 -translate-y-1/2">
       <Btn label="←" pressed={pressed(GAMEPAD_CODES.DPAD_LEFT)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute right-0 top-1/2 -translate-y-1/2">
+    <div className="absolute top-1/2 right-0 -translate-y-1/2">
       <Btn label="→" pressed={pressed(GAMEPAD_CODES.DPAD_RIGHT)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute left-1/2 bottom-0 -translate-x-1/2">
+    <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
       <Btn label="↓" pressed={pressed(GAMEPAD_CODES.DPAD_DOWN)} w={0.7} h={0.7} />
     </div>
   </div>
@@ -72,16 +75,16 @@ const Dpad = ({ pressed }: DpadProps) => (
 type FaceProps = { pressed: (code: InputCode) => boolean }
 const FaceButtons = ({ pressed }: FaceProps) => (
   <div className="relative" style={{ width: `${U * 2.2}cqh`, height: `${U * 2.2}cqh` }}>
-    <div className="absolute left-1/2 top-0 -translate-x-1/2">
+    <div className="absolute top-0 left-1/2 -translate-x-1/2">
       <Btn label="Y" pressed={pressed(GAMEPAD_CODES.Y)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute left-0 top-1/2 -translate-y-1/2">
+    <div className="absolute top-1/2 left-0 -translate-y-1/2">
       <Btn label="X" pressed={pressed(GAMEPAD_CODES.X)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute right-0 top-1/2 -translate-y-1/2">
+    <div className="absolute top-1/2 right-0 -translate-y-1/2">
       <Btn label="B" pressed={pressed(GAMEPAD_CODES.B)} w={0.7} h={0.7} />
     </div>
-    <div className="absolute left-1/2 bottom-0 -translate-x-1/2">
+    <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
       <Btn label="A" pressed={pressed(GAMEPAD_CODES.A)} w={0.7} h={0.7} />
     </div>
   </div>
@@ -100,7 +103,10 @@ const VirtualGamepad = ({ pressedGamepad, axes, visible }: VirtualGamepadProps) 
 
   return (
     <div
-      className="absolute bottom-[1.5cqh] left-1/2 -translate-x-1/2 z-10 pointer-events-none transition-opacity duration-[400ms] ease-out"
+      className="
+        pointer-events-none absolute bottom-[1.5cqh] left-1/2 z-10 -translate-x-1/2 transition-opacity duration-400
+        ease-out
+      "
       style={{ opacity: visible ? 1 : 0 }}
     >
       <div className="flex flex-col" style={{ gap: `${U * 0.28}cqh` }}>

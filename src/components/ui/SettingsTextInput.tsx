@@ -16,7 +16,12 @@ const SettingsTextInput = ({ value, onChange, onBlur, placeholder, disabled }: S
   return (
     <input
       type="text"
-      className={`w-full rounded-none cursor-text ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} outline-none appearance-none`}
+      className={`
+        w-full cursor-text rounded-none
+        ${SETTINGS_CONTROL_BASE}
+        ${SETTINGS_CONTROL_TEXT}
+        appearance-none outline-none
+      `}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onBlur={onBlur}

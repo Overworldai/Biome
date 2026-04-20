@@ -25,18 +25,23 @@ const OverlayModal = ({
   if (!open) return null
 
   return (
-    <div className="absolute inset-0 z-[210] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm">
+    <div className="absolute inset-0 z-210 flex items-center justify-center bg-overlay-scrim backdrop-blur-sm">
       <div
-        className={`max-h-[82cqh] ${widthClassName} border border-[var(--color-border-medium)] bg-[var(--color-surface-modal)] text-[var(--color-text-primary)] p-[1.6cqh_2cqh] flex flex-col gap-[1.2cqh]`}
+        className={`
+          max-h-[82cqh]
+          ${widthClassName}
+          flex flex-col gap-[1.2cqh] border border-border-medium bg-surface-modal p-[1.6cqh_2cqh]
+          text-(--color-text-primary)
+        `}
       >
         <div className="flex items-center justify-between gap-[1cqh]">
-          <h3 className="m-0 font-serif font-medium text-[3.56cqh]">{t(title)}</h3>
+          <h3 className="m-0 font-serif text-[3.56cqh] font-medium">{t(title)}</h3>
           {onClose && (
             <Button
               variant="secondary"
               autoShrinkLabel
               label="app.buttons.close"
-              className="text-[2.22cqh] px-[1.2cqh] py-[0.25cqh]"
+              className="px-[1.2cqh] py-[0.25cqh] text-[2.22cqh]"
               onClick={onClose}
             />
           )}

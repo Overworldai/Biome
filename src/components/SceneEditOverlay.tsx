@@ -114,14 +114,23 @@ const SceneEditOverlay = () => {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder={t('app.sceneEdit.placeholder')}
-          className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full outline-none focus:ring-1 focus:ring-border-medium`}
+          className={`
+            ${SETTINGS_CONTROL_BASE}
+            ${SETTINGS_CONTROL_TEXT}
+            w-full outline-none
+            focus:ring-1 focus:ring-border-medium
+          `}
         />
         <span className="font-serif text-[1.8cqh] text-text-muted">{t('app.sceneEdit.instructions')}</span>
       </div>
     ),
     loading: () => (
       <div className="flex items-center gap-[1cqw]">
-        <div className="h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary" />
+        <div
+          className="
+            h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary
+          "
+        />
         <span className="font-serif text-[2.4cqh] text-text-muted">{t('app.sceneEdit.applying')}</span>
       </div>
     ),

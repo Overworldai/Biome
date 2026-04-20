@@ -30,14 +30,14 @@ const ConfirmModal = ({
 
   return (
     <Modal title={title} onCancel={onCancel}>
-      <p className="m-0 font-serif text-[var(--color-text-modal-muted)] text-[2.4cqh] whitespace-pre-line">
+      <p className="m-0 font-serif text-[2.4cqh] whitespace-pre-line text-text-modal-muted">
         {descriptionComponents ? (
           <Trans i18nKey={description} values={descriptionParams} components={descriptionComponents} />
         ) : (
           t(description, descriptionParams)
         )}
       </p>
-      <div className="flex flex-wrap justify-end mt-[1.4cqh] gap-[1.42cqh]">
+      <div className="mt-[1.4cqh] flex flex-wrap justify-end gap-[1.42cqh]">
         <Button
           variant="secondary"
           autoShrinkLabel
