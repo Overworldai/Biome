@@ -255,14 +255,7 @@ const Row = ({ label, value, color, sparkValues, sparkColor, sparkMax, className
       ${className}
     `}
   >
-    <span
-      className={`
-        text-[${COLOR_LABEL}]
-        w-[5.5cqh] shrink-0 text-right
-      `}
-    >
-      {label}
-    </span>
+    <span className="w-[5.5cqh] shrink-0 text-right">{label}</span>
     {sparkValues !== undefined ? (
       <>
         <span style={{ color }} className="w-[14cqh] shrink-0 tabular-nums">
