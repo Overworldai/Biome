@@ -10,6 +10,8 @@ npm run lint-fix     # Auto-fix formatting (Prettier) + type-check (tsc) — run
 
 No test framework is configured.
 
+Run `npm run lint` after every major block of work to catch formatting and type errors early. Use `npm run lint-fix` to auto-fix formatting issues found by the linter.
+
 ## Cutting a Release
 
 ```bash
@@ -19,7 +21,75 @@ node scripts/release.mjs <version> # Bump versions, commit, and tag
 
 This updates version numbers across the project, creates a commit, and tags it. Follow the script's output for next steps.
 
-Run `npm run lint` after every major block of work to catch formatting and type errors early. Use `npm run lint-fix` to auto-fix formatting issues found by the linter.
+### Release Checklist
+
+The goal is to verify that the release behaves reasonably on an arbitrary user system, regardless of what is or isn't already installed globally. At the time of writing, Biome is expected to work on **Linux and Windows with an NVIDIA GPU**; other platforms and GPU vendors are out of scope for functional testing but should still fail gracefully. The compatibility target is not fixed — re-check it when cutting each release.
+
+**Fresh install** — on a clean environment without pre-existing Python, Node, CUDA toolchain, or C compiler (Windows Sandbox; a fresh Ubuntu / Fedora / Arch container via `./scripts/appimage-docker-desktop.sh`):
+
+- [ ] Installer / AppImage launches
+- [ ] Standalone mode unpacks `world_engine/`, installs UV + managed Python, runs `uv sync`, and reaches engine-ready without manual intervention
+- [ ] First frame streams end-to-end
+- [ ] Install / run path contains spaces and/or non-ASCII characters (e.g. `C:\Users\Café\...`) — standalone's `uv sync` and `world_engine/` unpack still work
+
+**Upgrade path** — install the new release on top of a previous version under the same user account:
+
+- [ ] Existing settings load; no reset prompt and no lost fields
+- [ ] Previously-downloaded models in the HF cache are reused (no surprise re-download)
+- [ ] `.uv/` cache is reused where possible; `uv sync` only re-runs for genuinely changed deps
+
+**Unsupported systems** — on macOS, a non-NVIDIA Linux/Windows host, or a host without a working CUDA driver:
+
+- [ ] The app opens and surfaces a localised, actionable error (no silent hang, no unhandled exception dialog)
+- [ ] UI remains responsive; settings can still be opened and exited
+
+**Engine error surfaces** — force server-originated `error` / `warning` push messages (easiest repro: set `engine_model` to a model that won't fit in VRAM to trigger CUDA OOM):
+
+- [ ] Known errors (messages with `message_id`) render using the translated string, with any `{{message}}` detail interpolated
+- [ ] Unknown errors (no `message_id`) show the raw `message` text rather than swallowing it
+- [ ] After a recoverable error, the UI returns to a usable state without a full app restart
+
+**Models** — each published Waypoint model (`Waypoint-1-Small`, `Waypoint-1.1-Small`, `Waypoint-1.5-1B`, `Waypoint-1.5-1B-360P`) should:
+
+- [ ] Appear in the model picker (populated from the `Overworld/waypoint` HF collection)
+- [ ] Download and load successfully on a cold cache
+- [ ] Stream at least one frame before any prompt change
+- [ ] `DEFAULT_WORLD_ENGINE_MODEL` (in `src/types/settings.ts` and `electron/ipc/models.ts`) points at the flagship model for this release
+
+**Seed images** — test at least one seed from each of the five defaults in `DEFAULT_PINNED_SCENES`.
+
+**Engine modes** — both must work:
+
+- [ ] **Standalone**: cold start, warm restart, "Reinstall" rebuilds `world_engine/` and recovers
+- [ ] **Server**: reachable `ws://` and `wss://` endpoints; invalid URL shows an error; unreachable URL does not freeze the UI
+- [ ] **Server disconnect recovery**: kill the remote server mid-stream — client surfaces a localised error and reconnects cleanly once the server is back
+- [ ] Toggling between modes mid-session stops the local server and reconnects cleanly
+
+**Setting permutations** — toggle each **mid-stream** (not just at startup) to exercise state-machine transitions. Settings live in `src/types/settings.ts`:
+
+- [ ] `engine_quant`: all of `none` / `fp8w8a8` / `intw8a8` — the first `intw8a8` run triggers a long optimisation pass (expected; must not hang the UI)
+- [ ] `cap_inference_fps`: on and off
+- [ ] `engine_model`: switch between a default model and a custom HF repo; try a private / non-existent repo (surface an error, do not crash)
+- [ ] `locale`: `ja` or `zh` (non-Latin), `he` (RTL), `goose` (novelty locale still renders without crashing)
+- [ ] `experimental.scene_edit_enabled`: off by default — when off, scene-edit UI and keybind are hidden; when on, the feature works well enough to ship even though it's experimental
+- [ ] `debug_overlays.*`: each of the four overlays individually, then all four at once
+
+**Keybindings**
+
+- [ ] Bind `reset_scene` and `scene_edit` to the same key — conflict warning appears
+- [ ] Bind either to a movement / camera key — in-game input remains usable (or the conflict is surfaced)
+
+**Long-session stability** — stream for ~10 minutes, with several prompt changes and at least one model switch. Each of these resets world state, but host resources should not accumulate across resets:
+
+- [ ] Renderer and Python server memory usage stabilises rather than climbing across resets
+- [ ] No stray child processes or dangling file handles linger after a model switch
+- [ ] Frame generation times stay consistent from the start of the session to the end
+
+**Settings robustness** — with the app closed, mutate the settings file on disk:
+
+- [ ] Delete the file entirely — app boots with all defaults and no error dialog
+- [ ] Remove individual fields — Zod defaults fill them in, other fields are preserved
+- [ ] Write malformed JSON — app boots and falls back to defaults rather than refusing to start
 
 ## Architecture
 
@@ -145,7 +215,45 @@ Electron Forge with Vite plugin. Three separate Vite configs and tsconfigs:
 
 **Local builds**: `npm run build` copies `server-components/` and other extra resource directories verbatim into the installer. Make sure your workspace is clean before building — any untracked files (`.venv`, `__pycache__`, `uv.lock`, `server.log`, etc.) will be included and can bloat the installer by gigabytes. Production releases should be cut via CI from a clean checkout.
 
-**Linux builds**: The AppImage maker requires `mksquashfs` (from squashfs-tools) to be on `PATH`. On NixOS, this is provided by `shell.nix`. On Ubuntu/Debian, install `squashfs-tools`.
+**Linux AppImage builds**: The default AppImage produced by `@reforged/maker-appimage` is a thin wrapper — it relies on the host system having GTK3, X11, NSS, a C toolchain (for Triton's runtime CUDA JIT), and a correctly-configured OpenSSL. In practice, this fails on many distros: OpenSuSE Tumbleweed crashes on OpenSSL config ([#92](https://github.com/Overworldai/Biome/issues/92)), NixOS has none of these at standard FHS paths, and most desktop Linux installs don't ship `gcc`. Our post-processing pipeline turns the bare AppImage into a self-contained bundle that works across distributions.
+
+On Linux, `npm run build` produces an AppImage that is then post-processed by `scripts/appimage-post-make.mjs` (called automatically via Forge's `postMake` hook). The pipeline:
+
+1. **Fetches build tools** (`scripts/appimage-prepare-assets.mjs`, run via Forge `generateAssets` hook): downloads pinned versions of [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy), linuxdeploy-plugin-gtk, [appimagetool](https://github.com/AppImage/appimagetool), and the [Zig](https://ziglang.org/) toolchain into `build/appimage/.cache/` and `build/appimage/toolchain/`. Idempotent; skips assets already present. SHA256 hashes are pinned in the script — CI refuses to proceed without them.
+2. **Bundles GTK/X11 deps**: linuxdeploy + plugin-gtk walk the Electron binary's ELF dependencies and copy ~130 shared libraries into the AppDir, with rpath patching.
+3. **Bundles transitive closure**: a second pass uses `ldd` to find libs that linuxdeploy's excludelist skipped (libX11, libxcb, libz, etc.) and copies them too. This ensures the AppImage works on distros with non-FHS layouts (NixOS, Alpine).
+4. **Bundles NSS plugins**: `libsoftokn3.so` and friends are dlopen'd by Chromium at runtime — invisible to `ldd` — so they're copied explicitly.
+5. **Installs Zig toolchain**: Zig is copied into `AppDir/toolchain/` with `cc`/`gcc`/`clang` shim symlinks. Triton JIT-compiles CUDA launcher stubs at runtime with `cc`; most user systems don't have a C toolchain installed, so the AppImage ships one. The shim rewrites `-l:libfoo.so.N` → `-lfoo` to work around zig's lld not supporting the GNU `-l:` extension.
+6. **Installs AppRun wrapper** (`build/appimage/AppRun`): replaces the default symlink with a shell script that sets `LD_LIBRARY_PATH` for bundled libs, `OPENSSL_CONF=/dev/null` (see [Overworldai/Biome#92](https://github.com/Overworldai/Biome/issues/92)), detects the host's `libcuda.so` path, exposes the Zig toolchain on `$PATH`, sources linuxdeploy-plugin-gtk hooks, and execs the Electron binary.
+7. **Fixes up .desktop entry**: injects `Categories=Game;` and `Icon=biome` (appimagetool requires both).
+8. **Re-squashes** the modified AppDir with appimagetool.
+
+Build-time apt dependencies are listed in `build/appimage/apt-deps.txt`, installed via `build/appimage/setup-build-env.sh` — a single script that sets up the entire Linux build environment (Node.js 20 via NodeSource + apt deps). Both CI and the Docker build image (`build/appimage/Dockerfile`) run this same script, so there's exactly one definition of what the Linux build needs.
+
+**Building the AppImage locally** (requires Docker):
+
+```bash
+./scripts/appimage-docker-build.sh           # Build inside an ubuntu-22.04 container
+./scripts/appimage-docker-build.sh --rebuild # Force image rebuild (e.g. after changing apt-deps.txt)
+```
+
+Output: `out/make/AppImage/x64/Biome-<version>-x64.AppImage`.
+
+**Testing the AppImage** (requires Docker + NVIDIA GPU):
+
+```bash
+./scripts/appimage-docker-desktop.sh                  # Ubuntu 24.04 (default)
+./scripts/appimage-docker-desktop.sh --distro fedora  # Fedora 41
+./scripts/appimage-docker-desktop.sh --distro arch    # Arch Linux
+./scripts/appimage-docker-desktop.sh --no-gpu         # Skip GPU passthrough
+./scripts/appimage-docker-desktop.sh --rebuild        # Force image rebuild
+```
+
+Opens a Wayland desktop (sway + wayvnc + noVNC) at http://localhost:6080/. The AppImage runs in a real Wayland session so Electron uses Ozone-Wayland, matching the default display server on modern Ubuntu/Fedora. Inside the terminal, type `biome` to launch. Logs are written to `out/appimage-test-out/biome.log` on the host. GPU is passed through via CDI on NixOS (`hardware.nvidia-container-toolkit.enable = true`) or via the legacy nvidia runtime on other distros. Bazzite is Fedora-based, so `--distro fedora` covers it.
+
+**Updating pinned tool versions**: null out the SHA256 constant in `scripts/appimage-prepare-assets.mjs`, re-run the script (it logs the new hash), paste it back. CI enforces all hashes are pinned.
+
+**NixOS note**: the AppImage requires `appimage-run` for direct launch on NixOS due to Chromium's DBus init crashing outside a FHS environment. The Docker-based test script avoids this by running inside a real Ubuntu desktop.
 
 ## Code Style
 

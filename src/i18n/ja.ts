@@ -32,7 +32,8 @@ const ja = {
         aborting: '中止中...',
         copy: 'コピー',
         pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
-        browseForImageFile: '画像ファイルを選択'
+        browseForImageFile: '画像ファイルを選択',
+        delete: '削除'
       },
       dialogs: {
         updateAvailable: {
@@ -70,6 +71,11 @@ const ja = {
           title: 'エンジン変更を適用しますか？',
           description:
             'エンジンモードまたはワールドモデルを変更すると、現在のセッションが中断され、保留中の設定がすべて適用されます。'
+        },
+        deleteModelCache: {
+          title: 'モデルを削除しますか？',
+          description:
+            '<bold>{{modelId}}</bold> はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
         },
         serverUnreachable: {
           title: 'サーバーに接続できません',
@@ -180,7 +186,8 @@ const ja = {
           checking: '確認中...',
           modelNotFound: 'モデルが見つかりません',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
-          couldNotCheckModel: 'モデルを確認できませんでした'
+          couldNotCheckModel: 'モデルを確認できませんでした',
+          deleteLocalCache: 'モデルを削除'
         },
         volume: {
           title: '音量',

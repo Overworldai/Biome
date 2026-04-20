@@ -32,7 +32,8 @@ const he = {
         aborting: 'מבטל...',
         copy: 'העתק',
         pasteImageFromClipboard: 'הדבק תמונה מהלוח',
-        browseForImageFile: 'בחר קובץ תמונה'
+        browseForImageFile: 'בחר קובץ תמונה',
+        delete: 'מחק'
       },
       dialogs: {
         updateAvailable: {
@@ -68,6 +69,11 @@ const he = {
         applyEngineChanges: {
           title: 'להחיל שינויים במנוע?',
           description: 'שינוי מצב המנוע או מודל העולם יקטע את הסשן הנוכחי שלך ויחיל את כל ההגדרות הממתינות.'
+        },
+        deleteModelCache: {
+          title: 'למחוק את המודל?',
+          description:
+            '<bold>{{modelId}}</bold> מורד למכשיר זה. מחיקתו תפנה מקום בדיסק, אך יהיה צורך להוריד את המודל מחדש לפני שניתן יהיה להשתמש בו שוב.'
         },
         serverUnreachable: {
           title: 'אי אפשר להגיע לשרת',
@@ -176,7 +182,8 @@ const he = {
           checking: 'בודק...',
           modelNotFound: 'המודל לא נמצא',
           couldNotLoadModelList: 'לא ניתן לטעון את רשימת המודלים',
-          couldNotCheckModel: 'לא ניתן לבדוק את המודל'
+          couldNotCheckModel: 'לא ניתן לבדוק את המודל',
+          deleteLocalCache: 'מחק את המודל'
         },
         volume: {
           title: 'עוצמת קול',

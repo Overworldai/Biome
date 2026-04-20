@@ -138,6 +138,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [showFixModal, setShowFixModal] = useState(false)
   const [showNukeModal, setShowNukeModal] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
+  const [showDeleteCacheModal, setShowDeleteCacheModal] = useState<string | null>(null)
   const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
 
@@ -360,8 +361,13 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
   )
 
-  const handleDeleteCustomModel = useCallback(
-    (modelId: string) => {
+  const handleConfirmDeleteCache = useCallback(async () => {
+    if (!showDeleteCacheModal) return
+    const modelId = showDeleteCacheModal
+    setShowDeleteCacheModal(null)
+    await invoke('delete-cached-model', modelId)
+    if (savedCustomModels.includes(modelId)) {
+      // Custom model: remove from cache AND from custom list
       const updated = savedCustomModels.filter((m) => m !== modelId)
       void saveSettings({ ...settings, custom_models: updated })
       setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
@@ -369,9 +375,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
         setMenuWorldModel(fallback)
       }
-    },
-    [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
-  )
+    } else {
+      // Default model: just update local status
+      setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
+    }
+  }, [showDeleteCacheModal, savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel])
 
   const handleLocaleChange = useCallback(
     (locale: AppLocale) => {
@@ -599,29 +607,44 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
           <SettingsSection title="app.settings.worldModel.title" description="app.settings.worldModel.description">
             <SettingsSelect
-              options={menuModelOptions.map((model) => ({
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === true
-                    ? t('app.settings.worldModel.local')
-                    : model.isLocal === false
-                      ? t('app.settings.worldModel.download')
-                      : null
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                deletable: savedCustomModels.includes(model.id)
-              }))}
+              options={[...menuModelOptions]
+                .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
+                .sort((a, b) => {
+                  // 1. Downloaded before undownloaded
+                  if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1
+                  // 2. Default models before custom
+                  if (savedCustomModels.includes(a.id) !== savedCustomModels.includes(b.id))
+                    return savedCustomModels.includes(a.id) ? 1 : -1
+                  // 3. Alphabetical
+                  return a.id.localeCompare(b.id)
+                })
+                .map((model) => {
+                  const isCustom = savedCustomModels.includes(model.id)
+                  return {
+                    value: model.id,
+                    rawLabel: model.id.replace(/^Overworld\//, ''),
+                    prefix: [
+                      model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+                      model.isLocal === false ? t('app.settings.worldModel.download') : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    deletable: isCustom && model.isLocal === true && menuEngineMode === 'standalone',
+                    cacheDeletable: !isCustom && model.isLocal === true && menuEngineMode === 'standalone',
+                    dimmed: model.isLocal === false
+                  }
+                })}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
-              onDelete={handleDeleteCustomModel}
+              onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              hideSelectedInDropdown
               disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
               allowCustom
               onCustomBlur={handleCustomModelBlur}
               customLabel="app.settings.worldModel.custom"
-              deleteLabel="app.settings.worldModel.removeCustomModel"
+              deleteLabel="app.settings.worldModel.deleteLocalCache"
+              cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
               rawCustomPrefix={
                 customModelStatus.state === 'loading'
                   ? t('app.settings.worldModel.checking')
@@ -917,6 +940,18 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           }}
           confirmLabel="app.buttons.editUrl"
           cancelLabel="app.buttons.revert"
+        />
+      )}
+
+      {showDeleteCacheModal && (
+        <ConfirmModal
+          title="app.dialogs.deleteModelCache.title"
+          description="app.dialogs.deleteModelCache.description"
+          descriptionParams={{ modelId: showDeleteCacheModal }}
+          descriptionComponents={{ bold: <span className="text-white" /> }}
+          onCancel={() => setShowDeleteCacheModal(null)}
+          onConfirm={() => void handleConfirmDeleteCache()}
+          confirmLabel="app.buttons.delete"
         />
       )}
 

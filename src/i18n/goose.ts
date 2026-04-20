@@ -1,171 +1,177 @@
 const goose = {
   translation: {
     app: {
-      name: 'Goose',
+      name: 'Biome',
       buttons: {
-        settings: 'Honk',
-        upgrade: 'HONK!',
-        later: 'Honk later',
+        settings: 'Settings',
+        upgrade: 'Upgrade',
+        later: 'Later',
         quit: 'Fly away',
-        reconnect: 'Waddle back',
+        reconnect: 'Reconnect',
         returnToMainMenu: 'Back to the nest',
-        close: 'Hiss',
-        cancel: 'Squawk',
-        back: 'Waddle back',
-        credits: 'Flock',
+        close: 'Close',
+        cancel: 'Cancel',
+        back: 'Back',
+        credits: 'The Flock',
         fix: 'Preen',
-        reinstallEverything: 'Molt everything',
-        switchMode: 'Flap',
-        keepCurrent: 'Stay put',
-        editUrl: 'Peck URL',
-        revert: 'Un-honk',
-        reset: 'Shake feathers',
-        scenes: 'Nesting grounds',
-        resume: 'Waddle on',
-        copyReport: 'Copy honk report',
-        saveReport: 'Save honk report',
-        reportOnGithub: 'Honk on GitHub',
+        reinstallEverything: 'Full Molt',
+        switchMode: 'Switch Mode',
+        keepCurrent: 'Keep Current',
+        editUrl: 'Edit URL',
+        revert: 'Revert',
+        reset: 'Reset',
+        scenes: 'Ponds',
+        resume: 'Resume',
+        copyReport: 'Copy Report',
+        saveReport: 'Save Report',
+        reportOnGithub: 'Report on GitHub',
         askOnDiscord: 'Honk on Discord',
-        showLogs: 'Show honks',
-        hideLogs: 'Hide honks',
-        abort: 'Flee!',
-        aborting: 'Fleeing...',
-        copy: 'Honk',
-        pasteImageFromClipboard: 'Peck image from clipboard',
-        browseForImageFile: 'Forage for image file'
+        showLogs: 'Show Logs',
+        hideLogs: 'Hide Logs',
+        abort: 'Abort',
+        aborting: 'Aborting...',
+        copy: 'Copy',
+        pasteImageFromClipboard: 'Paste image from clipboard',
+        browseForImageFile: 'Browse for image file',
+        delete: 'Delete'
       },
       dialogs: {
         updateAvailable: {
-          title: 'New feathers available',
+          title: 'Update Available',
           description:
-            'A new goose update has landed ({{latestVersion}}). You are still on {{currentVersion}}. Time to molt.'
+            'A new Biome release is available ({{latestVersion}}). You are on {{currentVersion}}. Time to molt.'
         },
         connectionLost: {
-          title: 'The flock flew away',
-          description: 'Connection to the Goose Engine was lost. Honk to try waddling back?'
+          title: 'Connection Lost',
+          description: 'The connection to the World Engine was lost. Waddle back and try reconnecting?'
         },
         install: {
-          title: 'Nesting',
+          title: 'Installation',
           installing: 'Building nest...',
           failed: 'Nest collapsed.',
           complete: 'Nest complete.',
-          exportCanceled: 'Migration canceled',
-          diagnosticsExported: 'Droppings exported',
-          exportFailed: 'Droppings stuck',
-          abortRequested: 'Retreat honked',
-          abortFailed: 'Too stubborn to retreat',
-          abortEngineInstall: 'Abandon nest building',
-          closeInstallLogs: 'Close nest logs'
+          exportCanceled: 'Export canceled',
+          diagnosticsExported: 'Diagnostics exported',
+          exportFailed: 'Export failed',
+          abortRequested: 'Abort requested',
+          abortFailed: 'Failed to abort install',
+          abortEngineInstall: 'Abort engine install',
+          closeInstallLogs: 'Close install logs'
         },
         fixInPlace: {
-          title: 'Preen in place?',
+          title: 'Preen In Place?',
           description:
-            'This will re-ruffle engine feathers without plucking anything. Usually enough to fix post-molt issues.'
+            'This will re-sync engine dependencies without deleting anything. Usually enough to fix issues after an update.'
         },
         totalReinstall: {
-          title: 'Full molt?',
+          title: 'Total Reinstall?',
           description:
-            'This will pluck every last feather and regrow them from scratch, including re-downloading the bread, all crumbs, and the pond manager. Takes a while, but fixes problems that preening cannot.'
+            'This will completely delete the engine directory and regrow everything from scratch, including re-downloading Python, all dependencies, and the UV package manager. Takes a while, but can fix stubborn issues that a quick preen cannot.'
         },
         applyEngineChanges: {
-          title: 'Ruffle your feathers?',
+          title: 'Apply Engine Changes?',
           description:
-            'Changing goose mode or pond model will interrupt your current waddle and apply all pending honks.'
+            'Changing engine mode or world model will interrupt your current session and apply all pending settings.'
+        },
+        deleteModelCache: {
+          title: 'Delete Model?',
+          description:
+            '<bold>{{modelId}}</bold> is nesting on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
         serverUnreachable: {
-          title: 'Pond not found',
+          title: 'Server Unreachable',
           withUrl:
-            'Could not waddle to {{url}}. The pond may be frozen, the address may be wrong, or a fox may be blocking the path.',
-          noUrl: 'Please honk a pond URL before leaving the nest.',
+            'Could not connect to {{url}}. The server may be down, the address may be wrong, or a fox may be blocking the path.',
+          noUrl: 'Please enter a server URL before leaving settings.',
           withUrlSecure:
-            'Could not waddle to {{url}}. The pond may be frozen, the address may be wrong, or a fox may be blocking the path.\n\nFancy ponds (HTTPS/WSS) are not supported by default; try a regular puddle (HTTP/WS) instead.',
+            'Could not connect to {{url}}. The server may be down, the address may be wrong, or a fox may be blocking the path.\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.',
           secureTransportHint:
-            'Fancy ponds (HTTPS/WSS) are not supported by default; try a regular puddle (HTTP/WS) instead.'
+            'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
         }
       },
       loading: {
-        error: 'HONK!',
+        error: 'Error',
         connecting: 'Waddling over...',
         starting: 'Ruffling feathers...',
         firstTimeSetup: 'First flight',
         firstTimeSetupDescription:
-          'This will take 10-30 minutes while bread crumbs are gathered and your nest is feathered.',
-        firstTimeSetupHint: 'Feel free to go forage in the meantime.',
-        exportCanceled: 'Migration canceled',
-        diagnosticsExported: 'Droppings exported',
-        exportFailed: 'Droppings stuck',
+          'This will take 10-30 minutes while components are downloaded and optimized for your system.',
+        firstTimeSetupHint: 'Feel free to go forage for a snack in the meantime.',
+        exportCanceled: 'Export canceled',
+        diagnosticsExported: 'Diagnostics exported',
+        exportFailed: 'Export failed',
         terminal: {
-          waitingForServerOutput: 'Listening for distant honks...',
-          runtimeError: 'Goose error (something was pecked too hard)',
-          diagnosticsCopied: 'Droppings copied',
-          failedToCopyDiagnostics: 'Failed to copy droppings',
-          openedGithubIssueFormAndCopiedDiagnostics: 'Opened GitHub honk form and copied droppings',
-          openedGithubIssueForm: 'Opened GitHub honk form',
-          failedToOpenIssueForm: 'Failed to open honk form',
-          whatHappened: 'What got honked',
-          whatHappenedPlaceholder: '<please describe what you were pecking and what went wrong>',
-          environment: 'Habitat',
-          appVersion: 'Goose version',
-          platform: 'Pond type',
-          reproductionSteps: 'Honk-by-honk replay',
-          recentLogs: 'Recent honks',
-          fullDiagnostics: 'Full droppings',
+          waitingForServerOutput: 'Waiting for server output...',
+          runtimeError: 'Runtime error',
+          diagnosticsCopied: 'Diagnostics copied',
+          failedToCopyDiagnostics: 'Failed to copy diagnostics',
+          openedGithubIssueFormAndCopiedDiagnostics: 'Opened GitHub issue form and copied diagnostics',
+          openedGithubIssueForm: 'Opened GitHub issue form',
+          failedToOpenIssueForm: 'Failed to open issue form',
+          whatHappened: 'What happened',
+          whatHappenedPlaceholder: '<please describe what you were doing and what failed>',
+          environment: 'Environment',
+          appVersion: 'Biome version',
+          platform: 'Platform',
+          reproductionSteps: 'Reproduction steps',
+          recentLogs: 'Recent logs',
+          fullDiagnostics: 'Full diagnostics',
           fullDiagnosticsCopiedHint:
-            'Full droppings JSON has been copied to clipboard. Paste below before submitting your honk.',
-          fullDiagnosticsCopyHint: 'Click "Copy honk report" in-app and paste droppings JSON below.',
-          pasteDiagnosticsJson: '<paste full droppings JSON here>',
-          saveDiagnosticsJson: 'Save droppings JSON to nest',
-          copying: 'Pecking...',
-          copyDiagnosticsJsonForBugReports: 'Copy droppings JSON for honk reports',
-          opening: 'Waddling...',
-          openPrefilledIssueOnGithub: 'Open prefilled honk on GitHub',
-          askForHelpInDiscord: 'Honk for help in Discord',
-          hideLogsPanel: 'Hide honk panel',
-          showLogsPanel: 'Show honk panel',
-          clipboardCopyFailed: 'Failed to copy to goose clipboard'
+            'Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.',
+          fullDiagnosticsCopyHint: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
+          pasteDiagnosticsJson: '<paste full diagnostics JSON here>',
+          saveDiagnosticsJson: 'Save diagnostics JSON to file',
+          copying: 'Copying...',
+          copyDiagnosticsJsonForBugReports: 'Copy diagnostics JSON for bug reports',
+          opening: 'Opening...',
+          openPrefilledIssueOnGithub: 'Open prefilled issue on GitHub',
+          askForHelpInDiscord: 'Ask for help in Discord',
+          hideLogsPanel: 'Hide logs panel',
+          showLogsPanel: 'Show logs panel',
+          clipboardCopyFailed: 'Clipboard copy command failed'
         }
       },
       settings: {
-        title: 'Honk',
-        subtitle: 'Ruffle your pond to your liking.',
+        title: 'Settings',
+        subtitle: 'Tweak your world to your liking.',
         language: {
-          title: 'Goose dialect',
-          description: 'which honk should Goose use?',
-          system: 'Local pond'
+          title: 'Language',
+          description: 'which language should Biome speak?',
+          system: 'System Default'
         },
         engineMode: {
-          title: 'Goose Engine',
-          description: 'run your own goose, or borrow one from the flock?',
-          standalone: 'Lone goose',
-          server: 'The flock'
+          title: 'Engine Mode',
+          description: 'how will you run the model? as part of Biome, or borrowed from the flock?',
+          standalone: 'Standalone',
+          server: 'Server'
         },
         serverUrl: {
-          title: 'Pond URL',
-          descriptionPrefix: 'the address of the pond running the goose',
-          setupInstructions: 'nesting instructions',
-          checking: 'sniffing...',
-          connected: 'in the pond',
-          unreachable: 'pond frozen',
+          title: 'Server URL',
+          descriptionPrefix: 'the address of the GPU server running the goose',
+          setupInstructions: 'setup instructions',
+          checking: 'checking...',
+          connected: 'connected',
+          unreachable: 'unreachable',
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
-          title: 'Goose Engine',
-          description: 'is the local goose healthy?',
-          checking: 'sniffing...',
-          yes: 'honk',
-          no: 'hiss',
-          fixInPlace: 'Preen in place',
-          totalReinstall: 'Full molt'
+          title: 'World Engine',
+          description: 'is the local engine in good feather?',
+          checking: 'checking...',
+          yes: 'yes',
+          no: 'no',
+          fixInPlace: 'Preen In Place',
+          totalReinstall: 'Full Molt'
         },
         performance: {
-          title: 'Waddle Tuning',
-          description: "want to dial in the goose's waddle?",
-          quantization: 'Feather compression',
+          title: 'Performance Settings',
+          description: "want to dial in the model's performance?",
+          quantization: 'Quantization',
           quantizationDescription:
-            'Plucks a few feathers for faster waddling with less nest space, at the cost of some plumage quality.\nFirst INT8 plucking takes 1-2 hours while the goose optimizes its molt - this is a one-time cost.',
-          capInferenceFps: 'Cap honk rate',
+            'Reduces model precision for faster inference and lower memory usage, at the cost of some visual quality.\nFirst use of INT8 quantization can take 1-2 hours while inference kernels are optimized - this is a one-time cost.',
+          capInferenceFps: 'Cap Inference FPS',
           capInferenceFpsDescription:
-            "Limits the waddling rate to the flock's trained pace. Turning this off may result in the goose waddling faster than intended."
+            "Limits the generation rate to the model's trained framerate. Without this, the goose may waddle faster than intended."
         },
         quantization: {
           none: 'None (full plumage)',
@@ -173,188 +179,189 @@ const goose = {
           intw8a8: 'INT8 W8A8'
         },
         worldModel: {
-          title: 'Goose Model',
-          description: 'which goose will waddle through your world?',
-          local: 'nearby',
-          download: 'migrate',
-          removeCustomModel: 'Release custom goose',
-          custom: 'Wild goose...',
-          checking: 'sniffing...',
-          modelNotFound: 'Goose not found',
-          couldNotLoadModelList: 'Could not find the flock',
-          couldNotCheckModel: 'Could not inspect goose'
+          title: 'World Model',
+          description: 'which Overworld model will shape your pond?',
+          local: 'local',
+          download: 'download',
+          removeCustomModel: 'Remove custom model',
+          custom: 'Custom...',
+          checking: 'checking...',
+          modelNotFound: 'Model not found',
+          couldNotLoadModelList: 'Could not load model list',
+          couldNotCheckModel: 'Could not check model',
+          deleteLocalCache: 'Delete the model'
         },
         volume: {
-          title: 'Loudness',
+          title: 'Volume',
           description: 'how loud should the honking be?',
-          master: 'overall honk',
-          soundEffects: 'wing flaps',
-          music: 'goose song'
+          master: 'master',
+          soundEffects: 'sound effects',
+          music: 'music'
         },
         mouseSensitivity: {
-          title: 'Neck sensitivity',
-          description: 'how much should the goose turn its neck when you move?',
-          sensitivity: 'neck range'
+          title: 'Mouse Sensitivity',
+          description: 'how much should the camera turn when you move your mouse?',
+          sensitivity: 'sensitivity'
         },
         keybindings: {
-          title: 'Beak bindings',
+          title: 'Keybindings',
           description: 'which keys do you want to peck?',
-          resetScene: 'Shake off',
-          sceneEdit: 'Pond edit',
-          conflictWithOther: 'This peck clashes with another peck',
-          resetToDefaults: 'Back to nesting defaults'
+          resetScene: 'Reset Scene',
+          sceneEdit: 'Scene Edit',
+          conflictWithOther: 'Conflicts with another peck',
+          resetToDefaults: 'Reset to Defaults'
         },
         gamepad: {
-          title: 'Wing controller',
-          description: 'how does a controller map to goose actions?',
-          descriptionDisconnected: 'bring a controller within honking distance!',
+          title: 'Gamepad',
+          description: 'how does a connected gamepad map to goose actions? (fixed for now)',
+          descriptionDisconnected: 'bring a gamepad within honking distance!',
           labels: {
             move: 'Waddle',
-            look: 'Crane neck',
+            look: 'Look',
             jump: 'Flap',
             crouch: 'Crouch',
             interact: 'Peck',
             sprint: 'Charge',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
-            pauseMenu: 'Tuck head under wing'
+            pauseMenu: 'Pause Menu'
           }
         },
         controls: {
           labels: {
-            moveForward: 'Waddle forward',
-            moveLeft: 'Waddle left',
-            moveBack: 'Waddle back',
-            moveRight: 'Waddle right',
+            moveForward: 'Waddle Forward',
+            moveLeft: 'Waddle Left',
+            moveBack: 'Waddle Back',
+            moveRight: 'Waddle Right',
             jump: 'Flap',
             sprint: 'Charge',
             interact: 'Peck',
             primaryFire: 'Honk',
             secondaryFire: 'Hiss',
-            pauseMenu: 'Tuck head under wing'
+            pauseMenu: 'Pause Menu'
           }
         },
         experimental: {
-          title: 'Experimental honks',
+          title: 'Experimental',
           description: 'want to try some half-baked eggs that might hatch or roll away?',
-          sceneEdit: 'Pond edit',
+          sceneEdit: 'Scene Edit',
           sceneEditDescription:
-            'Honk a key during waddling to edit the pond with a text quack using a local image edit model. Requires 8-10 GB additional nest space.'
+            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
         debugMetrics: {
-          title: 'Goose telemetry',
+          title: 'Debug Metrics',
           description: 'want to see what the goose is thinking?',
-          performanceStats: 'Waddle stats',
-          performanceStatsDescription:
-            'Show honks per second, waddle time, pond usage, nest memory, and lag sparklines.',
-          inputOverlay: 'Peck overlay',
-          inputOverlayDescription: 'Show a beak and webbed-foot diagram highlighting active pecks.',
-          frameTimeline: 'Feather timeline',
-          frameTimelineDescription: 'Show the feather interpolation pipeline with per-egg timing.',
-          actionLogging: 'Migration log',
+          performanceStats: 'Performance Stats',
+          performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',
+          inputOverlay: 'Input Overlay',
+          inputOverlayDescription: 'Show a keyboard and mouse diagram highlighting active inputs.',
+          frameTimeline: 'Frame Timeline',
+          frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
+          actionLogging: 'Action Logging',
           actionLoggingDescription:
-            "Record all pecks and waddles to a file on the pond server for replay. Honked to the OS's temp nest.",
-          diagnostics: 'Honknostics',
-          diagnosticsDescription: 'Copy honknostic information to the clipboard for flock reports.',
-          copiedToClipboard: 'Honked to clipboard',
-          copyFailed: 'Honk failed'
+            "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
+          diagnostics: 'Diagnostics',
+          diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
+          copiedToClipboard: 'Copied to clipboard',
+          copyFailed: 'Failed to copy'
         },
         credits: {
-          title: 'The flock'
+          title: 'The Flock'
         }
       },
       pause: {
-        title: 'Nesting',
+        title: 'Paused',
         pinnedScenes: {
-          title: 'Favorite ponds',
-          description: 'Your favorite ponds. Use the Nesting grounds button to {{suffix}} more ponds.',
-          uploadSuffix: 'browse, pin or migrate',
-          pinSuffix: 'browse or pin'
+          title: 'Pinned Ponds',
+          description: 'Your pinned ponds. Use the Ponds button to view{{suffix}} more ponds.',
+          uploadSuffix: ', pin or upload',
+          pinSuffix: ' or pin'
         },
-        unlockIn: 'preening for {{seconds}}s',
+        unlockIn: 'unlock in {{seconds}}s',
         scenes: {
-          title: 'Nesting grounds',
+          title: 'Ponds',
           description_one: 'All of your {{count}} pond.',
           description_other: 'All of your {{count}} ponds.',
-          uploadHint: 'Use the buttons to discover more ponds, or drag/paste them in.',
-          dropImagesToAddScenes: 'Drop bread to add ponds'
+          uploadHint: 'Use the buttons to add more ponds, or drag/paste them in.',
+          dropImagesToAddScenes: 'Drop images to add ponds'
         },
         sceneCard: {
           unsafe: 'Fox nearby',
-          unpinScene: 'Leave pond',
-          pinScene: 'Claim pond',
-          removeScene: 'Abandon pond'
+          unpinScene: 'Unpin pond',
+          pinScene: 'Pin pond',
+          removeScene: 'Remove pond'
         }
       },
       scenes: {
-        failedToReadImageData: 'Failed to nibble image data',
-        noImageInClipboard: 'No bread crumb found in clipboard'
+        failedToReadImageData: 'Failed to read image data',
+        noImageInClipboard: 'No image found in clipboard'
       },
       window: {
-        minimize: 'Tuck',
-        maximize: 'Spread wings',
-        close: 'Fly away'
+        minimize: 'Minimize',
+        maximize: 'Maximize',
+        close: 'Close'
       },
       social: {
-        website: 'Gooseworld website',
-        x: 'Gooseworld on X',
-        discord: 'Gooseworld Discord',
-        github: 'Gooseworld GitHub',
+        website: 'Overworld website',
+        x: 'Overworld on X',
+        discord: 'Overworld Discord',
+        github: 'Overworld GitHub',
         feedback: 'Send a honk'
       },
       sceneEdit: {
         placeholder: 'Describe the pond change...',
-        instructions: 'Enter to quack \u00b7 Esc to waddle away',
+        instructions: 'Enter to apply \u00b7 Esc to cancel',
         applying: 'Rearranging the pond...'
       },
       server: {
-        fallbackError: 'Goose error: {{message}}',
-        fallbackWarning: 'Goose warning: {{message}}',
-        websocketError: 'WebSocket honk failed',
-        serverUrlEmpty: 'Pond URL is empty',
-        noEndpointUrl: 'No pond address provided',
-        websocketDisconnected: 'Goose connection severed',
-        websocketNotConnected: 'Goose not connected to pond',
-        requestTimeout: 'Request "{{type}}" took too long ({{timeout}}ms) — the goose fell asleep',
-        defaultSeedNotFound: 'Required bread crumb "default.jpg" not found in the stash',
-        invalidWebsocketEndpoint: 'Invalid pond connection',
-        websocketConnectionFailed: 'Failed to waddle to the pond',
-        connectionFailed: 'Failed to reach the pond — the goose may have flown away',
-        connectionLost: 'Lost sight of the pond — the goose may have flown away',
-        startupTimeout: 'The goose took too long to wake up — check the nest logs',
-        noOpenPort: 'No open pond found in range {{rangeStart}}–{{rangeEnd}}',
-        notResponding: 'The goose is not honking back at {{url}}',
+        fallbackError: 'Server error: {{message}}',
+        fallbackWarning: 'Server warning: {{message}}',
+        websocketError: 'WebSocket error',
+        serverUrlEmpty: 'Server URL is empty',
+        noEndpointUrl: 'No endpoint URL provided',
+        websocketDisconnected: 'WebSocket disconnected',
+        websocketNotConnected: 'WebSocket not connected',
+        requestTimeout: 'Request "{{type}}" timed out after {{timeout}}ms — the goose fell asleep',
+        defaultSeedNotFound: 'Required seed file "default.jpg" not found in seeds folder',
+        invalidWebsocketEndpoint: 'Invalid WebSocket endpoint',
+        websocketConnectionFailed: 'Failed to create WebSocket connection',
+        connectionFailed: 'Connection failed — the goose may have flown away',
+        connectionLost: 'Connection lost — the goose may have flown away',
+        startupTimeout: 'Server startup timeout — check logs for errors',
+        noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
+        notResponding: 'Server is not honking back at {{url}}',
         error: {
-          serverStartupFailed: 'The goose failed to wake up: {{message}}',
-          timeoutWaitingForSeed: 'Timeout waiting for bread crumb',
-          sceneEditModelLoadFailed: 'Pond edit model failed to load: {{message}}',
-          sceneEditSafetyRejected: 'Pond edit rejected: the honk did not pass the fox safety check.',
-          generateSceneSafetyRejected: 'Pond creation rejected: the honk did not pass the fox safety check.',
-          sceneEditEmptyPrompt: 'Empty quack',
-          sceneEditModelNotLoaded: 'Pond edit model not loaded. Enable Pond Edit in Experimental Honks settings.',
-          sceneEditAlreadyInProgress: 'Pond edit already in progress',
-          contentFilterLoadFailed: 'Fox detector failed to load',
-          quantUnsupportedGpu: 'Your nest does not support {{quant}} feather compression. Try a different setting.',
-          cudaRecoveryFailed: 'CUDA honk — recovery failed. Please re-waddle.'
+          serverStartupFailed: 'Server startup failed: {{message}}',
+          timeoutWaitingForSeed: 'Timeout waiting for initial seed',
+          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
+          sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
+          generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
+          sceneEditEmptyPrompt: 'Empty prompt',
+          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
+          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          contentFilterLoadFailed: 'Content filter failed to load',
+          quantUnsupportedGpu:
+            'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
+          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
         },
         warning: {
-          missingSeedData: 'The bread crumb has gone missing from the nest',
-          invalidSeedData: 'That bread crumb looks funny — not fit for a goose',
-          seedSafetyCheckFailed: 'Bread crumb failed fox inspection',
-          seedUnsafe: 'Bread crumb marked as suspicious by the flock',
-          seedLoadFailed: 'Failed to nibble bread crumb',
-          missingModelId: 'Missing goose model ID'
+          missingSeedData: 'Missing seed image data',
+          invalidSeedData: 'Invalid seed image data',
+          seedSafetyCheckFailed: 'Seed failed safety check',
+          seedUnsafe: 'Seed marked as unsafe',
+          seedLoadFailed: 'Failed to load seed image',
+          missingModelId: 'Missing model ID'
         }
       }
     },
     stage: {
       setup: {
-        checking: 'Inspecting the pond...',
-        uv_check: 'Inspecting the pond...',
-        uv_download: 'Fetching bread...',
-        engine: 'Preening the goose...',
+        checking: 'Checking setup...',
+        uv_check: 'Checking setup...',
+        uv_download: 'Fetching runtime...',
+        engine: 'Preening the engine...',
         server_components: 'Gathering feathers...',
-        port_scan: 'Scouting for a good pond...',
+        port_scan: 'Scouting for an open port...',
         sync_deps: 'Stashing bread crumbs...',
         verify: 'Counting feathers...',
         server_start: 'Releasing the goose...',
@@ -365,20 +372,20 @@ const goose = {
         begin: 'Honking into existence...',
         world_engine_manager: 'Assembling the flock...',
         safety_checker: 'Summoning the fox detector...',
-        safety_ready: 'Fox detector operational.',
-        ready: 'Ready to unleash the goose.'
+        safety_ready: 'Fox detector ready.',
+        ready: 'Ready to load model.'
       },
       session: {
         waiting_for_seed: 'Choosing a pond...',
         loading_model: {
-          import: 'Importing goose genetics...',
-          load: 'Hatching the goose...',
-          instantiate: 'Loading goose into pond...',
+          import: 'Importing model framework...',
+          load: 'Loading model...',
+          instantiate: 'Loading model into memory...',
           done: 'The goose has landed!'
         },
         inpainting: {
-          load: 'Loading pond editor...',
-          ready: 'Pond editor ready.'
+          load: 'Loading scene edit model...',
+          ready: 'Scene edit model ready.'
         },
         safety: {
           load: 'Loading fox detector...',
@@ -386,16 +393,16 @@ const goose = {
         },
         warmup: {
           reset: 'Stretching wings...',
-          seed: 'Test waddle...',
-          prompt: 'Practice honk...',
-          compile: 'Optimizing honk frequency for your hardware...'
+          seed: 'Warming up with test frame...',
+          prompt: 'Warming up with test prompt...',
+          compile: 'Optimizing for your GPU...'
         },
         init: {
           reset: 'Filling the pond...',
           seed: 'Placing the goose...',
           frame: 'First honk...'
         },
-        reset: 'Recovering from a bad honk...',
+        reset: 'Recovering from GPU error...',
         ready: 'HONK!'
       }
     }
