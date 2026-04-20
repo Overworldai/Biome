@@ -1,3 +1,7 @@
+# Override the directory page's top text to warn about Program Files.
+# This is prepended before MUI2 is included, so the define is picked up when MUI_PAGE_DIRECTORY runs.
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Setup will install $(^NameDA) in the following folder.$\r$\n$\r$\nTo install in a different folder, click Browse and select another folder.$\r$\n$\r$\nNote: Biome cannot be installed under Program Files - Windows prevents applications from writing files to their own installation directory within Program Files. If the button is greyed out, try another directory."
+
 Function .onVerifyInstDir
   # Reject installs under Program Files — the app writes to $INSTDIR at runtime
   # (uv, world_engine/, HF cache) and those paths require admin rights to write.
