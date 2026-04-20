@@ -209,8 +209,8 @@ const ja = {
         },
         gamepad: {
           title: 'ゲームパッド',
-          description: '接続されたゲームパッドはどのアクションに対応しますか？（現在は固定）',
-          descriptionDisconnected: 'ゲームパッドを接続し、いずれかのボタンを押すと操作一覧が表示されます！',
+          description: 'ゲームパッドでどのように操作しますか？',
+          notDetectedHint: '（ゲームパッドが検出されません。いずれかのボタンを押してみてください！）',
           labels: {
             move: '移動',
             look: '視点',

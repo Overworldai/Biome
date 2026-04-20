@@ -784,20 +784,21 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
           <SettingsSection
             title="app.settings.gamepad.title"
-            description={
-              gamepadConnected ? 'app.settings.gamepad.description' : 'app.settings.gamepad.descriptionDisconnected'
+            rawDescription={
+              gamepadConnected
+                ? t('app.settings.gamepad.description')
+                : `${t('app.settings.gamepad.description')} ${t('app.settings.gamepad.notDetectedHint')}`
             }
           >
-            {gamepadConnected &&
-              GAME_ACTIONS.filter((a) => a.gamepad !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
-                (action) => (
-                  <KeybindRow
-                    key={action.id}
-                    label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
-                    fixedLabel={action.gamepad!.button}
-                  />
-                )
-              )}
+            {GAME_ACTIONS.filter((a) => a.gamepad !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
+              (action) => (
+                <KeybindRow
+                  key={action.id}
+                  label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
+                  fixedLabel={action.gamepad!.button}
+                />
+              )
+            )}
           </SettingsSection>
 
           <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
