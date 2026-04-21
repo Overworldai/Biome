@@ -123,6 +123,11 @@ class VideoRecorder:
         text = f"Edit: {self._overlay_text}"
         pad = max(8, int(frame_h * 0.02))
         shadow_offset = max(1, font_size // 16)
+        # Generous margin around the ink bbox — `textbbox` reports the tight
+        # ink box but antialiasing bleed (especially on serifs) can extend
+        # a few pixels past it, and raising the baseline keeps descenders
+        # from being flush with the frame's bottom edge.
+        margin = max(4, font_size // 6)
 
         # Render into a full-frame RGBA canvas so coordinates match the video.
         canvas = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
@@ -131,16 +136,17 @@ class VideoRecorder:
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
         x = pad - bbox[0]
-        y = frame_h - pad - text_h - bbox[1]
+        y = frame_h - pad - text_h - bbox[1] - margin
         # Drop-shadow for contrast over light scenes.
         draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200))
         draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
-        # Crop to the union of shadow + text so per-frame compositing is cheap.
-        region_x = max(0, x - 2)
-        region_y = max(0, y - 2)
-        region_w = min(frame_w - region_x, text_w + shadow_offset + 4)
-        region_h = min(frame_h - region_y, text_h + shadow_offset + 4)
+        # Crop with `margin` buffer on all sides of the ink + shadow so the
+        # saved texture includes any antialiasing bleed.
+        region_x = max(0, x + bbox[0] - margin)
+        region_y = max(0, y + bbox[1] - margin)
+        region_w = min(frame_w - region_x, text_w + shadow_offset + margin * 2)
+        region_h = min(frame_h - region_y, text_h + shadow_offset + margin * 2)
         cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
         self._overlay_bitmap = np.array(cropped)
         self._overlay_offset = (region_x, region_y)
