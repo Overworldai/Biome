@@ -29,6 +29,7 @@ class VideoRecorder:
         self._lock = threading.Lock()
         self._path: Path | None = None
         self._frame_count = 0
+        self._fps = 0
 
     @property
     def is_active(self) -> bool:
@@ -41,6 +42,7 @@ class VideoRecorder:
         path = VIDEO_DIR / f"rollout_{ts}.mp4"
         self._path = path
         self._frame_count = 0
+        self._fps = fps
         try:
             self._proc = subprocess.Popen(
                 [
@@ -80,6 +82,7 @@ class VideoRecorder:
             return
         path = self._path
         frame_count = self._frame_count
+        fps = self._fps
         try:
             if self._proc.stdin and not self._proc.stdin.closed:
                 self._proc.stdin.close()
@@ -102,11 +105,20 @@ class VideoRecorder:
             self._proc = None
             self._path = None
             self._frame_count = 0
+            self._fps = 0
 
-        # Clean up empty recordings (e.g. model loaded then immediately paused)
-        if frame_count == 0 and path is not None:
-            try:
-                path.unlink(missing_ok=True)
-                logger.info(f"[{self._client_host}] Removed empty video: {path}")
-            except Exception:
-                pass
+        # Clean up recordings shorter than MIN_DURATION_S — segments this short
+        # are almost always accidental (paused right after starting, quick model
+        # reload, etc.) and just clutter the recordings list.
+        MIN_DURATION_S = 3
+        if path is not None:
+            duration_s = frame_count / fps if fps > 0 else 0.0
+            if frame_count == 0 or duration_s < MIN_DURATION_S:
+                try:
+                    path.unlink(missing_ok=True)
+                    logger.info(
+                        f"[{self._client_host}] Removed short video "
+                        f"({frame_count} frames, {duration_s:.1f}s): {path}"
+                    )
+                except Exception:
+                    pass
