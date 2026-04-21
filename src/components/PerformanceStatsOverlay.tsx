@@ -59,15 +59,8 @@ const computeFrametimeStats = (entries: { time: number; value: number }[]): Fram
 }
 
 const PerformanceStatsOverlay = () => {
-  const {
-    performanceStatsOverlay,
-    isStreaming,
-    serverMetrics,
-    inputLatency,
-    latentGenMs,
-    temporalCompression,
-    frameId
-  } = useStreaming()
+  const { performanceStatsOverlay, isStreaming, connection, inputLatency, latentGenMs, temporalCompression, frameId } =
+    useStreaming()
   const [, setTick] = useState(0)
   const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
 
@@ -84,16 +77,25 @@ const PerformanceStatsOverlay = () => {
   const latentFps = latentGenMs !== null && latentGenMs > 0 ? 1000 / latentGenMs : 0
   const perceivedFps = latentFps * temporalCompression
 
+  // Static identifiers come from the init payload; runtime metrics from frame headers.
+  const systemInfo = connection.systemInfo
+  const runtime = connection.runtime
+  const vramTotalBytes = systemInfo?.vram_total_bytes ?? null
+  const vramPercent =
+    runtime && runtime.vramUsedBytes >= 0 && vramTotalBytes && vramTotalBytes > 0
+      ? Math.round((runtime.vramUsedBytes / vramTotalBytes) * 1000) / 10
+      : -1
+
   // Change-detection refs (all declared before any conditional logic)
-  const prevMetricsRef = useRef(serverMetrics)
+  const prevRuntimeRef = useRef(runtime)
   const prevLatentGenMsRef = useRef(latentGenMs)
   const prevLatencyRef = useRef(inputLatency)
 
   // Push GPU metrics into ring buffers when they update
-  if (serverMetrics && serverMetrics !== prevMetricsRef.current) {
-    prevMetricsRef.current = serverMetrics
-    if (serverMetrics.vramPercent >= 0) vramBuf.push(serverMetrics.vramPercent)
-    if (serverMetrics.gpuUtilPercent >= 0) gpuBuf.push(serverMetrics.gpuUtilPercent)
+  if (runtime && runtime !== prevRuntimeRef.current) {
+    prevRuntimeRef.current = runtime
+    if (vramPercent >= 0) vramBuf.push(vramPercent)
+    if (runtime.gpuUtilPercent >= 0) gpuBuf.push(runtime.gpuUtilPercent)
   }
 
   // Accumulate per-latent-pass gen times for sparklines and distribution stats
@@ -126,19 +128,18 @@ const PerformanceStatsOverlay = () => {
 
   if (!performanceStatsOverlay || !isStreaming) return null
 
-  const m = serverMetrics
-  const p = m?.profile ?? null
+  const p = runtime?.profile ?? null
 
   return (
     <div
       className={`absolute top-[1.5cqh] left-[1.5cqh] z-10 pointer-events-none ${OVERLAY_BG} ${OVERLAY_BORDER} rounded-[0.4cqh] p-[1cqh] ${OVERLAY_TEXT}`}
     >
-      <Row label="CPU" value={m?.cpuName ?? '[Unknown CPU]'} color={COLOR_HUD} />
-      <Row label="GPU" value={m?.gpuName ?? '[Unknown GPU]'} color={COLOR_HUD} />
-      <Row label="MDL" value={m?.model || '\u2014'} color={COLOR_WARM} />
+      <Row label="CPU" value={systemInfo?.cpu_name ?? '[Unknown CPU]'} color={COLOR_HUD} />
+      <Row label="GPU" value={systemInfo?.gpu_name ?? '[Unknown GPU]'} color={COLOR_HUD} />
+      <Row label="MDL" value={connection.model || '\u2014'} color={COLOR_WARM} />
       <Row
         label="ROLL"
-        value={`${formatElapsed(frameId / (m?.inferenceFps ?? 60))} (${frameId}f)`}
+        value={`${connection.inferenceFps ? formatElapsed(frameId / connection.inferenceFps) : '--'} (${frameId}f)`}
         color={COLOR_HUD}
         className="mb-[0.4cqh]"
       />
@@ -167,18 +168,24 @@ const PerformanceStatsOverlay = () => {
       />
       <Row
         label="VRAM"
-        value={m ? (m.vramUsedMb >= 0 ? `${Math.round(m.vramUsedMb)} / ${Math.round(m.vramTotalMb)} MB` : 'N/A') : '--'}
-        color={m && m.vramPercent >= 0 ? colorForPercent(m.vramPercent) : COLOR_HUD}
+        value={
+          runtime && runtime.vramUsedBytes >= 0
+            ? vramTotalBytes
+              ? `${Math.round(runtime.vramUsedBytes / (1024 * 1024))} / ${Math.round(vramTotalBytes / (1024 * 1024))} MB`
+              : `${Math.round(runtime.vramUsedBytes / (1024 * 1024))} MB`
+            : '--'
+        }
+        color={vramPercent >= 0 ? colorForPercent(vramPercent) : COLOR_HUD}
         sparkValues={vramBuf.values}
-        sparkColor={m && m.vramPercent >= 0 ? colorForPercent(m.vramPercent) : COLOR_HUD}
+        sparkColor={vramPercent >= 0 ? colorForPercent(vramPercent) : COLOR_HUD}
         sparkMax={100}
       />
       <Row
         label="GPU"
-        value={m ? `${formatValue(m.gpuUtilPercent)}%` : '--'}
-        color={m && m.gpuUtilPercent >= 0 ? colorForPercent(m.gpuUtilPercent) : COLOR_HUD}
+        value={runtime ? `${formatValue(runtime.gpuUtilPercent)}%` : '--'}
+        color={runtime && runtime.gpuUtilPercent >= 0 ? colorForPercent(runtime.gpuUtilPercent) : COLOR_HUD}
         sparkValues={gpuBuf.values}
-        sparkColor={m && m.gpuUtilPercent >= 0 ? colorForPercent(m.gpuUtilPercent) : COLOR_HUD}
+        sparkColor={runtime && runtime.gpuUtilPercent >= 0 ? colorForPercent(runtime.gpuUtilPercent) : COLOR_HUD}
         sparkMax={100}
       />
       <Row

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import stripAnsi from 'strip-ansi'
 import { createLogger } from '../utils/logger'
 import { WsRpcClient } from '../lib/wsRpc'
 import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
-import type { TranslationKey } from '../i18n'
-import type { InitMessage, InitResponse } from '../types/ws'
+import { TranslatableError, type TranslationKey } from '../i18n'
+import type { InitMessage, InitResponse, ServerErrorSnapshot, ServerSystemInfo } from '../types/ws'
+import type { ServerCode } from '../types/input'
 
 const log = createLogger('WebSocket')
 const MAX_VISIBLE_LOG_LINES = 500
@@ -21,23 +21,38 @@ export type FrameProfile = {
   overheadMs: number
 }
 
-export type ServerMetrics = {
-  isMultiframe: boolean
-  vramUsedMb: number
-  vramTotalMb: number
-  vramPercent: number
+/** Live, per-frame-header metrics.  Static identifiers (GPU name, VRAM total,
+ *  model, inference FPS) live on ServerConnection rather than here — frame
+ *  headers only carry dynamic values. */
+export type RuntimeMetrics = {
+  vramUsedBytes: number
   gpuUtilPercent: number
-  gpuName: string | null
-  cpuName: string | null
-  model: string
-  inferenceFps: number
   profile: FrameProfile | null
 }
+
+/** Single source of truth for everything about the current server session.
+ *  Populated from the init RPC response (static identifiers), binary frame
+ *  headers (runtime metrics), and error push messages (lastErrorSnapshot). */
+export type ServerConnection = {
+  systemInfo: ServerSystemInfo | null
+  model: string | null
+  inferenceFps: number | null
+  runtime: RuntimeMetrics | null
+  lastErrorSnapshot: ServerErrorSnapshot | null
+}
+
+const emptyConnection = (): ServerConnection => ({
+  systemInfo: null,
+  model: null,
+  inferenceFps: null,
+  runtime: null,
+  lastErrorSnapshot: null
+})
 
 type WebSocketHook = {
   connectionState: ConnectionState
   statusStage: StageId | null
-  error: string | null
+  error: TranslatableError | null
   frame: Blob | string | null
   hasRealFrame: boolean
   frameId: number
@@ -47,7 +62,7 @@ type WebSocketHook = {
   frameGenMsRef: { current: number }
   frameTemporalCompressionRef: { current: number }
   frameIdRef: { current: number }
-  serverMetrics: ServerMetrics | null
+  connection: ServerConnection
   inputLatency: number | null
   logs: string[]
   allLogs: string[]
@@ -56,7 +71,7 @@ type WebSocketHook = {
   sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
   sendPause: (paused: boolean) => void
   sendInit: (params: Omit<InitMessage, 'type' | 'req_id'>) => Promise<InitResponse>
-  setInitMetrics: (metrics: InitResponse) => void
+  applyInitResponse: (metrics: InitResponse) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
   reset: () => void
   request: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
@@ -67,18 +82,17 @@ type WebSocketHook = {
 }
 
 export const useWebSocket = (): WebSocketHook => {
-  const { t } = useTranslation()
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
   const [frame, setFrame] = useState<Blob | string | null>(null)
   const [frameId, setFrameId] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<TranslatableError | null>(null)
   const [genTime, setGenTime] = useState<number | null>(null)
   const [latentGenMs, setLatentGenMs] = useState<number | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
-  const [serverMetrics, setServerMetrics] = useState<ServerMetrics | null>(null)
+  const [connection, setConnection] = useState<ServerConnection>(emptyConnection)
   const [inputLatency, setInputLatency] = useState<number | null>(null)
   const allLogsRef = useRef<string[]>([])
 
@@ -90,32 +104,22 @@ export const useWebSocket = (): WebSocketHook => {
   const frameTemporalCompressionRef = useRef<number>(1)
   const frameIdRef = useRef<number>(0)
   const [temporalCompression, setTemporalCompression] = useState(1)
-  const staticMetricsRef = useRef<{
-    gpuName: string | null
-    cpuName: string | null
-    model: string
-    inferenceFps: number
-  }>({
-    gpuName: null,
-    cpuName: null,
-    model: '',
-    inferenceFps: 60
-  })
   const rpcRef = useRef(new WsRpcClient())
   const resolveServerMessage = useCallback(
-    (msg: Record<string, unknown>, fallbackKey: TranslationKey): string => {
+    (msg: Record<string, unknown>, fallbackKey: TranslationKey): TranslatableError => {
       const messageId = msg.message_id as string | undefined
       const detail = msg.message as string | undefined
       if (messageId) {
         const key = messageId as TranslationKey
         const params = (msg.params as Record<string, string>) ?? {}
-        const resolved = t(key, { defaultValue: '', ...params })
-        if (resolved) return detail ? `${resolved}: ${detail}` : resolved
+        // Forward raw detail as `message` param — keys that include
+        // `{{message}}` surface it; keys that don't just ignore it.
+        return new TranslatableError(key, detail ? { ...params, message: detail } : params)
       }
       const message = detail ?? JSON.stringify(msg)
-      return String(t(fallbackKey, { defaultValue: fallbackKey, message }))
+      return new TranslatableError(fallbackKey, { message })
     },
-    [t]
+    []
   )
 
   const appendLog = useCallback((line: string) => {
@@ -137,7 +141,7 @@ export const useWebSocket = (): WebSocketHook => {
     }
 
     if (!endpointUrl) {
-      setError(t('app.server.noEndpointUrl'))
+      setError(new TranslatableError('app.server.noEndpointUrl'))
       return
     }
 
@@ -155,7 +159,7 @@ export const useWebSocket = (): WebSocketHook => {
     } catch (err) {
       isConnectingRef.current = false
       setConnectionState('error')
-      setError(err instanceof Error ? err.message : t('app.server.invalidWebsocketEndpoint'))
+      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint'))
       return
     }
 
@@ -165,7 +169,7 @@ export const useWebSocket = (): WebSocketHook => {
     } catch (err) {
       isConnectingRef.current = false
       setConnectionState('error')
-      setError(err instanceof Error ? err.message : t('app.server.websocketConnectionFailed'))
+      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed'))
       return
     }
     wsRef.current = ws
@@ -213,13 +217,8 @@ export const useWebSocket = (): WebSocketHook => {
           if (typeof header.gen_ms === 'number') {
             setLatentGenMs(Math.round(header.gen_ms))
           }
-          // GPU metrics from frame header
-          setServerMetrics({
-            ...staticMetricsRef.current,
-            isMultiframe: headerTemporalCompression > 1,
-            vramUsedMb: (header.vram_used_mb as number) ?? -1,
-            vramTotalMb: (header.vram_total_mb as number) ?? -1,
-            vramPercent: (header.vram_percent as number) ?? -1,
+          const runtime: RuntimeMetrics = {
+            vramUsedBytes: (header.vram_used_bytes as number) ?? -1,
             gpuUtilPercent: (header.gpu_util_percent as number) ?? -1,
             profile:
               header.t_infer_ms != null
@@ -231,7 +230,8 @@ export const useWebSocket = (): WebSocketHook => {
                     overheadMs: (header.t_overhead_ms as number) ?? 0
                   }
                 : null
-          })
+          }
+          setConnection((prev) => ({ ...prev, runtime }))
         }
         setFrame(imageBlob)
         setHasRealFrame(true)
@@ -276,6 +276,18 @@ export const useWebSocket = (): WebSocketHook => {
           case 'error': {
             setError(resolveServerMessage(msg, 'app.server.fallbackError'))
             setConnectionState('error')
+            const snapshot = msg.snapshot as ServerErrorSnapshot | undefined
+            if (snapshot) {
+              setConnection((prev) => ({ ...prev, lastErrorSnapshot: snapshot }))
+            }
+            break
+          }
+          case 'system_info': {
+            // Early push from server at connect time — arrives before init so
+            // the hardware identity is available even if the session crashes
+            // during model load / CUDA warmup.
+            const { type: _, ...info } = msg
+            setConnection((prev) => ({ ...prev, systemInfo: info as unknown as ServerSystemInfo }))
             break
           }
           case 'warning':
@@ -291,7 +303,7 @@ export const useWebSocket = (): WebSocketHook => {
     ws.onerror = () => {
       if (wsRef.current !== ws) return
       isConnectingRef.current = false
-      setError(t('app.server.websocketError'))
+      setError(new TranslatableError('app.server.websocketError'))
       setConnectionState('error')
     }
 
@@ -302,13 +314,23 @@ export const useWebSocket = (): WebSocketHook => {
       wsRef.current = null
       setConnectionState('disconnected')
       setIsReady(false)
-      setStatusStage(null)
+      // Preserve statusStage across close so a bug report captures where the
+      // server was in its init flow (e.g. "session.inpainting_load") when it
+      // died.  It's overwritten by the next session's status messages on reconnect.
       setFrame(null)
       setHasRealFrame(false)
       setFrameId(0)
       setGenTime(null)
       setLatentGenMs(null)
-      setServerMetrics(null)
+      // Preserve systemInfo + lastErrorSnapshot across close so a bug report
+      // copied after the server dies still has the hardware identity + the
+      // error-time snapshot.  Model/inferenceFps/runtime are session-scoped
+      // and get reset.
+      setConnection((prev) => ({
+        ...emptyConnection(),
+        systemInfo: prev.systemInfo,
+        lastErrorSnapshot: prev.lastErrorSnapshot
+      }))
       setInputLatency(null)
     }
   }, [])
@@ -327,13 +349,15 @@ export const useWebSocket = (): WebSocketHook => {
     setFrameId(0)
     setError(null)
     setGenTime(null)
-    setServerMetrics(null)
+    // Explicit user-initiated disconnect — clear everything including any
+    // previously cached systemInfo, since this isn't a "server died" case.
+    setConnection(emptyConnection())
     setInputLatency(null)
     setStatusStage(null)
     setHasRealFrame(false)
   }, [])
 
-  const sendControl = useCallback((buttons: string[] = [], mouseDx = 0, mouseDy = 0) => {
+  const sendControl = useCallback((buttons: ServerCode[] = [], mouseDx = 0, mouseDy = 0) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const ts = performance.now()
       wsRef.current.send(JSON.stringify({ type: 'control', buttons, mouse_dx: mouseDx, mouse_dy: mouseDy, ts }))
@@ -355,22 +379,14 @@ export const useWebSocket = (): WebSocketHook => {
     return rpcRef.current.request<InitResponse>('init', params, 0)
   }, [])
 
-  const setInitMetrics = useCallback((metrics: InitResponse) => {
-    staticMetricsRef.current = {
-      gpuName: metrics.gpu_name ?? null,
-      cpuName: metrics.cpu_name ?? null,
-      model: metrics.model ?? '',
-      inferenceFps: metrics.inference_fps ?? 60
-    }
-    setServerMetrics({
-      ...staticMetricsRef.current,
-      isMultiframe: false,
-      vramUsedMb: -1,
-      vramTotalMb: -1,
-      vramPercent: -1,
-      gpuUtilPercent: -1,
-      profile: null
-    })
+  const applyInitResponse = useCallback((metrics: InitResponse) => {
+    setConnection((prev) => ({
+      ...prev,
+      systemInfo: metrics.system_info ?? prev.systemInfo,
+      model: metrics.model || null,
+      inferenceFps: metrics.inference_fps ?? null,
+      runtime: null // will be populated from the next frame header
+    }))
   }, [])
 
   const setPlaceholderFrame = useCallback((frame: Blob | string | null) => {
@@ -409,7 +425,7 @@ export const useWebSocket = (): WebSocketHook => {
     frameGenMsRef,
     frameTemporalCompressionRef,
     frameIdRef,
-    serverMetrics,
+    connection,
     inputLatency,
     logs,
     allLogs: allLogsRef.current,
@@ -418,7 +434,7 @@ export const useWebSocket = (): WebSocketHook => {
     sendControl,
     sendPause,
     sendInit,
-    setInitMetrics,
+    applyInitResponse,
     setPlaceholderFrame,
     reset,
     request,

@@ -1,0 +1,66 @@
+#!/bin/sh
+# Biome AppImage launcher — sets up LD_LIBRARY_PATH for bundled libs,
+# env shims (OpenSSL, libcuda, zig toolchain), sources GTK hooks, then
+# execs the Electron binary.
+#
+# No `set -u`: sourced apprun-hooks reference unguarded env vars like
+# $XDG_DATA_DIRS that may be unset on minimal systems.
+set -e
+
+APPDIR="${APPDIR:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}"
+export APPDIR
+
+# Bundled shared libs (linuxdeploy puts them in usr/lib; the Electron
+# binary's own rpath only covers usr/lib/biome).
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Neutralise host OpenSSL config — see Overworldai/Biome#92.
+export OPENSSL_CONF=/dev/null
+
+# libcuda must come from the host (paired with the kernel driver).
+if [ -z "${BIOME_LIBCUDA_DIR:-}" ]; then
+  for d in \
+    /run/opengl-driver/lib \
+    /usr/lib/x86_64-linux-gnu \
+    /usr/lib64 \
+    /usr/lib; do
+    if [ -e "$d/libcuda.so.1" ] || [ -e "$d/libcuda.so" ]; then
+      BIOME_LIBCUDA_DIR="$d"
+      break
+    fi
+  done
+
+  if [ -z "${BIOME_LIBCUDA_DIR:-}" ] && command -v ldconfig >/dev/null 2>&1; then
+    _cuda_path="$(ldconfig -p 2>/dev/null | awk '/libcuda\.so\.1/ {print $NF; exit}')"
+    if [ -n "$_cuda_path" ]; then
+      BIOME_LIBCUDA_DIR="$(dirname "$_cuda_path")"
+    fi
+  fi
+fi
+
+if [ -n "${BIOME_LIBCUDA_DIR:-}" ]; then
+  export TRITON_LIBCUDA_PATH="$BIOME_LIBCUDA_DIR"
+  export LD_LIBRARY_PATH="$BIOME_LIBCUDA_DIR:$LD_LIBRARY_PATH"
+fi
+
+# Bundled zig-cc toolchain for Triton's runtime JIT.
+TOOLCHAIN_ROOT="$APPDIR/toolchain"
+if [ -x "$TOOLCHAIN_ROOT/shim/cc" ] && [ -x "$TOOLCHAIN_ROOT/zig/zig" ]; then
+  export PATH="$TOOLCHAIN_ROOT/shim:$TOOLCHAIN_ROOT/zig:$PATH"
+fi
+
+# Source linuxdeploy-plugin-gtk env hooks (GTK modules, schemas, pixbuf).
+if [ -d "$APPDIR/apprun-hooks" ]; then
+  for hook in "$APPDIR/apprun-hooks"/*.sh; do
+    [ -f "$hook" ] || continue
+    # shellcheck disable=SC1090
+    . "$hook"
+  done
+fi
+
+BIOME_BIN="$APPDIR/usr/bin/biome"
+if [ ! -x "$BIOME_BIN" ]; then
+  echo "AppRun: $BIOME_BIN not found or not executable" >&2
+  exit 1
+fi
+exec "$BIOME_BIN" "$@"

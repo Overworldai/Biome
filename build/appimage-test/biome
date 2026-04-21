@@ -1,0 +1,18 @@
+#!/bin/sh
+# Helper for launching Biome inside the test container.
+#
+#   biome              # default flags, streamed and appended to /out/biome.log
+#   biome --some-flag  # extra flags pass through
+#
+# Output is teed to /out/biome.log so it's readable from the host at
+# out/appimage-test-out/biome.log without docker exec.
+
+set -e
+
+LOG=/out/biome.log
+{
+  echo
+  echo "=== $(date -Iseconds) biome ${*:-(no extra args)} ==="
+} >> "$LOG"
+
+/shared/Biome.AppImage --no-sandbox "$@" 2>&1 | tee -a "$LOG"

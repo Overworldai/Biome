@@ -1,7 +1,8 @@
 import type { EngineStatus } from '../types/app'
 import type { StageId } from '../stages'
 import type { TranslatableError } from '../i18n'
-import type { ServerMetrics } from '../hooks/useWebSocket'
+import type { ServerConnection } from '../hooks/useWebSocket'
+import type { InputCode } from '../types/input'
 import type { SceneEditState, SceneEditEvent } from './sceneEditMachine'
 
 export type StreamingStats = {
@@ -12,13 +13,17 @@ export type StreamingStats = {
 export type StreamingContextValue = {
   connectionState: string
   connectionLost: boolean
-  error: string | null
+  error: TranslatableError | null
   isConnected: boolean
   isVideoReady: boolean
   isReady: boolean
   isLoading: boolean
   isStreaming: boolean
   isPaused: boolean
+  /** True when the user is actively driving the game (streaming + unpaused + no menu/modal).
+   *  UI surfaces consult this to decide whether gamepad input goes to the game or to
+   *  UI navigation. Inverse of `inputEnabled` in game terms. */
+  isUIActive: boolean
   pausedAt: number | null
   canUnpause: boolean
   unlockDelayMs: number
@@ -37,7 +42,7 @@ export type StreamingContextValue = {
   showStats: boolean
   setShowStats: (value: boolean) => void
   stats: StreamingStats
-  serverMetrics: ServerMetrics | null
+  connection: ServerConnection
   inputLatency: number | null
   performanceStatsOverlay: boolean
   inputOverlay: boolean
@@ -71,8 +76,14 @@ export type StreamingContextValue = {
 
   mouseSensitivity: number
   setMouseSensitivity: (value: number) => void
-  pressedKeys: Set<string>
-  mouseButtons: Set<string>
+  gamepadSensitivity: number
+  setGamepadSensitivity: (value: number) => void
+  /** Physical keyboard `InputCode`s currently held down (e.g. `'KeyW'`, `'ArrowUp'`). */
+  pressedKeys: Set<InputCode>
+  /** Physical mouse `InputCode`s currently held down (e.g. `'MouseLeft'`). */
+  mouseButtons: Set<InputCode>
+  /** Gamepad `InputCode`s currently held down (e.g. `'GamepadA'`, `'GamepadLeftStickUp'`). */
+  pressedGamepad: Set<InputCode>
   scrollActive: { up: boolean; down: boolean }
   isPointerLocked: boolean
   pointerLockBlockedSeq: number

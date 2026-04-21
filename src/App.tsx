@@ -42,6 +42,8 @@ import PerformanceStatsOverlay from './components/PerformanceStatsOverlay'
 import InputOverlay from './components/InputOverlay'
 import FrameTimelineOverlay from './components/FrameTimelineOverlay'
 import I18nSync from './components/I18nSync'
+import FocusReticle from './components/ui/FocusReticle'
+import { useGamepadNavigation } from './hooks/useGamepadNavigation'
 import { useTranslation } from 'react-i18next'
 
 const LAUNCH_PRE_SHRINK_MS = 420
@@ -70,12 +72,14 @@ const AppShell = () => {
   const {
     isStreaming,
     isPaused,
+    isUIActive,
     connectionState,
     connectionLost,
     statusStage,
     prepareReturnToMainMenu,
     sceneEditState
   } = useStreaming()
+  useGamepadNavigation(isUIActive)
   const {
     getVideoElement,
     currentIndex,
@@ -274,6 +278,9 @@ const AppShell = () => {
             }}
             role="button"
             tabIndex={0}
+            data-focus-shape="round"
+            data-focus-target=".portal-preview-core"
+            data-default-focus
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
@@ -425,6 +432,7 @@ const AppShell = () => {
         )}
       </div>
       {PORTAL_SPARKS_DEBUG && <PortalSparksConfigurator />}
+      <FocusReticle />
       {availableUpdate && (
         <ConfirmModal
           title="app.dialogs.updateAvailable.title"

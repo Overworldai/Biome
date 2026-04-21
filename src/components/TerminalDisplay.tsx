@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '../bridge'
+import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { resolveStage } from '../stages'
 import { useStreaming } from '../context/StreamingContext'
 import { useVortex } from '../context/VortexContext'
@@ -11,6 +12,7 @@ import { isGooseMode } from '../i18n'
 import RawButton from './ui/RawButton'
 import ServerLogDisplay from './ServerLogDisplay'
 import SocialCtaRow from './SocialCtaRow'
+import { FocusScope } from '../context/FocusScopeContext'
 import { useTranslation } from 'react-i18next'
 
 const INLINE_ERROR_MAX_LENGTH = 80
@@ -22,7 +24,8 @@ type TerminalDisplayProps = {
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { t } = useTranslation()
-  const { connectionState, statusStage, isFreshInstall, engineError, error, cancelConnection, wsLogs } = useStreaming()
+  const { connectionState, statusStage, isFreshInstall, engineError, error, cancelConnection, wsLogs, connection } =
+    useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode, settings } = useSettings()
   const { logs: engineLogs } = useEngineLogs(!isServerMode)
@@ -32,11 +35,12 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const logsPanelHeight = '36cqh'
 
-  const errorDetail = engineError
+  const activeError = engineError ?? error
+  const errorDetail = activeError
     ? String(
-        t(engineError.translationKey, { defaultValue: engineError.translationKey, ...engineError.translationParams })
+        t(activeError.translationKey, { defaultValue: activeError.translationKey, ...activeError.translationParams })
       )
-    : error
+    : null
 
   // Extract the first non-empty line from the error for the inline display
   const errorFirstLine = useMemo(() => {
@@ -66,7 +70,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     setExportStatus(null)
 
     try {
-      const report = await buildDiagnosticsPayload()
+      const report = await buildPayload()
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
       if (result.canceled) {
@@ -82,41 +86,39 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     }
   }
 
-  const buildDiagnosticsPayload = useCallback(async () => {
-    const activeError = errorDetail
-    const logs = activeError ? [...activeLogs, `[ERROR] ${activeError}`] : activeLogs
-    const meta = await invoke('get-runtime-diagnostics-meta')
-    const system = await invoke('get-system-diagnostics')
-    return {
-      generated_at: new Date().toISOString(),
-      runtime: meta,
-      system,
-      loading_state: {
-        connection_state: connectionState,
-        status_stage: statusStage,
-        status_text: statusText,
+  const buildPayload = useCallback(() => {
+    const logs = errorDetail ? [...activeLogs, `[ERROR] ${errorDetail}`] : activeLogs
+    return buildDiagnosticsPayload({
+      connection,
+      error: {
+        message: errorDetail,
+        stage: statusStage,
         progress_percent: progressPercent,
-        active_error: activeError,
-        engine_error: errorDetail,
-        websocket_error: error,
-        is_server_mode: isServerMode
+        connection_state: connectionState
       },
-      logs
-    }
+      logs,
+      session: {
+        engineMode: isServerMode ? 'server' : 'standalone',
+        requestedModel: settings.engine_model ?? null,
+        requestedQuant: settings.engine_quant ?? null
+      }
+    })
   }, [
     activeLogs,
+    connection,
     connectionState,
     engineError,
     error,
     errorDetail,
     isServerMode,
     progressPercent,
-    statusStage,
-    statusText
+    settings.engine_model,
+    settings.engine_quant,
+    statusStage
   ])
 
   return (
-    <>
+    <FocusScope autoFocus onCancel={onCancel} className="contents">
       {isFreshInstall && !errorDetail && (
         <div
           className="absolute z-55 left-1/2 top-1/2 flex flex-col items-center gap-[2.4cqh] pointer-events-none bg-[rgba(4,8,16,0.45)] rounded-[1.8cqh] px-[5cqh] py-[3.6cqh] transition-transform duration-300 ease-in-out"
@@ -173,7 +175,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             <ServerLogDisplay
               errorMessage={errorDetail}
               logs={activeLogs}
-              buildDiagnosticsPayload={buildDiagnosticsPayload}
+              buildDiagnosticsPayload={buildPayload}
               showExportAction={!!errorDetail}
               onExportAction={() => void handleExportDiagnostics()}
               isExportingAction={isExportingDiagnostics}
@@ -219,9 +221,10 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
             }
             void cancelConnection()
           }}
+          data-default-focus
         />
       </div>
-    </>
+    </FocusScope>
   )
 }
 

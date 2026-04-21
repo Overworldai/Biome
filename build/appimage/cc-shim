@@ -1,0 +1,38 @@
+#!/bin/sh
+# Bundled C-compiler shim: routes cc/gcc/clang → zig cc, c++/g++/clang++ → zig c++.
+# Rewrites `-l:libfoo.so.N` → `-lfoo` because zig's lld doesn't support the
+# GNU `-l:` extension (Triton hardcodes `-l:libcuda.so.1`).
+
+set -e
+
+SHIM_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+ZIG="$SHIM_DIR/../zig/zig"
+
+# Walk the original argv exactly $# times: at each step, shift the head
+# and append either it or its rewritten form to the tail. After $# loops,
+# $@ contains the rewritten args in order with the originals consumed.
+n=$#
+i=0
+while [ $i -lt $n ]; do
+  case "$1" in
+    -l:lib*.so*)
+      stem=${1#-l:lib}
+      stem=${stem%%.so*}
+      set -- "$@" "-l$stem"
+      ;;
+    *)
+      set -- "$@" "$1"
+      ;;
+  esac
+  shift
+  i=$((i + 1))
+done
+
+case "$(basename "$0")" in
+  c++ | g++ | clang++ | cxx)
+    exec "$ZIG" c++ "$@"
+    ;;
+  *)
+    exec "$ZIG" cc "$@"
+    ;;
+esac

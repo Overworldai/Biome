@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TranslatableError, type TranslationKey } from '../i18n'
+import type { DiagnosticsPayload } from '../types/ipc'
 import Button from './ui/Button'
+import { findFocusables, findInDirection, focusSmooth } from '../lib/focusNavigation'
+import { getActiveScopeRoot } from '../context/FocusScopeContext'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
 const MAX_GITHUB_BODY_CHARS = 1200
@@ -49,7 +52,8 @@ const ServerLogDisplay = ({
   onExportAction,
   isExportingAction = false,
   exportActionLabel,
-  actionStatus = null
+  actionStatus = null,
+  primaryAction = null
 }: {
   errorMessage?: string | null
   showProgress?: boolean
@@ -57,12 +61,16 @@ const ServerLogDisplay = ({
   headerAction?: ReactNode
   logs?: string[]
   title?: TranslationKey | null
-  buildDiagnosticsPayload: () => Promise<Record<string, unknown>>
+  buildDiagnosticsPayload: () => Promise<DiagnosticsPayload>
   showExportAction?: boolean
   onExportAction?: () => void
   isExportingAction?: boolean
   exportActionLabel?: TranslationKey
   actionStatus?: string | null
+  /** Rendered at the far right of the footer action row.  Use for the one
+   *  primary CTA of the surrounding screen (e.g. "Return to Main Menu") so
+   *  all report/help buttons are secondary and the primary stands out. */
+  primaryAction?: ReactNode
 }) => {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -132,9 +140,9 @@ const ServerLogDisplay = ({
       const firstLine =
         (errorMessage || progressMessage || runtimeErrorLabel).split('\n')[0]?.trim() || runtimeErrorLabel
       const issueTitle = `[Auto Bug Report] ${firstLine.slice(0, 76)}`
-      const runtime = payload.runtime as Record<string, unknown> | undefined
-      const appVersion = String(runtime?.app_version ?? 'unknown')
-      const platform = String(runtime?.platform ?? 'unknown')
+      const appVersion = payload.app.version
+      const platform = payload.client.os
+      const gpuName = payload.server?.gpu ?? 'unknown'
       const recentLogsRaw = logs.slice(-MAX_GITHUB_LOG_LINES).join('\n')
       const recentLogsTrimmed =
         recentLogsRaw.length > MAX_GITHUB_LOG_CHARS
@@ -148,6 +156,7 @@ const ServerLogDisplay = ({
         `## ${t('app.loading.terminal.environment')}`,
         `- ${t('app.loading.terminal.appVersion')}: ${appVersion}`,
         `- ${t('app.loading.terminal.platform')}: ${platform}`,
+        `- GPU: ${gpuName}`,
         '',
         `## ${t('app.loading.terminal.reproductionSteps')}`,
         '1. ',
@@ -161,8 +170,8 @@ const ServerLogDisplay = ({
         '',
         `## ${t('app.loading.terminal.fullDiagnostics')}`,
         copiedDiagnostics
-          ? `- ${t('app.loading.terminal.fullDiagnosticsCopied')}`
-          : `- ${t('app.loading.terminal.fullDiagnosticsPaste')}`,
+          ? `- ${t('app.loading.terminal.fullDiagnosticsCopiedHint')}`
+          : `- ${t('app.loading.terminal.fullDiagnosticsCopyHint')}`,
         '',
         '```json',
         t('app.loading.terminal.pasteDiagnosticsJson'),
@@ -202,8 +211,44 @@ const ServerLogDisplay = ({
         </div>
       )}
       <div
-        className="server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed [scrollbar-color:rgba(255,255,255,0.34)_transparent]"
+        tabIndex={0}
+        aria-label={t('app.loading.terminal.serverOutput', { defaultValue: 'Server log output' })}
+        className="server-log-content flex-1 px-[1.78cqh] py-[0.8cqh] overflow-y-auto font-mono text-[1.78cqh] leading-relaxed [scrollbar-color:rgba(255,255,255,0.34)_transparent] focus:outline focus:outline-2 focus:outline-[var(--color-border-medium)]"
         ref={containerRef}
+        onKeyDown={(e) => {
+          // Allow gamepad d-pad (dispatched as arrow keys) to scroll the log pane.
+          // At scroll boundaries and on Escape, release focus so the user can
+          // navigate back out instead of getting stuck inside the logs.
+          const el = e.currentTarget
+          const moveOut = (direction: 'up' | 'down') => {
+            const target = findInDirection(el, findFocusables(getActiveScopeRoot()), direction)
+            if (target) focusSmooth(target)
+            else el.blur()
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            moveOut('up')
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            if (el.scrollTop <= 0) {
+              e.preventDefault()
+              moveOut('up')
+              return
+            }
+            e.preventDefault()
+            el.scrollBy({ top: -el.clientHeight * 0.25, behavior: 'smooth' })
+          } else if (e.key === 'ArrowDown') {
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
+              e.preventDefault()
+              moveOut('down')
+              return
+            }
+            e.preventDefault()
+            el.scrollBy({ top: el.clientHeight * 0.25, behavior: 'smooth' })
+          }
+        }}
       >
         {logs.length === 0 ? (
           <div className="italic text-text-muted">{t('app.loading.terminal.waitingForServerOutput')}</div>
@@ -262,7 +307,7 @@ const ServerLogDisplay = ({
             </div>
             <div className="flex items-center gap-[0.8cqh]">
               <Button
-                variant="primary"
+                variant={primaryAction ? 'secondary' : 'primary'}
                 autoShrinkLabel
                 label={isOpeningIssue ? 'app.loading.terminal.opening' : 'app.buttons.reportOnGithub'}
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
@@ -271,13 +316,14 @@ const ServerLogDisplay = ({
                 title={t('app.loading.terminal.openPrefilledIssueOnGithub')}
               />
               <Button
-                variant="primary"
+                variant={primaryAction ? 'secondary' : 'primary'}
                 autoShrinkLabel
                 label="app.buttons.askOnDiscord"
                 className="text-[2.13cqh] px-[1.4cqh] py-[0.4cqh]"
                 onClick={() => window.open(DISCORD_HELP_URL, '_blank', 'noopener,noreferrer')}
                 title={t('app.loading.terminal.askForHelpInDiscord')}
               />
+              {primaryAction}
             </div>
           </div>
         </div>

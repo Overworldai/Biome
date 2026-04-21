@@ -13,10 +13,14 @@ import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { RpcError } from '../lib/wsRpc'
 import type { GenerateSceneResponse } from '../types/ws'
+import { useSettings } from '../hooks/useSettings'
+import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { t } = useTranslation()
   const { requestPointerLock, reset, wsRequest } = useStreaming()
+  const { settings } = useSettings()
+  const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const [generateState, setGenerateState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -53,7 +57,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Escape is always a safety-escape; the user's configured pauseMenu key also re-locks.
+      if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
       if (generateState === 'loading') return
@@ -66,7 +71,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, generateState, requestPointerLock])
+  }, [isActive, view, generateState, requestPointerLock, pauseMenuCode])
 
   // Auto-dismiss generate error after 5 seconds
   useEffect(() => {
@@ -105,9 +110,14 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   }
 
   return (
-    <div
+    <FocusScope
+      active={isActive && view !== PAUSE_VIEW.SETTINGS}
+      autoFocus
+      onCancel={() => {
+        if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
+        else requestPointerLock()
+      }}
       className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      id="pause-overlay"
     >
       <div className="overlay-darken absolute inset-0 pointer-events-none" />
       <AnimatePresence mode="wait">
@@ -176,7 +186,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </FocusScope>
   )
 }
 

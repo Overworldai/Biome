@@ -84,7 +84,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     frameGenMsRef,
     frameTemporalCompressionRef,
     frameIdRef,
-    serverMetrics,
+    connection,
     inputLatency,
     logs: wsLogs,
     allLogs: wsAllLogs,
@@ -93,7 +93,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendControl,
     sendPause,
     sendInit,
-    setInitMetrics,
+    applyInitResponse,
     setPlaceholderFrame,
     reset,
     request: wsRequest,
@@ -113,6 +113,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [sceneEditGrace, setSceneEditGrace] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(() => settings.mouse_sensitivity ?? 1.0)
+  const [gamepadSensitivity, setGamepadSensitivity] = useState(() => settings.gamepad_sensitivity ?? 1.0)
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
@@ -244,7 +245,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Set lastAppliedModel before await to prevent the lifecycle machine from
-      // seeing a model mismatch during the re-render triggered by setInitMetrics.
+      // seeing a model mismatch during the re-render triggered by applyInitResponse.
       const quant = settings.engine_quant ?? 'none'
       lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
         ? `${selectedModel}+scene_edit+${quant}`
@@ -259,7 +260,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
-      setInitMetrics(metrics)
+      applyInitResponse(metrics)
     }
 
     bootstrap().catch((err) => log.error('Bootstrap failed:', err))
@@ -273,7 +274,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
     sendInit,
-    setInitMetrics,
+    applyInitResponse,
     setPlaceholderFrame
   ])
 
@@ -335,12 +336,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     dispatchSceneEdit({ type: 'OPEN' })
   }, [exitPointerLock])
 
-  const { pressedKeys, mouseButtons, getInputState, isPointerLocked } = useGameInput(
+  const { pressedKeys, mouseButtons, pressedGamepad, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
     containerRef,
     handleReset,
     settings.keybindings,
-    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null
+    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null,
+    exitPointerLock
   )
 
   useEffect(() => {
@@ -355,6 +357,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineError,
         hasReceivedFrame,
         socketReady: isReady,
+        // Init is considered complete once applyInitResponse has set model.
+        // Used to gate the LOADING → STREAMING transition so an error between
+        // session.ready and the init response doesn't leak us into streaming.
+        initCompleted: connection.model !== null,
         isPointerLocked,
         settingsOpen,
         isPaused,
@@ -373,6 +379,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     engineError,
     hasReceivedFrame,
     isReady,
+    connection.model,
     isPointerLocked,
     settingsOpen,
     isPaused,
@@ -532,6 +539,20 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const drawTick = () => {
       const now = performance.now()
+      // Defense-in-depth: if the queue has grown well beyond one batch worth
+      // of lead (e.g. rAF was paused while the window was backgrounded), drop
+      // the oldest bitmaps and snap the scheduling cursor back to now so new
+      // frames display live instead of replaying stale history.
+      const tc = frameTemporalCompressionRef.current
+      const maxQueue = Math.max(tc * 2, 8)
+      if (bitmapQueueRef.current.length > maxQueue) {
+        const keep = Math.max(tc, 4)
+        const dropCount = bitmapQueueRef.current.length - keep
+        for (let i = 0; i < dropCount; i++) {
+          bitmapQueueRef.current.shift()!.bitmap.close()
+        }
+        lastScheduledAtRef.current = 0
+      }
       const item = bitmapQueueRef.current[0]
       if (item && now >= item.displayAt) {
         bitmapQueueRef.current.shift()
@@ -583,7 +604,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         // batch), otherwise chain after the previously reserved slot.  The slot
         // reservation (lastScheduledAtRef) always advances by genMs so that
         // subsequent frames in the same batch are evenly spaced.
-        const displayAt = Math.max(lastScheduledAtRef.current, now)
+        //
+        // Cap the forward lead: if the server bursts frames faster than the
+        // reported genMs (warmup, model switch, backgrounded window) the cursor
+        // can drift far into the future and latency accumulates without bound
+        // (Overworldai/Biome#79).  Allow up to ~2 batches of lead, so intra-
+        // batch spacing still works, but snap back if we overshoot.
+        const batchMs = Math.max(temporalCompression * genMs, 16)
+        const maxLeadMs = Math.max(2 * batchMs, 100)
+        const cappedBase = Math.min(lastScheduledAtRef.current, now + maxLeadMs)
+        const displayAt = Math.max(cappedBase, now)
         lastScheduledAtRef.current = displayAt + genMs
 
         const batchIndex = capturedFrameId % temporalCompression
@@ -608,7 +638,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const tick = () => {
-      const { buttons, mouseDx, mouseDy } = getInputState()
+      const { buttons, mouse, gamepad } = getInputState()
       const scrollUp = buttons.includes('SCROLL_UP')
       const scrollDown = buttons.includes('SCROLL_DOWN')
       if (scrollUp || scrollDown) {
@@ -616,7 +646,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
         scrollTimeoutRef.current = setTimeout(() => setScrollActive({ up: false, down: false }), 150)
       }
-      sendControl(buttons, Math.round(mouseDx * mouseSensitivity), Math.round(mouseDy * mouseSensitivity))
+      const dx = mouse.dx * mouseSensitivity + gamepad.dx * gamepadSensitivity
+      const dy = mouse.dy * mouseSensitivity + gamepad.dy * gamepadSensitivity
+      sendControl(buttons, Math.round(dx), Math.round(dy))
       inputLoopRef.current = requestAnimationFrame(tick)
     }
     inputLoopRef.current = requestAnimationFrame(tick)
@@ -631,7 +663,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         scrollTimeoutRef.current = null
       }
     }
-  }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
+  }, [inputEnabled, getInputState, sendControl, mouseSensitivity, gamepadSensitivity])
 
   // Ref registration callbacks
   const registerContainerRef = useCallback((element: HTMLDivElement | null) => {
@@ -709,9 +741,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       if (!result) return
       lastSeedRef.current = { filename, imageData: result.base64 }
       const metrics = await sendInit({ seed_image_data: result.base64, seed_filename: filename })
-      setInitMetrics(metrics)
+      applyInitResponse(metrics)
     },
-    [sendInit, setInitMetrics]
+    [sendInit, applyInitResponse]
   )
 
   const value: StreamingContextValue = {
@@ -725,6 +757,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     isStreaming,
     isPaused,
+    isUIActive: !inputEnabled,
     pausedAt,
     canUnpause,
     unlockDelayMs: UNLOCK_DELAY_MS,
@@ -747,7 +780,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     },
     showStats,
     setShowStats,
-    serverMetrics,
+    connection,
     inputLatency,
     performanceStatsOverlay: settings.debug_overlays.performance_stats,
     inputOverlay: settings.debug_overlays.input,
@@ -787,10 +820,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
+    gamepadSensitivity,
+    setGamepadSensitivity,
 
     // Input state
     pressedKeys,
     mouseButtons,
+    pressedGamepad,
     scrollActive,
     isPointerLocked,
     pointerLockBlockedSeq,

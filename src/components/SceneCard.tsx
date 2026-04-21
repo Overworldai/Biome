@@ -1,6 +1,7 @@
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/AudioContext'
+import { useInputModality } from '../lib/inputModality'
 import { useTranslation } from 'react-i18next'
 
 const ACTION_BASE =
@@ -94,7 +95,11 @@ const SceneCard = ({
   const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const { play } = useAudio()
+  const modality = useInputModality()
   const isUnsafe = seed.is_safe === false
+  // Gamepad users can't reliably reach nested pin/delete actions with spatial
+  // nav (the parent scene card is what's focused). Hide them in gamepad mode.
+  const hideSecondaryActions = modality === 'gamepad'
 
   return (
     <button
@@ -121,8 +126,10 @@ const SceneCard = ({
           {t('app.pause.sceneCard.unsafe')}
         </span>
       )}
-      <span className="absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100 group-focus-within/scene:opacity-100">
-        {!isUnsafe && (
+      <span
+        className={`absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-[140ms] ease-in-out ${hideSecondaryActions ? '' : 'group-hover/scene:opacity-100 group-focus-within/scene:opacity-100'}`}
+      >
+        {!isUnsafe && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}
@@ -145,7 +152,7 @@ const SceneCard = ({
             {pinVariant === 'pinned-only' || isPinned ? <PinnedIcon /> : <UnpinnedIcon />}
           </span>
         )}
-        {!seed.is_default && onRemove && (
+        {!seed.is_default && onRemove && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}
