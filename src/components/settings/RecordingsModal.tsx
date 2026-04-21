@@ -162,8 +162,18 @@ type RecordingRowProps = {
   onDelete: () => void
 }
 
+/** Strip any `org/` prefix from a model URI for compact display. */
+const shortModelName = (model: string | null | undefined): string | null => {
+  if (!model) return null
+  const slash = model.lastIndexOf('/')
+  return slash >= 0 ? model.slice(slash + 1) : model
+}
+
 const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) => {
   const src = `biome-recording://serve/${encodeURIComponent(entry.filename)}`
+  const model = shortModelName(entry.properties?.model)
+  const date = formatDate(entry.mtime_ms, locale)
+  const subtitle = model ? `${model} · ${date}` : date
 
   return (
     <li className="flex items-stretch gap-[1.2cqh] border border-border-medium bg-white/5 p-[0.8cqh]">
@@ -195,7 +205,7 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
               ${SETTINGS_MUTED_TEXT_WITHOUT_FONT_SIZE}
             `}
           >
-            {formatDate(entry.mtime_ms, locale)}
+            {subtitle}
           </p>
         </div>
         <div className="flex shrink-0 justify-end gap-[0.8cqh]">

@@ -2,12 +2,34 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import open from 'open'
+import { parseFile } from 'music-metadata'
+import type { RecordingProperties } from '../../src/types/ipc.js'
 
 export type RecordingEntry = {
   filename: string
   path: string
   size_bytes: number
   mtime_ms: number
+  /** Semantic properties parsed from the MP4's `comment` atom (written by
+   *  `_properties_to_mp4_metadata` server-side). `null` when the file
+   *  predates the metadata feature or the atom is absent/unparseable. */
+  properties: RecordingProperties | null
+}
+
+/** Read the `comment` atom from an MP4 and parse it as the JSON blob that
+ *  video_recorder.py writes. Returns `null` on any failure — caller uses
+ *  this to decide whether to show the metadata row in the UI. */
+async function readRecordingProperties(filePath: string): Promise<RecordingProperties | null> {
+  try {
+    const parsed = await parseFile(filePath, { skipCovers: true, skipPostHeaders: true })
+    const raw = Array.isArray(parsed.common.comment) ? parsed.common.comment[0] : parsed.common.comment
+    const text = typeof raw === 'string' ? raw : (raw as { text?: string } | undefined)?.text
+    if (!text) return null
+    const obj = JSON.parse(text) as unknown
+    return obj && typeof obj === 'object' ? (obj as RecordingProperties) : null
+  } catch {
+    return null
+  }
 }
 
 /** The currently-configured output directory, cached after the last
@@ -72,29 +94,30 @@ export function registerRecordingsIpc(): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle('list-recordings', (_event, configured: string): RecordingEntry[] => {
+  ipcMain.handle('list-recordings', async (_event, configured: string): Promise<RecordingEntry[]> => {
     const dir = resolveRecordingsDir(configured)
     currentRecordingsDir = dir
     if (!fs.existsSync(dir)) return []
 
-    const entries = fs.readdirSync(dir)
-    const results: RecordingEntry[] = []
-    for (const name of entries) {
+    // First pass: collect filename + stats synchronously.
+    const candidates: { filename: string; path: string; size_bytes: number; mtime_ms: number }[] = []
+    for (const name of fs.readdirSync(dir)) {
       if (!name.toLowerCase().endsWith('.mp4')) continue
       const fullPath = path.join(dir, name)
       try {
         const stat = fs.statSync(fullPath)
         if (!stat.isFile()) continue
-        results.push({
-          filename: name,
-          path: fullPath,
-          size_bytes: stat.size,
-          mtime_ms: stat.mtimeMs
-        })
+        candidates.push({ filename: name, path: fullPath, size_bytes: stat.size, mtime_ms: stat.mtimeMs })
       } catch {
         // skip unreadable entries
       }
     }
+
+    // Second pass: parse metadata in parallel. Each parseFile reads a small
+    // prefix of the file so this is cheap enough to do every refresh.
+    const properties = await Promise.all(candidates.map((c) => readRecordingProperties(c.path)))
+
+    const results: RecordingEntry[] = candidates.map((c, i) => ({ ...c, properties: properties[i] }))
     results.sort((a, b) => b.mtime_ms - a.mtime_ms)
     return results
   })

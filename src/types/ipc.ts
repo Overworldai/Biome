@@ -205,11 +205,24 @@ export type AppUpdateInfo = {
   update_available: boolean
 }
 
+/** Semantic session state parsed from a recording's MP4 `comment` atom.
+ *  Matches the dataclass in server-components/video_recorder.py. All fields
+ *  optional on the renderer side because older files may lack the atom or
+ *  its contents may be malformed. */
+export type RecordingProperties = {
+  biome_version?: string
+  model?: string | null
+  quant?: string
+  seed?: string | null
+  scene_edit_enabled?: boolean
+}
+
 export type RecordingEntry = {
   filename: string
   path: string
   size_bytes: number
   mtime_ms: number
+  properties: RecordingProperties | null
 }
 
 /**
