@@ -149,7 +149,7 @@ const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: G
                   <Button
                     variant="secondary"
                     autoShrinkLabel
-                    label="app.settings.recording.open"
+                    label="app.settings.recording.browse"
                     className={`
                       px-[1.4cqh]
                       ${SETTINGS_CONTROL_VMETRICS}

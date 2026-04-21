@@ -269,7 +269,7 @@ const zh = {
           enabledDescription: '以模型完整帧率保存流畅视频。',
           outputFolder: '输出文件夹',
           outputFolderHint: '留空则使用系统默认位置。',
-          open: '打开',
+          browse: '浏览...',
           manage: '管理录制...'
         },
         debugMetrics: {

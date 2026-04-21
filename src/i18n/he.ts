@@ -273,7 +273,7 @@ const he = {
           enabledDescription: 'שומר סרטונים חלקים בקצב הפריימים המלא של המודל.',
           outputFolder: 'תיקיית פלט',
           outputFolderHint: 'השאר ריק כדי להשתמש בברירת המחדל של המערכת.',
-          open: 'פתח',
+          browse: 'עיון...',
           manage: 'נהל הקלטות...'
         },
         debugMetrics: {

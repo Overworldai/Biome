@@ -279,7 +279,7 @@ const goose = {
           enabledDescription: "Saves smooth filmstrips at the model's full framerate.",
           outputFolder: 'Nesting folder',
           outputFolderHint: 'Leave blank to use the usual migration route.',
-          open: 'Open',
+          browse: 'Waddle to folder...',
           manage: 'Manage footage...'
         },
         debugMetrics: {

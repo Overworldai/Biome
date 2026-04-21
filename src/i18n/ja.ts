@@ -277,7 +277,7 @@ const ja = {
           enabledDescription: 'モデル本来のフレームレートで滑らかな動画を保存します。',
           outputFolder: '保存先フォルダ',
           outputFolderHint: '空欄の場合はシステム既定の場所を使用します。',
-          open: '開く',
+          browse: '参照...',
           manage: '録画を管理...'
         },
         debugMetrics: {

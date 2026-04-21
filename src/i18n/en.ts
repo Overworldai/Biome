@@ -278,7 +278,7 @@ const en = {
           enabledDescription: "Saves smooth videos at the model's full framerate.",
           outputFolder: 'Output folder',
           outputFolderHint: 'Leave blank to use the system default.',
-          open: 'Open',
+          browse: 'Browse...',
           manage: 'Manage recordings...'
         },
         debugMetrics: {
