@@ -102,7 +102,21 @@ export const settingsSchema = z.object({
       frame_timeline: z.boolean().default(false),
       action_logging: z.boolean().default(false)
     })
-    .default({ performance_stats: false, input: false, frame_timeline: false, action_logging: false })
+    .default({
+      performance_stats: false,
+      input: false,
+      frame_timeline: false,
+      action_logging: false
+    }),
+  // Video recording (standalone mode only). output_dir is user-configurable;
+  // the empty-string default means "use the OS video directory + /Biome",
+  // resolved at the Electron layer via resolve-video-dir.
+  recording: z
+    .object({
+      enabled: z.boolean().default(false),
+      output_dir: z.string().default('')
+    })
+    .default({ enabled: false, output_dir: '' })
 })
 
 export type Settings = z.infer<typeof settingsSchema>

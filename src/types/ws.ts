@@ -22,6 +22,13 @@ export type InitMessage = {
   seed_filename?: string // informational, for action logging only
   scene_edit?: boolean
   action_logging?: boolean
+  video_recording?: boolean
+  /** Absolute path to write recordings into. Only honoured in standalone mode;
+   *  in server mode the server decides where to write. */
+  video_output_dir?: string
+  /** Biome app version. Embedded into each recorded MP4's metadata so the
+   *  recording carries a self-describing record of what produced it. */
+  biome_version?: string
   quant?: string | null
   cap_inference_fps?: boolean
 }

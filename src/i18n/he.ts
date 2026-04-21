@@ -31,6 +31,7 @@ const he = {
         abort: 'בטל',
         aborting: 'מבטל...',
         copy: 'העתק',
+        open: 'פתח',
         pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה',
         delete: 'מחק'
@@ -74,6 +75,15 @@ const he = {
           title: 'למחוק את המודל?',
           description:
             '<bold>{{modelId}}</bold> מורד למכשיר זה. מחיקתו תפנה מקום בדיסק, אך יהיה צורך להוריד את המודל מחדש לפני שניתן יהיה להשתמש בו שוב.'
+        },
+        recordings: {
+          title: 'הקלטות',
+          empty: 'עדיין אין הקלטות. הפעל הקלטה כדי לשמור את הסשן הבא.',
+          openFolder: 'פתח תיקייה',
+          refresh: 'רענן',
+          confirmDeleteTitle: 'למחוק את ההקלטה?',
+          confirmDeleteDescription: 'למחוק את <bold>{{filename}}</bold>? לא ניתן לבטל פעולה זו.',
+          openExternally: 'פתח'
         },
         serverUnreachable: {
           title: 'אי אפשר להגיע לשרת',
@@ -256,6 +266,17 @@ const he = {
           sceneEdit: 'עריכת סצנה',
           sceneEditDescription:
             'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
+        },
+        recording: {
+          title: 'הקלטת וידאו',
+          description: 'רוצה להקליט את המשחק שלך?',
+          enabled: 'הקלט את המשחק',
+          enabledDescription: 'שומר סרטונים חלקים בקצב הפריימים המלא של המודל.',
+          outputFolder: 'תיקיית פלט',
+          outputFolderHint: 'השאר ריק כדי להשתמש בברירת המחדל של המערכת.',
+          browse: 'עיון...',
+          manage: 'ניהול הקלטות',
+          manageDescription: 'צפה או מחק סרטונים שהוקלטו בעבר.'
         },
         debugMetrics: {
           title: 'מדדים',

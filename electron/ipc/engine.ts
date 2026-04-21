@@ -7,7 +7,7 @@ import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions, getUvArchiveName, getVenvPythonPath } from '../lib/platform.js'
 import { getServerState, stopServerSync } from '../lib/serverState.js'
 import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
-import { copyServerComponentFiles } from '../lib/serverFiles.js'
+import { copyServerComponentFiles, ensureEngineFont } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
 
 const UV_VERSION = '0.10.9'
@@ -36,6 +36,9 @@ function unpackServerFilesInner(force: boolean): string {
   const hasKey =
     fs.existsSync(path.join(engineDir, 'pyproject.toml')) && fs.existsSync(path.join(engineDir, 'server.py'))
   if (hasKey) {
+    // Re-run the font copy so upgrades from older installs (which didn't
+    // unpack fonts) pick it up without a full reinstall.
+    ensureEngineFont(engineDir)
     return 'Files already exist, skipped unpacking'
   }
 

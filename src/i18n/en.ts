@@ -31,6 +31,7 @@ const en = {
         abort: 'Abort',
         aborting: 'Aborting...',
         copy: 'Copy',
+        open: 'Open',
         pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
@@ -76,6 +77,15 @@ const en = {
           title: 'Delete Model?',
           description:
             '<bold>{{modelId}}</bold> is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
+        },
+        recordings: {
+          title: 'Recordings',
+          empty: "You haven't recorded anything yet. Turn on recording to capture your next session.",
+          openFolder: 'Open folder',
+          refresh: 'Refresh',
+          confirmDeleteTitle: 'Delete recording?',
+          confirmDeleteDescription: 'Delete <bold>{{filename}}</bold>? This cannot be undone.',
+          openExternally: 'Open'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -261,6 +271,17 @@ const en = {
           sceneEdit: 'Scene Edit',
           sceneEditDescription:
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        },
+        recording: {
+          title: 'Video Recording',
+          description: 'want to record your gameplay?',
+          enabled: 'Record Gameplay',
+          enabledDescription: "Saves smooth videos at the model's full framerate.",
+          outputFolder: 'Output folder',
+          outputFolderHint: 'Leave blank to use the system default.',
+          browse: 'Browse...',
+          manage: 'Manage Recordings',
+          manageDescription: 'View or delete previously recorded videos.'
         },
         debugMetrics: {
           title: 'Metrics',
