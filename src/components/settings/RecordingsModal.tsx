@@ -202,18 +202,18 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
         </div>
         <div className="flex shrink-0 justify-end gap-[0.8cqh]">
           <Button
+            variant="danger"
+            autoShrinkLabel
+            label="app.buttons.delete"
+            className="px-[1.2cqh] py-[0.2cqh] text-[1.9cqh]"
+            onClick={onDelete}
+          />
+          <Button
             variant="secondary"
             autoShrinkLabel
             label="app.dialogs.recordings.openExternally"
             className="px-[1.2cqh] py-[0.2cqh] text-[1.9cqh]"
             onClick={onOpen}
-          />
-          <Button
-            variant="secondary"
-            autoShrinkLabel
-            label="app.buttons.delete"
-            className="px-[1.2cqh] py-[0.2cqh] text-[1.9cqh]"
-            onClick={onDelete}
           />
         </div>
       </div>
