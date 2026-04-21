@@ -91,7 +91,7 @@ const SceneEditOverlay = () => {
       }
       dispatchSceneEdit({ type: 'ERROR', message: msg })
     }
-  }, [prompt, phase, wsRequest, dispatchSceneEdit])
+  }, [prompt, phase, wsRequest, dispatchSceneEdit, t])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -83,6 +83,8 @@ export function VortexProvider({ children }: { children: ReactNode }) {
       resizeObserverRef.current?.disconnect()
       renderer.dispose()
     }
+    // Mount-only: the raf loop re-schedules itself via its own closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const lastSizeRef = useRef({ w: 0, h: 0 })

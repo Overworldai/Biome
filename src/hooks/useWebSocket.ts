@@ -135,205 +135,208 @@ export const useWebSocket = (): WebSocketHook => {
     setLogs([])
   }, [])
 
-  const connect = useCallback((endpointUrl: string) => {
-    if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
-      return
-    }
-
-    if (!endpointUrl) {
-      setError(new TranslatableError('app.server.noEndpointUrl'))
-      return
-    }
-
-    isConnectingRef.current = true
-    setConnectionState('connecting')
-    setError(null)
-    setStatusStage(null)
-    setHasRealFrame(false)
-    allLogsRef.current = []
-    setLogs([])
-
-    let wsUrl: string
-    try {
-      wsUrl = toWebSocketUrl(endpointUrl)
-    } catch (err) {
-      isConnectingRef.current = false
-      setConnectionState('error')
-      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint'))
-      return
-    }
-
-    let ws: WebSocket
-    try {
-      ws = new WebSocket(wsUrl)
-    } catch (err) {
-      isConnectingRef.current = false
-      setConnectionState('error')
-      setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed'))
-      return
-    }
-    wsRef.current = ws
-
-    const rpc = rpcRef.current
-    rpc.attach(ws)
-
-    ws.onopen = () => {
-      if (wsRef.current !== ws) return
-      isConnectingRef.current = false
-      setConnectionState('connected')
-    }
-
-    ws.binaryType = 'arraybuffer'
-
-    ws.onmessage = (event: MessageEvent<string | ArrayBuffer>) => {
-      if (wsRef.current !== ws) return
-
-      // Binary messages: [4-byte LE header_len][JSON header][image bytes]
-      // If header contains req_id → RPC response; otherwise → frame
-      if (event.data instanceof ArrayBuffer) {
-        const view = new DataView(event.data)
-        const headerLen = view.getUint32(0, true)
-        const headerBytes = new Uint8Array(event.data, 4, headerLen)
-        const header = JSON.parse(new TextDecoder().decode(headerBytes)) as Record<string, unknown>
-        const imageBlob = new Blob([new Uint8Array(event.data, 4 + headerLen)], { type: 'image/jpeg' })
-
-        // Binary RPC response
-        if (header.req_id != null) {
-          rpc.handleBinaryResponse(header, imageBlob)
-          return
-        }
-
-        // Binary frame
-        const headerTemporalCompression = (header.temporal_compression as number) ?? 1
-        frameTemporalCompressionRef.current = headerTemporalCompression
-        setTemporalCompression(headerTemporalCompression)
-        if (typeof header.gen_ms === 'number') {
-          frameGenMsRef.current = header.gen_ms
-          setGenTime(Math.round(header.gen_ms))
-        }
-        frameIdRef.current = (header.frame_id as number) ?? 0
-        // First display frame of each latent pass: update latent gen stats and GPU metrics
-        if ((frameIdRef.current - 1) % headerTemporalCompression === 0) {
-          if (typeof header.gen_ms === 'number') {
-            setLatentGenMs(Math.round(header.gen_ms))
-          }
-          const runtime: RuntimeMetrics = {
-            vramUsedBytes: (header.vram_used_bytes as number) ?? -1,
-            gpuUtilPercent: (header.gpu_util_percent as number) ?? -1,
-            profile:
-              header.t_infer_ms != null
-                ? {
-                    inferMs: header.t_infer_ms as number,
-                    syncMs: header.t_sync_ms as number,
-                    encMs: header.t_enc_ms as number,
-                    metricsMs: header.t_metrics_ms as number,
-                    overheadMs: (header.t_overhead_ms as number) ?? 0
-                  }
-                : null
-          }
-          setConnection((prev) => ({ ...prev, runtime }))
-        }
-        setFrame(imageBlob)
-        setHasRealFrame(true)
-        setFrameId(frameIdRef.current)
-        if (typeof header.client_ts === 'number' && (header.client_ts as number) > 0) {
-          setInputLatency(Math.round(performance.now() - (header.client_ts as number)))
-        }
+  const connect = useCallback(
+    (endpointUrl: string) => {
+      if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
         return
       }
 
-      try {
-        const msg = JSON.parse(event.data) as Record<string, unknown>
-
-        // Let RPC client consume response messages first
-        if (rpc.handleMessage(msg)) return
-
-        switch (msg.type) {
-          case 'status': {
-            const stageId = typeof msg.stage === 'string' ? msg.stage : null
-            if (stageId) {
-              setStatusStage(stageId as StageId)
-            }
-            if (stageId === 'session.ready') {
-              setIsReady(true)
-              isReadyRef.current = true
-            }
-            break
-          }
-          case 'stats': {
-            if (typeof msg.gentime === 'number') {
-              setGenTime(Math.round(msg.gentime))
-            }
-            if (typeof msg.frame === 'number') {
-              setFrameId(msg.frame)
-            }
-            break
-          }
-          case 'log': {
-            appendLog(stripAnsi(String(msg.line ?? '')))
-            break
-          }
-          case 'error': {
-            setError(resolveServerMessage(msg, 'app.server.fallbackError'))
-            setConnectionState('error')
-            const snapshot = msg.snapshot as ServerErrorSnapshot | undefined
-            if (snapshot) {
-              setConnection((prev) => ({ ...prev, lastErrorSnapshot: snapshot }))
-            }
-            break
-          }
-          case 'system_info': {
-            // Early push from server at connect time — arrives before init so
-            // the hardware identity is available even if the session crashes
-            // during model load / CUDA warmup.
-            const { type: _, ...info } = msg
-            setConnection((prev) => ({ ...prev, systemInfo: info as unknown as ServerSystemInfo }))
-            break
-          }
-          case 'warning':
-            break
-          default:
-            log.debug('Message:', msg.type, msg)
-        }
-      } catch (err) {
-        log.error('Failed to parse message:', err)
+      if (!endpointUrl) {
+        setError(new TranslatableError('app.server.noEndpointUrl'))
+        return
       }
-    }
 
-    ws.onerror = () => {
-      if (wsRef.current !== ws) return
-      isConnectingRef.current = false
-      setError(new TranslatableError('app.server.websocketError'))
-      setConnectionState('error')
-    }
-
-    ws.onclose = () => {
-      if (wsRef.current !== ws) return
-      isConnectingRef.current = false
-      rpc.detach()
-      wsRef.current = null
-      setConnectionState('disconnected')
-      setIsReady(false)
-      // Preserve statusStage across close so a bug report captures where the
-      // server was in its init flow (e.g. "session.inpainting_load") when it
-      // died.  It's overwritten by the next session's status messages on reconnect.
-      setFrame(null)
+      isConnectingRef.current = true
+      setConnectionState('connecting')
+      setError(null)
+      setStatusStage(null)
       setHasRealFrame(false)
-      setFrameId(0)
-      setGenTime(null)
-      setLatentGenMs(null)
-      // Preserve systemInfo + lastErrorSnapshot across close so a bug report
-      // copied after the server dies still has the hardware identity + the
-      // error-time snapshot.  Model/inferenceFps/runtime are session-scoped
-      // and get reset.
-      setConnection((prev) => ({
-        ...emptyConnection(),
-        systemInfo: prev.systemInfo,
-        lastErrorSnapshot: prev.lastErrorSnapshot
-      }))
-      setInputLatency(null)
-    }
-  }, [])
+      allLogsRef.current = []
+      setLogs([])
+
+      let wsUrl: string
+      try {
+        wsUrl = toWebSocketUrl(endpointUrl)
+      } catch (err) {
+        isConnectingRef.current = false
+        setConnectionState('error')
+        setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint'))
+        return
+      }
+
+      let ws: WebSocket
+      try {
+        ws = new WebSocket(wsUrl)
+      } catch (err) {
+        isConnectingRef.current = false
+        setConnectionState('error')
+        setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed'))
+        return
+      }
+      wsRef.current = ws
+
+      const rpc = rpcRef.current
+      rpc.attach(ws)
+
+      ws.onopen = () => {
+        if (wsRef.current !== ws) return
+        isConnectingRef.current = false
+        setConnectionState('connected')
+      }
+
+      ws.binaryType = 'arraybuffer'
+
+      ws.onmessage = (event: MessageEvent<string | ArrayBuffer>) => {
+        if (wsRef.current !== ws) return
+
+        // Binary messages: [4-byte LE header_len][JSON header][image bytes]
+        // If header contains req_id → RPC response; otherwise → frame
+        if (event.data instanceof ArrayBuffer) {
+          const view = new DataView(event.data)
+          const headerLen = view.getUint32(0, true)
+          const headerBytes = new Uint8Array(event.data, 4, headerLen)
+          const header = JSON.parse(new TextDecoder().decode(headerBytes)) as Record<string, unknown>
+          const imageBlob = new Blob([new Uint8Array(event.data, 4 + headerLen)], { type: 'image/jpeg' })
+
+          // Binary RPC response
+          if (header.req_id != null) {
+            rpc.handleBinaryResponse(header, imageBlob)
+            return
+          }
+
+          // Binary frame
+          const headerTemporalCompression = (header.temporal_compression as number) ?? 1
+          frameTemporalCompressionRef.current = headerTemporalCompression
+          setTemporalCompression(headerTemporalCompression)
+          if (typeof header.gen_ms === 'number') {
+            frameGenMsRef.current = header.gen_ms
+            setGenTime(Math.round(header.gen_ms))
+          }
+          frameIdRef.current = (header.frame_id as number) ?? 0
+          // First display frame of each latent pass: update latent gen stats and GPU metrics
+          if ((frameIdRef.current - 1) % headerTemporalCompression === 0) {
+            if (typeof header.gen_ms === 'number') {
+              setLatentGenMs(Math.round(header.gen_ms))
+            }
+            const runtime: RuntimeMetrics = {
+              vramUsedBytes: (header.vram_used_bytes as number) ?? -1,
+              gpuUtilPercent: (header.gpu_util_percent as number) ?? -1,
+              profile:
+                header.t_infer_ms != null
+                  ? {
+                      inferMs: header.t_infer_ms as number,
+                      syncMs: header.t_sync_ms as number,
+                      encMs: header.t_enc_ms as number,
+                      metricsMs: header.t_metrics_ms as number,
+                      overheadMs: (header.t_overhead_ms as number) ?? 0
+                    }
+                  : null
+            }
+            setConnection((prev) => ({ ...prev, runtime }))
+          }
+          setFrame(imageBlob)
+          setHasRealFrame(true)
+          setFrameId(frameIdRef.current)
+          if (typeof header.client_ts === 'number' && (header.client_ts as number) > 0) {
+            setInputLatency(Math.round(performance.now() - (header.client_ts as number)))
+          }
+          return
+        }
+
+        try {
+          const msg = JSON.parse(event.data) as Record<string, unknown>
+
+          // Let RPC client consume response messages first
+          if (rpc.handleMessage(msg)) return
+
+          switch (msg.type) {
+            case 'status': {
+              const stageId = typeof msg.stage === 'string' ? msg.stage : null
+              if (stageId) {
+                setStatusStage(stageId as StageId)
+              }
+              if (stageId === 'session.ready') {
+                setIsReady(true)
+                isReadyRef.current = true
+              }
+              break
+            }
+            case 'stats': {
+              if (typeof msg.gentime === 'number') {
+                setGenTime(Math.round(msg.gentime))
+              }
+              if (typeof msg.frame === 'number') {
+                setFrameId(msg.frame)
+              }
+              break
+            }
+            case 'log': {
+              appendLog(stripAnsi(String(msg.line ?? '')))
+              break
+            }
+            case 'error': {
+              setError(resolveServerMessage(msg, 'app.server.fallbackError'))
+              setConnectionState('error')
+              const snapshot = msg.snapshot as ServerErrorSnapshot | undefined
+              if (snapshot) {
+                setConnection((prev) => ({ ...prev, lastErrorSnapshot: snapshot }))
+              }
+              break
+            }
+            case 'system_info': {
+              // Early push from server at connect time — arrives before init so
+              // the hardware identity is available even if the session crashes
+              // during model load / CUDA warmup.
+              const { type: _, ...info } = msg
+              setConnection((prev) => ({ ...prev, systemInfo: info as unknown as ServerSystemInfo }))
+              break
+            }
+            case 'warning':
+              break
+            default:
+              log.debug('Message:', msg.type, msg)
+          }
+        } catch (err) {
+          log.error('Failed to parse message:', err)
+        }
+      }
+
+      ws.onerror = () => {
+        if (wsRef.current !== ws) return
+        isConnectingRef.current = false
+        setError(new TranslatableError('app.server.websocketError'))
+        setConnectionState('error')
+      }
+
+      ws.onclose = () => {
+        if (wsRef.current !== ws) return
+        isConnectingRef.current = false
+        rpc.detach()
+        wsRef.current = null
+        setConnectionState('disconnected')
+        setIsReady(false)
+        // Preserve statusStage across close so a bug report captures where the
+        // server was in its init flow (e.g. "session.inpainting_load") when it
+        // died.  It's overwritten by the next session's status messages on reconnect.
+        setFrame(null)
+        setHasRealFrame(false)
+        setFrameId(0)
+        setGenTime(null)
+        setLatentGenMs(null)
+        // Preserve systemInfo + lastErrorSnapshot across close so a bug report
+        // copied after the server dies still has the hardware identity + the
+        // error-time snapshot.  Model/inferenceFps/runtime are session-scoped
+        // and get reset.
+        setConnection((prev) => ({
+          ...emptyConnection(),
+          systemInfo: prev.systemInfo,
+          lastErrorSnapshot: prev.lastErrorSnapshot
+        }))
+        setInputLatency(null)
+      }
+    },
+    [appendLog, resolveServerMessage]
+  )
 
   const disconnect = useCallback(() => {
     isConnectingRef.current = false

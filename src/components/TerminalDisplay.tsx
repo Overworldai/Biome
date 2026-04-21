@@ -107,8 +107,6 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     activeLogs,
     connection,
     connectionState,
-    engineError,
-    error,
     errorDetail,
     isServerMode,
     progressPercent,

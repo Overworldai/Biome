@@ -83,7 +83,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return settings.server_url
-  }, [engineMode, settings?.server_url])
+  }, [engineMode, settings])
 
   const openSettingsFile = useCallback(async () => {
     try {

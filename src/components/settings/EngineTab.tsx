@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
@@ -57,7 +57,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
-  const savedCustomModels = settings.custom_models ?? []
+  const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
 
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
     configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'

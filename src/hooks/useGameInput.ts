@@ -344,16 +344,7 @@ export const useGameInput = (
         setPressedKeys((prev) => new Set([...prev, e.code]))
       }
     },
-    [
-      enabled,
-      onReset,
-      onSceneEdit,
-      onPauseMenu,
-      keybindings.resetScene,
-      keybindings.sceneEdit,
-      keybindings.pauseMenu,
-      effectiveCodeMap
-    ]
+    [enabled, onReset, onSceneEdit, onPauseMenu, keybindings, effectiveCodeMap]
   )
 
   const handleKeyUp = useCallback(
