@@ -31,6 +31,7 @@ const zh = {
         abort: '中止',
         aborting: '正在中止...',
         copy: '复制',
+        open: '打开',
         pasteImageFromClipboard: '从剪贴板粘贴图片',
         browseForImageFile: '浏览图片文件',
         delete: '删除'
@@ -270,7 +271,8 @@ const zh = {
           outputFolder: '输出文件夹',
           outputFolderHint: '留空则使用系统默认位置。',
           browse: '浏览...',
-          manage: '管理录制...'
+          manage: '管理录制',
+          manageDescription: '查看或删除之前录制的视频。'
         },
         debugMetrics: {
           title: '指标',

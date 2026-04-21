@@ -31,6 +31,7 @@ const he = {
         abort: 'בטל',
         aborting: 'מבטל...',
         copy: 'העתק',
+        open: 'פתח',
         pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה',
         delete: 'מחק'
@@ -274,7 +275,8 @@ const he = {
           outputFolder: 'תיקיית פלט',
           outputFolderHint: 'השאר ריק כדי להשתמש בברירת המחדל של המערכת.',
           browse: 'עיון...',
-          manage: 'נהל הקלטות...'
+          manage: 'ניהול הקלטות',
+          manageDescription: 'צפה או מחק סרטונים שהוקלטו בעבר.'
         },
         debugMetrics: {
           title: 'מדדים',

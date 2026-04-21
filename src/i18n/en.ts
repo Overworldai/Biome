@@ -31,6 +31,7 @@ const en = {
         abort: 'Abort',
         aborting: 'Aborting...',
         copy: 'Copy',
+        open: 'Open',
         pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
@@ -279,7 +280,8 @@ const en = {
           outputFolder: 'Output folder',
           outputFolderHint: 'Leave blank to use the system default.',
           browse: 'Browse...',
-          manage: 'Manage recordings...'
+          manage: 'Manage Recordings',
+          manageDescription: 'View or delete previously recorded videos.'
         },
         debugMetrics: {
           title: 'Metrics',

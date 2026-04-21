@@ -31,6 +31,7 @@ const goose = {
         abort: 'Abort',
         aborting: 'Aborting...',
         copy: 'Copy',
+        open: 'Open',
         pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
@@ -280,7 +281,8 @@ const goose = {
           outputFolder: 'Nesting folder',
           outputFolderHint: 'Leave blank to use the usual migration route.',
           browse: 'Waddle to folder...',
-          manage: 'Manage footage...'
+          manage: 'Manage Footage',
+          manageDescription: 'Review or cast out past honks of gameplay.'
         },
         debugMetrics: {
           title: 'Metrics',

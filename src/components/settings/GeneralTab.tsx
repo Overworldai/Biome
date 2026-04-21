@@ -159,15 +159,19 @@ const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: G
                 </div>
               </SettingsRow>
             )}
-            <div className="flex justify-end">
+            <SettingsRow
+              label={t('app.settings.recording.manage')}
+              hint={t('app.settings.recording.manageDescription')}
+              align="start"
+            >
               <Button
                 variant="secondary"
                 autoShrinkLabel
-                label="app.settings.recording.manage"
+                label="app.buttons.open"
                 className="px-[1.4cqh] py-[0.2cqh] text-[2cqh]"
                 onClick={handleOpenRecordings}
               />
-            </div>
+            </SettingsRow>
           </div>
         </SettingsSection>
       )}

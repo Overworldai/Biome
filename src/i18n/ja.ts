@@ -31,6 +31,7 @@ const ja = {
         abort: '中止',
         aborting: '中止中...',
         copy: 'コピー',
+        open: '開く',
         pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
         browseForImageFile: '画像ファイルを選択',
         delete: '削除'
@@ -278,7 +279,8 @@ const ja = {
           outputFolder: '保存先フォルダ',
           outputFolderHint: '空欄の場合はシステム既定の場所を使用します。',
           browse: '参照...',
-          manage: '録画を管理...'
+          manage: '録画の管理',
+          manageDescription: '過去に録画した動画を表示または削除します。'
         },
         debugMetrics: {
           title: 'メトリクス',
