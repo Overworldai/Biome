@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import type { RecordingEntry } from '../../types/ipc'
@@ -175,16 +175,43 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
   const date = formatDate(entry.mtime_ms, locale)
   const subtitle = model ? `${model} · ${date}` : date
 
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Nudge currentTime past 0 once metadata loads — some browsers (including
+  // Chromium under certain codecs/containers) won't decode the first frame
+  // until playback actually advances, leaving the element showing the black
+  // background. Seeking a tiny bit forward forces the decode.
+  const handleLoadedMetadata = useCallback(() => {
+    const el = videoRef.current
+    if (!el) return
+    el.currentTime = Math.min(0.05, (el.duration || 0.05) / 2)
+    el.play().catch(() => {
+      // Autoplay blocked or aborted — harmless; the static first frame will
+      // still be visible thanks to the currentTime nudge above.
+    })
+  }, [])
+
+  const handleError = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      const el = e.currentTarget
+      console.error(`Recording preview failed for ${entry.filename}:`, el.error)
+    },
+    [entry.filename]
+  )
+
   return (
     <li className="flex items-stretch gap-[1.2cqh] border border-border-medium bg-white/5 p-[0.8cqh]">
       <video
+        ref={videoRef}
         src={src}
         className="h-[11cqh] w-[19.5cqh] shrink-0 self-center bg-black object-cover"
         autoPlay
         loop
         muted
         playsInline
-        preload="metadata"
+        preload="auto"
+        onLoadedMetadata={handleLoadedMetadata}
+        onError={handleError}
       />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-[0.4cqh]">
         <div className="flex min-w-0 flex-col">
