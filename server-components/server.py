@@ -1373,6 +1373,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 req["prompt"], last_generated_cpu_frames
                             )
                             session.perceptual_frame_count = 0
+                            if video_recorder is not None:
+                                video_recorder.note_edit(req["prompt"])
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)

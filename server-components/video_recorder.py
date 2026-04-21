@@ -16,9 +16,22 @@ import tempfile
 import threading
 from pathlib import Path
 
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
 from server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
+
+# Scene-edit overlay — a "Edit: {prompt}" caption baked into the recorded video
+# after each successful scene edit. Total visible duration, with the last
+# FADE_S fading out.
+SCENE_EDIT_OVERLAY_S = 5.0
+SCENE_EDIT_OVERLAY_FADE_S = 1.0
+
+# Bundled app font, placed in the engine dir by Biome's unpack step so
+# recordings carry Biome's visual identity regardless of the host OS fonts.
+FONT_PATH = Path(__file__).parent / "fonts" / "9SALERNO.TTF"
 
 
 class VideoRecorder:
@@ -40,6 +53,13 @@ class VideoRecorder:
         self._path: Path | None = None
         self._frame_count = 0
         self._fps = 0
+        # Scene-edit overlay state. `_overlay_bitmap` is a cropped RGBA region
+        # (with the text's own alpha channel) positioned via `_overlay_offset`
+        # — per-frame compositing only touches those pixels, not the full frame.
+        self._overlay_text: str | None = None
+        self._overlay_start_frame: int = 0
+        self._overlay_bitmap: np.ndarray | None = None
+        self._overlay_offset: tuple[int, int] = (0, 0)
 
     @property
     def is_active(self) -> bool:
@@ -53,6 +73,8 @@ class VideoRecorder:
         self._path = path
         self._frame_count = 0
         self._fps = fps
+        self._overlay_text = None
+        self._overlay_bitmap = None
         try:
             self._proc = subprocess.Popen(
                 [
@@ -74,6 +96,89 @@ class VideoRecorder:
             logger.warning(f"[{self._client_host}] ffmpeg not found — video recording disabled")
             self._proc = None
 
+    def note_edit(self, prompt: str) -> None:
+        """Trigger a 'Edit: {prompt}' overlay on the next SCENE_EDIT_OVERLAY_S
+        of frames. No-op if the recorder isn't active or the prompt is empty."""
+        if not self.is_active or not prompt:
+            return
+        self._overlay_text = prompt
+        self._overlay_start_frame = self._frame_count
+        # Invalidate the cached bitmap so the next frame re-renders with the
+        # new prompt (bitmap stays cached for 5 s, not across edits).
+        self._overlay_bitmap = None
+
+    def _ensure_overlay_bitmap(self, frame_w: int, frame_h: int) -> None:
+        """Render the overlay bitmap lazily once per edit. Crops to the text
+        bbox so per-frame compositing only touches the bottom-left corner."""
+        if self._overlay_bitmap is not None or self._overlay_text is None:
+            return
+        try:
+            font_size = max(14, int(frame_h * 0.05))
+            font = ImageFont.truetype(str(FONT_PATH), font_size)
+        except Exception as e:
+            logger.warning(f"[{self._client_host}] Could not load overlay font: {e}")
+            self._overlay_text = None
+            return
+
+        text = f"Edit: {self._overlay_text}"
+        pad = max(8, int(frame_h * 0.02))
+        shadow_offset = max(1, font_size // 16)
+
+        # Render into a full-frame RGBA canvas so coordinates match the video.
+        canvas = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        x = pad - bbox[0]
+        y = frame_h - pad - text_h - bbox[1]
+        # Drop-shadow for contrast over light scenes.
+        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200))
+        draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
+
+        # Crop to the union of shadow + text so per-frame compositing is cheap.
+        region_x = max(0, x - 2)
+        region_y = max(0, y - 2)
+        region_w = min(frame_w - region_x, text_w + shadow_offset + 4)
+        region_h = min(frame_h - region_y, text_h + shadow_offset + 4)
+        cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
+        self._overlay_bitmap = np.array(cropped)
+        self._overlay_offset = (region_x, region_y)
+
+    def _apply_overlay(self, frame: np.ndarray) -> np.ndarray:
+        """Composite the active scene-edit overlay onto a single RGB frame.
+        Returns the original frame unchanged when no overlay is active."""
+        if self._overlay_text is None or self._fps <= 0:
+            return frame
+        elapsed_s = (self._frame_count - self._overlay_start_frame) / self._fps
+        if elapsed_s >= SCENE_EDIT_OVERLAY_S:
+            self._overlay_text = None
+            self._overlay_bitmap = None
+            return frame
+
+        self._ensure_overlay_bitmap(frame.shape[1], frame.shape[0])
+        if self._overlay_bitmap is None:
+            return frame
+
+        # Linear fade during the trailing FADE_S.
+        fade_start = SCENE_EDIT_OVERLAY_S - SCENE_EDIT_OVERLAY_FADE_S
+        alpha_mul = 1.0
+        if elapsed_s > fade_start:
+            alpha_mul = max(0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S)
+        if alpha_mul <= 0.0:
+            return frame
+
+        x, y = self._overlay_offset
+        rh, rw = self._overlay_bitmap.shape[:2]
+        rgb = self._overlay_bitmap[:, :, :3].astype(np.float32)
+        alpha = (self._overlay_bitmap[:, :, 3:4].astype(np.float32) / 255.0) * alpha_mul
+
+        out = frame.copy()
+        region = out[y : y + rh, x : x + rw].astype(np.float32)
+        blended = region * (1.0 - alpha) + rgb * alpha
+        out[y : y + rh, x : x + rw] = np.clip(blended, 0, 255).astype(np.uint8)
+        return out
+
     def write_frames(self, frames: list) -> None:
         """Write one or more RGB numpy frames to the video."""
         if self._proc is None or self._proc.stdin is None or self._proc.stdin.closed:
@@ -81,7 +186,8 @@ class VideoRecorder:
         with self._lock:
             for frame in frames:
                 try:
-                    self._proc.stdin.write(frame.tobytes())
+                    to_write = self._apply_overlay(frame)
+                    self._proc.stdin.write(to_write.tobytes())
                     self._frame_count += 1
                 except (BrokenPipeError, OSError):
                     break
