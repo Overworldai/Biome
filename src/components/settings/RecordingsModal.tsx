@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import type { RecordingEntry } from '../../types/ipc'
-import { SETTINGS_MUTED_TEXT } from '../../styles'
+import { SETTINGS_MUTED_TEXT, SETTINGS_MUTED_TEXT_WITHOUT_FONT_SIZE } from '../../styles'
 import Modal from '../ui/Modal'
 import ConfirmModal from '../ui/ConfirmModal'
 import Button from '../ui/Button'
@@ -166,7 +166,7 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
   const src = `biome-recording://serve/${encodeURIComponent(entry.filename)}`
 
   return (
-    <li className="flex items-stretch gap-[0.8cqh] border border-border-medium bg-white/5 p-[0.8cqh]">
+    <li className="flex items-stretch gap-[1.2cqh] border border-border-medium bg-white/5 p-[0.8cqh]">
       <video
         src={src}
         className="h-[11cqh] w-[19.5cqh] shrink-0 self-center bg-black object-cover"
@@ -177,14 +177,13 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
         preload="metadata"
       />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-[0.4cqh]">
-        <div className="flex min-w-0 flex-col gap-[0.4cqh]">
+        <div className="flex min-w-0 flex-col">
           <div className="flex min-w-0 items-baseline gap-[0.8cqh]">
             <span className="truncate font-serif text-[2.4cqh] text-text-primary">{entry.filename}</span>
             <span
               className={`
                 shrink-0
                 ${SETTINGS_MUTED_TEXT}
-                text-[1.9cqh]
               `}
             >
               {formatBytes(entry.size_bytes)}
@@ -193,8 +192,7 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
           <p
             className={`
               m-0 truncate
-              ${SETTINGS_MUTED_TEXT}
-              text-[1.9cqh]
+              ${SETTINGS_MUTED_TEXT_WITHOUT_FONT_SIZE}
             `}
           >
             {formatDate(entry.mtime_ms, locale)}
