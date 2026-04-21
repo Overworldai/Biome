@@ -1,0 +1,64 @@
+import type { ReactNode } from 'react'
+import type { SeedRecord } from '../types/app'
+import SceneCard from './SceneCard'
+
+interface SceneGridProps {
+  seeds: SeedRecord[]
+  thumbnails: Record<string, string>
+  pinnedSceneIds: string[]
+  pinVariant: 'pinned-only' | 'toggle'
+  selectCooldown: boolean
+  onSelect: (filename: string) => void
+  onTogglePin: (filename: string) => void
+  onRemove: (seed: SeedRecord) => void
+  className?: string
+  before?: ReactNode
+  emptyState?: ReactNode
+}
+
+const SceneGrid = ({
+  seeds,
+  thumbnails,
+  pinnedSceneIds,
+  pinVariant,
+  selectCooldown,
+  onSelect,
+  onTogglePin,
+  onRemove,
+  className,
+  before,
+  emptyState
+}: SceneGridProps) => (
+  <div
+    className={`
+      styled-scrollbar mt-[1.1cqh] max-h-[62cqh] overflow-y-auto pr-[0.8cqh]
+      ${className ?? ''}
+    `}
+  >
+    <div className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
+      {before}
+      {/* `display: contents` wrapper so the default-focus marker only covers
+          scene tiles (not the user-scenes "paste / browse" buttons in `before`)
+          without breaking the grid layout. */}
+      <div data-default-focus className="contents">
+        {seeds.length > 0
+          ? seeds.map((seed) => (
+              <SceneCard
+                key={seed.filename}
+                seed={seed}
+                thumbnailSrc={thumbnails[seed.filename]}
+                isPinned={pinnedSceneIds.includes(seed.filename)}
+                pinVariant={pinVariant}
+                selectCooldown={selectCooldown}
+                onSelect={onSelect}
+                onTogglePin={onTogglePin}
+                onRemove={onRemove}
+              />
+            ))
+          : emptyState}
+      </div>
+    </div>
+  </div>
+)
+
+export default SceneGrid

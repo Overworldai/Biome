@@ -8,6 +8,7 @@ const ja = {
         later: '後で',
         quit: '終了',
         reconnect: '再接続',
+        returnToMainMenu: 'メインメニューに戻る',
         close: '閉じる',
         cancel: 'キャンセル',
         back: '戻る',
@@ -29,8 +30,10 @@ const ja = {
         hideLogs: 'ログを隠す',
         abort: '中止',
         aborting: '中止中...',
+        copy: 'コピー',
         pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
-        browseForImageFile: '画像ファイルを選択'
+        browseForImageFile: '画像ファイルを選択',
+        delete: '削除'
       },
       dialogs: {
         updateAvailable: {
@@ -69,6 +72,11 @@ const ja = {
           description:
             'エンジンモードまたはワールドモデルを変更すると、現在のセッションが中断され、保留中の設定がすべて適用されます。'
         },
+        deleteModelCache: {
+          title: 'モデルを削除しますか？',
+          description:
+            '<bold>{{modelId}}</bold> はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
+        },
         serverUnreachable: {
           title: 'サーバーに接続できません',
           withUrl:
@@ -106,9 +114,9 @@ const ja = {
           reproductionSteps: '再現手順',
           recentLogs: '最近のログ',
           fullDiagnostics: '完全な診断情報',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             '完全な診断 JSON はクリップボードにコピーされています。送信前に下へ貼り付けてください。',
-          fullDiagnosticsPaste: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
+          fullDiagnosticsCopyHint: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
           pasteDiagnosticsJson: '<完全な診断 JSON をここに貼り付けてください>',
           saveDiagnosticsJson: '診断 JSON をファイルに保存',
           copying: 'コピー中...',
@@ -124,6 +132,13 @@ const ja = {
       settings: {
         title: '設定',
         subtitle: '世界を好みに合わせて調整します。',
+        tabs: {
+          general: '一般',
+          engine: 'エンジン',
+          keyboard: 'キーボード',
+          gamepad: 'ゲームパッド',
+          debug: 'デバッグ'
+        },
         language: {
           title: '言語',
           description: 'Biome で使用する言語はどれですか？',
@@ -178,7 +193,8 @@ const ja = {
           checking: '確認中...',
           modelNotFound: 'モデルが見つかりません',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
-          couldNotCheckModel: 'モデルを確認できませんでした'
+          couldNotCheckModel: 'モデルを確認できませんでした',
+          deleteLocalCache: 'モデルを削除'
         },
         volume: {
           title: '音量',
@@ -192,32 +208,50 @@ const ja = {
           description: 'マウス移動に対してカメラをどれだけ動かしますか？',
           sensitivity: '感度'
         },
+        gamepadSensitivity: {
+          title: '視点感度',
+          description: '右スティックの移動に対してカメラをどれだけ動かしますか？',
+          sensitivity: '感度'
+        },
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集'
+          conflictWith: '<key>「{{other}}」</key>と重複しています',
+          resetToDefaults: 'デフォルトに戻す'
         },
-        fixedControls: {
-          title: '固定コントロール',
-          description: '組み込みの操作は何ですか？',
+        gamepad: {
+          title: 'ゲームパッド',
+          description: 'ゲームパッドでどのように操作しますか？',
+          notDetectedHint: '（ゲームパッドが検出されません。いずれかのボタンを押してみてください！）',
+          labels: {
+            move: '移動',
+            look: '視点',
+            jump: 'ジャンプ',
+            crouch: 'しゃがむ',
+            interact: '操作',
+            sceneEdit: 'シーン編集',
+            sprint: 'ダッシュ',
+            primaryFire: 'メイン射撃',
+            secondaryFire: 'サブ射撃',
+            resetScene: 'シーンをリセット',
+            pauseMenu: 'ポーズメニュー'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前進',
             moveLeft: '左移動',
             moveBack: '後退',
             moveRight: '右移動',
             jump: 'ジャンプ',
+            crouch: 'しゃがむ',
             sprint: 'ダッシュ',
-            look: '視点移動',
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
-            pauseMenu: 'ポーズメニュー'
-          },
-          values: {
-            mouse: 'マウス',
-            leftClick: '左クリック',
-            rightClick: '右クリック'
+            pauseMenu: 'ポーズメニュー',
+            resetScene: 'シーンをリセット',
+            sceneEdit: 'シーン編集'
           }
         },
         experimental: {
@@ -228,7 +262,7 @@ const ja = {
             'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
         },
         debugMetrics: {
-          title: 'デバッグメトリクス',
+          title: 'メトリクス',
           description: '内部で何が起きているか見ますか？',
           performanceStats: '性能統計',
           performanceStatsDescription: 'FPS、フレーム時間、GPU使用率、VRAM、レイテンシのスパークラインを表示します。',
@@ -241,7 +275,11 @@ const ja = {
             'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
           videoRecording: '動画録画',
           videoRecordingDescription:
-            'サーバーフレームをMP4動画ファイルに録画します。OSの一時ディレクトリに書き込まれます。'
+            'サーバーフレームをMP4動画ファイルに録画します。OSの一時ディレクトリに書き込まれます。',
+          diagnostics: '診断情報',
+          diagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
+          copiedToClipboard: 'クリップボードにコピーしました',
+          copyFailed: 'コピーに失敗しました'
         },
         credits: {
           title: 'クレジット'
@@ -309,11 +347,13 @@ const ja = {
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
         error: {
-          serverStartupFailed: 'サーバーの起動に失敗しました',
+          serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
-          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
+          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
+          generateSceneSafetyRejected:
+            'シーン生成が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           sceneEditEmptyPrompt: 'プロンプトが空です',
           sceneEditModelNotLoaded:
             'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',

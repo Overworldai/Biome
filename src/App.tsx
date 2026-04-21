@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties }
 import { AnimatePresence, motion } from 'framer-motion'
 import { resolveStage } from './stages'
 import { SettingsProvider } from './hooks/useSettings'
-import { PortalProvider, usePortal } from './context/PortalContext'
-import { StreamingProvider, useStreaming } from './context/StreamingContext'
+import { PortalProvider } from './context/PortalContext'
+import { usePortal } from './context/portalContextValue'
+import { StreamingProvider } from './context/StreamingContext'
+import { useStreaming } from './context/streamingContextValue'
 import { VortexProvider } from './context/VortexContext'
 import { AudioProvider } from './context/AudioContext'
-import { useAudio } from './context/AudioContext'
+import { useAudio } from './context/audioContextValue'
 import AudioController from './components/AudioController'
 import { useAppStartup } from './hooks/useAppStartup'
 import { invoke } from './bridge'
@@ -26,7 +28,6 @@ import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
-import useSceneGlowColor from './hooks/useSceneGlowColor'
 import usePortalGlowSample from './hooks/usePortalGlowSample'
 import {
   PORTAL_SPARKS_DEBUG,
@@ -42,6 +43,8 @@ import PerformanceStatsOverlay from './components/PerformanceStatsOverlay'
 import InputOverlay from './components/InputOverlay'
 import FrameTimelineOverlay from './components/FrameTimelineOverlay'
 import I18nSync from './components/I18nSync'
+import FocusReticle from './components/ui/FocusReticle'
+import { useGamepadNavigation } from './hooks/useGamepadNavigation'
 import { useTranslation } from 'react-i18next'
 
 const LAUNCH_PRE_SHRINK_MS = 420
@@ -49,7 +52,7 @@ const LAUNCH_PRE_SHRINK_MS = 420
 const AppShell = () => {
   const { t } = useTranslation()
   const [isPortalHovered, setIsPortalHovered] = useState(false)
-  const { play, startLoop, stopLoop, fadeOutLoop } = useAudio()
+  const { play, startLoop, fadeOutLoop } = useAudio()
   const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
@@ -67,15 +70,9 @@ const AppShell = () => {
     toggleSettings,
     transitionTo
   } = usePortal()
-  const {
-    isStreaming,
-    isPaused,
-    connectionState,
-    connectionLost,
-    statusStage,
-    prepareReturnToMainMenu,
-    sceneEditState
-  } = useStreaming()
+  const { isStreaming, isPaused, isUIActive, connectionState, statusStage, prepareReturnToMainMenu, sceneEditState } =
+    useStreaming()
+  useGamepadNavigation(isUIActive)
   const {
     getVideoElement,
     currentIndex,
@@ -224,7 +221,6 @@ const AppShell = () => {
     ) {
       play('portal_swoosh_long')
       fadeOutLoop('portal_hum', 0.15)
-      startLoop('vortex_loop', 1, 0.5)
       setIsLaunchShrinking(true)
     }
   }
@@ -239,11 +235,18 @@ const AppShell = () => {
 
   return (
     <div
-      className={`app-shell relative flex h-full w-full items-center justify-center ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''} ${isStreamingUi ? '' : ''}`}
+      className={`
+        app-shell relative flex size-full items-center justify-center
+        ${isConnected && !isStreamingUi ? 'overflow-y-visible' : ''}
+        ${isStreamingUi ? '' : ''}
+      `}
     >
       <WindowControls />
       <div
-        className={`app-shell-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out ${isStreamingUi ? 'w-[100cqw] h-[100cqh] !aspect-auto bg-black' : ''}`}
+        className={`
+          app-shell-inner relative z-0 overflow-visible transition-transform duration-300 ease-in-out
+          ${isStreamingUi ? 'aspect-auto! h-[100cqh] w-[100cqw] bg-black' : ''}
+        `}
       >
         {useMainBackground && (
           <BackgroundSlideshow
@@ -259,7 +262,9 @@ const AppShell = () => {
         )}
         {isMainUi && !isConnected && !isEnteringLoading && (
           <div
-            className={`absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-[180ms] ease-out ${!isConnected && isSettingsOpen ? 'left-[var(--portal-settings-right)] pointer-events-none' : 'left-[49%] pointer-events-auto'}`}
+            className={`
+              absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-180 ease-out
+              ${!isConnected && isSettingsOpen ? 'pointer-events-none left-(--portal-settings-right)' : 'pointer-events-auto left-[49%]'}`}
             style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
             onMouseEnter={() => {
               setIsPortalHovered(true)
@@ -275,6 +280,9 @@ const AppShell = () => {
             }}
             role="button"
             tabIndex={0}
+            data-focus-shape="round"
+            data-focus-target=".portal-preview-core"
+            data-default-focus
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
@@ -305,7 +313,7 @@ const AppShell = () => {
           {activeMenuView === MENU_VIEW.HOME && (
             <motion.div
               key={MENU_VIEW.HOME}
-              className="absolute inset-0 z-[9] pointer-events-none"
+              className="pointer-events-none absolute inset-0 z-9"
               variants={viewFadeVariants}
               initial="initial"
               animate="animate"
@@ -318,7 +326,10 @@ const AppShell = () => {
               <MenuButton
                 variant="secondary"
                 label="app.buttons.settings"
-                className="absolute z-[1] right-[var(--edge-right)] bottom-[var(--edge-bottom)] min-w-[132px] m-0 p-[0.9cqh_2.67cqh] box-border appearance-none text-[3.91cqh] tracking-tight pointer-events-auto"
+                className="
+                  pointer-events-auto absolute right-(--edge-right) bottom-(--edge-bottom) z-1 m-0 box-border
+                  min-w-[132px] appearance-none p-[0.9cqh_2.67cqh] text-[3.91cqh] tracking-tight
+                "
                 onClick={toggleSettings}
               />
             </motion.div>
@@ -339,7 +350,10 @@ const AppShell = () => {
 
         {isStreamingUi && (
           <main
-            className={`content-area absolute z-[5] inset-0 w-full h-full bg-black opacity-100 ${isStreamingReveal ? 'streaming-reveal' : ''}`}
+            className={`
+              content-area absolute inset-0 z-5 size-full bg-black opacity-100
+              ${isStreamingReveal ? 'streaming-reveal' : ''}
+            `}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
               if (event.animationName !== 'streamingCircularReveal') return
@@ -350,7 +364,7 @@ const AppShell = () => {
             <PerformanceStatsOverlay />
             <InputOverlay />
             <FrameTimelineOverlay />
-            <div className="absolute z-[2] pointer-events-none" id="logo-container"></div>
+            <div className="pointer-events-none absolute z-2" id="logo-container"></div>
             <PauseOverlay isActive={isPaused && sceneEditState.phase === 'inactive'} />
             <SceneEditOverlay />
             {SCENE_EDIT_DEBUG_PREVIEW &&
@@ -359,10 +373,13 @@ const AppShell = () => {
               sceneEditState.phase === 'inactive' && (
                 <div
                   key={editPromptKeyRef.current}
-                  className="absolute bottom-[3.2cqh] left-1/2 -translate-x-1/2 z-[180] pointer-events-none max-w-[80cqw]"
+                  className="pointer-events-none absolute bottom-[3.2cqh] left-1/2 z-180 max-w-[80cqw] -translate-x-1/2"
                 >
                   <div
-                    className="border border-white/20 bg-black/70 text-white/90 px-[2.1cqh] py-[0.9cqh] font-serif text-[2cqh] tracking-[0.01em] shadow-lg backdrop-blur-sm text-center"
+                    className="
+                      border border-white/20 bg-black/70 px-[2.1cqh] py-[0.9cqh] text-center font-serif text-[2cqh]
+                      tracking-[0.01em] text-white/90 shadow-lg backdrop-blur-sm
+                    "
                     style={{ animation: `streamingWarningToast ${SCENE_EDIT_PROMPT_TOAST_MS}ms ease forwards` }}
                   >
                     {sceneEditState.lastEditPrompt}
@@ -371,11 +388,11 @@ const AppShell = () => {
               )}
             {SCENE_EDIT_DEBUG_PREVIEW && editPreviewVisible && sceneEditState.lastPreview && (
               <div
-                className="absolute bottom-[2cqh] right-[2cqw] z-40 pointer-events-none flex flex-col gap-[0.5cqh]"
+                className="pointer-events-none absolute right-[2cqw] bottom-[2cqh] z-40 flex flex-col gap-[0.5cqh]"
                 style={{ animation: `streamingWarningToast ${SCENE_EDIT_PREVIEW_TOAST_MS}ms ease forwards` }}
               >
                 <div className="flex flex-col items-end">
-                  <span className="font-serif text-[1.6cqh] text-white/70 mb-[0.3cqh]">Before</span>
+                  <span className="mb-[0.3cqh] font-serif text-[1.6cqh] text-white/70">Before</span>
                   <img
                     src={`data:image/jpeg;base64,${sceneEditState.lastPreview.originalB64}`}
                     alt="Before inpainting"
@@ -383,7 +400,7 @@ const AppShell = () => {
                   />
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="font-serif text-[1.6cqh] text-white/70 mb-[0.3cqh]">After</span>
+                  <span className="mb-[0.3cqh] font-serif text-[1.6cqh] text-white/70">After</span>
                   <img
                     src={`data:image/jpeg;base64,${sceneEditState.lastPreview.inpaintedB64}`}
                     alt="After inpainting"
@@ -397,7 +414,13 @@ const AppShell = () => {
         )}
         {(isLoadingUi || isEnteringLoading || isReturningToMenu || isStreamingReveal) && (
           <div
-            className={`loading-ui-layer absolute inset-0 ${isStreamingReveal ? 'z-[4]' : 'z-20'} ${isEnteringLoading ? 'launch-revealing' : ''} ${isReturningToMenu ? 'launch-concealing' : ''} ${isStreamingReveal ? 'streaming-pullout' : ''}`}
+            className={`
+              loading-ui-layer absolute inset-0
+              ${isStreamingReveal ? 'z-4' : 'z-20'}
+              ${isEnteringLoading ? 'launch-revealing' : ''}
+              ${isReturningToMenu ? 'launch-concealing' : ''}
+              ${isStreamingReveal ? 'streaming-pullout' : ''}
+            `}
             style={loadingLayerStyle}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
@@ -414,7 +437,7 @@ const AppShell = () => {
               }
             }}
           >
-            <div className="loading-vortex-layer absolute inset-0 z-[7] pointer-events-none" aria-hidden="true">
+            <div className="loading-vortex-layer pointer-events-none absolute inset-0 z-7" aria-hidden="true">
               <VortexHost mode="loading" />
             </div>
             {(isLoadingUi || isEnteringLoading || isStreamingReveal) && !isReturningToMenu && (
@@ -426,6 +449,7 @@ const AppShell = () => {
         )}
       </div>
       {PORTAL_SPARKS_DEBUG && <PortalSparksConfigurator />}
+      <FocusReticle />
       {availableUpdate && (
         <ConfirmModal
           title="app.dialogs.updateAvailable.title"

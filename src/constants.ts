@@ -17,7 +17,7 @@ export type MenuViewKey = (typeof MENU_VIEW)[keyof typeof MENU_VIEW]
 export const PORTAL_SPARKS_DEBUG = false
 
 /** Allow users to add their own scenes via drag-and-drop, paste, or file picker. */
-export const ALLOW_USER_SCENES = false
+export const ALLOW_USER_SCENES = import.meta.env.DEV
 
 /** Show debug info (edit prompt toast + before/after preview) for scene edits. */
 export const SCENE_EDIT_DEBUG_PREVIEW = false

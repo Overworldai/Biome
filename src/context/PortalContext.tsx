@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { createLogger } from '../utils/logger'
 import { PORTAL_STATES, canTransitionPortalState, type PortalState } from './portalStateMachine'
+import { PortalContext, type PortalContextValue } from './portalContextValue'
 
 const log = createLogger('Portal')
 const VISUAL_PHASES = {
@@ -13,40 +14,12 @@ const VISUAL_PHASES = {
 
 type VisualPhase = (typeof VISUAL_PHASES)[keyof typeof VISUAL_PHASES]
 
-type PortalContextValue = {
-  state: PortalState
-  states: typeof PORTAL_STATES
-  isAnimating: boolean
-  isShrinking: boolean
-  isExpanded: boolean
-  isConnected: boolean
-  showFlash: boolean
-  isSettingsOpen: boolean
-  toggleSettings: () => void
-  runLaunchTransition: () => Promise<boolean>
-  transitionTo: (newState: PortalState) => Promise<boolean>
-  shutdown: () => Promise<void>
-  onStateChange: (callback: (newState: PortalState, previousState: PortalState) => void) => () => void
-  registerMaskRef: (element: HTMLDivElement | null) => void
-  is: (state: PortalState) => boolean
-}
-
 type ShrinkExpandOptions = {
   shrinkDuration?: string
   expandDuration?: string
   onShrinkComplete?: () => void
   targetSize?: string
   feather?: string
-}
-
-const PortalContext = createContext<PortalContextValue | null>(null)
-
-export const usePortal = () => {
-  const context = useContext(PortalContext)
-  if (!context) {
-    throw new Error('usePortal must be used within a PortalProvider')
-  }
-  return context
 }
 
 export const PortalProvider = ({ children }: { children: ReactNode }) => {

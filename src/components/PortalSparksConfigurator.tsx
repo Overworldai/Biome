@@ -121,7 +121,10 @@ const PortalSparksConfigurator = () => {
 
   return (
     <div
-      className="fixed right-0 top-0 bottom-0 z-[100] w-[320px] overflow-y-auto bg-black/80 backdrop-blur-sm p-3 text-white text-xs font-mono pointer-events-auto select-none"
+      className="
+        pointer-events-auto fixed inset-y-0 right-0 z-100 w-[320px] overflow-y-auto bg-black/80 p-3 font-mono text-xs
+        text-white backdrop-blur-sm select-none
+      "
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-3">
@@ -139,7 +142,7 @@ const PortalSparksConfigurator = () => {
 
         return (
           <div key={key} className="mb-2">
-            <label className="block text-[10px] text-white/60 mb-0.5">{key}</label>
+            <label className="mb-0.5 block text-[10px] text-white/60">{key}</label>
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -148,18 +151,30 @@ const PortalSparksConfigurator = () => {
                 step={step}
                 value={Math.max(sliderMin, Math.min(sliderMax, current))}
                 onChange={(e) => handleSliderChange(key, parseFloat(e.target.value))}
-                className="flex-1 h-1 accent-orange-400"
+                className="h-1 flex-1 accent-orange-400"
               />
               <input
                 type="text"
                 value={displayValue}
                 onChange={(e) => handleInputChange(key, e.target.value)}
                 onBlur={() => handleInputBlur(key)}
-                className="w-[72px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-right text-[11px] text-white"
+                className="
+                  w-[72px] rounded-sm border border-white/20 bg-white/10 px-1.5 py-0.5 text-right text-[11px] text-white
+                "
               />
               <button
                 type="button"
-                className={`w-4 h-4 flex items-center justify-center rounded text-[10px] leading-none ${modified ? 'bg-white/10 hover:bg-white/20 text-white/80' : 'text-white/10 pointer-events-none'}`}
+                className={`
+                  flex size-4 items-center justify-center rounded-sm text-[10px] leading-none
+                  ${
+                    modified
+                      ? `
+                        bg-white/10 text-white/80
+                        hover:bg-white/20
+                      `
+                      : 'pointer-events-none text-white/10'
+                  }
+                `}
                 onClick={() => handleSliderChange(key, defaultVal)}
                 title={`Reset to ${defaultVal}`}
               >
@@ -173,13 +188,23 @@ const PortalSparksConfigurator = () => {
         <span className="text-sm font-bold tracking-wide">Debug Composite</span>
         <div className="mt-2 space-y-1.5">
           <div>
-            <label className="block text-[10px] text-white/60 mb-0.5">Background behind sparks</label>
+            <label className="mb-0.5 block text-[10px] text-white/60">Background behind sparks</label>
             <div className="flex gap-1">
               {(['none', 'black', 'white', 'gray'] as DebugBg[]).map((bg) => (
                 <button
                   key={bg}
                   type="button"
-                  className={`px-2 py-0.5 rounded text-[10px] ${debugBg === bg ? 'bg-orange-500/80' : 'bg-white/10 hover:bg-white/20'}`}
+                  className={`
+                    rounded-sm px-2 py-0.5 text-[10px]
+                    ${
+                      debugBg === bg
+                        ? 'bg-orange-500/80'
+                        : `
+                          bg-white/10
+                          hover:bg-white/20
+                        `
+                    }
+                  `}
                   onClick={() => setDebugBg(bg)}
                 >
                   {bg}
@@ -187,37 +212,37 @@ const PortalSparksConfigurator = () => {
               ))}
             </div>
           </div>
-          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2 text-[10px]">
             <input type="checkbox" checked={pauseCycling} onChange={(e) => setPauseCycling(e.target.checked)} />
             <span>Pause background cycling</span>
           </label>
-          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2 text-[10px]">
             <input type="checkbox" checked={debugNoMask} onChange={(e) => setDebugNoMask(e.target.checked)} />
             <span>Disable mask (radial fade)</span>
           </label>
-          <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2 text-[10px]">
             <input type="checkbox" checked={debugIsolate} onChange={(e) => setDebugIsolate(e.target.checked)} />
             <span>Hide portal (isolate sparks)</span>
           </label>
           <div className="mt-2">
-            <label className="block text-[10px] text-white/60 mb-0.5">Portal sub-layers</label>
-            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <label className="mb-0.5 block text-[10px] text-white/60">Portal sub-layers</label>
+            <label className="flex cursor-pointer items-center gap-2 text-[10px]">
               <input type="checkbox" checked={debugNoHalo} onChange={(e) => setDebugNoHalo(e.target.checked)} />
               <span>Hide halo glow</span>
             </label>
-            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-[10px]">
               <input type="checkbox" checked={debugNoOverlay} onChange={(e) => setDebugNoOverlay(e.target.checked)} />
               <span>Hide core overlay (vignette)</span>
             </label>
-            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-[10px]">
               <input type="checkbox" checked={debugNoRing} onChange={(e) => setDebugNoRing(e.target.checked)} />
               <span>Hide core ring (border)</span>
             </label>
-            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-[10px]">
               <input type="checkbox" checked={debugNoRingFade} onChange={(e) => setDebugNoRingFade(e.target.checked)} />
               <span>Hide ring fade (blurred borders)</span>
             </label>
-            <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-[10px]">
               <input
                 type="checkbox"
                 checked={debugNoCoreContent}
@@ -228,17 +253,23 @@ const PortalSparksConfigurator = () => {
           </div>
         </div>
       </div>
-      <div className="sticky bottom-0 flex justify-end gap-1 pt-2 pb-1 bg-black/80">
+      <div className="sticky bottom-0 flex justify-end gap-1 bg-black/80 pt-2 pb-1">
         <button
           type="button"
-          className="px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded text-[10px]"
+          className="
+            rounded-sm bg-white/10 px-2 py-0.5 text-[10px]
+            hover:bg-white/20
+          "
           onClick={handleReset}
         >
           Reset
         </button>
         <button
           type="button"
-          className="px-2 py-0.5 bg-orange-500/80 hover:bg-orange-500 rounded text-[10px]"
+          className="
+            rounded-sm bg-orange-500/80 px-2 py-0.5 text-[10px]
+            hover:bg-orange-500
+          "
           onClick={handleSave}
         >
           Save

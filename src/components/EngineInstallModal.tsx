@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '../bridge'
-import { useStreaming } from '../context/StreamingContext'
+import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
+import { useStreaming } from '../context/streamingContextValue'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
+import { FocusScope } from '../context/FocusScopeContext'
 import { useTranslation } from 'react-i18next'
 
 type EngineInstallModalProps = {
@@ -12,7 +14,7 @@ type EngineInstallModalProps = {
 
 const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
   const { t } = useTranslation()
-  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup } = useStreaming()
+  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup, connection } = useStreaming()
   const { logs: installLogs, clear: clearInstallLogs } = useEngineLogs(true)
   const [isExportingInstallDiagnostics, setIsExportingInstallDiagnostics] = useState(false)
   const [isAbortingInstall, setIsAbortingInstall] = useState(false)
@@ -25,21 +27,19 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     }
   }, [engineSetupInProgress, clearInstallLogs])
 
-  const buildDiagnosticsPayload = useCallback(async () => {
-    const meta = await invoke('get-runtime-diagnostics-meta')
-    const system = await invoke('get-system-diagnostics')
-    return {
-      generated_at: new Date().toISOString(),
-      runtime: meta,
-      system,
-      install_state: {
-        engine_setup_in_progress: engineSetupInProgress,
-        setup_progress: setupProgress,
-        engine_setup_error: engineSetupError
-      },
-      logs: installLogs
-    }
-  }, [engineSetupError, engineSetupInProgress, installLogs, setupProgress])
+  const buildPayload = useCallback(
+    () =>
+      buildDiagnosticsPayload({
+        connection,
+        error: {
+          message: engineSetupError,
+          stage: setupProgress,
+          in_progress: engineSetupInProgress
+        },
+        logs: installLogs
+      }),
+    [connection, engineSetupError, engineSetupInProgress, installLogs, setupProgress]
+  )
 
   const handleExportInstallDiagnostics = async () => {
     if (isExportingInstallDiagnostics) return
@@ -47,7 +47,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     setIsExportingInstallDiagnostics(true)
     setInstallExportStatus(null)
     try {
-      const report = await buildDiagnosticsPayload()
+      const report = await buildPayload()
 
       const result = await invoke('export-loading-diagnostics', JSON.stringify(report, null, 2))
       if (result.canceled) {
@@ -81,11 +81,15 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
 
   return (
     <div
-      className="absolute inset-0 z-[12] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm"
+      className="absolute inset-0 z-12 flex items-center justify-center bg-overlay-scrim backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-[135.11cqh] max-w-[92vw] pointer-events-auto">
+      <FocusScope
+        autoFocus
+        onCancel={engineSetupInProgress ? undefined : onClose}
+        className="pointer-events-auto w-[135.11cqh] max-w-[92vw]"
+      >
         <ServerLogDisplay
           title="app.dialogs.install.title"
           logs={installLogs}
@@ -98,7 +102,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                 : t('app.dialogs.install.complete')
           }
           errorMessage={engineSetupError}
-          buildDiagnosticsPayload={buildDiagnosticsPayload}
+          buildDiagnosticsPayload={buildPayload}
           showExportAction={!engineSetupInProgress && !!engineSetupError}
           onExportAction={() => void handleExportInstallDiagnostics()}
           isExportingAction={isExportingInstallDiagnostics}
@@ -111,7 +115,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   variant="secondary"
                   autoShrinkLabel
                   label={isAbortingInstall ? 'app.buttons.aborting' : 'app.buttons.abort'}
-                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
+                  className="px-[1.2cqh] py-[0.25cqh] text-[1.8cqh]"
                   onClick={() => void handleAbortInstall()}
                   disabled={isAbortingInstall}
                   aria-label={t('app.dialogs.install.abortEngineInstall')}
@@ -123,15 +127,16 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   variant="secondary"
                   autoShrinkLabel
                   label="app.buttons.close"
-                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
+                  className="px-[1.2cqh] py-[0.25cqh] text-[1.8cqh]"
                   onClick={onClose}
                   aria-label={t('app.dialogs.install.closeInstallLogs')}
+                  data-default-focus
                 />
               </div>
             )
           }
         />
-      </div>
+      </FocusScope>
     </div>
   )
 }

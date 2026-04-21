@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
 import PauseScenesView from './PauseScenesView'
@@ -9,12 +9,16 @@ import { viewFadeVariants } from '../transitions'
 import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
+import { useSceneActions } from '../hooks/useSceneActions'
+import { useSettings } from '../hooks/settingsContextValue'
+import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { requestPointerLock, reset, selectSeed, wsRequest } = useStreaming()
+  const { requestPointerLock, reset, wsRequest } = useStreaming()
+  const { settings } = useSettings()
+  const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
-    usePointerLockFeedback(isActive)
+  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
 
   const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
 
@@ -33,6 +37,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     onPinnedSceneRemoved: removePinnedScene
   })
 
+  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
+
+  const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+
   useEffect(() => {
     if (!isActive) {
       setView(PAUSE_VIEW.MAIN)
@@ -40,7 +48,8 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Escape is always a safety-escape; the user's configured pauseMenu key also re-locks.
+      if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
       if (view === PAUSE_VIEW.SCENES) {
@@ -52,21 +61,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, requestPointerLock])
-
-  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
-
-  const handleSceneSelect = async (filename: string) => {
-    await selectSeed(filename)
-    requestPointerLock()
-  }
-
-  const handleClipboardUploadAndSelect = async () => {
-    const uploaded = await handleClipboardUpload()
-    if (uploaded.length === 1) {
-      await handleSceneSelect(uploaded[0])
-    }
-  }
+  }, [isActive, view, requestPointerLock, pauseMenuCode])
 
   const handleResetAndResume = () => {
     reset()
@@ -74,11 +69,19 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   }
 
   return (
-    <div
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      id="pause-overlay"
+    <FocusScope
+      active={isActive && view !== PAUSE_VIEW.SETTINGS}
+      autoFocus
+      onCancel={() => {
+        if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
+        else requestPointerLock()
+      }}
+      className={`
+        absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
+        ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
+      `}
     >
-      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
         {view === PAUSE_VIEW.SETTINGS ? (
           <motion.div
@@ -104,7 +107,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               pinnedScenes={pinnedScenes}
               thumbnails={thumbnails}
               selectCooldown={selectCooldown}
-              onSceneSelect={handleSceneSelect}
+              onSceneSelect={selectScene}
               onTogglePin={togglePinnedScene}
               onRemoveScene={removeScene}
               onResetAndResume={handleResetAndResume}
@@ -112,7 +115,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
-              showUnlockHint={showUnlockHint}
             />
           </motion.div>
         ) : (
@@ -131,18 +133,18 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               selectCooldown={selectCooldown}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
-              onSceneSelect={handleSceneSelect}
+              onSceneSelect={selectScene}
               onTogglePin={togglePinnedScene}
               onRemoveScene={removeScene}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={handleClipboardUploadAndSelect}
+              onClipboardUpload={pasteScene}
               onBack={() => setView(PAUSE_VIEW.MAIN)}
             />
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </FocusScope>
   )
 }
 

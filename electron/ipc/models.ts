@@ -94,9 +94,16 @@ type HfApiResponse = {
   siblings?: HfApiSibling[]
 }
 
+const EXCLUDED_SAFETENSOR_BASENAMES = new Set(['diffusion_pytorch_model.safetensors'])
+
 function extractSizeBytes(info: HfApiResponse): number | null {
   if (!info.siblings) return null
-  const safetensorFiles = info.siblings.filter((s) => s.rfilename.endsWith('.safetensors') && s.size != null)
+  const safetensorFiles = info.siblings.filter(
+    (s) =>
+      s.rfilename.endsWith('.safetensors') &&
+      s.size != null &&
+      !EXCLUDED_SAFETENSOR_BASENAMES.has(path.basename(s.rfilename))
+  )
   if (safetensorFiles.length === 0) return null
   // Deduplicate by blobId to avoid counting symlinked files twice
   const seen = new Set<string>()
@@ -160,6 +167,19 @@ async function getModelInfoFromServer(serverUrl: string, modelId: string): Promi
   }
 }
 
+function deleteCachedModel(repoId: string): void {
+  const hubDir = getHfHubCacheDir()
+  const modelDirName = `models--${repoId.replace('/', '--')}`
+  const modelDir = path.join(hubDir, modelDirName)
+
+  if (!fs.existsSync(modelDir)) return
+
+  // HF hub cache uses symlinks inside snapshots/ that point to ../blobs/.
+  // Removing the whole model directory (blobs + snapshots + refs) is safe
+  // because each model gets its own isolated directory.
+  fs.rmSync(modelDir, { recursive: true, force: true })
+}
+
 export function registerModelsIpc(): void {
   ipcMain.handle('list-waypoint-models', async () => {
     return listWaypointModels()
@@ -200,5 +220,9 @@ export function registerModelsIpc(): void {
         ? result.value
         : { id: deduped[i], size_bytes: null, exists: true, error: 'Fetch failed' }
     )
+  })
+
+  ipcMain.handle('delete-cached-model', (_event, modelId: string) => {
+    deleteCachedModel(modelId)
   })
 }

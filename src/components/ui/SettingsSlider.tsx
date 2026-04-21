@@ -50,24 +50,56 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
     [onChange, valueFromEvent]
   )
 
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Arrow Left/Right adjust the value and prevent default so gamepad nav
+      // (which dispatches these keys) treats the input as consumed.
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        onChange(Math.max(min, value - 1))
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        onChange(Math.min(max, value + 1))
+      }
+    },
+    [onChange, value, min, max]
+  )
+
   return (
     <div className="flex flex-col items-start">
       <div
         ref={trackRef}
-        className={`relative w-full ${SETTINGS_CONTROL_BASE} cursor-pointer leading-[1.2] p-[0.275cqh_1.42cqh] text-[1.33cqh] ${SETTINGS_OUTLINE_HOVER}`}
+        role="slider"
+        tabIndex={0}
+        aria-valuenow={value}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        className={`
+          relative w-full
+          ${SETTINGS_CONTROL_BASE}
+          cursor-pointer p-[0.275cqh_1.42cqh] text-[1.33cqh] leading-[1.2]
+          ${SETTINGS_OUTLINE_HOVER}
+          focus:outline-none
+        `}
         onMouseEnter={playHover}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onKeyDown={handleKeyDown}
       >
         <div
-          className="absolute inset-0 bg-surface-btn-primary pointer-events-none"
+          className="pointer-events-none absolute inset-0 bg-surface-btn-primary"
           style={{ width: `${fraction * 100}%` }}
         />
         <span className="invisible">X</span>
       </div>
       {(label || suffix) && (
-        <span className={`${SETTINGS_MUTED_TEXT} flex flex-wrap w-full items-start gap-[0.6cqh_1cqh] justify-between`}>
-          {label && <span className="lowercase break-words">{t(label)}</span>}
+        <span
+          className={`
+            ${SETTINGS_MUTED_TEXT}
+            flex w-full flex-wrap items-start justify-between gap-[0.6cqh_1cqh]
+          `}
+        >
+          {label && <span className="wrap-break-word lowercase">{t(label)}</span>}
           {suffix && <span className="ml-auto">{suffix}</span>}
         </span>
       )}

@@ -8,6 +8,7 @@ const zh = {
         later: '稍后',
         quit: '退出',
         reconnect: '重新连接',
+        returnToMainMenu: '返回主菜单',
         close: '关闭',
         cancel: '取消',
         back: '返回',
@@ -29,8 +30,10 @@ const zh = {
         hideLogs: '隐藏日志',
         abort: '中止',
         aborting: '正在中止...',
+        copy: '复制',
         pasteImageFromClipboard: '从剪贴板粘贴图片',
-        browseForImageFile: '浏览图片文件'
+        browseForImageFile: '浏览图片文件',
+        delete: '删除'
       },
       dialogs: {
         updateAvailable: {
@@ -67,6 +70,10 @@ const zh = {
           title: '应用引擎更改？',
           description: '更改引擎模式或世界模型会中断当前会话，并应用所有待保存设置。'
         },
+        deleteModelCache: {
+          title: '删除模型？',
+          description: '<bold>{{modelId}}</bold> 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
+        },
         serverUnreachable: {
           title: '无法连接到服务器',
           withUrl: '无法连接到 {{url}}。服务器可能已停止、URL 有误，或被防火墙拦截。',
@@ -102,8 +109,8 @@ const zh = {
           reproductionSteps: '复现步骤',
           recentLogs: '最近日志',
           fullDiagnostics: '完整诊断信息',
-          fullDiagnosticsCopied: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
-          fullDiagnosticsPaste: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
+          fullDiagnosticsCopiedHint: '完整诊断 JSON 已复制到剪贴板。请在提交前粘贴到下方。',
+          fullDiagnosticsCopyHint: '请先在应用内点击“复制报告”，然后将诊断 JSON 粘贴到下方。',
           pasteDiagnosticsJson: '<请在此粘贴完整诊断 JSON>',
           saveDiagnosticsJson: '将诊断 JSON 保存到文件',
           copying: '复制中...',
@@ -119,6 +126,13 @@ const zh = {
       settings: {
         title: '设置',
         subtitle: '按你的喜好调整这个世界。',
+        tabs: {
+          general: '常规',
+          engine: '引擎',
+          keyboard: '键盘',
+          gamepad: '手柄',
+          debug: '调试'
+        },
         language: {
           title: '语言',
           description: 'Biome 应该使用哪种语言？',
@@ -172,7 +186,8 @@ const zh = {
           checking: '检查中...',
           modelNotFound: '未找到模型',
           couldNotLoadModelList: '无法加载模型列表',
-          couldNotCheckModel: '无法检查模型'
+          couldNotCheckModel: '无法检查模型',
+          deleteLocalCache: '删除模型'
         },
         volume: {
           title: '音量',
@@ -186,32 +201,50 @@ const zh = {
           description: '移动鼠标时，镜头应该移动多少？',
           sensitivity: '灵敏度'
         },
+        gamepadSensitivity: {
+          title: '视角灵敏度',
+          description: '移动右摇杆时，镜头应该移动多少？',
+          sensitivity: '灵敏度'
+        },
         keybindings: {
           title: '按键绑定',
           description: '你想使用哪些按键？',
-          resetScene: '重置场景',
-          sceneEdit: '场景编辑'
+          conflictWith: '与<key>「{{other}}」</key>冲突',
+          resetToDefaults: '恢复默认'
         },
-        fixedControls: {
-          title: '固定操作',
-          description: '内置操作有哪些？',
+        gamepad: {
+          title: '手柄',
+          description: '你如何用手柄控制游戏？',
+          notDetectedHint: '（未检测到手柄，请按下任意按钮！）',
+          labels: {
+            move: '移动',
+            look: '视角',
+            jump: '跳跃',
+            crouch: '蹲下',
+            interact: '交互',
+            sceneEdit: '场景编辑',
+            sprint: '冲刺',
+            primaryFire: '主射击',
+            secondaryFire: '副射击',
+            resetScene: '重置场景',
+            pauseMenu: '暂停菜单'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前进',
             moveLeft: '向左移动',
             moveBack: '后退',
             moveRight: '向右移动',
             jump: '跳跃',
+            crouch: '蹲下',
             sprint: '冲刺',
-            look: '视角移动',
             interact: '交互',
             primaryFire: '主射击',
             secondaryFire: '副射击',
-            pauseMenu: '暂停菜单'
-          },
-          values: {
-            mouse: '鼠标',
-            leftClick: '左键单击',
-            rightClick: '右键单击'
+            pauseMenu: '暂停菜单',
+            resetScene: '重置场景',
+            sceneEdit: '场景编辑'
           }
         },
         experimental: {
@@ -221,7 +254,7 @@ const zh = {
           sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
         },
         debugMetrics: {
-          title: '调试指标',
+          title: '指标',
           description: '想看看底层正在发生什么吗？',
           performanceStats: '性能统计',
           performanceStatsDescription: '显示FPS、帧时间、GPU使用率、显存和延迟的迷你图。',
@@ -232,7 +265,11 @@ const zh = {
           actionLogging: '操作日志',
           actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。',
           videoRecording: '视频录制',
-          videoRecordingDescription: '将服务器帧录制为MP4视频文件。写入操作系统的临时目录。'
+          videoRecordingDescription: '将服务器帧录制为MP4视频文件。写入操作系统的临时目录。',
+          diagnostics: '诊断信息',
+          diagnosticsDescription: '将诊断信息复制到剪贴板，用于错误报告。',
+          copiedToClipboard: '已复制到剪贴板',
+          copyFailed: '复制失败'
         },
         credits: {
           title: '鸣谢'
@@ -300,10 +337,11 @@ const zh = {
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
         error: {
-          serverStartupFailed: '服务器启动失败',
+          serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
-          sceneEditModelLoadFailed: '场景编辑模型加载失败',
+          sceneEditModelLoadFailed: '场景编辑模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
+          generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
           sceneEditEmptyPrompt: '提示词为空',
           sceneEditModelNotLoaded: '场景编辑模型未加载。请在实验性功能设置中启用场景编辑。',
           sceneEditAlreadyInProgress: '场景编辑已在进行中',

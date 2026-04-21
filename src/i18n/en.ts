@@ -8,6 +8,7 @@ const en = {
         later: 'Later',
         quit: 'Quit',
         reconnect: 'Reconnect',
+        returnToMainMenu: 'Return to Main Menu',
         close: 'Close',
         cancel: 'Cancel',
         back: 'Back',
@@ -29,8 +30,10 @@ const en = {
         hideLogs: 'Hide Logs',
         abort: 'Abort',
         aborting: 'Aborting...',
+        copy: 'Copy',
         pasteImageFromClipboard: 'Paste image from clipboard',
-        browseForImageFile: 'Browse for image file'
+        browseForImageFile: 'Browse for image file',
+        delete: 'Delete'
       },
       dialogs: {
         updateAvailable: {
@@ -68,6 +71,11 @@ const en = {
           title: 'Apply Engine Changes?',
           description:
             'Changing engine mode or world model will interrupt your current session and apply all pending settings.'
+        },
+        deleteModelCache: {
+          title: 'Delete Model?',
+          description:
+            '<bold>{{modelId}}</bold> is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -107,9 +115,9 @@ const en = {
           reproductionSteps: 'Reproduction steps',
           recentLogs: 'Recent logs',
           fullDiagnostics: 'Full diagnostics',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.',
-          fullDiagnosticsPaste: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
           pasteDiagnosticsJson: '<paste full diagnostics JSON here>',
           saveDiagnosticsJson: 'Save diagnostics JSON to file',
           copying: 'Copying...',
@@ -125,6 +133,13 @@ const en = {
       settings: {
         title: 'Settings',
         subtitle: 'Tweak your world to your liking.',
+        tabs: {
+          general: 'General',
+          engine: 'Engine',
+          keyboard: 'Keyboard',
+          gamepad: 'Gamepad',
+          debug: 'Debug'
+        },
         language: {
           title: 'Language',
           description: 'which language should Biome use?',
@@ -179,7 +194,8 @@ const en = {
           checking: 'checking...',
           modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
-          couldNotCheckModel: 'Could not check model'
+          couldNotCheckModel: 'Could not check model',
+          deleteLocalCache: 'Delete the model'
         },
         volume: {
           title: 'Volume',
@@ -193,32 +209,50 @@ const en = {
           description: 'how much should the camera move when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Look Sensitivity',
+          description: 'how much should the camera move when you move the right stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          conflictWith: 'Conflicts with <key>"{{other}}"</key>',
+          resetToDefaults: 'Reset to Defaults'
         },
-        fixedControls: {
-          title: 'Fixed Controls',
-          description: 'what are the built-in controls?',
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how do you control the game with your gamepad?',
+          notDetectedHint: '(gamepad not detected; try pressing a button!)',
+          labels: {
+            move: 'Move',
+            look: 'Look',
+            jump: 'Jump',
+            crouch: 'Crouch',
+            interact: 'Interact',
+            sceneEdit: 'Scene Edit',
+            sprint: 'Sprint',
+            primaryFire: 'Primary Fire',
+            secondaryFire: 'Secondary Fire',
+            resetScene: 'Reset Scene',
+            pauseMenu: 'Pause Menu'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Move Forward',
             moveLeft: 'Move Left',
             moveBack: 'Move Back',
             moveRight: 'Move Right',
             jump: 'Jump',
+            crouch: 'Crouch',
             sprint: 'Sprint',
-            look: 'Look',
             interact: 'Interact',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
-            pauseMenu: 'Pause Menu'
-          },
-          values: {
-            mouse: 'Mouse',
-            leftClick: 'Left Click',
-            rightClick: 'Right Click'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Reset Scene',
+            sceneEdit: 'Scene Edit'
           }
         },
         experimental: {
@@ -229,7 +263,7 @@ const en = {
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
         debugMetrics: {
-          title: 'Debug Metrics',
+          title: 'Metrics',
           description: "want to see what's happening under the hood?",
           performanceStats: 'Performance Stats',
           performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',
@@ -241,7 +275,11 @@ const en = {
           actionLoggingDescription:
             "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
           videoRecording: 'Video Recording',
-          videoRecordingDescription: "Record server frames to an MP4 video file. Written to the OS's temp directory."
+          videoRecordingDescription: "Record server frames to an MP4 video file. Written to the OS's temp directory.",
+          diagnostics: 'Diagnostics',
+          diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
+          copiedToClipboard: 'Copied to clipboard',
+          copyFailed: 'Failed to copy'
         },
         credits: {
           title: 'Credits'
@@ -309,10 +347,11 @@ const en = {
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
         error: {
-          serverStartupFailed: 'Server startup failed',
+          serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load',
+          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
+          generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
           sceneEditEmptyPrompt: 'Empty prompt',
           sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
           sceneEditAlreadyInProgress: 'Scene edit already in progress',

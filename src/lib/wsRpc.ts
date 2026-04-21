@@ -1,5 +1,5 @@
 import { createLogger } from '../utils/logger'
-import { TranslatableError } from '../i18n'
+import { TranslatableError, type TranslationKey } from '../i18n'
 
 const log = createLogger('WsRpc')
 
@@ -7,8 +7,8 @@ const DEFAULT_TIMEOUT_MS = 30_000
 
 /** Error from a server RPC response, optionally carrying a translation key. */
 export class RpcError extends Error {
-  readonly errorId: string | undefined
-  constructor(message: string, errorId?: string) {
+  readonly errorId: TranslationKey | undefined
+  constructor(message: string, errorId?: TranslationKey) {
     super(message)
     this.errorId = errorId
   }
@@ -58,7 +58,7 @@ export class WsRpcClient {
     if (msg.success) {
       entry.resolve(msg.data)
     } else {
-      const errorId = msg.error_id as string | undefined
+      const errorId = msg.error_id as TranslationKey | undefined
       entry.reject(new RpcError(String(msg.error ?? errorId ?? 'Request failed'), errorId))
     }
 
@@ -85,7 +85,7 @@ export class WsRpcClient {
     if (header.success) {
       entry.resolve({ blob })
     } else {
-      const errorId = header.error_id as string | undefined
+      const errorId = header.error_id as TranslationKey | undefined
       entry.reject(new RpcError(String(header.error ?? errorId ?? 'Request failed'), errorId))
     }
 

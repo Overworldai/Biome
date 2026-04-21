@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettings } from './useSettings'
+import { useSettings } from './settingsContextValue'
 
 export function usePinnedScenes() {
   const { settings, isLoaded, saveSettings } = useSettings()

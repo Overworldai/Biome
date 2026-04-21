@@ -1,6 +1,7 @@
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
-import { useAudio } from '../context/AudioContext'
+import { useAudio } from '../context/audioContextValue'
+import { useInputModality } from '../lib/inputModality'
 import { useTranslation } from 'react-i18next'
 
 const ACTION_BASE =
@@ -15,7 +16,7 @@ const ACTION_DELETE = 'text-error-muted border-error/50 hover:text-[var(--color-
 
 const PinnedIcon = () => (
   <svg
-    className="w-[66%] h-[66%]"
+    className="h-[66%] w-[66%]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -33,7 +34,7 @@ const PinnedIcon = () => (
 
 const UnpinnedIcon = () => (
   <svg
-    className="w-[66%] h-[66%]"
+    className="h-[66%] w-[66%]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -53,7 +54,7 @@ const UnpinnedIcon = () => (
 
 const DeleteIcon = () => (
   <svg
-    className="w-[66%] h-[66%]"
+    className="h-[66%] w-[66%]"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -94,14 +95,20 @@ const SceneCard = ({
   const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const { play } = useAudio()
+  const modality = useInputModality()
   const isUnsafe = seed.is_safe === false
+  // Gamepad users can't reliably reach nested pin/delete actions with spatial
+  // nav (the parent scene card is what's focused). Hide them in gamepad mode.
+  const hideSecondaryActions = modality === 'gamepad'
 
   return (
     <button
       type="button"
-      className={`w-full aspect-video rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-card)] p-0 overflow-hidden group/scene relative ${
-        isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'
-      }`}
+      className={`
+        group/scene relative aspect-video w-full overflow-hidden rounded-card border border-border-subtle
+        bg-surface-card p-0
+        ${isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'}
+      `}
       title={seed.filename}
       aria-disabled={isUnsafe}
       onMouseEnter={() => !isUnsafe && playHover()}
@@ -112,21 +119,44 @@ const SceneCard = ({
       }}
     >
       <img
-        className={`w-full h-full object-cover block ${isUnsafe ? 'grayscale brightness-[0.45] contrast-[0.8]' : ''}`}
+        className={`
+          block size-full object-cover
+          ${isUnsafe ? 'brightness-[0.45] contrast-[0.8] grayscale' : ''}
+        `}
         src={thumbnailSrc || ''}
         alt={seed.filename}
       />
       {isUnsafe && (
-        <span className="absolute left-1 top-1 px-[0.58cqh] py-[0.18cqh] text-[1.11cqh] font-semibold tracking-[0.08em] uppercase text-[rgba(16,20,28,0.95)] bg-[rgba(214,218,228,0.92)]">
+        <span
+          className="
+            absolute top-1 left-1 bg-[rgba(214,218,228,0.92)] px-[0.58cqh] py-[0.18cqh] text-[1.11cqh] font-semibold
+            tracking-[0.08em] text-[rgba(16,20,28,0.95)] uppercase
+          "
+        >
           {t('app.pause.sceneCard.unsafe')}
         </span>
       )}
-      <span className="absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-[140ms] ease-in-out group-hover/scene:opacity-100 group-focus-within/scene:opacity-100">
-        {!isUnsafe && (
+      <span
+        className={`
+          absolute top-1 right-1 flex flex-col gap-0.5 opacity-0 transition-opacity duration-140 ease-in-out
+          ${
+            hideSecondaryActions
+              ? ''
+              : `
+                group-focus-within/scene:opacity-100
+                group-hover/scene:opacity-100
+              `
+          }
+        `}
+      >
+        {!isUnsafe && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}
-            className={`${ACTION_BASE} ${isPinned ? ACTION_PINNED : ACTION_UNPINNED}`}
+            className={`
+              ${ACTION_BASE}
+              ${isPinned ? ACTION_PINNED : ACTION_UNPINNED}
+            `}
             title={isPinned ? t('app.pause.sceneCard.unpinScene') : t('app.pause.sceneCard.pinScene')}
             onMouseEnter={playHover}
             onClick={(event) => {
@@ -145,11 +175,14 @@ const SceneCard = ({
             {pinVariant === 'pinned-only' || isPinned ? <PinnedIcon /> : <UnpinnedIcon />}
           </span>
         )}
-        {!seed.is_default && onRemove && (
+        {!seed.is_default && onRemove && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}
-            className={`${ACTION_BASE} ${ACTION_DELETE}`}
+            className={`
+              ${ACTION_BASE}
+              ${ACTION_DELETE}
+            `}
             title={t('app.pause.sceneCard.removeScene')}
             onMouseEnter={playHover}
             onClick={(event) => {

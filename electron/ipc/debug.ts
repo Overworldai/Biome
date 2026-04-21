@@ -41,8 +41,23 @@ export function registerDebugIpc(): void {
     }
   })
 
-  ipcMain.handle('get-system-diagnostics', () => {
+  ipcMain.handle('get-system-diagnostics', async () => {
     const cpus = os.cpus()
+
+    // Extract the active GPU device name from Chromium's GPU info.
+    // This is the *rendering* GPU (may differ from CUDA GPU in multi-GPU setups).
+    let gpuName: string | null = null
+    try {
+      const info = (await app.getGPUInfo('complete')) as {
+        gpuDevice?: { active?: boolean; description?: string }[]
+        auxAttributes?: { glRenderer?: string }
+      }
+      const active = info.gpuDevice?.find((d) => d.active) ?? info.gpuDevice?.[0]
+      gpuName = active?.description || info.auxAttributes?.glRenderer || null
+    } catch {
+      // getGPUInfo can fail on headless / some Linux compositors
+    }
+
     return {
       platform: os.platform(),
       release: os.release(),
@@ -53,6 +68,7 @@ export function registerDebugIpc(): void {
       free_memory_bytes: os.freemem(),
       cpu_model: cpus[0]?.model || 'unknown',
       cpu_cores: cpus.length,
+      gpu: gpuName,
       gpu_feature_status: app.getGPUFeatureStatus()
     }
   })

@@ -44,6 +44,7 @@ type CreateHandlersArgs = {
   lastAppliedModelRef: { current: string | null }
   exitPointerLock: () => void
   sendPause: (paused: boolean) => void
+  resume: () => void
 }
 
 type LifecycleEffectHandlers = {
@@ -67,7 +68,8 @@ export const createStreamingLifecycleEffectHandlers = ({
   states,
   lastAppliedModelRef,
   exitPointerLock,
-  sendPause
+  sendPause,
+  resume
 }: CreateHandlersArgs): LifecycleEffectHandlers => {
   return {
     suppressedIntentionalWarmError: () => {
@@ -80,7 +82,9 @@ export const createStreamingLifecycleEffectHandlers = ({
         if ('key' in info) {
           setEngineError(new TranslatableError(info.key))
         } else {
-          setEngineError(new TranslatableError('app.server.fallbackError', { message: info.transportError }))
+          // transportError is already a TranslatableError — pass it through
+          // without re-wrapping (would add a duplicate "Server error:" prefix).
+          setEngineError(info.transportError)
         }
       }
     },
@@ -114,10 +118,7 @@ export const createStreamingLifecycleEffectHandlers = ({
       setPausedAt(null)
     },
     resumeOnPointerLock: () => {
-      setSettingsOpen(false)
-      setIsPaused(false)
-      setPausedAt(null)
-      sendPause(false)
+      resume()
       log.info('Pointer locked - settings closed, resumed')
     },
     pauseOnPointerUnlock: () => {

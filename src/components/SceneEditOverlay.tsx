@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT } from '../styles'
 import type { SceneEditPhase } from '../context/sceneEditMachine'
 import { RpcError } from '../lib/wsRpc'
-import type { TranslationKey } from '../i18n'
 
 const SceneEditOverlay = () => {
   const { t } = useTranslation()
@@ -86,13 +85,13 @@ const SceneEditOverlay = () => {
     } catch (err) {
       let msg: string
       if (err instanceof RpcError && err.errorId) {
-        msg = t(err.errorId as TranslationKey, { defaultValue: err.message })
+        msg = t(err.errorId, { defaultValue: err.message })
       } else {
         msg = err instanceof Error ? err.message : String(err)
       }
       dispatchSceneEdit({ type: 'ERROR', message: msg })
     }
-  }, [prompt, phase, wsRequest, dispatchSceneEdit])
+  }, [prompt, phase, wsRequest, dispatchSceneEdit, t])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -115,14 +114,23 @@ const SceneEditOverlay = () => {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleInputKeyDown}
           placeholder={t('app.sceneEdit.placeholder')}
-          className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full outline-none focus:ring-1 focus:ring-border-medium`}
+          className={`
+            ${SETTINGS_CONTROL_BASE}
+            ${SETTINGS_CONTROL_TEXT}
+            w-full outline-none
+            focus:ring-1 focus:ring-border-medium
+          `}
         />
         <span className="font-serif text-[1.8cqh] text-text-muted">{t('app.sceneEdit.instructions')}</span>
       </div>
     ),
     loading: () => (
       <div className="flex items-center gap-[1cqw]">
-        <div className="h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary" />
+        <div
+          className="
+            h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary
+          "
+        />
         <span className="font-serif text-[2.4cqh] text-text-muted">{t('app.sceneEdit.applying')}</span>
       </div>
     ),

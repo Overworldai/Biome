@@ -4,6 +4,8 @@
 // Strongly typed message definitions for the client ↔ server WebSocket protocol.
 // See CONTRIBUTING.md "WebSocket Protocol" for the full specification.
 
+import type { ServerCode } from './input'
+
 // ── Client → Server: Fire-and-forget messages ──────────────────────────────
 
 /** Unified session init/update RPC.
@@ -24,16 +26,40 @@ export type InitMessage = {
   quant?: string | null
   cap_inference_fps?: boolean
 }
+/** Host identity returned in the init RPC response (Overworldai/Biome#98).
+ *  Every CPU/GPU identifier the client shows comes from here — frame
+ *  headers and error snapshots carry only dynamic/ephemeral data. */
+export type ServerSystemInfo = {
+  cpu_name?: string | null
+  gpu_name?: string | null
+  gpu_count?: number
+  vram_total_bytes?: number | null
+  cuda_version?: string | null
+  driver_version?: string | null
+  torch_version?: string
+}
+
+/** Ephemeral state captured on the server at the moment an error is emitted.
+ *  Included in `ErrorPushMessage.snapshot` so bug reports have context about
+ *  what the server was doing at the failure point rather than idle values. */
+export type ServerErrorSnapshot = {
+  process_rss_bytes?: number
+  ram_used_bytes?: number
+  ram_total_bytes?: number
+  vram_used_bytes?: number
+  vram_reserved_bytes?: number
+  gpu_util_percent?: number
+}
+
 export type InitResponse = {
-  gpu_name: string | null
-  cpu_name: string | null
   model: string
   inference_fps: number
+  system_info: ServerSystemInfo
 }
 
 export type ControlMessage = {
   type: 'control'
-  buttons: string[]
+  buttons: ServerCode[]
   mouse_dx: number
   mouse_dy: number
   ts?: number
@@ -89,6 +115,7 @@ export type ErrorPushMessage = {
   message_id?: string
   message?: string
   params?: Record<string, string>
+  snapshot?: ServerErrorSnapshot
 }
 
 export type WarningPushMessage = {

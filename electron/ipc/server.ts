@@ -4,8 +4,8 @@ import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
-import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
-import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
+import { getEngineDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
+import { getUvBinaryPath, getUvEnvVars, getBundledPythonIncludeDir } from '../lib/uv.js'
 import { getHiddenWindowOptions } from '../lib/platform.js'
 import {
   getServerState,
@@ -24,7 +24,6 @@ function isLocalhost(hostname: string): boolean {
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
     const engineDir = getEngineDir()
-    const uvDir = getUvDir()
     const uvBinary = getUvBinaryPath()
     const uvEnv = getUvEnvVars()
     const hfHomeDir = getHfHomeDir()
@@ -65,6 +64,16 @@ export function registerServerIpc(): void {
       PYTHONUNBUFFERED: '1',
       PYTHONFAULTHANDLER: '1',
       BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
+    }
+
+    // Point the in-venv C compiler at the uv-managed Python headers so Triton's
+    // runtime JIT can #include <Python.h>. python-build-standalone's sysconfig
+    // reports an incorrect include path on NixOS; this override also helps
+    // users on distros where the system Python headers are absent.
+    const pythonIncludeDir = getBundledPythonIncludeDir()
+    if (pythonIncludeDir) {
+      const existingCPath = serverEnv.C_INCLUDE_PATH
+      serverEnv.C_INCLUDE_PATH = existingCPath ? `${pythonIncludeDir}:${existingCPath}` : pythonIncludeDir
     }
 
     // Create log file path
