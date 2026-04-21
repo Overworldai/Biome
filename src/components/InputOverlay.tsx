@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import type { InputCode } from '../types/input'
 import { CODE_MAP } from '../hooks/useGameInput'
 import VirtualGamepad, { type GamepadAxes } from './VirtualGamepad'

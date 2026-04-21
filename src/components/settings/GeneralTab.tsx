@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../../i18n'
-import { useSettings } from '../../hooks/useSettings'
+import { useSettings } from '../../hooks/settingsContextValue'
 import { useVolumeControls } from '../../hooks/useVolumeControls'
 import type { AppLocale } from '../../types/settings'
 import SettingsSection from '../ui/SettingsSection'

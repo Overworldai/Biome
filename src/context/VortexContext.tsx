@@ -14,10 +14,11 @@
  *   new container dimensions)
  * - Pauses the rAF loop when no component owns the canvas or the tab is hidden
  */
-import { createContext, useContext, useRef, useEffect, useCallback, type ReactNode } from 'react'
-import { useSettings } from '../hooks/useSettings'
+import { useRef, useEffect, useCallback, type ReactNode } from 'react'
+import { useSettings } from '../hooks/settingsContextValue'
 import { isGooseMode } from '../i18n'
 import { VortexRenderer, VORTEX_PORTAL_COUNT, VORTEX_LOADING_COUNT } from '../lib/vortexRenderer'
+import { VortexContext } from './vortexContextValue'
 
 const GOOSE_SPRITESHEET_URL = new URL('../../assets/goose-spritesheet.png', import.meta.url).href
 
@@ -27,14 +28,6 @@ const PARTICLE_COUNTS: Record<VortexMode, number> = {
   portal: VORTEX_PORTAL_COUNT,
   loading: VORTEX_LOADING_COUNT
 }
-
-type VortexContextValue = {
-  claimCanvas: (container: HTMLElement, mode: VortexMode) => void
-  releaseCanvas: (container?: HTMLElement) => void
-  setErrorMode: (error: boolean) => void
-}
-
-const VortexContext = createContext<VortexContextValue | null>(null)
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
@@ -206,10 +199,4 @@ export function VortexProvider({ children }: { children: ReactNode }) {
   return (
     <VortexContext.Provider value={{ claimCanvas, releaseCanvas, setErrorMode }}>{children}</VortexContext.Provider>
   )
-}
-
-export function useVortex() {
-  const ctx = useContext(VortexContext)
-  if (!ctx) throw new Error('useVortex must be used within VortexProvider')
-  return ctx
 }

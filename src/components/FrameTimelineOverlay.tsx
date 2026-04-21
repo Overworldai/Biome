@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 
 const OVERLAY_BG = 'bg-black/50'
 const OVERLAY_BORDER = 'border border-white/20'

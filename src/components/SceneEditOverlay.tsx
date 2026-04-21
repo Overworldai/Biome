@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT } from '../styles'
 import type { SceneEditPhase } from '../context/sceneEditMachine'
 import { RpcError } from '../lib/wsRpc'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'

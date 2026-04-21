@@ -1,23 +1,8 @@
-import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { invoke } from '../bridge'
-import type { Settings, EngineMode } from '../types/settings'
+import type { Settings } from '../types/settings'
 import { ENGINE_MODES, DEFAULT_STANDALONE_URL } from '../types/settings'
-
-type SettingsContextValue = {
-  settings: Settings
-  isLoaded: boolean
-  error: string | null
-  settingsPath: string | null
-  reloadSettings: () => Promise<boolean>
-  saveSettings: (s: Settings) => Promise<boolean>
-  openSettings: () => Promise<boolean>
-  getUrl: () => string
-  engineMode: EngineMode
-  isStandaloneMode: boolean
-  isServerMode: boolean
-}
-
-const SettingsContext = createContext<SettingsContextValue | null>(null)
+import { SettingsContext, type SettingsContextValue } from './settingsContextValue'
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -116,13 +101,3 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }
-
-export const useSettings = () => {
-  const context = useContext(SettingsContext)
-  if (!context) {
-    throw new Error('useSettings must be used within a SettingsProvider')
-  }
-  return context
-}
-
-export default useSettings

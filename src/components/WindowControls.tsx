@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../i18n'
 import { useWindow } from '../hooks/useWindow'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 const WindowControlButton = ({

@@ -20,7 +20,7 @@ const MOUSE_BUTTON_TO_CODE: Record<number, InputCode> = {
   4: MOUSE_CODES.FORWARD
 }
 
-export const keyCodeToLabel = (code: InputCode): DisplayLabel => {
+const keyCodeToLabel = (code: InputCode): DisplayLabel => {
   if (code in MOUSE_CODE_LABELS) return MOUSE_CODE_LABELS[code]
   if (code.startsWith('Key')) return code.slice(3)
   if (code.startsWith('Digit')) return code.slice(5)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import { ALLOW_USER_SCENES } from '../constants'
 
 /**

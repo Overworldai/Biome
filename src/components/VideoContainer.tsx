@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 
 const VideoContainer = () => {
   const { isStreaming, isPaused, registerContainerRef, registerCanvasRef, handleContainerClick, isPointerLocked } =

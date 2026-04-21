@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import Sparkline from './Sparkline'
 
 const BUFFER_SIZE = 60

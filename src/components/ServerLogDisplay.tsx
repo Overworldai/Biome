@@ -4,7 +4,7 @@ import { TranslatableError, type TranslationKey } from '../i18n'
 import type { DiagnosticsPayload } from '../types/ipc'
 import Button from './ui/Button'
 import { findFocusables, findInDirection, focusSmooth } from '../lib/focusNavigation'
-import { getActiveScopeRoot } from '../context/FocusScopeContext'
+import { getActiveScopeRoot } from '../context/focusScopeStack'
 
 const MAX_ERROR_MESSAGE_CHARS = 220
 const MAX_GITHUB_BODY_CHARS = 1200

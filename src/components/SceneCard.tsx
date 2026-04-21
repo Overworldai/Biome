@@ -1,6 +1,6 @@
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
-import { useAudio } from '../context/AudioContext'
+import { useAudio } from '../context/audioContextValue'
 import { useInputModality } from '../lib/inputModality'
 import { useTranslation } from 'react-i18next'
 

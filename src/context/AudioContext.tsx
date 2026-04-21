@@ -1,21 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AudioEngine, type SoundId, type VolumeSettings } from '../lib/audio'
-import { useSettings } from '../hooks/useSettings'
-
-type AudioContextValue = {
-  play: (id: SoundId) => void
-  startLoop: (id: SoundId, volume?: number, fadeInSeconds?: number) => void
-  stopLoop: (id: SoundId) => void
-  fadeOutLoop: (id: SoundId, seconds: number) => void
-  crossfadeLoop: (from: SoundId, to: SoundId, seconds: number) => void
-  stopAllLoops: () => void
-  setLoopVolume: (id: SoundId, volume: number, rampSeconds?: number) => void
-  isLoopActive: (id: SoundId) => boolean
-  volumes: VolumeSettings
-  setVolumes: (update: Partial<VolumeSettings>) => void
-}
-
-const Ctx = createContext<AudioContextValue | null>(null)
+import { useSettings } from '../hooks/settingsContextValue'
+import { AudioCtx } from './audioContextValue'
 
 export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const engineRef = useRef<AudioEngine | null>(null)
@@ -78,7 +64,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   return (
-    <Ctx.Provider
+    <AudioCtx.Provider
       value={{
         play,
         startLoop,
@@ -93,14 +79,6 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
-    </Ctx.Provider>
+    </AudioCtx.Provider>
   )
-}
-
-export const useAudio = () => {
-  const context = useContext(Ctx)
-  if (!context) {
-    throw new Error('useAudio must be used within an AudioProvider')
-  }
-  return context
 }

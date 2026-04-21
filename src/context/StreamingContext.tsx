@@ -1,15 +1,5 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useReducer,
-  useMemo,
-  type ReactNode
-} from 'react'
-import { usePortal } from './PortalContext'
+import { useState, useEffect, useRef, useCallback, useReducer, useMemo, type ReactNode } from 'react'
+import { usePortal } from './portalContextValue'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { TranslatableError } from '../i18n'
 import type { StageId } from '../stages'
@@ -22,29 +12,20 @@ import {
 } from './streamingLifecycleMachine'
 import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
 import type { StreamingContextValue } from './streamingContextTypes'
+import { StreamingContext } from './streamingContextValue'
 import { initialSceneEditState, sceneEditReducer } from './sceneEditMachine'
 
 const log = createLogger('Streaming')
 
 // Browsers require ~1s delay before pointer lock can be re-requested
 const UNLOCK_DELAY_MS = 1250
-
-export const StreamingContext = createContext<StreamingContextValue | null>(null)
-
-export const useStreaming = () => {
-  const context = useContext(StreamingContext)
-  if (!context) {
-    throw new Error('useStreaming must be used within a StreamingProvider')
-  }
-  return context
-}
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo, shutdown } = usePortal()
@@ -841,5 +822,3 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   return <StreamingContext.Provider value={value}>{children}</StreamingContext.Provider>
 }
-
-export default StreamingContext

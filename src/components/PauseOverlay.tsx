@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
 import PauseScenesView from './PauseScenesView'
@@ -10,7 +10,7 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
