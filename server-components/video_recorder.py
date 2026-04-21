@@ -19,12 +19,18 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
+import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
+
+# Prebuilt ffmpeg binary shipped with imageio-ffmpeg — cross-platform, bundled
+# into the venv by `uv sync`, so we don't depend on a system ffmpeg install.
+# Cached at import time since resolving the path touches the filesystem.
+FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
 
 
 @dataclass(frozen=True)
@@ -119,7 +125,7 @@ class VideoRecorder:
         self._overlay_bitmap = None
 
         cmd = [
-            "ffmpeg",
+            FFMPEG_EXE,
             "-y",
             "-f", "rawvideo",
             "-pix_fmt", "rgb24",
@@ -151,7 +157,7 @@ class VideoRecorder:
             logger.info(f"[{self._client_host}] Video recording -> {path}")
         except FileNotFoundError:
             logger.warning(
-                f"[{self._client_host}] ffmpeg not found — video recording disabled"
+                f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled"
             )
             self._proc = None
 
