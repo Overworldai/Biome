@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../i18n'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
-import { useSettings } from '../hooks/useSettings'
-import { useStreaming } from '../context/StreamingContext'
+import { useSettings } from '../hooks/settingsContextValue'
+import { useStreaming } from '../context/streamingContextValue'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
 import SettingsToggle from './ui/SettingsToggle'
@@ -120,15 +120,16 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }
 
   return (
-    <FocusScope
-      onCancel={() => void handleBackClick()}
-      autoFocus
-      className="absolute inset-0 z-[9] pointer-events-auto"
-    >
-      <section className="absolute top-[var(--edge-top-xl)] bottom-[var(--edge-bottom)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
+    <FocusScope onCancel={() => void handleBackClick()} autoFocus className="pointer-events-auto absolute inset-0 z-9">
+      <section className="absolute top-(--edge-top-xl) bottom-(--edge-bottom) left-(--edge-left) z-3 flex w-[90%] flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
-        <div className={`mt-[1.6cqh] relative z-[4] ${wide ? 'w-[83%]' : 'w-[63%]'}`}>
+        <div
+          className={`
+            relative z-4 mt-[1.6cqh]
+            ${wide ? 'w-[83%]' : 'w-[63%]'}
+          `}
+        >
           <SettingsToggle
             options={SETTINGS_TAB_OPTIONS}
             value={activeTab}
@@ -136,7 +137,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           />
         </div>
         <div
-          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] flex-1 min-h-0 mt-[1.6cqh] relative z-[4] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
+          className={`
+            styled-scrollbar relative z-4 mt-[1.6cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh] pb-[1.0cqh]
+            ${wide ? 'w-[83%]' : 'w-[63%]'}
+          `}
         >
           <GeneralTab
             active={activeTab === 'general'}
@@ -164,7 +168,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         </div>
       </section>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] z-[5] w-btn-w flex flex-col gap-[1.1cqh]">
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) z-5 flex w-btn-w flex-col gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
           label="app.buttons.credits"
@@ -174,7 +178,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         <MenuButton
           variant="primary"
           label="app.buttons.back"
-          className="w-full px-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="
+            w-full px-0
+            disabled:cursor-not-allowed disabled:opacity-50
+          "
           disabled={hasKeybindConflict}
           onClick={() => {
             void handleBackClick()
@@ -197,10 +204,15 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
       {showCredits && (
         <Modal title="app.settings.credits.title" onBackdropClick={() => setShowCredits(false)}>
-          <pre className="m-0 mt-[0.8cqh] font-mono text-[1.8cqh] text-text-modal-muted whitespace-pre-wrap border border-border-subtle bg-white/5 p-[1.2cqh] rounded-[0.4cqh]">
+          <pre
+            className="
+              m-0 mt-[0.8cqh] rounded-[0.4cqh] border border-border-subtle bg-white/5 p-[1.2cqh] font-mono text-[1.8cqh]
+              whitespace-pre-wrap text-text-modal-muted
+            "
+          >
             {attributionText.trim()}
           </pre>
-          <div className="flex justify-end mt-[1.4cqh]">
+          <div className="mt-[1.4cqh] flex justify-end">
             <Button
               variant="primary"
               autoShrinkLabel

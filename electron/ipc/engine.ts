@@ -203,7 +203,6 @@ export function registerEngineIpc(): void {
     console.log(`[ENGINE] check-engine-status: start (caller=${caller})`)
     const engineDir = getEngineDir()
     const uvBinary = getUvBinaryPath()
-    const uvDir = getUvDir()
     const uvEnv = getUvEnvVars()
 
     // Check if our local uv binary exists and works

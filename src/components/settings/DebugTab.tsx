@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { buildDiagnosticsPayload } from '../../lib/diagnosticsPayload'
 import { ENGINE_MODES, type Settings } from '../../types/settings'
-import { useStreaming } from '../../context/StreamingContext'
+import { useStreaming } from '../../context/streamingContextValue'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsRow from '../ui/SettingsRow'
 import SettingsCheckbox from '../ui/SettingsCheckbox'
@@ -77,11 +77,18 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
                 variant="secondary"
                 autoShrinkLabel
                 label="app.buttons.copy"
-                className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                className="px-[1.4cqh] py-[0.2cqh] text-[2cqh]"
                 onClick={() => void handleCopyDiagnostics()}
               />
               {diagnosticsStatus && (
-                <span className={`font-serif text-[2cqh] ${SETTINGS_MUTED_TEXT}`}>{diagnosticsStatus}</span>
+                <span
+                  className={`
+                    font-serif text-[2cqh]
+                    ${SETTINGS_MUTED_TEXT}
+                  `}
+                >
+                  {diagnosticsStatus}
+                </span>
               )}
             </div>
           </SettingsRow>

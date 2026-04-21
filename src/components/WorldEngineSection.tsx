@@ -22,12 +22,22 @@ const WorldEngineSection = ({ engineReady, onFixInPlaceClick, onTotalReinstallCl
           ) : engineReady ? (
             <>
               {t('app.settings.worldEngine.yes')}
-              <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+              <span
+                className="
+                  inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)]
+                  shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]
+                "
+              />
             </>
           ) : (
             <>
               {t('app.settings.worldEngine.no')}
-              <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+              <span
+                className="
+                  inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)]
+                  shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]
+                "
+              />
             </>
           )}
         </span>

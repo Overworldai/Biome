@@ -107,7 +107,7 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
               <Trans
                 i18nKey="app.settings.keybindings.conflictWith"
                 values={{ other: conflict.otherLabel }}
-                components={{ key: <span className="font-bold text-[var(--color-error-bright)]" /> }}
+                components={{ key: <span className="font-bold text-error-bright" /> }}
               />
             ) : null
             return (
@@ -121,12 +121,12 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
             )
           })}
           {hasCustomKeybindings(menuKeybindings) && (
-            <div className="flex justify-end mt-[0.8cqh]">
+            <div className="mt-[0.8cqh] flex justify-end">
               <Button
                 variant="secondary"
                 autoShrinkLabel
                 label="app.settings.keybindings.resetToDefaults"
-                className="text-[2cqh] px-[1.4cqh] py-[0.2cqh]"
+                className="px-[1.4cqh] py-[0.2cqh] text-[2cqh]"
                 onClick={() => setMenuKeybindings({ ...DEFAULT_KEYBINDINGS })}
               />
             </div>

@@ -11,7 +11,7 @@
  * moves it away from any previous owner.
  */
 import { useRef, useEffect } from 'react'
-import { useVortex } from '../context/VortexContext'
+import { useVortex } from '../context/vortexContextValue'
 
 type VortexHostProps = {
   mode: 'portal' | 'loading'
@@ -32,7 +32,7 @@ const VortexHost = ({ mode }: VortexHostProps) => {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 w-full h-full"
+      className="absolute inset-0 size-full"
       style={{ position: 'relative' }}
       aria-hidden="true"
     />

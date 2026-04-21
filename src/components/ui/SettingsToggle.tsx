@@ -14,7 +14,7 @@ const SettingsToggle = ({ options, value, onChange }: SettingsToggleProps) => (
         key={option.value}
         variant={value === option.value ? 'primary' : 'secondary'}
         label={option.label}
-        className="flex-1 min-w-[16cqh]"
+        className="min-w-[16cqh] flex-1"
         onClick={() => onChange(option.value)}
       />
     ))}

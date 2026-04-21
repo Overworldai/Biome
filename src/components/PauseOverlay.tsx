@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
 import PauseScenesView from './PauseScenesView'
@@ -10,7 +10,7 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import { usePinnedScenes } from '../hooks/usePinnedScenes'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
@@ -18,8 +18,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
-    usePointerLockFeedback(isActive)
+  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
 
   const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
 
@@ -77,9 +76,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
         else requestPointerLock()
       }}
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      className={`
+        absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
+        ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
+      `}
     >
-      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
         {view === PAUSE_VIEW.SETTINGS ? (
           <motion.div
@@ -113,7 +115,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
-              showUnlockHint={showUnlockHint}
             />
           </motion.div>
         ) : (

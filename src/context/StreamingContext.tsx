@@ -1,15 +1,5 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useReducer,
-  useMemo,
-  type ReactNode
-} from 'react'
-import { usePortal } from './PortalContext'
+import { useState, useEffect, useRef, useCallback, useReducer, useMemo, type ReactNode } from 'react'
+import { usePortal } from './portalContextValue'
 import { runWarmConnectionFlow } from './streamingWarmConnection'
 import { TranslatableError } from '../i18n'
 import type { StageId } from '../stages'
@@ -22,29 +12,20 @@ import {
 } from './streamingLifecycleMachine'
 import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
 import type { StreamingContextValue } from './streamingContextTypes'
+import { StreamingContext } from './streamingContextValue'
 import { initialSceneEditState, sceneEditReducer } from './sceneEditMachine'
 
 const log = createLogger('Streaming')
 
 // Browsers require ~1s delay before pointer lock can be re-requested
 const UNLOCK_DELAY_MS = 1250
-
-export const StreamingContext = createContext<StreamingContextValue | null>(null)
-
-export const useStreaming = () => {
-  const context = useContext(StreamingContext)
-  if (!context) {
-    throw new Error('useStreaming must be used within a StreamingProvider')
-  }
-  return context
-}
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo, shutdown } = usePortal()
@@ -76,7 +57,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     statusStage,
     error,
     frame,
-    hasRealFrame,
     frameId,
     genTime,
     latentGenMs,
@@ -436,6 +416,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       setPreConnectionStage(null)
       setIsFreshInstall(false)
     }
+    // Only restart the warm-connection flow when a new job is requested; all other
+    // referenced values are read latest-at-call-time on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingConnectionJobSeq])
 
   useEffect(() => {
@@ -500,18 +483,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
 
     runStreamingLifecycleEffects({ effects, handlers })
-  }, [
-    lifecycleState,
-    transitionTo,
-    states.MAIN_MENU,
-    states.LOADING,
-    states.STREAMING,
-    disconnect,
-    settings?.engine_model,
-    exitPointerLock,
-    sendPause,
-    resume
-  ])
+  }, [lifecycleState, transitionTo, states, disconnect, settings, exitPointerLock, sendPause, resume])
 
   // Render frames to canvas using createImageBitmap for off-main-thread decoding.
   // Decoded bitmaps are queued with a target displayAt timestamp so multiframe
@@ -577,7 +549,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       bitmapQueueRef.current = []
       lastScheduledAtRef.current = 0
     }
-  }, [canvasReady])
+  }, [canvasReady, frameTemporalCompressionRef])
 
   // Decode incoming frames off-thread and push to the draw queue.
   // displayAt is computed inside the .then() callback — i.e. once the bitmap is
@@ -625,7 +597,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         bitmapQueueRef.current.push({ bitmap, displayAt, frameId: capturedFrameId, genMs })
       })
       .catch(() => {})
-  }, [frame, canvasReady])
+  }, [frame, canvasReady, frameGenMsRef, frameIdRef, frameTemporalCompressionRef])
 
   // Input loop synced to requestAnimationFrame for minimal jitter
   useEffect(() => {
@@ -850,5 +822,3 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   return <StreamingContext.Provider value={value}>{children}</StreamingContext.Provider>
 }
-
-export default StreamingContext
