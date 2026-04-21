@@ -4,6 +4,7 @@ import type { TranslationKey } from '../i18n'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { useSettings } from '../hooks/settingsContextValue'
 import { useStreaming } from '../context/streamingContextValue'
+import { ENGINE_MODES } from '../types/settings'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
 import SettingsToggle from './ui/SettingsToggle'
@@ -46,6 +47,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
     () => settings.experimental?.scene_edit_enabled ?? false
   )
+  const [menuOfflineMode, setMenuOfflineMode] = useState(() => settings.offline_mode ?? false)
   const [hasKeybindConflict, setHasKeybindConflict] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
@@ -72,6 +74,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       ...gamepadDraft,
       ...debugDraft,
       audio: volume.getAudioSettings(),
+      offline_mode: menuOfflineMode,
       experimental: {
         scene_edit_enabled: menuSceneEditEnabled
       }
@@ -82,18 +85,28 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     if (gamepadDraft.gamepad_sensitivity !== undefined) {
       setGamepadSensitivity(gamepadDraft.gamepad_sensitivity)
     }
-  }, [settings, saveSettings, volume, menuSceneEditEnabled, setMouseSensitivity, setGamepadSensitivity])
+  }, [
+    settings,
+    saveSettings,
+    volume,
+    menuSceneEditEnabled,
+    menuOfflineMode,
+    setMouseSensitivity,
+    setGamepadSensitivity
+  ])
 
   const handleBackClick = useCallback(async () => {
     if (hasKeybindConflict) return
     if (engineRef.current && !engineRef.current.validateBeforeSave()) return
-    if (isStreaming && engineRef.current?.hasChangesRequiringRestart()) {
+    const offlineChanged =
+      settings.engine_mode === ENGINE_MODES.STANDALONE && menuOfflineMode !== (settings.offline_mode ?? false)
+    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack])
+  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack, settings, menuOfflineMode])
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -146,6 +159,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             active={activeTab === 'general'}
             menuSceneEditEnabled={menuSceneEditEnabled}
             setMenuSceneEditEnabled={setMenuSceneEditEnabled}
+            menuOfflineMode={menuOfflineMode}
+            setMenuOfflineMode={setMenuOfflineMode}
           />
           <EngineTab ref={engineRef} settings={settings} active={activeTab === 'engine'} />
           <KeyboardTab

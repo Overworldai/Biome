@@ -109,6 +109,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const prevEngineModeRef = useRef(engineMode)
+  const prevOfflineModeRef = useRef(settings.offline_mode ?? false)
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
   const inputLoopRef = useRef<number | null>(null)
@@ -162,28 +163,42 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isStandaloneMode, checkEngineStatus])
 
-  // Handle engine mode switching without app restart
+  // Restart whenever a spawn-time setting changes: engine_mode (local-vs-remote
+  // process) or offline_mode (env vars injected at spawn). The env only takes
+  // effect when the Python process starts, so a mid-stream toggle needs a full
+  // teardown-and-reconnect. Offline changes only matter in standalone mode.
   useEffect(() => {
     const prevMode = prevEngineModeRef.current
+    const prevOffline = prevOfflineModeRef.current
+    const nextOffline = settings.offline_mode ?? false
     prevEngineModeRef.current = engineMode
+    prevOfflineModeRef.current = nextOffline
 
-    // Skip if mode hasn't actually changed, or if we're in MAIN_MENU state (nothing to tear down)
-    if (prevMode === engineMode || !prevMode || state === states.MAIN_MENU) return
+    const engineModeChanged = !!prevMode && prevMode !== engineMode
+    const offlineChanged = prevOffline !== nextOffline && engineMode === ENGINE_MODES.STANDALONE
 
-    log.info(`Engine mode changed: ${prevMode} -> ${engineMode}, performing teardown-and-reconnect`)
+    if (!engineModeChanged && !offlineChanged) return
+    if (state === states.MAIN_MENU) return
 
-    // Disconnect existing WebSocket
+    log.info(`Respawn: engine_mode ${prevMode}->${engineMode}, offline ${prevOffline}->${nextOffline}`)
+
     disconnect()
-
-    // If the OLD mode was standalone and the server is running, stop it
-    if (prevMode === ENGINE_MODES.STANDALONE && isServerRunning) {
-      stopServer().catch((err) => log.error('Failed to stop server during mode switch:', err))
+    if (isServerRunning) {
+      stopServer().catch((err) => log.error('Failed to stop server during respawn:', err))
     }
-
-    // Clear any existing error and transition to LOADING to re-trigger connection
     setEngineError(null)
     transitionTo(states.LOADING)
-  }, [engineMode, state, states.MAIN_MENU, states.LOADING, disconnect, isServerRunning, stopServer, transitionTo])
+  }, [
+    engineMode,
+    settings.offline_mode,
+    state,
+    states.MAIN_MENU,
+    states.LOADING,
+    disconnect,
+    isServerRunning,
+    stopServer,
+    transitionTo
+  ])
 
   // Resolve local seeds dir path on mount (does not require server availability)
   useEffect(() => {

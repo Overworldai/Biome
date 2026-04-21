@@ -19,9 +19,17 @@ type GeneralTabProps = {
   active: boolean
   menuSceneEditEnabled: boolean
   setMenuSceneEditEnabled: (enabled: boolean) => void
+  menuOfflineMode: boolean
+  setMenuOfflineMode: (enabled: boolean) => void
 }
 
-const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: GeneralTabProps) => {
+const GeneralTab = ({
+  active,
+  menuSceneEditEnabled,
+  setMenuSceneEditEnabled,
+  menuOfflineMode,
+  setMenuOfflineMode
+}: GeneralTabProps) => {
   const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
   const volume = useVolumeControls()
@@ -75,6 +83,7 @@ const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: G
   }, [])
 
   const showRecording = settings.engine_mode === ENGINE_MODES.STANDALONE
+  const showOfflineMode = settings.engine_mode === ENGINE_MODES.STANDALONE
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>
@@ -176,14 +185,16 @@ const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: G
         </SettingsSection>
       )}
 
-      <SettingsSection title="app.settings.offlineMode.title" description="app.settings.offlineMode.description">
-        <SettingsCheckbox
-          label="app.settings.offlineMode.enabled"
-          description="app.settings.offlineMode.enabledDescription"
-          checked={settings.offline_mode}
-          onChange={(v) => void saveSettings({ ...settings, offline_mode: v })}
-        />
-      </SettingsSection>
+      {showOfflineMode && (
+        <SettingsSection title="app.settings.offlineMode.title" description="app.settings.offlineMode.description">
+          <SettingsCheckbox
+            label="app.settings.offlineMode.enabled"
+            description="app.settings.offlineMode.enabledDescription"
+            checked={menuOfflineMode}
+            onChange={setMenuOfflineMode}
+          />
+        </SettingsSection>
+      )}
 
       <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
         <SettingsCheckbox
