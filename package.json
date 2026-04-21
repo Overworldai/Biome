@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "framer-motion": "^12.35.0",
     "i18next": "^25.10.10",
+    "open": "^11.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^16.6.6",

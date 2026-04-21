@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import open from 'open'
 
 export type RecordingEntry = {
   filename: string
@@ -38,6 +39,15 @@ function ensureDir(dir: string): void {
 function isWithin(child: string, parent: string): boolean {
   const rel = path.relative(parent, child)
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+/** Launch the OS's default handler for `target` in a fully detached process.
+ *  `open` takes care of the OS-native shell invocation, Windows path-quoting
+ *  edge cases, and detaching + unref'ing so Biome can exit independently. */
+function openDetached(target: string): void {
+  open(target).catch((err) => {
+    console.error(`[RECORDINGS] Failed to open "${target}":`, err)
+  })
 }
 
 export function registerRecordingsIpc(): void {
@@ -98,17 +108,17 @@ export function registerRecordingsIpc(): void {
     fs.rmSync(resolved, { force: true })
   })
 
-  ipcMain.handle('open-recording-externally', async (_event, filePath: string) => {
+  ipcMain.handle('open-recording-externally', (_event, filePath: string) => {
     if (!currentRecordingsDir) return
     const resolved = path.resolve(filePath)
     if (!isWithin(resolved, currentRecordingsDir)) return
-    await shell.openPath(resolved)
+    openDetached(resolved)
   })
 
-  ipcMain.handle('open-recordings-folder', async (_event, configured: string) => {
+  ipcMain.handle('open-recordings-folder', (_event, configured: string) => {
     const dir = resolveRecordingsDir(configured)
     ensureDir(dir)
     currentRecordingsDir = dir
-    await shell.openPath(dir)
+    openDetached(dir)
   })
 }
