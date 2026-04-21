@@ -372,6 +372,8 @@ const en = {
         startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
+        networkUnreachable:
+          "Couldn't reach the internet. If the engine and model you want are already downloaded, turn on Offline Mode in General Settings to use them without a network.\n\nDetails: {{message}}",
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',

@@ -2,21 +2,30 @@ import { STANDALONE_PORT, localhostUrl } from '../types/settings'
 import type { StageId } from '../stages'
 import { toHealthUrl, toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError } from '../i18n'
+import { isNetworkError } from '../lib/networkErrorClassifier'
 
-const toTranslatableError = (err: unknown): TranslatableError => {
+export const toTranslatableError = (err: unknown, offlineMode: boolean): TranslatableError => {
   if (err instanceof TranslatableError) return err
   const message = err instanceof Error ? err.message : String(err)
+  // Steer users who aren't offline-mode-enabled yet toward it. If they already
+  // are, the suggestion is irrelevant — fall through to the raw message.
+  if (!offlineMode && isNetworkError(message)) {
+    return new TranslatableError('app.server.networkUnreachable', { message })
+  }
   return new TranslatableError('app.server.fallbackError', { message })
 }
 
 type WarmConnectionOptions = {
   currentServerPort: number | null
   isStandaloneMode: boolean
+  offlineMode: boolean
   endpointUrl: string | null
   serverUrl: string
   isServerRunning: boolean
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
+  checkServerRunning: () => Promise<boolean>
+  getLastServerExitTail: () => Promise<string | null>
   probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
   checkEngineStatus: () => Promise<{
     uv_installed?: boolean
@@ -65,10 +74,16 @@ const probeServerHealth = async (
 /**
  * Poll health endpoint until it responds 200.
  * Used instead of listening for stdout "SERVER READY" signals.
+ *
+ * Also watches for the server process dying mid-poll (e.g. uv failed to fetch
+ * a dep at startup). When it does, throws a plain Error carrying the log tail
+ * so the caller's classifier can decide whether it's a network failure.
  */
 const waitForHealthy = async (
   wsUrl: string,
   probeServerHealthViaMain: (healthUrl: string, timeoutMs?: number) => Promise<boolean>,
+  checkServerRunning: () => Promise<boolean>,
+  getLastServerExitTail: () => Promise<string | null>,
   isCancelled: () => boolean,
   log: { info: (...args: unknown[]) => void }
 ): Promise<void> => {
@@ -82,6 +97,10 @@ const waitForHealthy = async (
     if (ok) {
       log.info('Server health check passed')
       return
+    }
+    if (!(await checkServerRunning())) {
+      const tail = (await getLastServerExitTail()) ?? ''
+      throw new Error(tail || 'Server exited before becoming ready')
     }
     await delay(STARTUP_HEALTH_POLL_INTERVAL_MS)
   }
@@ -107,11 +126,14 @@ const findFirstOpenStandalonePort = async (
 export const runWarmConnectionFlow = async ({
   currentServerPort,
   isStandaloneMode,
+  offlineMode,
   endpointUrl,
   serverUrl,
   isServerRunning,
   checkServerReady,
   checkPortInUse,
+  checkServerRunning,
+  getLastServerExitTail,
   probeServerHealthViaMain,
   checkEngineStatus,
   startServer,
@@ -123,6 +145,10 @@ export const runWarmConnectionFlow = async ({
   isCancelled,
   log
 }: WarmConnectionOptions): Promise<void> => {
+  const classify = (err: unknown) => toTranslatableError(err, offlineMode)
+  const healthWait = () =>
+    waitForHealthy(wsUrl, probeServerHealthViaMain, checkServerRunning, getLastServerExitTail, isCancelled, log)
+
   // In server mode, derive WS URL from the configured server URL (or override endpoint).
   // In standalone mode, wsUrl is always overwritten below with localhost:{port}.
   let wsUrl = toWebSocketUrl(endpointUrl || serverUrl || localhostUrl(STANDALONE_PORT))
@@ -148,11 +174,11 @@ export const runWarmConnectionFlow = async ({
         onStage('setup.health_poll')
         log.info('Managed standalone server running but not ready; polling health on port', selectedPort)
         try {
-          await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
+          await healthWait()
           if (isCancelled()) return
         } catch (err) {
           if (isCancelled()) return
-          onServerError(toTranslatableError(err))
+          onServerError(classify(err))
           return
         }
       }
@@ -181,7 +207,7 @@ export const runWarmConnectionFlow = async ({
           if (isCancelled()) return
         } catch (err) {
           if (isCancelled()) return
-          onServerError(toTranslatableError(err))
+          onServerError(classify(err))
           return
         }
       }
@@ -192,11 +218,11 @@ export const runWarmConnectionFlow = async ({
         await startServer(selectedPort)
         onStage('setup.health_poll')
         log.info('Server started, polling health until ready...')
-        await waitForHealthy(wsUrl, probeServerHealthViaMain, isCancelled, log)
+        await healthWait()
         if (isCancelled()) return
       } catch (err) {
         if (isCancelled()) return
-        onServerError(toTranslatableError(err))
+        onServerError(classify(err))
         return
       }
     }

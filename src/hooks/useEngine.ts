@@ -19,6 +19,7 @@ export type UseEngineResult = {
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
   probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+  getLastServerExitTail: () => Promise<string | null>
   isReady: boolean
   isServerRunning: boolean
   serverPort: number | null
@@ -161,6 +162,14 @@ export const useEngine = (): UseEngineResult => {
     }
   }, [])
 
+  const getLastServerExitTail = useCallback(async () => {
+    try {
+      return await invoke('get-last-server-exit-tail')
+    } catch {
+      return null
+    }
+  }, [])
+
   return {
     status,
     isLoading,
@@ -177,6 +186,7 @@ export const useEngine = (): UseEngineResult => {
     checkServerReady,
     checkPortInUse,
     probeServerHealth,
+    getLastServerExitTail,
     isReady: !!(status?.uv_installed && status?.repo_cloned && status?.dependencies_synced),
     isServerRunning: status?.server_running ?? false,
     serverPort: status?.server_port ?? null,

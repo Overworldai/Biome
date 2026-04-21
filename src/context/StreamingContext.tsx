@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useReducer, useMemo, type ReactNode } from 'react'
 import { usePortal } from './portalContextValue'
-import { runWarmConnectionFlow } from './streamingWarmConnection'
+import { runWarmConnectionFlow, toTranslatableError } from './streamingWarmConnection'
 import { TranslatableError } from '../i18n'
 import type { StageId } from '../stages'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -42,8 +42,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isReady: engineReady,
     checkStatus: checkEngineStatus,
     checkServerReady,
+    checkServerRunning,
     checkPortInUse,
     probeServerHealth,
+    getLastServerExitTail,
     serverLogPath,
     setupEngine,
     nukeAndReinstallEngine,
@@ -432,14 +434,19 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Clear WS logs before starting a new connection
     clearWsLogs()
 
+    const offlineMode = settings.offline_mode ?? false
+
     runWarmConnectionFlow({
       currentServerPort: serverPort,
       isStandaloneMode,
+      offlineMode,
       endpointUrl,
       serverUrl: settings.server_url,
       isServerRunning,
       checkServerReady,
       checkPortInUse,
+      checkServerRunning,
+      getLastServerExitTail,
       probeServerHealthViaMain: probeServerHealth,
       checkEngineStatus,
       startServer,
@@ -456,10 +463,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       log
     }).catch((err) => {
       if (warmFlowCancelledRef.current) return
-      const message = err instanceof Error ? err.message : String(err)
-      handleServerError(
-        err instanceof TranslatableError ? err : new TranslatableError('app.server.fallbackError', { message })
-      )
+      handleServerError(toTranslatableError(err, offlineMode))
     })
 
     return () => {

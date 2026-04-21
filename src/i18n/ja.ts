@@ -371,6 +371,8 @@ const ja = {
         startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
+        networkUnreachable:
+          'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',

@@ -366,6 +366,8 @@ const he = {
         startupTimeout: 'תם הזמן להפעלת השרת — בדוק את הלוגים לשגיאות',
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
+        networkUnreachable:
+          'לא ניתן להגיע לאינטרנט. אם המנוע והמודל הרצויים כבר הורדו, ניתן להפעיל מצב לא מקוון בהגדרות הכלליות כדי להשתמש בהם ללא רשת.\n\nפרטים: {{message}}',
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
