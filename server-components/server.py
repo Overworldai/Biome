@@ -33,7 +33,7 @@ from queue import Empty, Queue
 from typing import Optional, TypedDict
 
 from action_logger import ActionLogger
-from video_recorder import VideoRecorder
+from video_recorder import RecordingProperties, VideoRecorder
 from progress_stages import (
     Stage,
     STARTUP_BEGIN,
@@ -818,7 +818,7 @@ async def websocket_endpoint(websocket: WebSocket):
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
         seed_loaded=a new seed was loaded in this call."""
-        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, video_output_dir, action_logger, video_recorder, cap_inference_fps
+        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, video_output_dir, biome_version, action_logger, video_recorder, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
@@ -834,6 +834,8 @@ async def websocket_endpoint(websocket: WebSocket):
             video_recording_requested = msg["video_recording"]
         if "video_output_dir" in msg:
             video_output_dir = msg["video_output_dir"]
+        if "biome_version" in msg:
+            biome_version = msg["biome_version"]
         if "cap_inference_fps" in msg:
             cap_inference_fps = msg["cap_inference_fps"]
 
@@ -855,12 +857,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.info(f"[{client_host}] Action logging disabled")
 
             if video_recording_requested and video_recorder is None:
-                video_recorder = VideoRecorder(client_host, output_dir=video_output_dir)
-                video_recorder.new_segment(
-                    width=world_engine.seed_target_size[1],
-                    height=world_engine.seed_target_size[0],
-                    fps=int(world_engine.inference_fps),
-                )
+                _video_recorder_new_segment()
                 logger.info(f"[{client_host}] Video recording enabled")
             elif not video_recording_requested and video_recorder is not None:
                 video_recorder.end_segment()
@@ -898,6 +895,7 @@ async def websocket_endpoint(websocket: WebSocket):
     action_logging_requested = False
     video_recording_requested = False
     video_output_dir: str | None = None
+    biome_version: str | None = None
     cap_inference_fps = True
     action_logger: ActionLogger | None = None
     video_recorder: VideoRecorder | None = None
@@ -1017,15 +1015,27 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Ready for game loop")
 
         action_logger = ActionLogger(client_host) if action_logging_requested else None
-        video_recorder = VideoRecorder(client_host, output_dir=video_output_dir) if video_recording_requested else None
 
         def _video_recorder_new_segment() -> None:
-            if video_recorder is not None:
-                video_recorder.new_segment(
-                    width=world_engine.seed_target_size[1],
-                    height=world_engine.seed_target_size[0],
-                    fps=int(world_engine.inference_fps),
-                )
+            """Ensure the video recorder exists when recording is requested,
+            then start a new segment with the current session's metadata."""
+            nonlocal video_recorder
+            if not video_recording_requested:
+                return
+            if video_recorder is None:
+                video_recorder = VideoRecorder(client_host, output_dir=video_output_dir)
+            video_recorder.new_segment(
+                width=world_engine.seed_target_size[1],
+                height=world_engine.seed_target_size[0],
+                fps=int(world_engine.inference_fps),
+                properties=RecordingProperties(
+                    biome_version=biome_version or "unknown",
+                    model=getattr(world_engine, "model_uri", None),
+                    quant=getattr(world_engine, "quant", None) or "none",
+                    seed=current_seed_filename,
+                    scene_edit_enabled=scene_edit_requested,
+                ),
+            )
 
         def _video_recorder_end_segment() -> None:
             if video_recorder is not None:

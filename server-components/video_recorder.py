@@ -11,10 +11,13 @@ preset, yuv420p output, +faststart, no audio.
 """
 
 import datetime
+import json
 import subprocess
 import tempfile
 import threading
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -22,6 +25,35 @@ from PIL import Image, ImageDraw, ImageFont
 from server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
+
+
+@dataclass(frozen=True)
+class RecordingProperties:
+    """Semantic session state captured into the MP4's metadata so each
+    recording is self-describing. The field set is the wire format — callers
+    (server.py) construct this explicitly rather than passing a free-form
+    dict, so the schema is fixed and searchable."""
+
+    biome_version: str = "unknown"
+    model: Optional[str] = None
+    quant: str = "none"
+    seed: Optional[str] = None
+    scene_edit_enabled: bool = False
+
+
+def _properties_to_mp4_metadata(properties: RecordingProperties) -> dict[str, str]:
+    """Encode RecordingProperties into MP4 metadata atoms. The full property
+    record becomes a JSON `comment` (for programmatic extraction via ffprobe);
+    `title` and `artist` are set for nicer display in standard video players
+    and file managers. `biome_version` is lifted into `artist` when known so
+    the originating build is visible without inspecting the JSON."""
+    has_version = properties.biome_version and properties.biome_version != "unknown"
+    version_suffix = f" v{properties.biome_version}" if has_version else ""
+    return {
+        "title": "Biome Recording",
+        "artist": f"Biome{version_suffix}",
+        "comment": json.dumps(asdict(properties), separators=(",", ":")),
+    }
 
 # Scene-edit overlay — a "Edit: {prompt}" caption baked into the recorded video
 # after each successful scene edit. Total visible duration, with the last
@@ -65,8 +97,18 @@ class VideoRecorder:
     def is_active(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
 
-    def new_segment(self, *, width: int, height: int, fps: int) -> None:
-        """End any active segment and start a new video file."""
+    def new_segment(
+        self,
+        *,
+        width: int,
+        height: int,
+        fps: int,
+        properties: Optional[RecordingProperties] = None,
+    ) -> None:
+        """End any active segment and start a new video file. `properties`
+        captures the semantic session state (model, quant, seed, …) and is
+        encoded into MP4 metadata atoms internally so callers don't have to
+        know how MP4 structures its metadata."""
         self.end_segment()
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self._output_dir / f"{ts}.mp4"
@@ -75,25 +117,42 @@ class VideoRecorder:
         self._fps = fps
         self._overlay_text = None
         self._overlay_bitmap = None
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f", "rawvideo",
+            "-pix_fmt", "rgb24",
+            "-s", f"{width}x{height}",
+            "-r", str(fps),
+            "-i", "pipe:0",
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "20",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-an",
+        ]
+        # Output-scoped -metadata flags must come before the output path.
+        if properties:
+            for key, value in _properties_to_mp4_metadata(properties).items():
+                if value is None or value == "":
+                    continue
+                cmd.extend(["-metadata", f"{key}={value}"])
+        cmd.append(str(path))
+
         try:
             self._proc = subprocess.Popen(
-                [
-                    "ffmpeg", "-y",
-                    "-f", "rawvideo", "-pix_fmt", "rgb24",
-                    "-s", f"{width}x{height}", "-r", str(fps),
-                    "-i", "pipe:0",
-                    "-c:v", "libx264", "-preset", "medium",
-                    "-crf", "20", "-pix_fmt", "yuv420p",
-                    "-movflags", "+faststart", "-an",
-                    str(path),
-                ],
+                cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
             logger.info(f"[{self._client_host}] Video recording -> {path}")
         except FileNotFoundError:
-            logger.warning(f"[{self._client_host}] ffmpeg not found — video recording disabled")
+            logger.warning(
+                f"[{self._client_host}] ffmpeg not found — video recording disabled"
+            )
             self._proc = None
 
     def note_edit(self, prompt: str) -> None:
@@ -138,7 +197,9 @@ class VideoRecorder:
         x = pad - bbox[0]
         y = frame_h - pad - text_h - bbox[1] - margin
         # Drop-shadow for contrast over light scenes.
-        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200))
+        draw.text(
+            (x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200)
+        )
         draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
         # Crop with `margin` buffer on all sides of the ink + shadow so the
@@ -147,7 +208,9 @@ class VideoRecorder:
         region_y = max(0, y + bbox[1] - margin)
         region_w = min(frame_w - region_x, text_w + shadow_offset + margin * 2)
         region_h = min(frame_h - region_y, text_h + shadow_offset + margin * 2)
-        cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
+        cropped = canvas.crop(
+            (region_x, region_y, region_x + region_w, region_y + region_h)
+        )
         self._overlay_bitmap = np.array(cropped)
         self._overlay_offset = (region_x, region_y)
 
@@ -170,7 +233,9 @@ class VideoRecorder:
         fade_start = SCENE_EDIT_OVERLAY_S - SCENE_EDIT_OVERLAY_FADE_S
         alpha_mul = 1.0
         if elapsed_s > fade_start:
-            alpha_mul = max(0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S)
+            alpha_mul = max(
+                0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S
+            )
         if alpha_mul <= 0.0:
             return frame
 

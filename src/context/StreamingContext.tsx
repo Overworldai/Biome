@@ -238,6 +238,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
         : undefined
 
+      // App version — embedded into recording metadata so MP4s carry a
+      // self-describing record of what Biome build produced them. Best-effort;
+      // a fetch failure just omits the field from the metadata.
+      const diag = await invoke('get-runtime-diagnostics-meta').catch(() => null)
+      const biomeVersion = diag?.app_version
+
       const metrics = await sendInit({
         model: selectedModel,
         seed_image_data: imageData,
@@ -246,6 +252,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         action_logging: settings.debug_overlays?.action_logging ?? false,
         video_recording: recordingEnabled,
         video_output_dir: videoOutputDir,
+        biome_version: biomeVersion,
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
