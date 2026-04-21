@@ -131,11 +131,14 @@ export const findInDirection = (
   for (const el of candidates) {
     if (el === source) continue
     const r = el.getBoundingClientRect()
-    let pass = false
-    if (direction === 'up') pass = r.bottom <= src.top + 1
-    else if (direction === 'down') pass = r.top >= src.bottom - 1
-    else if (direction === 'left') pass = r.right <= src.left + 1
-    else pass = r.left >= src.right - 1
+    const pass =
+      direction === 'up'
+        ? r.bottom <= src.top + 1
+        : direction === 'down'
+          ? r.top >= src.bottom - 1
+          : direction === 'left'
+            ? r.right <= src.left + 1
+            : r.left >= src.right - 1
     if (pass) inDirection.push(el)
   }
   if (inDirection.length === 0) return null

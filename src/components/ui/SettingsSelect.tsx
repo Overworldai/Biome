@@ -122,6 +122,16 @@ const SettingsSelect = ({
     }
   }
 
+  const cycleOption = useCallback(
+    (delta: 1 | -1) => {
+      if (options.length === 0) return
+      const idx = options.findIndex((o) => o.value === value)
+      const next = options[(idx + delta + options.length) % options.length]
+      if (next) onChange(next.value)
+    },
+    [options, value, onChange]
+  )
+
   // Absolute-positioned directly below the trigger (our containerRef has `position: relative`).
   // Any ancestor with `overflow: auto/hidden` — in our case the scroll container — will clip
   // the dropdown for free, so there's no need to portal, measure, or manage scroll listeners.
@@ -296,16 +306,6 @@ const SettingsSelect = ({
     )
   }
 
-  const cycleOption = useCallback(
-    (delta: 1 | -1) => {
-      if (options.length === 0) return
-      const idx = options.findIndex((o) => o.value === value)
-      const next = options[(idx + delta + options.length) % options.length]
-      if (next) onChange(next.value)
-    },
-    [options, value, onChange]
-  )
-
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -327,7 +327,8 @@ const SettingsSelect = ({
         onClick={() => {
           if (disabled) return
           playClick()
-          isOpen ? setIsOpen(false) : openDropdown()
+          if (isOpen) setIsOpen(false)
+          else openDropdown()
         }}
         onKeyDown={(e) => {
           if (disabled) return
