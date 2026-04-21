@@ -26,7 +26,6 @@ import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
-import useSceneGlowColor from './hooks/useSceneGlowColor'
 import usePortalGlowSample from './hooks/usePortalGlowSample'
 import {
   PORTAL_SPARKS_DEBUG,
@@ -51,7 +50,7 @@ const LAUNCH_PRE_SHRINK_MS = 420
 const AppShell = () => {
   const { t } = useTranslation()
   const [isPortalHovered, setIsPortalHovered] = useState(false)
-  const { play, startLoop, stopLoop, fadeOutLoop } = useAudio()
+  const { play, startLoop, fadeOutLoop } = useAudio()
   const [isLaunchShrinking, setIsLaunchShrinking] = useState(false)
   const [isEnteringLoading, setIsEnteringLoading] = useState(false)
   const [isReturningToMenu, setIsReturningToMenu] = useState(false)
@@ -69,16 +68,8 @@ const AppShell = () => {
     toggleSettings,
     transitionTo
   } = usePortal()
-  const {
-    isStreaming,
-    isPaused,
-    isUIActive,
-    connectionState,
-    connectionLost,
-    statusStage,
-    prepareReturnToMainMenu,
-    sceneEditState
-  } = useStreaming()
+  const { isStreaming, isPaused, isUIActive, connectionState, statusStage, prepareReturnToMainMenu, sceneEditState } =
+    useStreaming()
   useGamepadNavigation(isUIActive)
   const {
     getVideoElement,

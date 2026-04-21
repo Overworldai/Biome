@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { invoke, listen } from '../bridge'
+import { useCallback } from 'react'
+import { invoke } from '../bridge'
 
 export const useWindow = () => {
   const setSize = useCallback(async (width: number, height: number) => {

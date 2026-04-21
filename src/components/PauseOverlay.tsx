@@ -18,8 +18,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
-    usePointerLockFeedback(isActive)
+  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
 
   const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
 
@@ -116,7 +115,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
-              showUnlockHint={showUnlockHint}
             />
           </motion.div>
         ) : (

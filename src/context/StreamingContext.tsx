@@ -76,7 +76,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     statusStage,
     error,
     frame,
-    hasRealFrame,
     frameId,
     genTime,
     latentGenMs,

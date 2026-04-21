@@ -20,7 +20,6 @@ interface PauseMainViewProps {
   requestPointerLock: () => void
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
-  showUnlockHint: boolean
 }
 
 const PauseMainView = ({
@@ -34,8 +33,7 @@ const PauseMainView = ({
   onNavigate,
   requestPointerLock,
   showPauseLockoutTimer,
-  pauseLockoutSecondsText,
-  showUnlockHint
+  pauseLockoutSecondsText
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
   const suffix = ALLOW_USER_SCENES ? t('app.pause.pinnedScenes.uploadSuffix') : t('app.pause.pinnedScenes.pinSuffix')

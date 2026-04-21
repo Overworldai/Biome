@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
-import { getEngineDir, getUvDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
+import { getEngineDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars, getBundledPythonIncludeDir } from '../lib/uv.js'
 import { getHiddenWindowOptions } from '../lib/platform.js'
 import {
@@ -24,7 +24,6 @@ function isLocalhost(hostname: string): boolean {
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
     const engineDir = getEngineDir()
-    const uvDir = getUvDir()
     const uvBinary = getUvBinaryPath()
     const uvEnv = getUvEnvVars()
     const hfHomeDir = getHfHomeDir()

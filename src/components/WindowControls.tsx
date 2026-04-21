@@ -39,7 +39,6 @@ const WindowControlButton = ({
 }
 
 const WindowControls = () => {
-  const { t } = useTranslation()
   const { minimize, toggleMaximize, close } = useWindow()
   const { isStreaming, isPaused } = useStreaming()
   const dragRegionStyle = {
