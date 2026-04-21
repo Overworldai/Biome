@@ -3,7 +3,7 @@ Optional per-session video recorder.
 
 Records server-generated frames to an MP4 file via FFmpeg subprocess piping.
 Enabled alongside action logging — same lifecycle, same segment boundaries.
-Output: rollout_{timestamp}.mp4 in the client-supplied output directory
+Output: video in the client-supplied output directory
 (falls back to the OS temp directory if unset).
 
 Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
@@ -69,7 +69,7 @@ class VideoRecorder:
         """End any active segment and start a new video file."""
         self.end_segment()
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = self._output_dir / f"rollout_{ts}.mp4"
+        path = self._output_dir / f"{ts}.mp4"
         self._path = path
         self._frame_count = 0
         self._fps = fps
