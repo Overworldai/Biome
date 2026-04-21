@@ -62,6 +62,7 @@ export const settingsSchema = z.object({
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
+  offline_mode: z.boolean().default(false),
   custom_models: z.array(z.string()).default([]),
   mouse_sensitivity: sensitivitySchema,
   gamepad_sensitivity: sensitivitySchema,

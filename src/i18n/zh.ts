@@ -257,6 +257,12 @@ const zh = {
             sceneEdit: '场景编辑'
           }
         },
+        offlineMode: {
+          title: '离线模式',
+          description: '想要在没有网络连接的情况下使用 Biome 吗？',
+          enabled: '离线工作',
+          enabledDescription: '你可以继续使用已经配置好的内容，但引擎重新安装和模型下载将会失败。'
+        },
         experimental: {
           title: '实验性功能',
           description: '想尝试一些可能会改变或消失的粗略想法吗？',

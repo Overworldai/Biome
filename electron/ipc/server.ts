@@ -16,6 +16,7 @@ import {
 } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
+import { getOfflineEnv } from './settings.js'
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -63,7 +64,8 @@ export function registerServerIpc(): void {
       HF_HUB_DOWNLOAD_TIMEOUT: '600',
       PYTHONUNBUFFERED: '1',
       PYTHONFAULTHANDLER: '1',
-      BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
+      BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log'),
+      ...getOfflineEnv()
     }
 
     // Point the in-venv C compiler at the uv-managed Python headers so Triton's

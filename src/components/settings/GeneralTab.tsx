@@ -176,6 +176,15 @@ const GeneralTab = ({ active, menuSceneEditEnabled, setMenuSceneEditEnabled }: G
         </SettingsSection>
       )}
 
+      <SettingsSection title="app.settings.offlineMode.title" description="app.settings.offlineMode.description">
+        <SettingsCheckbox
+          label="app.settings.offlineMode.enabled"
+          description="app.settings.offlineMode.enabledDescription"
+          checked={settings.offline_mode}
+          onChange={(v) => void saveSettings({ ...settings, offline_mode: v })}
+        />
+      </SettingsSection>
+
       <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
         <SettingsCheckbox
           label="app.settings.experimental.sceneEdit"

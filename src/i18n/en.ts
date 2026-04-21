@@ -265,6 +265,13 @@ const en = {
             sceneEdit: 'Scene Edit'
           }
         },
+        offlineMode: {
+          title: 'Offline Mode',
+          description: 'want to use Biome without an internet connection?',
+          enabled: 'Work Offline',
+          enabledDescription:
+            "You can keep using what's already set up, but engine reinstalls and model downloads will fail."
+        },
         experimental: {
           title: 'Experimental',
           description: 'want to try some rough ideas that might change or disappear?',

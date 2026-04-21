@@ -264,6 +264,13 @@ const ja = {
             sceneEdit: 'シーン編集'
           }
         },
+        offlineMode: {
+          title: 'オフラインモード',
+          description: 'インターネット接続なしでBiomeを使用しますか？',
+          enabled: 'オフラインで動作',
+          enabledDescription:
+            'すでにセットアップ済みのものはそのまま使用できますが、エンジンの再インストールやモデルのダウンロードは失敗します。'
+        },
         experimental: {
           title: '実験的機能',
           description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',

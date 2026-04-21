@@ -266,6 +266,13 @@ const goose = {
             sceneEdit: 'Scene Edit'
           }
         },
+        offlineMode: {
+          title: 'Pond Isolation',
+          description: 'want to use the flock away from the open waters of the internet?',
+          enabled: 'Nest Offline',
+          enabledDescription:
+            "Keep paddling with whatever's already in the nest, but engine reinstalls and model downloads will honk and fail."
+        },
         experimental: {
           title: 'Experimental',
           description: 'want to try some half-baked eggs that might hatch or roll away?',
