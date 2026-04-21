@@ -66,6 +66,7 @@ export const settingsSchema = z.object({
   mouse_sensitivity: sensitivitySchema,
   gamepad_sensitivity: sensitivitySchema,
   pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
+  unpinned_scene_order: z.array(z.string()).default([]),
   keybindings: z
     .object({
       moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),

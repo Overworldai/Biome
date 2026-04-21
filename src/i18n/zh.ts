@@ -20,7 +20,6 @@ const zh = {
         editUrl: '编辑 URL',
         revert: '恢复',
         reset: '重置',
-        scenes: '场景',
         resume: '继续',
         copyReport: '复制报告',
         saveReport: '保存报告',
@@ -275,12 +274,6 @@ const zh = {
       },
       pause: {
         title: '已暂停',
-        pinnedScenes: {
-          title: '已固定场景',
-          description: '这是你固定的场景。使用场景按钮可{{suffix}}更多场景。',
-          uploadSuffix: '查看、固定或上传',
-          pinSuffix: '查看或固定'
-        },
         unlockIn: '{{seconds}} 秒后解锁',
         scenes: {
           title: '场景',

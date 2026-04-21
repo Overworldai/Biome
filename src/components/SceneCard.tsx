@@ -1,3 +1,4 @@
+import type { DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/AudioContext'
@@ -80,6 +81,12 @@ interface SceneCardProps {
   onSelect: (filename: string) => void
   onTogglePin: (filename: string) => void
   onRemove?: (seed: SeedRecord) => void
+  draggable?: boolean
+  isBeingDragged?: boolean
+  onDragStart?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDragOver?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDrop?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDragEnd?: (event: DragEvent<HTMLButtonElement>) => void
 }
 
 const SceneCard = ({
@@ -90,7 +97,13 @@ const SceneCard = ({
   selectCooldown,
   onSelect,
   onTogglePin,
-  onRemove
+  onRemove,
+  draggable = false,
+  isBeingDragged = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd
 }: SceneCardProps) => {
   const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
@@ -104,9 +117,10 @@ const SceneCard = ({
   return (
     <button
       type="button"
-      className={`w-full aspect-video rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-card)] p-0 overflow-hidden group/scene relative ${
+      draggable={draggable}
+      className={`w-full aspect-video rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-card)] p-0 overflow-hidden group/scene relative transition-opacity duration-[120ms] ${
         isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'
-      }`}
+      } ${isBeingDragged ? 'opacity-40' : ''}`}
       title={seed.filename}
       aria-disabled={isUnsafe}
       onMouseEnter={() => !isUnsafe && playHover()}
@@ -115,8 +129,13 @@ const SceneCard = ({
         if (!selectCooldown) play('portal_swoosh')
         onSelect(seed.filename)
       }}
+      onDragStart={draggable && onDragStart ? (e) => onDragStart(seed.filename, e) : undefined}
+      onDragOver={onDragOver ? (e) => onDragOver(seed.filename, e) : undefined}
+      onDrop={onDrop ? (e) => onDrop(seed.filename, e) : undefined}
+      onDragEnd={onDragEnd}
     >
       <img
+        draggable={false}
         className={`w-full h-full object-cover block ${isUnsafe ? 'grayscale brightness-[0.45] contrast-[0.8]' : ''}`}
         src={thumbnailSrc || ''}
         alt={seed.filename}

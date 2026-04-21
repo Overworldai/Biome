@@ -20,7 +20,6 @@ const goose = {
         editUrl: 'Edit URL',
         revert: 'Revert',
         reset: 'Reset',
-        scenes: 'Ponds',
         resume: 'Resume',
         copyReport: 'Copy Report',
         saveReport: 'Save Report',
@@ -286,12 +285,6 @@ const goose = {
       },
       pause: {
         title: 'Paused',
-        pinnedScenes: {
-          title: 'Pinned Ponds',
-          description: 'Your pinned ponds. Use the Ponds button to view{{suffix}} more ponds.',
-          uploadSuffix: ', pin or upload',
-          pinSuffix: ' or pin'
-        },
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Ponds',

@@ -20,7 +20,6 @@ const ja = {
         editUrl: 'URLを編集',
         revert: '元に戻す',
         reset: 'リセット',
-        scenes: 'シーン',
         resume: '再開',
         copyReport: 'レポートをコピー',
         saveReport: 'レポートを保存',
@@ -284,12 +283,6 @@ const ja = {
       },
       pause: {
         title: '一時停止',
-        pinnedScenes: {
-          title: '固定シーン',
-          description: '固定したシーンです。シーンボタンを使って{{suffix}}さらにシーンを表示できます。',
-          uploadSuffix: '、固定、またはアップロードして',
-          pinSuffix: '固定して'
-        },
         unlockIn: '{{seconds}} 秒後に解除',
         scenes: {
           title: 'シーン',

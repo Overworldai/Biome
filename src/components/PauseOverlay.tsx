@@ -4,15 +4,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useStreaming } from '../context/StreamingContext'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
-import PauseScenesView from './PauseScenesView'
 import { PAUSE_VIEW, type PauseViewKey } from '../constants'
 import { viewFadeVariants } from '../transitions'
 import { useSeedManager } from '../hooks/useSeedManager'
-import { usePinnedScenes } from '../hooks/usePinnedScenes'
+import { useSceneOrder } from '../hooks/useSceneOrder'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { RpcError } from '../lib/wsRpc'
 import type { GenerateSceneResponse } from '../types/ws'
+import type { SeedRecord } from '../types/app'
 import { useSettings } from '../hooks/useSettings'
 import { FocusScope } from '../context/FocusScopeContext'
 
@@ -27,24 +27,33 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
     usePointerLockFeedback(isActive)
 
-  const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
-
   const {
     seeds,
+    seedsLoaded,
     thumbnails,
     uploadingImage,
     uploadError,
-    removeScene,
+    removeScene: removeSceneFile,
     handleImageUpload,
     handleImageDrop,
     handleClipboardUpload
   } = useSeedManager({
     wsRequest,
     isActive,
-    onPinnedSceneRemoved: removePinnedScene
+    onPinnedSceneRemoved: (filename: string) => removeScene(filename)
   })
 
-  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
+  const { pinnedSceneIds, unpinnedSceneIds, togglePinnedScene, removeScene, moveScene } = useSceneOrder({
+    seeds,
+    isLoaded: seedsLoaded
+  })
+
+  const { pinnedScenes, unpinnedScenes } = useMemo(() => {
+    const byFilename = new Map(seeds.map((s) => [s.filename, s]))
+    const resolve = (ids: string[]): SeedRecord[] =>
+      ids.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
+    return { pinnedScenes: resolve(pinnedSceneIds), unpinnedScenes: resolve(unpinnedSceneIds) }
+  }, [seeds, pinnedSceneIds, unpinnedSceneIds])
 
   const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
 
@@ -62,11 +71,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
       if (generateState === 'loading') return
-      if (view === PAUSE_VIEW.SCENES) {
-        setView(PAUSE_VIEW.MAIN)
-      } else {
-        requestPointerLock()
-      }
+      requestPointerLock()
     }
 
     window.addEventListener('keyup', handleKeyUp)
@@ -113,10 +118,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     <FocusScope
       active={isActive && view !== PAUSE_VIEW.SETTINGS}
       autoFocus
-      onCancel={() => {
-        if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
-        else requestPointerLock()
-      }}
+      onCancel={requestPointerLock}
       className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
     >
       <div className="overlay-darken absolute inset-0 pointer-events-none" />
@@ -132,7 +134,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           >
             <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} wide />
           </motion.div>
-        ) : view === PAUSE_VIEW.MAIN ? (
+        ) : (
           <motion.div
             key={PAUSE_VIEW.MAIN}
             className="absolute inset-0"
@@ -143,13 +145,20 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           >
             <PauseMainView
               pinnedScenes={pinnedScenes}
+              unpinnedScenes={unpinnedScenes}
               thumbnails={thumbnails}
               selectCooldown={selectCooldown}
+              uploadingImage={uploadingImage}
+              uploadError={uploadError}
               onSceneSelect={selectScene}
               onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
+              onRemoveScene={removeSceneFile}
+              onMoveScene={moveScene}
               onResetAndResume={handleResetAndResume}
-              onNavigate={(v) => setView(v === 'scenes' ? PAUSE_VIEW.SCENES : PAUSE_VIEW.SETTINGS)}
+              onNavigateSettings={() => setView(PAUSE_VIEW.SETTINGS)}
+              onImageUpload={handleImageUpload}
+              onImageDrop={handleImageDrop}
+              onClipboardUpload={pasteScene}
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
@@ -157,31 +166,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               generateState={generateState}
               generateError={generateError}
               onGenerateScene={handleGenerateScene}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key={PAUSE_VIEW.SCENES}
-            className="absolute inset-0"
-            variants={viewFadeVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-          >
-            <PauseScenesView
-              seeds={seeds}
-              thumbnails={thumbnails}
-              pinnedSceneIds={pinnedSceneIds}
-              selectCooldown={selectCooldown}
-              uploadingImage={uploadingImage}
-              uploadError={uploadError}
-              onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
-              onImageUpload={handleImageUpload}
-              onImageDrop={handleImageDrop}
-              onClipboardUpload={pasteScene}
-              onBack={() => setView(PAUSE_VIEW.MAIN)}
             />
           </motion.div>
         )}

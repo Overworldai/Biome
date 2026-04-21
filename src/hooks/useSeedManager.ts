@@ -72,6 +72,7 @@ type UseSeedManagerOptions = {
 
 export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: UseSeedManagerOptions) {
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
+  const [seedsLoaded, setSeedsLoaded] = useState(false)
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [uploadingImage, setUploadingImage] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -117,6 +118,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
 
     console.log(`[PauseOverlay] Loaded ${seedRecords.length} seeds`)
     setSeeds(seedRecords)
+    setSeedsLoaded(true)
 
     if (!isMountedRef.current) return
     setUploadError(null)
@@ -276,6 +278,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
 
   return {
     seeds,
+    seedsLoaded,
     thumbnails,
     uploadingImage,
     uploadError,

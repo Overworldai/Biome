@@ -20,7 +20,6 @@ const he = {
         editUrl: 'URL ערוך כתובת',
         revert: 'שחזר',
         reset: 'איפוס',
-        scenes: 'סצנות',
         resume: 'המשך',
         copyReport: 'העתק דוח',
         saveReport: 'שמור דוח',
@@ -280,12 +279,6 @@ const he = {
       },
       pause: {
         title: 'מושהה',
-        pinnedScenes: {
-          title: 'סצנות מוצמדות',
-          description: 'הסצנות המוצמדות שלך. השתמש בכפתור סצנות כדי לצפות בעוד סצנות{{suffix}}.',
-          uploadSuffix: ', להצמיד או להעלות',
-          pinSuffix: ' או להצמיד'
-        },
         unlockIn: 'ייפתח בעוד {{seconds}}ש׳',
         scenes: {
           title: 'סצנות',

@@ -20,7 +20,6 @@ const en = {
         editUrl: 'Edit URL',
         revert: 'Revert',
         reset: 'Reset',
-        scenes: 'Scenes',
         resume: 'Resume',
         copyReport: 'Copy Report',
         saveReport: 'Save Report',
@@ -285,12 +284,6 @@ const en = {
       },
       pause: {
         title: 'Paused',
-        pinnedScenes: {
-          title: 'Pinned Scenes',
-          description: 'Your pinned scenes. Use the Scenes button to view{{suffix}} more scenes.',
-          uploadSuffix: ', pin or upload',
-          pinSuffix: ' or pin'
-        },
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Scenes',

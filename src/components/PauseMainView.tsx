@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
 import SocialCtaRow from './SocialCtaRow'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
+import RawSettingsButton from './ui/RawSettingsButton'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
@@ -11,13 +12,20 @@ import { useSettings } from '../hooks/useSettings'
 
 interface PauseMainViewProps {
   pinnedScenes: SeedRecord[]
+  unpinnedScenes: SeedRecord[]
   thumbnails: Record<string, string>
   selectCooldown: boolean
+  uploadingImage: boolean
+  uploadError: string | null
   onSceneSelect: (filename: string) => void
   onTogglePin: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
+  onMoveScene: (filename: string, targetRegion: 'pinned' | 'unpinned', targetIdx: number) => void
   onResetAndResume: () => void
-  onNavigate: (view: 'scenes' | 'settings') => void
+  onNavigateSettings: () => void
+  onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
+  onImageDrop: (files: File[]) => void
+  onClipboardUpload: () => void
   requestPointerLock: () => void
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
@@ -29,17 +37,24 @@ interface PauseMainViewProps {
 
 const PauseMainView = ({
   pinnedScenes,
+  unpinnedScenes,
   thumbnails,
   selectCooldown,
+  uploadingImage,
+  uploadError,
   onSceneSelect,
   onTogglePin,
   onRemoveScene,
+  onMoveScene,
   onResetAndResume,
-  onNavigate,
+  onNavigateSettings,
+  onImageUpload,
+  onImageDrop,
+  onClipboardUpload,
   requestPointerLock,
   showPauseLockoutTimer,
   pauseLockoutSecondsText,
-  showUnlockHint,
+  showUnlockHint: _showUnlockHint,
   generateState,
   generateError,
   onGenerateScene
@@ -48,53 +63,171 @@ const PauseMainView = ({
   const { settings } = useSettings()
   const sceneEditEnabled = settings.experimental?.scene_edit_enabled ?? false
   const isGenerating = generateState === 'loading'
-  const suffix = ALLOW_USER_SCENES ? t('app.pause.pinnedScenes.uploadSuffix') : t('app.pause.pinnedScenes.pinSuffix')
-  const pinnedSceneIds = useMemo(() => pinnedScenes.map((s) => s.filename), [pinnedScenes])
+  const totalSceneCount = pinnedScenes.length + unpinnedScenes.length
   const [promptText, setPromptText] = useState('')
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dragDepthRef = useRef(0)
+  const [isDragActive, setIsDragActive] = useState(false)
+
+  const hasImagePayload = (event: DragEvent<HTMLDivElement>): boolean => {
+    const dt = event.dataTransfer
+    if (!dt) return false
+
+    // During dragenter/dragover, Chromium/Electron may expose only "Files"
+    // in types and leave files[] empty until drop.
+    const types = Array.from(dt.types || [])
+    if (types.includes('Files')) return true
+
+    if (dt.items && dt.items.length > 0) {
+      return Array.from(dt.items).some((item) => item.kind === 'file')
+    }
+
+    if (dt.files && dt.files.length > 0) {
+      return Array.from(dt.files).some((file) => file.type.startsWith('image/'))
+    }
+
+    return false
+  }
+
+  const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasImagePayload(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current += 1
+    setIsDragActive(true)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasImagePayload(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!isDragActive) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) {
+      setIsDragActive(false)
+    }
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current = 0
+    setIsDragActive(false)
+    const files = Array.from(event.dataTransfer.files || [])
+    if (files.length === 0) return
+    onImageDrop(files)
+  }
+
   return (
-    <div className="absolute inset-0 p-[3.8%_4%]">
+    <div
+      className="absolute inset-0 p-[3.8%_4%]"
+      {...(ALLOW_USER_SCENES
+        ? {
+            onDragEnter: handleDragEnter,
+            onDragOver: handleDragOver,
+            onDragLeave: handleDragLeave,
+            onDrop: handleDrop
+          }
+        : {})}
+    >
       <SocialCtaRow />
 
+      {ALLOW_USER_SCENES && isDragActive && (
+        <div
+          className="absolute inset-[2.4cqh] z-[20] border border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)] pointer-events-none grid place-items-center"
+          aria-hidden="true"
+        >
+          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
+            {t('app.pause.scenes.dropImagesToAddScenes')}
+          </span>
+        </div>
+      )}
+
       <section
-        className={`absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
+        className={`absolute top-[var(--edge-top-xl)] bottom-[14cqh] left-[var(--edge-left)] w-[77%] flex flex-col ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
       >
-        <h2 className={VIEW_HEADING}>{t('app.pause.pinnedScenes.title')}</h2>
-        <p className={VIEW_DESCRIPTION}>{t('app.pause.pinnedScenes.description', { suffix })}</p>
+        <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
+        <p className={VIEW_DESCRIPTION}>
+          {t('app.pause.scenes.description', { count: totalSceneCount })}
+          {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
+        </p>
+        {uploadError && (
+          <p className="m-0 mt-[0.6cqh] font-serif text-caption text-[var(--color-error-bright)]">{uploadError}</p>
+        )}
+        {ALLOW_USER_SCENES && (
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
+        )}
         <SceneGrid
-          seeds={pinnedScenes}
+          pinnedSeeds={pinnedScenes}
+          unpinnedSeeds={unpinnedScenes}
           thumbnails={thumbnails}
-          pinnedSceneIds={pinnedSceneIds}
-          pinVariant="pinned-only"
           selectCooldown={selectCooldown}
           onSelect={onSceneSelect}
           onTogglePin={onTogglePin}
           onRemove={onRemoveScene}
-          emptyState={
-            <div
-              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
-              aria-hidden="true"
-            >
-              <svg
-                className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
+          onMoveScene={onMoveScene}
+          before={
+            ALLOW_USER_SCENES && (
+              <div
+                className={`relative w-full aspect-video border border-[rgba(245,249,255,0.84)] bg-[rgba(248,248,245,0.14)] p-0 overflow-hidden grid grid-cols-2 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
               >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.4" />
-                <polyline points="21,15 16,10 5,21" />
-              </svg>
-            </div>
+                <span
+                  className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-[rgba(245,249,255,0.4)] pointer-events-none z-[1]"
+                  aria-hidden="true"
+                />
+                <RawSettingsButton
+                  variant="secondary"
+                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  onClick={() => void onClipboardUpload()}
+                  title={t('app.buttons.pasteImageFromClipboard')}
+                >
+                  <svg
+                    className="w-[2.67cqh] h-[2.67cqh]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <rect x="9" y="3" width="6" height="4" rx="1" />
+                    <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+                    <rect x="12" y="10" width="8" height="10" rx="1" />
+                  </svg>
+                </RawSettingsButton>
+                <RawSettingsButton
+                  variant="secondary"
+                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  onClick={() => fileInputRef.current?.click()}
+                  title={t('app.buttons.browseForImageFile')}
+                >
+                  <svg
+                    className="w-[2.67cqh] h-[2.67cqh]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+                    <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
+                    <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </RawSettingsButton>
+              </div>
+            )
           }
         />
         {sceneEditEnabled && (
           <>
             <div className="flex items-center gap-[1.5cqh] mt-[2cqh]">
-              <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
+              <div className="flex-1 h-px bg-border-subtle" />
               <span className="font-serif text-caption text-text-muted">{t('app.pause.generateScene.divider')}</span>
-              <div className="flex-1 h-px bg-[var(--color-border-subtle)]" />
+              <div className="flex-1 h-px bg-border-subtle" />
             </div>
             <div className="mt-[1.5cqh] relative">
               {generateState === 'error' && generateError && (
@@ -152,16 +285,9 @@ const PauseMainView = ({
         />
         <MenuButton
           variant="secondary"
-          label="app.buttons.scenes"
-          className="w-full px-0"
-          onClick={() => onNavigate('scenes')}
-          disabled={isGenerating}
-        />
-        <MenuButton
-          variant="secondary"
           label="app.buttons.settings"
           className="w-full px-0"
-          onClick={() => onNavigate('settings')}
+          onClick={onNavigateSettings}
           disabled={isGenerating}
         />
         <MenuButton
