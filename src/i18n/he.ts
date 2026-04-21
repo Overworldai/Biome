@@ -269,6 +269,8 @@ const he = {
           actionLogging: 'רישום פעולות',
           actionLoggingDescription:
             'הקלט את כל הקלטים לקובץ בשרת לצורך ניגון חוזר. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
+          videoRecording: 'הקלטת וידאו',
+          videoRecordingDescription: 'הקלט פריימים מהשרת לקובץ וידאו MP4. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
           diagnostics: 'דיאגנוסטיקה',
           diagnosticsDescription: 'העתק מידע דיאגנוסטי ללוח לצורך דיווחי באגים.',
           copiedToClipboard: 'הועתק ללוח',
