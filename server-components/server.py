@@ -414,7 +414,13 @@ async def get_model_info(model_id: str):
         info = hf_model_info(model_id, files_metadata=True)
         size_bytes = None
         if hasattr(info, "siblings") and info.siblings:
-            st_files = [s for s in info.siblings if s.rfilename.endswith(".safetensors") and s.size is not None]
+            excluded_basenames = {"diffusion_pytorch_model.safetensors"}
+            st_files = [
+                s for s in info.siblings
+                if s.rfilename.endswith(".safetensors")
+                and s.size is not None
+                and os.path.basename(s.rfilename) not in excluded_basenames
+            ]
             seen_blobs = set()
             for s in st_files:
                 blob_key = getattr(s, "blob_id", None) or s.rfilename
