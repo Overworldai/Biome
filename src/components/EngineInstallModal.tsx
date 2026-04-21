@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { useStreaming } from '../context/streamingContextValue'
@@ -79,9 +80,9 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="absolute inset-0 z-12 flex items-center justify-center bg-overlay-scrim backdrop-blur-sm"
+      className="fixed inset-0 z-10000 flex items-center justify-center bg-overlay-scrim backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
@@ -137,7 +138,8 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
           }
         />
       </FocusScope>
-    </div>
+    </div>,
+    document.body
   )
 }
 

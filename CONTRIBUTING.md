@@ -294,7 +294,7 @@ Other components use prop-level `raw` prefixes for escape hatches:
 | `SettingsSelect` option | `label: TranslationKey`                                                 | `rawLabel: string`                    |
 | `SettingsSelect`        | `customLabel`, `deleteLabel`: `TranslationKey`                          | `rawCustomPrefix: string`             |
 | `ConfirmModal`          | `title`, `description`, `confirmLabel`, `cancelLabel`: `TranslationKey` | `descriptionParams` for interpolation |
-| `Modal`, `OverlayModal` | `title: TranslationKey`                                                 | —                                     |
+| `Modal`                 | `title: TranslationKey`                                                 | —                                     |
 | `SettingsCheckbox`      | `label: TranslationKey`                                                 | —                                     |
 | `SettingsSlider`        | `label: TranslationKey`                                                 | —                                     |
 | `SettingsTextInput`     | `placeholder: TranslationKey`                                           | —                                     |
