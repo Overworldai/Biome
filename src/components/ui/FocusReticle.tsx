@@ -31,6 +31,15 @@ const resolveRadius = (outer: HTMLElement, visual: HTMLElement): string => {
   return '0'
 }
 
+// Text-entry elements carry their own caret and focus styling; the reticle
+// would sit on top and add visual noise without helping the user navigate.
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number', ''])
+const isTextEntry = (el: HTMLElement): boolean => {
+  if (el instanceof HTMLTextAreaElement) return true
+  if (el instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has(el.type)
+  return el.isContentEditable
+}
+
 const extractRotation = (transform: string): number => {
   if (!transform || transform === 'none') return 0
   const m = transform.match(/matrix\(([^)]+)\)/)
@@ -69,7 +78,7 @@ const FocusReticle = () => {
   useEffect(() => {
     const onFocusIn = () => {
       const el = document.activeElement
-      if (!(el instanceof HTMLElement) || el === document.body) {
+      if (!(el instanceof HTMLElement) || el === document.body || isTextEntry(el)) {
         setTarget(null)
         return
       }
@@ -79,7 +88,7 @@ const FocusReticle = () => {
       // Delay — focus may be moving to another element in the same tick.
       queueMicrotask(() => {
         const el = document.activeElement
-        if (!(el instanceof HTMLElement) || el === document.body) {
+        if (!(el instanceof HTMLElement) || el === document.body || isTextEntry(el)) {
           setTarget(null)
           return
         }
