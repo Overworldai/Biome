@@ -205,6 +205,13 @@ export type AppUpdateInfo = {
   update_available: boolean
 }
 
+export type RecordingEntry = {
+  filename: string
+  path: string
+  size_bytes: number
+  mtime_ms: number
+}
+
 /**
  * Maps each IPC command channel to its argument tuple and return type.
  * This is the single source of truth for all invoke() calls.
@@ -269,6 +276,15 @@ export type IpcCommandMap = {
 
   // Updates
   'check-for-app-update': { args: []; return: AppUpdateInfo }
+
+  // Recordings
+  'get-default-video-dir': { args: []; return: string }
+  'resolve-video-dir': { args: [configured: string]; return: string }
+  'pick-video-dir': { args: [currentValue: string]; return: string | null }
+  'list-recordings': { args: [configured: string]; return: RecordingEntry[] }
+  'delete-recording': { args: [filePath: string]; return: void }
+  'open-recording-externally': { args: [filePath: string]; return: void }
+  'open-recordings-folder': { args: [configured: string]; return: void }
 }
 
 /**

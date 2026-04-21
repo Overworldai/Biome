@@ -25,7 +25,6 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
   const [menuInputOverlay, setMenuInputOverlay] = useState(settings.debug_overlays.input)
   const [menuFrameTimeline, setMenuFrameTimeline] = useState(settings.debug_overlays.frame_timeline)
   const [menuActionLogging, setMenuActionLogging] = useState(settings.debug_overlays.action_logging)
-  const [menuVideoRecording, setMenuVideoRecording] = useState(settings.debug_overlays.video_recording)
   const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null)
 
   useImperativeHandle(
@@ -36,12 +35,11 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
           performance_stats: menuPerformanceStats,
           input: menuInputOverlay,
           frame_timeline: menuFrameTimeline,
-          action_logging: menuActionLogging,
-          video_recording: menuVideoRecording
+          action_logging: menuActionLogging
         }
       })
     }),
-    [menuPerformanceStats, menuInputOverlay, menuFrameTimeline, menuActionLogging, menuVideoRecording]
+    [menuPerformanceStats, menuInputOverlay, menuFrameTimeline, menuActionLogging]
   )
 
   const handleCopyDiagnostics = useCallback(async () => {
@@ -117,12 +115,6 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
             description="app.settings.debugMetrics.actionLoggingDescription"
             checked={menuActionLogging}
             onChange={setMenuActionLogging}
-          />
-          <SettingsCheckbox
-            label="app.settings.debugMetrics.videoRecording"
-            description="app.settings.debugMetrics.videoRecordingDescription"
-            checked={menuVideoRecording}
-            onChange={setMenuVideoRecording}
           />
         </div>
       </SettingsSection>

@@ -231,13 +231,21 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         ? `${selectedModel}+scene_edit+${quant}`
         : `${selectedModel}+${quant}`
 
+      // Recording is standalone-only: in server mode the server owns its own
+      // output directory, so we never send enable=true or a directory path.
+      const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+      const videoOutputDir = recordingEnabled
+        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
+        : undefined
+
       const metrics = await sendInit({
         model: selectedModel,
         seed_image_data: imageData,
         seed_filename: seedFilename,
         scene_edit: settings.experimental?.scene_edit_enabled ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
-        video_recording: settings.debug_overlays?.video_recording ?? false,
+        video_recording: recordingEnabled,
+        video_output_dir: videoOutputDir,
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
@@ -249,12 +257,14 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     state,
     states.LOADING,
     isConnected,
+    isStandaloneMode,
     settings?.engine_model,
     settings?.engine_quant,
     settings?.cap_inference_fps,
     settings.experimental?.scene_edit_enabled,
     settings.debug_overlays?.action_logging,
-    settings.debug_overlays?.video_recording,
+    settings.recording?.enabled,
+    settings.recording?.output_dir,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -270,15 +280,25 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   // Live-toggle action logging / video recording during streaming without a full re-bootstrap
   useEffect(() => {
     if (!isStreaming || !isConnected) return
-    sendInit({
-      action_logging: settings.debug_overlays?.action_logging ?? false,
-      video_recording: settings.debug_overlays?.video_recording ?? false
-    }).catch((err) => log.error('Failed to toggle action logging / video recording:', err))
+    const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+    const run = async () => {
+      const videoOutputDir = recordingEnabled
+        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
+        : undefined
+      await sendInit({
+        action_logging: settings.debug_overlays?.action_logging ?? false,
+        video_recording: recordingEnabled,
+        video_output_dir: videoOutputDir
+      })
+    }
+    run().catch((err) => log.error('Failed to toggle action logging / video recording:', err))
   }, [
     isStreaming,
     isConnected,
+    isStandaloneMode,
     settings.debug_overlays?.action_logging,
-    settings.debug_overlays?.video_recording,
+    settings.recording?.enabled,
+    settings.recording?.output_dir,
     sendInit
   ])
 

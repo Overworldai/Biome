@@ -818,7 +818,7 @@ async def websocket_endpoint(websocket: WebSocket):
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
         seed_loaded=a new seed was loaded in this call."""
-        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, action_logger, video_recorder, cap_inference_fps
+        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, video_output_dir, action_logger, video_recorder, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
@@ -832,6 +832,8 @@ async def websocket_endpoint(websocket: WebSocket):
             action_logging_requested = msg["action_logging"]
         if "video_recording" in msg:
             video_recording_requested = msg["video_recording"]
+        if "video_output_dir" in msg:
+            video_output_dir = msg["video_output_dir"]
         if "cap_inference_fps" in msg:
             cap_inference_fps = msg["cap_inference_fps"]
 
@@ -853,7 +855,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.info(f"[{client_host}] Action logging disabled")
 
             if video_recording_requested and video_recorder is None:
-                video_recorder = VideoRecorder(client_host)
+                video_recorder = VideoRecorder(client_host, output_dir=video_output_dir)
                 video_recorder.new_segment(
                     width=world_engine.seed_target_size[1],
                     height=world_engine.seed_target_size[0],
@@ -895,6 +897,7 @@ async def websocket_endpoint(websocket: WebSocket):
     scene_edit_requested = False
     action_logging_requested = False
     video_recording_requested = False
+    video_output_dir: str | None = None
     cap_inference_fps = True
     action_logger: ActionLogger | None = None
     video_recorder: VideoRecorder | None = None
@@ -1014,7 +1017,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Ready for game loop")
 
         action_logger = ActionLogger(client_host) if action_logging_requested else None
-        video_recorder = VideoRecorder(client_host) if video_recording_requested else None
+        video_recorder = VideoRecorder(client_host, output_dir=video_output_dir) if video_recording_requested else None
 
         def _video_recorder_new_segment() -> None:
             if video_recorder is not None:

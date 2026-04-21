@@ -75,6 +75,15 @@ const he = {
           description:
             '<bold>{{modelId}}</bold> מורד למכשיר זה. מחיקתו תפנה מקום בדיסק, אך יהיה צורך להוריד את המודל מחדש לפני שניתן יהיה להשתמש בו שוב.'
         },
+        recordings: {
+          title: 'הקלטות',
+          empty: 'עדיין אין הקלטות. הפעל הקלטה כדי לשמור את הסשן הבא.',
+          openFolder: 'פתח תיקייה',
+          refresh: 'רענן',
+          confirmDeleteTitle: 'למחוק את ההקלטה?',
+          confirmDeleteDescription: 'למחוק את <bold>{{filename}}</bold>? לא ניתן לבטל פעולה זו.',
+          openExternally: 'פתח'
+        },
         serverUnreachable: {
           title: 'אי אפשר להגיע לשרת',
           withUrl: 'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.',
@@ -257,6 +266,16 @@ const he = {
           sceneEditDescription:
             'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
         },
+        recording: {
+          title: 'הקלטת וידאו',
+          description: 'רוצה להקליט את המשחק שלך?',
+          enabled: 'הקלט את המשחק',
+          enabledDescription: 'שומר סרטונים חלקים בקצב הפריימים המלא של המודל.',
+          outputFolder: 'תיקיית פלט',
+          outputFolderHint: 'השאר ריק כדי להשתמש בברירת המחדל של המערכת.',
+          open: 'פתח',
+          manage: 'נהל הקלטות...'
+        },
         debugMetrics: {
           title: 'מדדים',
           description: 'רוצה לראות מה קורה מאחורי הקלעים?',
@@ -269,8 +288,6 @@ const he = {
           actionLogging: 'רישום פעולות',
           actionLoggingDescription:
             'הקלט את כל הקלטים לקובץ בשרת לצורך ניגון חוזר. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
-          videoRecording: 'הקלטת וידאו',
-          videoRecordingDescription: 'הקלט פריימים מהשרת לקובץ וידאו MP4. נשמר בתיקיית ה-temp של מערכת ההפעלה.',
           diagnostics: 'דיאגנוסטיקה',
           diagnosticsDescription: 'העתק מידע דיאגנוסטי ללוח לצורך דיווחי באגים.',
           copiedToClipboard: 'הועתק ללוח',

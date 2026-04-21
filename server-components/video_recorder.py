@@ -3,7 +3,8 @@ Optional per-session video recorder.
 
 Records server-generated frames to an MP4 file via FFmpeg subprocess piping.
 Enabled alongside action logging — same lifecycle, same segment boundaries.
-Output: rollout_{timestamp}.mp4 in the OS temp directory.
+Output: rollout_{timestamp}.mp4 in the client-supplied output directory
+(falls back to the OS temp directory if unset).
 
 Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
 preset, yuv420p output, +faststart, no audio.
@@ -17,14 +18,23 @@ from pathlib import Path
 
 from server_logging import logger
 
-VIDEO_DIR = Path(tempfile.gettempdir())
+DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
 
 
 class VideoRecorder:
     """Pipes raw RGB frames to an FFmpeg subprocess, one file per segment."""
 
-    def __init__(self, client_host: str) -> None:
+    def __init__(self, client_host: str, output_dir: str | None = None) -> None:
         self._client_host = client_host
+        self._output_dir = Path(output_dir) if output_dir else DEFAULT_VIDEO_DIR
+        try:
+            self._output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            logger.warning(
+                f"[{client_host}] Could not create recordings dir {self._output_dir}: {e} "
+                f"— falling back to {DEFAULT_VIDEO_DIR}"
+            )
+            self._output_dir = DEFAULT_VIDEO_DIR
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
         self._path: Path | None = None
@@ -39,7 +49,7 @@ class VideoRecorder:
         """End any active segment and start a new video file."""
         self.end_segment()
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = VIDEO_DIR / f"rollout_{ts}.mp4"
+        path = self._output_dir / f"rollout_{ts}.mp4"
         self._path = path
         self._frame_count = 0
         self._fps = fps

@@ -78,6 +78,15 @@ const goose = {
           description:
             '<bold>{{modelId}}</bold> is nesting on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
+        recordings: {
+          title: 'Pond Footage',
+          empty: 'No footage in the nest yet. Turn on recording to capture your next flight.',
+          openFolder: 'Open nest',
+          refresh: 'Refresh',
+          confirmDeleteTitle: 'Cast this footage out?',
+          confirmDeleteDescription: 'Delete <bold>{{filename}}</bold>? Once gone, it cannot be un-honked.',
+          openExternally: 'Open'
+        },
         serverUnreachable: {
           title: 'Server Unreachable',
           withUrl:
@@ -263,6 +272,16 @@ const goose = {
           sceneEditDescription:
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
+        recording: {
+          title: 'Pond Footage',
+          description: 'want to record your flight?',
+          enabled: 'Record Gameplay',
+          enabledDescription: "Saves smooth filmstrips at the model's full framerate.",
+          outputFolder: 'Nesting folder',
+          outputFolderHint: 'Leave blank to use the usual migration route.',
+          open: 'Open',
+          manage: 'Manage footage...'
+        },
         debugMetrics: {
           title: 'Metrics',
           description: 'want to see what the goose is thinking?',
@@ -275,8 +294,6 @@ const goose = {
           actionLogging: 'Action Logging',
           actionLoggingDescription:
             "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
-          videoRecording: 'Pond footage',
-          videoRecordingDescription: "Record pond frames to an MP4 filmstrip. Honked to the OS's temp nest.",
           diagnostics: 'Diagnostics',
           diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
           copiedToClipboard: 'Copied to clipboard',

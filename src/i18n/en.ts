@@ -77,6 +77,15 @@ const en = {
           description:
             '<bold>{{modelId}}</bold> is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
         },
+        recordings: {
+          title: 'Recordings',
+          empty: "You haven't recorded anything yet. Turn on recording to capture your next session.",
+          openFolder: 'Open folder',
+          refresh: 'Refresh',
+          confirmDeleteTitle: 'Delete recording?',
+          confirmDeleteDescription: 'Delete <bold>{{filename}}</bold>? This cannot be undone.',
+          openExternally: 'Open'
+        },
         serverUnreachable: {
           title: 'Server Unreachable',
           withUrl:
@@ -262,6 +271,16 @@ const en = {
           sceneEditDescription:
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
         },
+        recording: {
+          title: 'Video Recording',
+          description: 'want to record your gameplay?',
+          enabled: 'Record Gameplay',
+          enabledDescription: "Saves smooth videos at the model's full framerate.",
+          outputFolder: 'Output folder',
+          outputFolderHint: 'Leave blank to use the system default.',
+          open: 'Open',
+          manage: 'Manage recordings...'
+        },
         debugMetrics: {
           title: 'Metrics',
           description: "want to see what's happening under the hood?",
@@ -274,8 +293,6 @@ const en = {
           actionLogging: 'Action Logging',
           actionLoggingDescription:
             "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
-          videoRecording: 'Video Recording',
-          videoRecordingDescription: "Record server frames to an MP4 video file. Written to the OS's temp directory.",
           diagnostics: 'Diagnostics',
           diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
           copiedToClipboard: 'Copied to clipboard',

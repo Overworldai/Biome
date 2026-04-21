@@ -23,6 +23,9 @@ export type InitMessage = {
   scene_edit?: boolean
   action_logging?: boolean
   video_recording?: boolean
+  /** Absolute path to write recordings into. Only honoured in standalone mode;
+   *  in server mode the server decides where to write. */
+  video_output_dir?: string
   quant?: string | null
   cap_inference_fps?: boolean
 }

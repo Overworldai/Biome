@@ -7,6 +7,7 @@ import { registerServerIpc } from './server.js'
 import { registerWindowIpc } from './window.js'
 import { registerDebugIpc } from './debug.js'
 import { registerUpdateIpc } from './update.js'
+import { registerRecordingsIpc } from './recordings.js'
 
 export function registerAllIpc(): void {
   registerSettingsIpc()
@@ -18,4 +19,5 @@ export function registerAllIpc(): void {
   registerWindowIpc()
   registerDebugIpc()
   registerUpdateIpc()
+  registerRecordingsIpc()
 }

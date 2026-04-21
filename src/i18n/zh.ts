@@ -74,6 +74,15 @@ const zh = {
           title: '删除模型？',
           description: '<bold>{{modelId}}</bold> 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
         },
+        recordings: {
+          title: '录制',
+          empty: '还没有录制。开启录制后，下一局游戏将被保存。',
+          openFolder: '打开文件夹',
+          refresh: '刷新',
+          confirmDeleteTitle: '删除录制？',
+          confirmDeleteDescription: '删除 <bold>{{filename}}</bold>？此操作无法撤销。',
+          openExternally: '打开'
+        },
         serverUnreachable: {
           title: '无法连接到服务器',
           withUrl: '无法连接到 {{url}}。服务器可能已停止、URL 有误，或被防火墙拦截。',
@@ -253,6 +262,16 @@ const zh = {
           sceneEdit: '场景编辑',
           sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
         },
+        recording: {
+          title: '视频录制',
+          description: '想录制你的游戏过程吗？',
+          enabled: '录制游戏',
+          enabledDescription: '以模型完整帧率保存流畅视频。',
+          outputFolder: '输出文件夹',
+          outputFolderHint: '留空则使用系统默认位置。',
+          open: '打开',
+          manage: '管理录制...'
+        },
         debugMetrics: {
           title: '指标',
           description: '想看看底层正在发生什么吗？',
@@ -264,8 +283,6 @@ const zh = {
           frameTimelineDescription: '显示帧插值管线及每个槽位的计时。',
           actionLogging: '操作日志',
           actionLoggingDescription: '将所有输入记录到服务器上的文件以供回放。写入操作系统的临时目录。',
-          videoRecording: '视频录制',
-          videoRecordingDescription: '将服务器帧录制为MP4视频文件。写入操作系统的临时目录。',
           diagnostics: '诊断信息',
           diagnosticsDescription: '将诊断信息复制到剪贴板，用于错误报告。',
           copiedToClipboard: '已复制到剪贴板',

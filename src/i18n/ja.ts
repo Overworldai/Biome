@@ -77,6 +77,15 @@ const ja = {
           description:
             '<bold>{{modelId}}</bold> はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
         },
+        recordings: {
+          title: '録画',
+          empty: 'まだ録画がありません。録画を有効にすると、次のセッションから保存されます。',
+          openFolder: 'フォルダを開く',
+          refresh: '更新',
+          confirmDeleteTitle: '録画を削除しますか？',
+          confirmDeleteDescription: '<bold>{{filename}}</bold> を削除しますか？この操作は取り消せません。',
+          openExternally: '開く'
+        },
         serverUnreachable: {
           title: 'サーバーに接続できません',
           withUrl:
@@ -261,6 +270,16 @@ const ja = {
           sceneEditDescription:
             'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
         },
+        recording: {
+          title: '動画録画',
+          description: 'プレイ内容を録画しますか？',
+          enabled: 'プレイを録画',
+          enabledDescription: 'モデル本来のフレームレートで滑らかな動画を保存します。',
+          outputFolder: '保存先フォルダ',
+          outputFolderHint: '空欄の場合はシステム既定の場所を使用します。',
+          open: '開く',
+          manage: '録画を管理...'
+        },
         debugMetrics: {
           title: 'メトリクス',
           description: '内部で何が起きているか見ますか？',
@@ -273,9 +292,6 @@ const ja = {
           actionLogging: 'アクションログ',
           actionLoggingDescription:
             'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
-          videoRecording: '動画録画',
-          videoRecordingDescription:
-            'サーバーフレームをMP4動画ファイルに録画します。OSの一時ディレクトリに書き込まれます。',
           diagnostics: '診断情報',
           diagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
           copiedToClipboard: 'クリップボードにコピーしました',
