@@ -116,30 +116,6 @@ function validateDefaultScenes(): void {
   }
 }
 
-function seedFileExists(filename: string): boolean {
-  const defaultDir = getSeedsDefaultDir()
-  const uploadsDir = getSeedsUploadsDir()
-  return fs.existsSync(path.join(defaultDir, filename)) || fs.existsSync(path.join(uploadsDir, filename))
-}
-
-/** Replace any scenes in the order list whose seed files no longer exist
- *  with defaults. Returns the same object if no changes. */
-function repairMissingScenes(settings: Settings): Settings {
-  const order = settings.scene_order
-  const missing = order.filter((f) => !seedFileExists(f))
-  if (missing.length === 0) return settings
-
-  const kept = order.filter((f) => seedFileExists(f))
-  const keptSet = new Set(kept)
-  const replacements = DEFAULT_SCENE_ORDER.filter((f) => !keptSet.has(f))
-
-  const repaired = [...kept, ...replacements].slice(0, Math.max(order.length, DEFAULT_SCENE_ORDER.length))
-
-  console.log(`[SETTINGS] Replaced ${missing.length} missing scene(s): ${missing.join(', ')}`)
-
-  return { ...settings, scene_order: repaired }
-}
-
 function loadSettings(settingsPath: string): { settings: Settings; dirty: boolean } {
   if (!fs.existsSync(settingsPath)) {
     const legacyPath = getLegacyConfigPath()
@@ -180,11 +156,10 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
 export function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
   const { settings, dirty } = loadSettings(settingsPath)
-  const repaired = repairMissingScenes(settings)
-  if (dirty || repaired !== settings) {
-    fs.writeFileSync(settingsPath, JSON.stringify(repaired, null, 2))
+  if (dirty) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
   }
-  return repaired
+  return settings
 }
 
 /** Env vars injected into any uv / python subprocess when offline mode is on.
