@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { SeedRecord } from '../types/app'
 import SceneCard from './SceneCard'
@@ -33,6 +33,11 @@ const REORDER_TRANSITION = { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
 // Indicator width in px; matches w-[0.32cqh] visually closely enough without
 // having to resolve the container unit at runtime.
 const INDICATOR_WIDTH_PX = 4
+// Auto-scroll while dragging: cursor within this many px of the container
+// top/bottom triggers scrolling, with speed ramping up as the cursor nears
+// the edge.
+const AUTO_SCROLL_EDGE_PX = 48
+const AUTO_SCROLL_MAX_SPEED_PX = 16
 
 const SceneGrid = ({
   pinnedSeeds,
@@ -51,6 +56,8 @@ const SceneGrid = ({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const outerRef = useRef<HTMLDivElement | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
+  const cursorYRef = useRef<number | null>(null)
+  const autoScrollRafRef = useRef<number | null>(null)
 
   const pinnedIds = useMemo(() => pinnedSeeds.map((s) => s.filename), [pinnedSeeds])
   const unpinnedIds = useMemo(() => unpinnedSeeds.map((s) => s.filename), [unpinnedSeeds])
@@ -104,9 +111,42 @@ const SceneGrid = ({
     setIndicatorPos({ left, top, height: cardRect.height })
   }, [dropTarget])
 
+  const stopAutoScroll = () => {
+    if (autoScrollRafRef.current !== null) {
+      cancelAnimationFrame(autoScrollRafRef.current)
+      autoScrollRafRef.current = null
+    }
+    cursorYRef.current = null
+  }
+
+  const startAutoScroll = () => {
+    if (autoScrollRafRef.current !== null) return
+    const tick = () => {
+      const outer = outerRef.current
+      const y = cursorYRef.current
+      if (outer && y !== null) {
+        const rect = outer.getBoundingClientRect()
+        let delta = 0
+        if (y < rect.top + AUTO_SCROLL_EDGE_PX) {
+          const intensity = Math.min(1, (rect.top + AUTO_SCROLL_EDGE_PX - y) / AUTO_SCROLL_EDGE_PX)
+          delta = -intensity * AUTO_SCROLL_MAX_SPEED_PX
+        } else if (y > rect.bottom - AUTO_SCROLL_EDGE_PX) {
+          const intensity = Math.min(1, (y - (rect.bottom - AUTO_SCROLL_EDGE_PX)) / AUTO_SCROLL_EDGE_PX)
+          delta = intensity * AUTO_SCROLL_MAX_SPEED_PX
+        }
+        if (delta !== 0) outer.scrollTop += delta
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick)
+    }
+    autoScrollRafRef.current = requestAnimationFrame(tick)
+  }
+
+  useEffect(() => stopAutoScroll, [])
+
   const resetDrag = () => {
     setDraggedFilename(null)
     setDropTarget(null)
+    stopAutoScroll()
   }
 
   const seedInitialTarget = (filename: string): DropTarget | null => {
@@ -128,6 +168,8 @@ const SceneGrid = ({
   const handleDragStart = (filename: string, event: DragEvent<HTMLButtonElement>) => {
     setDraggedFilename(filename)
     setDropTarget(seedInitialTarget(filename))
+    cursorYRef.current = event.clientY
+    startAutoScroll()
     event.dataTransfer.setData(SCENE_DRAG_MIME, filename)
     event.dataTransfer.effectAllowed = 'move'
   }
@@ -143,6 +185,7 @@ const SceneGrid = ({
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
+    cursorYRef.current = event.clientY
 
     // Pinned stays pinned: clamp to end of pinned if cursor strays into unpinned cards.
     if (draggedIsPinned && region === 'unpinned') {
@@ -187,6 +230,7 @@ const SceneGrid = ({
     if (!draggedFilename) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
+    cursorYRef.current = event.clientY
 
     const grid = gridRef.current
     if (!grid) return
