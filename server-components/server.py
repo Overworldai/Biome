@@ -663,7 +663,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool, "quant": str|null}
+            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_authoring": bool, "action_logging": bool, "quant": str|null}
             {"type": "reset"}
             {"type": "pause"}
             {"type": "resume"}
@@ -871,7 +871,7 @@ async def websocket_endpoint(websocket: WebSocket):
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
         seed_loaded=a new seed was loaded in this call."""
-        nonlocal scene_edit_requested, action_logging_requested, video_recording_requested, video_output_dir, biome_version, action_logger, video_recorder, cap_inference_fps
+        nonlocal scene_authoring_requested, action_logging_requested, video_recording_requested, video_output_dir, biome_version, action_logger, video_recorder, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
@@ -879,8 +879,8 @@ async def websocket_endpoint(websocket: WebSocket):
         quant = msg.get("quant")
 
         # Update flags
-        if "scene_edit" in msg:
-            scene_edit_requested = msg["scene_edit"]
+        if "scene_authoring" in msg:
+            scene_authoring_requested = msg["scene_authoring"]
         if "action_logging" in msg:
             action_logging_requested = msg["action_logging"]
         if "video_recording" in msg:
@@ -944,7 +944,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ready = seed_loaded or (world_engine.seed_frame is not None)
         return ready, seed_loaded
 
-    scene_edit_requested = False
+    scene_authoring_requested = False
     action_logging_requested = False
     video_recording_requested = False
     video_output_dir: str | None = None
@@ -1013,23 +1013,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.initFailed"})
             return
 
-        # Load or unload inpainting model based on scene_edit flag.
+        # Load or unload scene authoring model based on flag.
         # Loading happens BEFORE WorldEngine warmup so CUDA graphs
-        # are compiled with the inpainting model's memory already allocated.
-        if not scene_edit_requested and image_gen is not None and image_gen.is_loaded:
-            logger.info(f"[{client_host}] Scene edit disabled — unloading inpainting model")
+        # are compiled with the model's memory already allocated.
+        if not scene_authoring_requested and image_gen is not None and image_gen.is_loaded:
+            logger.info(f"[{client_host}] Scene authoring disabled — unloading model")
             await asyncio.to_thread(image_gen.unload)
 
-        if scene_edit_requested and image_gen is not None and not image_gen.is_loaded:
+        if scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
             await send_stage(SESSION_INPAINTING_LOAD)
             try:
                 await image_gen.warmup()
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
-                logger.error(f"[{client_host}] Inpainting warmup failed: {e}", exc_info=True)
-                await send_json(_error_payload(message_id="app.server.error.sceneEditModelLoadFailed", message=str(e)))
+                logger.error(f"[{client_host}] Scene authoring warmup failed: {e}", exc_info=True)
+                await send_json(_error_payload(message_id="app.server.error.sceneAuthoringModelLoadFailed", message=str(e)))
                 if init_req_id:
-                    await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.sceneEditModelLoadFailed"})
+                    await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.sceneAuthoringModelLoadFailed"})
                 return
 
         # Warmup on first connection AFTER seed is loaded
@@ -1086,7 +1086,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     model=getattr(world_engine, "model_uri", None),
                     quant=getattr(world_engine, "quant", None) or "none",
                     seed=current_seed_filename,
-                    scene_edit_enabled=scene_edit_requested,
+                    scene_authoring_enabled=scene_authoring_requested,
                 ),
             )
 
@@ -1214,11 +1214,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                 action_logger.scene_edit(msg.get("prompt", "").strip())
                             prompt = msg.get("prompt", "").strip()
                             if not prompt:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditEmptyPrompt"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
                             elif image_gen is None or not image_gen.is_loaded:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditModelNotLoaded"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
                             elif scene_edit_request is not None:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditAlreadyInProgress"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringAlreadyInProgress"}
                             else:
                                 import concurrent.futures
                                 fut = concurrent.futures.Future()
@@ -1248,11 +1248,11 @@ async def websocket_endpoint(websocket: WebSocket):
                             # canvas — generates a new seed from a text prompt.
                             prompt = msg.get("prompt", "").strip()
                             if not prompt:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditEmptyPrompt"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
                             elif image_gen is None or not image_gen.is_loaded:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditModelNotLoaded"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
                             elif scene_edit_request is not None or generate_scene_request is not None:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditAlreadyInProgress"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringAlreadyInProgress"}
                             else:
                                 import concurrent.futures
                                 fut = concurrent.futures.Future()

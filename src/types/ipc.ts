@@ -214,7 +214,7 @@ export type RecordingProperties = {
   model?: string | null
   quant?: string
   seed?: string | null
-  scene_edit_enabled?: boolean
+  scene_authoring_enabled?: boolean
 }
 
 export type RecordingEntry = {

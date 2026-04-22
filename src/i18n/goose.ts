@@ -271,12 +271,12 @@ const goose = {
           enabledDescription:
             "Keep paddling with whatever's already in the nest, but engine reinstalls and model downloads will honk and fail."
         },
-        experimental: {
-          title: 'Experimental',
-          description: 'want to try some half-baked eggs that might hatch or roll away?',
-          sceneEdit: 'Scene Edit',
-          sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        sceneAuthoring: {
+          title: 'Pond Authoring',
+          description: 'want to honk new ponds into shape with text prompts?',
+          enabled: 'Enable Pond Authoring',
+          enabledDescription:
+            'Honk up a fresh pond or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.'
         },
         recording: {
           title: 'Pond Footage',
@@ -375,12 +375,12 @@ const goose = {
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
+          sceneAuthoringModelLoadFailed: 'Pond authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
-          sceneEditEmptyPrompt: 'Empty prompt',
-          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
-          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          sceneAuthoringEmptyPrompt: 'Empty prompt',
+          sceneAuthoringModelNotLoaded: 'Pond authoring model not loaded. Enable Pond Authoring in settings.',
+          sceneAuthoringAlreadyInProgress: 'Pond authoring already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
@@ -426,8 +426,8 @@ const goose = {
           done: 'The goose has landed!'
         },
         inpainting: {
-          load: 'Loading scene edit model...',
-          ready: 'Scene edit model ready.'
+          load: 'Loading pond authoring model...',
+          ready: 'Pond authoring model ready.'
         },
         safety: {
           load: 'Loading fox detector...',

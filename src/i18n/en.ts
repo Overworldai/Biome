@@ -270,12 +270,12 @@ const en = {
           enabledDescription:
             "You can keep using what's already set up, but engine reinstalls and model downloads will fail."
         },
-        experimental: {
-          title: 'Experimental',
-          description: 'want to try some rough ideas that might change or disappear?',
-          sceneEdit: 'Scene Edit',
-          sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        sceneAuthoring: {
+          title: 'Scene Authoring',
+          description: 'want to compose and modify scenes with text prompts?',
+          enabled: 'Enable Scene Authoring',
+          enabledDescription:
+            'Generate new scenes or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.'
         },
         recording: {
           title: 'Video Recording',
@@ -374,12 +374,12 @@ const en = {
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
+          sceneAuthoringModelLoadFailed: 'Scene authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
-          sceneEditEmptyPrompt: 'Empty prompt',
-          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
-          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          sceneAuthoringEmptyPrompt: 'Empty prompt',
+          sceneAuthoringModelNotLoaded: 'Scene authoring model not loaded. Enable Scene Authoring in settings.',
+          sceneAuthoringAlreadyInProgress: 'Scene authoring already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
@@ -425,8 +425,8 @@ const en = {
           done: 'Model loaded!'
         },
         inpainting: {
-          load: 'Loading scene edit model...',
-          ready: 'Scene edit model ready.'
+          load: 'Loading scene authoring model...',
+          ready: 'Scene authoring model ready.'
         },
         safety: {
           load: 'Loading content filter...',

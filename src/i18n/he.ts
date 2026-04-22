@@ -264,12 +264,12 @@ const he = {
           enabled: 'עבוד לא מקוון',
           enabledDescription: 'אפשר להמשיך להשתמש במה שכבר מותקן, אך התקנות מנוע מחדש והורדות מודלים ייכשלו.'
         },
-        experimental: {
-          title: 'ניסיוני',
-          description: 'רוצה לנסות רעיונות גולמיים שעלולים להשתנות או להיעלם?',
-          sceneEdit: 'עריכת סצנה',
-          sceneEditDescription:
-            'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
+        sceneAuthoring: {
+          title: 'יצירת סצנות',
+          description: 'רוצה ליצור ולערוך סצנות באמצעות פרומפטים של טקסט?',
+          enabled: 'הפעל יצירת סצנות',
+          enabledDescription:
+            'צור סצנות חדשות או ערוך את הסצנה הנוכחית בעזרת פרומפט טקסט, מופעל על ידי מודל תמונה מקומי. דורש 8–10GB נוספים של VRAM.'
         },
         recording: {
           title: 'הקלטת וידאו',
@@ -368,12 +368,12 @@ const he = {
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
-          sceneEditModelLoadFailed: 'טעינת מודל עריכת הסצנה נכשלה: {{message}}',
+          sceneAuthoringModelLoadFailed: 'טעינת מודל יצירת הסצנות נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
-          sceneEditEmptyPrompt: 'פרומפט ריק',
-          sceneEditModelNotLoaded: 'מודל עריכת הסצנה לא נטען. הפעל את Scene Edit בהגדרות הניסיוניות.',
-          sceneEditAlreadyInProgress: 'עריכת סצנה כבר מתבצעת',
+          sceneAuthoringEmptyPrompt: 'פרומפט ריק',
+          sceneAuthoringModelNotLoaded: 'מודל יצירת הסצנות לא נטען. הפעל את יצירת סצנות בהגדרות.',
+          sceneAuthoringAlreadyInProgress: 'יצירת סצנה כבר מתבצעת',
           contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
           quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
           cudaRecoveryFailed: 'שגיאת CUDA — השחזור נכשל. נא להתחבר מחדש.'
@@ -418,8 +418,8 @@ const he = {
           done: 'המודל נטען!'
         },
         inpainting: {
-          load: 'טוען מודל עריכת סצנה...',
-          ready: 'מודל עריכת הסצנה מוכן.'
+          load: 'טוען מודל יצירת סצנות...',
+          ready: 'מודל יצירת הסצנות מוכן.'
         },
         safety: {
           load: 'טוען מסנן תוכן...',

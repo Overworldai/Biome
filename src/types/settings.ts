@@ -93,11 +93,7 @@ export const settingsSchema = z.object({
       music_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.music_volume)
     })
     .default(DEFAULT_AUDIO),
-  experimental: z
-    .object({
-      scene_edit_enabled: z.boolean().default(false)
-    })
-    .default({ scene_edit_enabled: false }),
+  scene_authoring_enabled: z.boolean().default(false),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),

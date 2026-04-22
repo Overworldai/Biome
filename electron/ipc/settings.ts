@@ -80,6 +80,21 @@ function migrateLegacySceneFields(parsed: unknown): unknown {
   return { ...obj, scene_order: [...pinned, ...unpinned] }
 }
 
+/** The scene-edit toggle used to live under `experimental.scene_edit_enabled`;
+ *  promoting it out of experimental (and renaming to Scene Authoring) means we
+ *  need to lift any saved value onto the new top-level `scene_authoring_enabled`
+ *  key so upgrading users don't silently lose their toggle state. */
+function migrateSceneAuthoringField(parsed: unknown): unknown {
+  if (typeof parsed !== 'object' || parsed === null) return parsed
+  const obj = parsed as Record<string, unknown>
+  if ('scene_authoring_enabled' in obj) return parsed
+  const experimental = obj.experimental as Record<string, unknown> | undefined
+  if (experimental && typeof experimental.scene_edit_enabled === 'boolean') {
+    return { ...obj, scene_authoring_enabled: experimental.scene_edit_enabled }
+  }
+  return parsed
+}
+
 function validateDefaultScenes(): void {
   const defaultDir = getSeedsDefaultDir()
   const uploadsDir = getSeedsUploadsDir()
@@ -152,7 +167,7 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
     return { settings: settingsSchema.parse({}), dirty: true }
   }
 
-  const migrated = migrateLegacySceneFields(parsed)
+  const migrated = migrateSceneAuthoringField(migrateLegacySceneFields(parsed))
   const result = settingsSchema.safeParse(migrated)
   if (result.success) {
     return { settings: result.data, dirty: migrated !== parsed }

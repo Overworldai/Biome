@@ -12,7 +12,7 @@ import type { ServerCode } from './input'
  * Server compares against current state and only applies what changed:
  *   - model changed? → reload engine
  *   - seed_image_data changed? → load new seed (server computes hash for safety + dedup)
- *   - scene_edit/action_logging changed? → update flags
+ *   - scene_authoring/action_logging changed? → update flags
  * Responds with session metrics on success. */
 export type InitMessage = {
   type: 'init'
@@ -20,7 +20,7 @@ export type InitMessage = {
   model?: string
   seed_image_data?: string
   seed_filename?: string // informational, for action logging only
-  scene_edit?: boolean
+  scene_authoring?: boolean
   action_logging?: boolean
   video_recording?: boolean
   /** Absolute path to write recordings into. Only honoured in standalone mode;

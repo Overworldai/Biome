@@ -17,18 +17,18 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   settingsOpen: boolean
   isPaused: boolean
   sceneEditActive: boolean
-  sceneEditEnabled?: boolean
+  sceneAuthoringEnabled?: boolean
   engineQuant?: string
 }
 
 export const buildStreamingLifecycleSyncPayload = (
   args: BuildStreamingLifecycleSyncPayloadArgs
 ): StreamingLifecycleSyncPayload => {
-  // Encode scene_edit_enabled and quant into the model key so toggling
+  // Encode scene_authoring_enabled and quant into the model key so toggling
   // either triggers the same intentional-reconnect flow as switching models.
   const baseModel = args.engineModel || DEFAULT_WORLD_ENGINE_MODEL
   const quant = args.engineQuant ?? 'none'
-  let selectedModel = args.sceneEditEnabled ? `${baseModel}+scene_edit` : baseModel
+  let selectedModel = args.sceneAuthoringEnabled ? `${baseModel}+scene_authoring` : baseModel
   selectedModel = `${selectedModel}+${quant}`
 
   return {

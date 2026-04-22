@@ -53,7 +53,7 @@ const PauseMainView = ({
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
   const { settings } = useSettings()
-  const sceneEditEnabled = settings.experimental?.scene_edit_enabled ?? false
+  const sceneAuthoringEnabled = settings.scene_authoring_enabled ?? false
   const isGenerating = generateState === 'loading'
   const [promptText, setPromptText] = useState('')
 
@@ -203,7 +203,7 @@ const PauseMainView = ({
             )
           }
         />
-        {sceneEditEnabled && (
+        {sceneAuthoringEnabled && (
           <>
             <div className="mt-[2cqh] flex items-center gap-[1.5cqh]">
               <div className="h-px flex-1 bg-border-subtle" />

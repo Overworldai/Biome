@@ -18,8 +18,8 @@ import RecordingsModal from './RecordingsModal'
 type GeneralTabProps = {
   active: boolean
   menuEngineMode: 'server' | 'standalone'
-  menuSceneEditEnabled: boolean
-  setMenuSceneEditEnabled: (enabled: boolean) => void
+  menuSceneAuthoringEnabled: boolean
+  setMenuSceneAuthoringEnabled: (enabled: boolean) => void
   menuOfflineMode: boolean
   setMenuOfflineMode: (enabled: boolean) => void
 }
@@ -27,8 +27,8 @@ type GeneralTabProps = {
 const GeneralTab = ({
   active,
   menuEngineMode,
-  menuSceneEditEnabled,
-  setMenuSceneEditEnabled,
+  menuSceneAuthoringEnabled,
+  setMenuSceneAuthoringEnabled,
   menuOfflineMode,
   setMenuOfflineMode
 }: GeneralTabProps) => {
@@ -133,6 +133,15 @@ const GeneralTab = ({
         </div>
       </SettingsSection>
 
+      <SettingsSection title="app.settings.sceneAuthoring.title" description="app.settings.sceneAuthoring.description">
+        <SettingsCheckbox
+          label="app.settings.sceneAuthoring.enabled"
+          description="app.settings.sceneAuthoring.enabledDescription"
+          checked={menuSceneAuthoringEnabled}
+          onChange={setMenuSceneAuthoringEnabled}
+        />
+      </SettingsSection>
+
       {showRecording && (
         <SettingsSection title="app.settings.recording.title" description="app.settings.recording.description">
           <div className="flex flex-col gap-[1cqh]">
@@ -198,15 +207,6 @@ const GeneralTab = ({
           />
         </SettingsSection>
       )}
-
-      <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
-        <SettingsCheckbox
-          label="app.settings.experimental.sceneEdit"
-          description="app.settings.experimental.sceneEditDescription"
-          checked={menuSceneEditEnabled}
-          onChange={setMenuSceneEditEnabled}
-        />
-      </SettingsSection>
 
       {showRecordingsModal && (
         <RecordingsModal configuredDir={draftDir || defaultDir} onClose={() => setShowRecordingsModal(false)} />

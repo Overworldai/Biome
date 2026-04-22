@@ -44,8 +44,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   const volume = useVolumeControls()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
-  const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
-    () => settings.experimental?.scene_edit_enabled ?? false
+  const [menuSceneAuthoringEnabled, setMenuSceneAuthoringEnabled] = useState(
+    () => settings.scene_authoring_enabled ?? false
   )
   const [menuOfflineMode, setMenuOfflineMode] = useState(() => settings.offline_mode ?? false)
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
@@ -78,9 +78,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       ...debugDraft,
       audio: volume.getAudioSettings(),
       offline_mode: menuOfflineMode,
-      experimental: {
-        scene_edit_enabled: menuSceneEditEnabled
-      }
+      scene_authoring_enabled: menuSceneAuthoringEnabled
     })
     if (keyboardDraft.mouse_sensitivity !== undefined) {
       setMouseSensitivity(keyboardDraft.mouse_sensitivity)
@@ -92,7 +90,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     settings,
     saveSettings,
     volume,
-    menuSceneEditEnabled,
+    menuSceneAuthoringEnabled,
     menuOfflineMode,
     setMouseSensitivity,
     setGamepadSensitivity
@@ -103,14 +101,22 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     if (engineRef.current && !engineRef.current.validateBeforeSave()) return
     const offlineChanged =
       settings.engine_mode === ENGINE_MODES.STANDALONE && menuOfflineMode !== (settings.offline_mode ?? false)
-    const sceneEditChanged = menuSceneEditEnabled !== (settings.experimental?.scene_edit_enabled ?? false)
-    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged || sceneEditChanged)) {
+    const sceneAuthoringChanged = menuSceneAuthoringEnabled !== (settings.scene_authoring_enabled ?? false)
+    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged || sceneAuthoringChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack, settings, menuOfflineMode, menuSceneEditEnabled])
+  }, [
+    hasKeybindConflict,
+    isStreaming,
+    applyDraftSettings,
+    onBack,
+    settings,
+    menuOfflineMode,
+    menuSceneAuthoringEnabled
+  ])
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -162,8 +168,8 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           <GeneralTab
             active={activeTab === 'general'}
             menuEngineMode={menuEngineMode}
-            menuSceneEditEnabled={menuSceneEditEnabled}
-            setMenuSceneEditEnabled={setMenuSceneEditEnabled}
+            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+            setMenuSceneAuthoringEnabled={setMenuSceneAuthoringEnabled}
             menuOfflineMode={menuOfflineMode}
             setMenuOfflineMode={setMenuOfflineMode}
           />
@@ -178,7 +184,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             ref={keyboardRef}
             settings={settings}
             active={activeTab === 'keyboard'}
-            menuSceneEditEnabled={menuSceneEditEnabled}
+            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
             initialMouseSensitivityFallback={mouseSensitivity}
             onConflictChange={handleConflictChange}
           />
@@ -187,7 +193,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
             settings={settings}
             active={activeTab === 'gamepad'}
             gamepadConnected={gamepadConnected}
-            menuSceneEditEnabled={menuSceneEditEnabled}
+            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
             initialSensitivityFallback={gamepadSensitivity}
           />
           <DebugTab ref={debugRef} settings={settings} active={activeTab === 'debug'} />

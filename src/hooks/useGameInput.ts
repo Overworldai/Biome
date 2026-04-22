@@ -24,8 +24,8 @@ export type GameAction = {
   keyboard?: { bindKey: ControlBindKey; defaultCode: InputCode }
   /** Fixed gamepad binding (hardware button label shown verbatim). */
   gamepad?: { button: string }
-  /** Only rendered when the experimental scene-edit flag is enabled. */
-  experimental?: boolean
+  /** Only rendered when the Scene Authoring toggle is enabled. */
+  requiresSceneAuthoring?: boolean
 }
 
 export const GAME_ACTIONS: readonly GameAction[] = [
@@ -51,7 +51,7 @@ export const GAME_ACTIONS: readonly GameAction[] = [
     id: 'sceneEdit',
     keyboard: { bindKey: 'sceneEdit', defaultCode: 'KeyQ' },
     gamepad: { button: 'Y' },
-    experimental: true
+    requiresSceneAuthoring: true
   }
 ]
 
@@ -319,8 +319,8 @@ export const useGameInput = (
         ['pauseMenu', onPauseMenu]
       ]
       for (const [bindKey, handler] of callbackHandlers) {
-        // Skip callbacks with no handler wired (e.g. sceneEdit when the experimental
-        // flag is off) — otherwise we'd swallow the key and prevent it from reaching
+        // Skip callbacks with no handler wired (e.g. sceneEdit when the Scene Authoring
+        // toggle is off) — otherwise we'd swallow the key and prevent it from reaching
         // whatever the user actually bound to that code.
         if (!handler) continue
         if (e.code !== keybindings[bindKey]) continue
