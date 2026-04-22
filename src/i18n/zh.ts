@@ -306,6 +306,7 @@ const zh = {
           description_one: '你一共有 {{count}} 个场景。',
           description_other: '你一共有 {{count}} 个场景。',
           uploadHint: '可使用按钮添加更多场景，或直接拖放 / 粘贴。',
+          reorderHint: '拖动场景可重新排序。',
           dropImagesToAddScenes: '拖放图片以添加场景'
         },
         sceneCard: {

@@ -154,6 +154,7 @@ const PauseMainView = ({
         <p className={VIEW_DESCRIPTION}>
           {t('app.pause.scenes.description', { count: scenes.length })}
           {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
+          {scenes.length > 1 && ` ${t('app.pause.scenes.reorderHint')}`}
         </p>
         {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (

@@ -316,7 +316,8 @@ const en = {
           title: 'Scenes',
           description_one: 'All of your {{count}} scene.',
           description_other: 'All of your {{count}} scenes.',
-          uploadHint: 'Use the buttons to add more scenes, or drag/paste them in.',
+          uploadHint: 'Use the button to add more scenes, or drag/paste them in.',
+          reorderHint: 'Drag scenes to reorder.',
           dropImagesToAddScenes: 'Drop images to add scenes'
         },
         sceneCard: {

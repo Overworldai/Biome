@@ -310,7 +310,8 @@ const he = {
           title: 'סצנות',
           description_one: 'כל {{count}} הסצנה שלך.',
           description_other: 'כל {{count}} הסצנות שלך.',
-          uploadHint: 'השתמש בכפתורים כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
+          uploadHint: 'השתמש בכפתור כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
+          reorderHint: 'גרור סצנות כדי לשנות את סדרן.',
           dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות'
         },
         sceneCard: {

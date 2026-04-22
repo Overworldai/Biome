@@ -317,7 +317,8 @@ const goose = {
           title: 'Ponds',
           description_one: 'All of your {{count}} pond.',
           description_other: 'All of your {{count}} ponds.',
-          uploadHint: 'Use the buttons to add more ponds, or drag/paste them in.',
+          uploadHint: 'Use the button to add more ponds, or drag/paste them in.',
+          reorderHint: 'Drag ponds to reorder.',
           dropImagesToAddScenes: 'Drop images to add ponds'
         },
         sceneCard: {

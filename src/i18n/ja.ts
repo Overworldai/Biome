@@ -316,6 +316,7 @@ const ja = {
           description_one: '全 {{count}} 個のシーンです。',
           description_other: '全 {{count}} 個のシーンです。',
           uploadHint: 'ボタンでシーンを追加するか、ドラッグまたは貼り付けで追加できます。',
+          reorderHint: 'シーンをドラッグして並べ替えできます。',
           dropImagesToAddScenes: '画像をドロップしてシーンを追加'
         },
         sceneCard: {
