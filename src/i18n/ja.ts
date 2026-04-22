@@ -31,7 +31,6 @@ const ja = {
         aborting: '中止中...',
         copy: 'コピー',
         open: '開く',
-        pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
         browseForImageFile: '画像ファイルを選択',
         delete: '削除'
       },

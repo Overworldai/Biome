@@ -31,7 +31,6 @@ const goose = {
         aborting: 'Aborting...',
         copy: 'Copy',
         open: 'Open',
-        pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
       },

@@ -31,7 +31,6 @@ const he = {
         aborting: 'מבטל...',
         copy: 'העתק',
         open: 'פתח',
-        pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה',
         delete: 'מחק'
       },

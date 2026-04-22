@@ -31,7 +31,6 @@ const zh = {
         aborting: '正在中止...',
         copy: '复制',
         open: '打开',
-        pasteImageFromClipboard: '从剪贴板粘贴图片',
         browseForImageFile: '浏览图片文件',
         delete: '删除'
       },

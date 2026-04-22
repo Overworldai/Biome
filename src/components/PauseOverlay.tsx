@@ -52,7 +52,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     return sceneIds.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
   }, [seeds, sceneIds])
 
-  const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+  const { selectScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
 
   useEffect(() => {
     if (!isActive) {
@@ -156,7 +156,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               onNavigateSettings={() => setView(PAUSE_VIEW.SETTINGS)}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={pasteScene}
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}

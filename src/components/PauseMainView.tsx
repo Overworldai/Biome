@@ -23,7 +23,6 @@ interface PauseMainViewProps {
   onNavigateSettings: () => void
   onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
   onImageDrop: (files: File[]) => void
-  onClipboardUpload: () => void
   requestPointerLock: () => void
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
@@ -45,7 +44,6 @@ const PauseMainView = ({
   onNavigateSettings,
   onImageUpload,
   onImageDrop,
-  onClipboardUpload,
   requestPointerLock,
   showPauseLockoutTimer,
   pauseLockoutSecondsText,
@@ -172,40 +170,11 @@ const PauseMainView = ({
             ALLOW_USER_SCENES && (
               <div
                 className={`
-                  relative grid aspect-video w-full grid-cols-2 overflow-hidden border border-[rgba(245,249,255,0.84)]
+                  relative aspect-video w-full overflow-hidden border border-[rgba(245,249,255,0.84)]
                   bg-[rgba(248,248,245,0.14)] p-0
                   ${uploadingImage ? 'pointer-events-none opacity-60' : ''}
                 `}
               >
-                <span
-                  className="
-                    pointer-events-none absolute inset-y-0 left-1/2 z-1 w-px -translate-x-1/2 bg-[rgba(245,249,255,0.4)]
-                  "
-                  aria-hidden="true"
-                />
-                <RawSettingsButton
-                  variant="secondary"
-                  className="
-                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
-                    hover:outline-0!
-                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
-                    active:bg-surface-btn-hover active:text-text-inverse
-                  "
-                  onClick={() => void onClipboardUpload()}
-                  title={t('app.buttons.pasteImageFromClipboard')}
-                >
-                  <svg
-                    className="h-[2.67cqh] w-[2.67cqh]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <rect x="9" y="3" width="6" height="4" rx="1" />
-                    <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
-                    <rect x="12" y="10" width="8" height="10" rx="1" />
-                  </svg>
-                </RawSettingsButton>
                 <RawSettingsButton
                   variant="secondary"
                   className="
