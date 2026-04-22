@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { SeedRecord } from '../types/app'
+import type { NavDirection } from '../lib/focusNavigation'
 import SceneCard from './SceneCard'
 
 // Track the hovered card + which half the cursor is on. This preserves the
@@ -49,6 +50,18 @@ const SceneGrid = ({
 }: SceneGridProps) => {
   const [draggedFilename, setDraggedFilename] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Gamepad reorder renders the list in preview order (dragged tile actually
+  // moves between slots + neighbours reflow via framer-motion `layout`) rather
+  // than the mouse-drag visuals (faded source tile + standalone indicator).
+  // Mouse drag keeps the indicator because the browser's native drag ghost
+  // already shows where the source tile is; gamepad has no such cursor.
+  const [isGamepadReorder, setIsGamepadReorder] = useState(false)
+  // Mirror of the gamepad drag state, synchronously readable. The gamepad
+  // path can fire `holdstart` and `holdmove` in the same rAF tick (d-pad
+  // pressed before the 400ms threshold is promoted to an immediate capture);
+  // handlers that read only from React state would see stale values because
+  // the commit from the preceding setState hasn't happened yet.
+  const gamepadDragRef = useRef<{ filename: string; target: DropTarget } | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const outerRef = useRef<HTMLDivElement | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -59,6 +72,20 @@ const SceneGrid = ({
 
   const isEmpty = sceneIds.length === 0
   const canDrag = onMoveScene !== undefined && sceneIds.length > 1
+
+  // During gamepad reorder, rearrange the visible list so the dragged tile
+  // renders at its preview position. Framer Motion's `layout` prop on each
+  // card animates neighbours out of the way as the user presses the d-pad.
+  const displayScenes = useMemo(() => {
+    if (!isGamepadReorder || !draggedFilename || !dropTarget) return scenes
+    const dragged = scenes.find((s) => s.filename === draggedFilename)
+    if (!dragged) return scenes
+    const rest = scenes.filter((s) => s.filename !== draggedFilename)
+    const hoveredIdx = rest.findIndex((s) => s.filename === dropTarget.hoveredFilename)
+    if (hoveredIdx === -1) return scenes
+    const insertIdx = dropTarget.side === 'left' ? hoveredIdx : hoveredIdx + 1
+    return [...rest.slice(0, insertIdx), dragged, ...rest.slice(insertIdx)]
+  }, [isGamepadReorder, draggedFilename, dropTarget, scenes])
 
   // Indicator is rendered at the wrapper level (outside the scroll container)
   // so it can sit in the gap past the leftmost/rightmost cards without being
@@ -132,23 +159,141 @@ const SceneGrid = ({
 
   useEffect(() => stopAutoScroll, [])
 
+  // Gamepad hold-to-drag: hold A on a focused scene card to pick it up, then
+  // d-pad moves the drop indicator. Release A to commit, B to cancel.
+  // useGamepadNavigation dispatches the events; capture them by preventing
+  // default on `gamepadholdstart`.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper || !canDrag) return
+
+    const filenameFromEvent = (e: Event): string | null => {
+      const target = e.target instanceof HTMLElement ? e.target : null
+      const tile = target?.closest<HTMLElement>('[data-scene-filename]')
+      return tile?.dataset.sceneFilename ?? null
+    }
+
+    const insertIdxFor = (target: DropTarget, filename: string): number => {
+      const withoutDragged = sceneIds.filter((f) => f !== filename)
+      const hoveredIdx = withoutDragged.indexOf(target.hoveredFilename)
+      if (hoveredIdx === -1) return withoutDragged.length
+      return target.side === 'left' ? hoveredIdx : hoveredIdx + 1
+    }
+
+    const handleHoldStart = (e: Event) => {
+      const filename = filenameFromEvent(e)
+      if (!filename) return
+      const initial = seedInitialTarget(filename)
+      if (!initial) return
+      e.preventDefault()
+      gamepadDragRef.current = { filename, target: initial }
+      setIsGamepadReorder(true)
+      setDraggedFilename(filename)
+      setDropTarget(initial)
+    }
+
+    const handleHoldMove = (e: Event) => {
+      const state = gamepadDragRef.current
+      if (!state) return
+      const direction = (e as CustomEvent<{ direction: NavDirection }>).detail?.direction
+      if (!direction) return
+      const withoutDragged = sceneIds.filter((f) => f !== state.filename)
+      const cols = getColumnCount()
+      const currentIdx = insertIdxFor(state.target, state.filename)
+      const deltaMap: Record<NavDirection, number> = { left: -1, right: 1, up: -cols, down: cols }
+      const nextIdx = Math.max(0, Math.min(withoutDragged.length, currentIdx + deltaMap[direction]))
+      if (nextIdx === currentIdx) return
+      const nextTarget = dropTargetForInsertIdx(nextIdx, withoutDragged)
+      if (!nextTarget) return
+      gamepadDragRef.current = { filename: state.filename, target: nextTarget }
+      setDropTarget(nextTarget)
+      scrollDropTargetIntoView(nextTarget)
+    }
+
+    const handleHoldEnd = () => {
+      const state = gamepadDragRef.current
+      if (state && onMoveScene) {
+        onMoveScene(state.filename, insertIdxFor(state.target, state.filename))
+      }
+      gamepadDragRef.current = null
+      resetDrag()
+    }
+
+    const handleHoldCancel = () => {
+      gamepadDragRef.current = null
+      resetDrag()
+    }
+
+    wrapper.addEventListener('gamepadholdstart', handleHoldStart)
+    wrapper.addEventListener('gamepadholdmove', handleHoldMove)
+    wrapper.addEventListener('gamepadholdend', handleHoldEnd)
+    wrapper.addEventListener('gamepadholdcancel', handleHoldCancel)
+    return () => {
+      wrapper.removeEventListener('gamepadholdstart', handleHoldStart)
+      wrapper.removeEventListener('gamepadholdmove', handleHoldMove)
+      wrapper.removeEventListener('gamepadholdend', handleHoldEnd)
+      wrapper.removeEventListener('gamepadholdcancel', handleHoldCancel)
+    }
+    // Drag state is tracked in `gamepadDragRef` (synchronous), not in the deps;
+    // seedInitialTarget / resetDrag / dropTargetForInsertIdx read only
+    // `sceneIds` which is already listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canDrag, sceneIds, onMoveScene])
+
   const resetDrag = () => {
     setDraggedFilename(null)
     setDropTarget(null)
+    setIsGamepadReorder(false)
     stopAutoScroll()
+  }
+
+  // Translate an insert-slot index (0..withoutDragged.length) back to a
+  // {hoveredFilename, side} so the drop indicator can be driven programmatically
+  // from gamepad input, not just from hover coordinates.
+  const dropTargetForInsertIdx = (insertIdx: number, withoutDragged: string[]): DropTarget | null => {
+    if (withoutDragged.length === 0) return null
+    if (insertIdx < withoutDragged.length) {
+      return { hoveredFilename: withoutDragged[insertIdx], side: 'left' }
+    }
+    return { hoveredFilename: withoutDragged[withoutDragged.length - 1], side: 'right' }
   }
 
   const seedInitialTarget = (filename: string): DropTarget | null => {
     const idx = sceneIds.indexOf(filename)
     if (idx === -1) return null
     const withoutDragged = sceneIds.filter((f) => f !== filename)
-    if (withoutDragged.length === 0) return null
     // Seed on the card adjacent to the dragged scene so the preview stays
     // anchored at the drag's original position until the cursor moves.
-    if (idx < withoutDragged.length) {
-      return { hoveredFilename: withoutDragged[idx], side: 'left' }
+    return dropTargetForInsertIdx(idx, withoutDragged)
+  }
+
+  // Column count is layout-dependent (`grid-cols-[repeat(auto-fill,...)]`).
+  // Read it from the resolved `grid-template-columns` track list rather than
+  // sampling tile positions — during reorder the tiles are mid-animation, so
+  // their current bounding rects don't reflect the underlying row structure.
+  const getColumnCount = (): number => {
+    const grid = gridRef.current
+    if (!grid) return 1
+    const tracks = window
+      .getComputedStyle(grid)
+      .gridTemplateColumns.split(' ')
+      .filter((s) => s && s !== 'none')
+    return tracks.length || 1
+  }
+
+  const scrollDropTargetIntoView = (target: DropTarget) => {
+    const outer = outerRef.current
+    const grid = gridRef.current
+    if (!outer || !grid) return
+    const card = grid.querySelector<HTMLElement>(`[data-scene-filename="${CSS.escape(target.hoveredFilename)}"]`)
+    if (!card) return
+    const cardRect = card.getBoundingClientRect()
+    const outerRect = outer.getBoundingClientRect()
+    if (cardRect.top < outerRect.top) {
+      outer.scrollBy({ top: cardRect.top - outerRect.top - 8, behavior: 'smooth' })
+    } else if (cardRect.bottom > outerRect.bottom) {
+      outer.scrollBy({ top: cardRect.bottom - outerRect.bottom + 8, behavior: 'smooth' })
     }
-    return { hoveredFilename: withoutDragged[withoutDragged.length - 1], side: 'right' }
   }
 
   const handleDragStart = (filename: string, event: DragEvent<HTMLButtonElement>) => {
@@ -237,7 +382,7 @@ const SceneGrid = ({
         onSelect={onSelect}
         onRemove={onRemove}
         draggable={canDrag}
-        isBeingDragged={draggedFilename === scene.filename}
+        isBeingDragged={draggedFilename === scene.filename && !isGamepadReorder}
         onDragStart={canDrag ? handleDragStart : undefined}
         onDragOver={canDrag ? handleCardDragOver : undefined}
         onDrop={canDrag ? handleCardDrop : undefined}
@@ -256,7 +401,10 @@ const SceneGrid = ({
     >
       <div
         ref={outerRef}
-        className="styled-scrollbar absolute inset-0 overflow-y-auto pr-[0.8cqh]"
+        // overflow-anchor:none — otherwise the browser pins the focused tile in
+        // place when siblings shift above it, so during gamepad reorder the
+        // dragged (focused) card appears stationary while the rest visibly slide.
+        className="styled-scrollbar absolute inset-0 overflow-y-auto pr-[0.8cqh] [overflow-anchor:none]"
         onDragOver={canDrag ? handleGridDragOver : undefined}
         onDrop={canDrag ? handleGridDrop : undefined}
       >
@@ -266,12 +414,12 @@ const SceneGrid = ({
               scene tiles (not the user-scenes "paste / browse" buttons in `before`)
               without breaking the grid layout. */}
           <div data-default-focus className="contents">
-            {isEmpty ? emptyState : scenes.map(renderCard)}
+            {isEmpty ? emptyState : displayScenes.map(renderCard)}
           </div>
         </div>
       </div>
       <AnimatePresence>
-        {indicatorPos && (
+        {indicatorPos && !isGamepadReorder && (
           <motion.div
             key="drop-indicator"
             initial={{ opacity: 0, left: indicatorPos.left, top: indicatorPos.top, height: indicatorPos.height }}
