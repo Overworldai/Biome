@@ -103,13 +103,14 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     if (engineRef.current && !engineRef.current.validateBeforeSave()) return
     const offlineChanged =
       settings.engine_mode === ENGINE_MODES.STANDALONE && menuOfflineMode !== (settings.offline_mode ?? false)
-    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged)) {
+    const sceneEditChanged = menuSceneEditEnabled !== (settings.experimental?.scene_edit_enabled ?? false)
+    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged || sceneEditChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack, settings, menuOfflineMode])
+  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack, settings, menuOfflineMode, menuSceneEditEnabled])
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {
