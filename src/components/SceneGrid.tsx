@@ -54,6 +54,7 @@ const SceneGrid = ({
 }: SceneGridProps) => {
   const [draggedFilename, setDraggedFilename] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
   const outerRef = useRef<HTMLDivElement | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
   const cursorYRef = useRef<number | null>(null)
@@ -74,41 +75,44 @@ const SceneGrid = ({
   const totalCount = pinnedIds.length + unpinnedIds.length
   const canDrag = onMoveScene !== undefined && totalCount > 1
 
-  // Resolve the indicator's pixel rect from the hovered card's position,
-  // relative to the outer scroll container. Rendering the indicator at the top
-  // level sidesteps per-card containing-block clipping.
+  // Indicator is rendered at the wrapper level (outside the scroll container)
+  // so it can sit in the gap past the leftmost/rightmost cards without being
+  // clipped by overflow. The wrapper uses clip-path to clip vertically only,
+  // so content above/below the scroll area stays safe.
   const [indicatorPos, setIndicatorPos] = useState<{ left: number; top: number; height: number } | null>(null)
 
   useLayoutEffect(() => {
-    if (!dropTarget || !gridRef.current || !outerRef.current) {
+    const outer = outerRef.current
+    const wrapper = wrapperRef.current
+    const grid = gridRef.current
+    if (!dropTarget || !outer || !wrapper || !grid) {
       setIndicatorPos(null)
       return
     }
-    const card = gridRef.current.querySelector<HTMLElement>(
-      `[data-scene-filename="${CSS.escape(dropTarget.hoveredFilename)}"]`
-    )
-    if (!card) {
-      setIndicatorPos(null)
-      return
+
+    const compute = () => {
+      const card = grid.querySelector<HTMLElement>(`[data-scene-filename="${CSS.escape(dropTarget.hoveredFilename)}"]`)
+      if (!card) {
+        setIndicatorPos(null)
+        return
+      }
+      const cardRect = card.getBoundingClientRect()
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const gapPx = parseFloat(window.getComputedStyle(grid).columnGap) || 0
+      const halfGap = gapPx / 2
+      const halfWidth = INDICATOR_WIDTH_PX / 2
+
+      const left =
+        dropTarget.side === 'left'
+          ? cardRect.left - wrapperRect.left - halfGap - halfWidth
+          : cardRect.right - wrapperRect.left + halfGap - halfWidth
+      const top = cardRect.top - wrapperRect.top
+      setIndicatorPos({ left, top, height: cardRect.height })
     }
-    const cardRect = card.getBoundingClientRect()
-    const outerRect = outerRef.current.getBoundingClientRect()
-    const scrollTop = outerRef.current.scrollTop
 
-    const gapPx = parseFloat(window.getComputedStyle(gridRef.current).columnGap) || 0
-    const halfGap = gapPx / 2
-    const halfWidth = INDICATOR_WIDTH_PX / 2
-
-    const rawLeft =
-      dropTarget.side === 'left'
-        ? cardRect.left - outerRect.left - halfGap - halfWidth
-        : cardRect.right - outerRect.left + halfGap - halfWidth
-    // Clamp so edge cards still show the indicator inside the visible clip
-    // region — snaps to the container's inner edge rather than overflowing.
-    const maxLeft = outerRef.current.clientWidth - INDICATOR_WIDTH_PX
-    const left = Math.max(0, Math.min(rawLeft, maxLeft))
-    const top = cardRect.top - outerRect.top + scrollTop
-    setIndicatorPos({ left, top, height: cardRect.height })
+    compute()
+    outer.addEventListener('scroll', compute)
+    return () => outer.removeEventListener('scroll', compute)
   }, [dropTarget])
 
   const stopAutoScroll = () => {
@@ -289,28 +293,33 @@ const SceneGrid = ({
 
   return (
     <div
-      ref={outerRef}
+      ref={wrapperRef}
       className={`
-        styled-scrollbar relative mt-[1.1cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh]
+        relative mt-[1.1cqh] min-h-0 flex-1 [clip-path:inset(0_-100vw)]
         ${className ?? ''}
       `}
-      onDragOver={canDrag ? handleGridDragOver : undefined}
-      onDrop={canDrag ? handleGridDrop : undefined}
     >
-      <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
-        {before}
-        {/* `display: contents` wrapper so the default-focus marker only covers
-            scene tiles (not the user-scenes "paste / browse" buttons in `before`)
-            without breaking the grid layout. */}
-        <div data-default-focus className="contents">
-          {isEmpty ? (
-            emptyState
-          ) : (
-            <>
-              {pinnedIds.map((f) => renderCard(f, 'pinned'))}
-              {unpinnedIds.map((f) => renderCard(f, 'unpinned'))}
-            </>
-          )}
+      <div
+        ref={outerRef}
+        className="styled-scrollbar absolute inset-0 overflow-y-auto pr-[0.8cqh]"
+        onDragOver={canDrag ? handleGridDragOver : undefined}
+        onDrop={canDrag ? handleGridDrop : undefined}
+      >
+        <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
+          {before}
+          {/* `display: contents` wrapper so the default-focus marker only covers
+              scene tiles (not the user-scenes "paste / browse" buttons in `before`)
+              without breaking the grid layout. */}
+          <div data-default-focus className="contents">
+            {isEmpty ? (
+              emptyState
+            ) : (
+              <>
+                {pinnedIds.map((f) => renderCard(f, 'pinned'))}
+                {unpinnedIds.map((f) => renderCard(f, 'unpinned'))}
+              </>
+            )}
+          </div>
         </div>
       </div>
       <AnimatePresence>
