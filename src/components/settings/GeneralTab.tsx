@@ -4,7 +4,7 @@ import { invoke } from '../../bridge'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../../i18n'
 import { useSettings } from '../../hooks/settingsContextValue'
 import { useVolumeControls } from '../../hooks/useVolumeControls'
-import { ENGINE_MODES, type AppLocale } from '../../types/settings'
+import { type AppLocale } from '../../types/settings'
 import { SETTINGS_CONTROL_VMETRICS } from '../../styles'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsSelect from '../ui/SettingsSelect'
@@ -17,6 +17,7 @@ import RecordingsModal from './RecordingsModal'
 
 type GeneralTabProps = {
   active: boolean
+  menuEngineMode: 'server' | 'standalone'
   menuSceneEditEnabled: boolean
   setMenuSceneEditEnabled: (enabled: boolean) => void
   menuOfflineMode: boolean
@@ -25,6 +26,7 @@ type GeneralTabProps = {
 
 const GeneralTab = ({
   active,
+  menuEngineMode,
   menuSceneEditEnabled,
   setMenuSceneEditEnabled,
   menuOfflineMode,
@@ -82,8 +84,9 @@ const GeneralTab = ({
     setShowRecordingsModal(true)
   }, [])
 
-  const showRecording = settings.engine_mode === ENGINE_MODES.STANDALONE
-  const showOfflineMode = settings.engine_mode === ENGINE_MODES.STANDALONE
+  const isStandalone = menuEngineMode === 'standalone'
+  const showRecording = isStandalone
+  const showOfflineMode = isStandalone
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>

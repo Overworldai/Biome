@@ -48,6 +48,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     () => settings.experimental?.scene_edit_enabled ?? false
   )
   const [menuOfflineMode, setMenuOfflineMode] = useState(() => settings.offline_mode ?? false)
+  const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
+    settings.engine_mode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
+  )
   const [hasKeybindConflict, setHasKeybindConflict] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
@@ -157,12 +160,19 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         >
           <GeneralTab
             active={activeTab === 'general'}
+            menuEngineMode={menuEngineMode}
             menuSceneEditEnabled={menuSceneEditEnabled}
             setMenuSceneEditEnabled={setMenuSceneEditEnabled}
             menuOfflineMode={menuOfflineMode}
             setMenuOfflineMode={setMenuOfflineMode}
           />
-          <EngineTab ref={engineRef} settings={settings} active={activeTab === 'engine'} />
+          <EngineTab
+            ref={engineRef}
+            settings={settings}
+            active={activeTab === 'engine'}
+            menuEngineMode={menuEngineMode}
+            setMenuEngineMode={setMenuEngineMode}
+          />
           <KeyboardTab
             ref={keyboardRef}
             settings={settings}

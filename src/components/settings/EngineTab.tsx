@@ -47,9 +47,12 @@ export type EngineTabHandle = {
 type EngineTabProps = {
   settings: Settings
   active: boolean
+  menuEngineMode: 'server' | 'standalone'
+  setMenuEngineMode: (mode: 'server' | 'standalone') => void
 }
 
-const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, active }, ref) => {
+const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
+  const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
   const { saveSettings } = useSettings()
   const { engineStatus, checkEngineStatus, setupEngine, nukeAndReinstallEngine } = useStreaming()
@@ -59,9 +62,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
   const configServerUrl = settings.server_url
   const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
 
-  const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
-    configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
-  )
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
