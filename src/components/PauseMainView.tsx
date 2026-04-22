@@ -148,7 +148,7 @@ const PauseMainView = ({
 
       <section
         className={`
-          absolute top-(--edge-top) bottom-[12cqh] left-(--edge-left) flex w-[77%] flex-col
+          absolute top-(--edge-top) bottom-[13cqh] left-(--edge-left) flex w-[77%] flex-col
           ${isGenerating ? 'pointer-events-none opacity-60' : ''}
         `}
       >
@@ -244,8 +244,8 @@ const PauseMainView = ({
               {generateState === 'error' && generateError && (
                 <p className="m-0 mb-[0.8cqh] font-serif text-caption text-red-400">{generateError}</p>
               )}
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 disabled={isGenerating}
@@ -253,13 +253,13 @@ const PauseMainView = ({
                 className={`
                   ${SETTINGS_CONTROL_BASE}
                   ${SETTINGS_CONTROL_TEXT}
-                  w-full outline-none
+                  w-full resize-none outline-none
                   focus:ring-1 focus:ring-border-medium
                   disabled:opacity-50
                 `}
                 onKeyDown={(e) => {
                   e.stopPropagation()
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     const trimmed = promptText.trim()
                     if (trimmed && !isGenerating) {
