@@ -8,7 +8,7 @@ import RawSettingsButton from './ui/RawSettingsButton'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 
 interface PauseMainViewProps {
   pinnedScenes: SeedRecord[]
@@ -29,7 +29,6 @@ interface PauseMainViewProps {
   requestPointerLock: () => void
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
-  showUnlockHint: boolean
   generateState: 'idle' | 'loading' | 'error'
   generateError: string | null
   onGenerateScene: (prompt: string) => void
@@ -54,7 +53,6 @@ const PauseMainView = ({
   requestPointerLock,
   showPauseLockoutTimer,
   pauseLockoutSecondsText,
-  showUnlockHint: _showUnlockHint,
   generateState,
   generateError,
   onGenerateScene
@@ -141,7 +139,10 @@ const PauseMainView = ({
 
       {ALLOW_USER_SCENES && isDragActive && (
         <div
-          className="absolute inset-[2.4cqh] z-[20] border border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)] pointer-events-none grid place-items-center"
+          className="
+            pointer-events-none absolute inset-[2.4cqh] z-20 grid place-items-center border
+            border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)]
+          "
           aria-hidden="true"
         >
           <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
@@ -151,16 +152,17 @@ const PauseMainView = ({
       )}
 
       <section
-        className={`absolute top-[var(--edge-top-xl)] bottom-[14cqh] left-[var(--edge-left)] w-[77%] flex flex-col ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
+        className={`
+          absolute top-(--edge-top-xl) bottom-[14cqh] left-(--edge-left) flex w-[77%] flex-col
+          ${isGenerating ? 'pointer-events-none opacity-60' : ''}
+        `}
       >
         <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
         <p className={VIEW_DESCRIPTION}>
           {t('app.pause.scenes.description', { count: totalSceneCount })}
           {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
         </p>
-        {uploadError && (
-          <p className="m-0 mt-[0.6cqh] font-serif text-caption text-[var(--color-error-bright)]">{uploadError}</p>
-        )}
+        {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (
           <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
         )}
@@ -176,20 +178,31 @@ const PauseMainView = ({
           before={
             ALLOW_USER_SCENES && (
               <div
-                className={`relative w-full aspect-video border border-[rgba(245,249,255,0.84)] bg-[rgba(248,248,245,0.14)] p-0 overflow-hidden grid grid-cols-2 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
+                className={`
+                  relative grid aspect-video w-full grid-cols-2 overflow-hidden border border-[rgba(245,249,255,0.84)]
+                  bg-[rgba(248,248,245,0.14)] p-0
+                  ${uploadingImage ? 'pointer-events-none opacity-60' : ''}
+                `}
               >
                 <span
-                  className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-[rgba(245,249,255,0.4)] pointer-events-none z-[1]"
+                  className="
+                    pointer-events-none absolute inset-y-0 left-1/2 z-1 w-px -translate-x-1/2 bg-[rgba(245,249,255,0.4)]
+                  "
                   aria-hidden="true"
                 />
                 <RawSettingsButton
                   variant="secondary"
-                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  className="
+                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
+                    hover:outline-0!
+                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
+                    active:bg-surface-btn-hover active:text-text-inverse
+                  "
                   onClick={() => void onClipboardUpload()}
                   title={t('app.buttons.pasteImageFromClipboard')}
                 >
                   <svg
-                    className="w-[2.67cqh] h-[2.67cqh]"
+                    className="h-[2.67cqh] w-[2.67cqh]"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -202,12 +215,17 @@ const PauseMainView = ({
                 </RawSettingsButton>
                 <RawSettingsButton
                   variant="secondary"
-                  className="!rounded-none !border-0 !outline-0 hover:!outline-0 h-full w-full grid place-items-center !p-0 active:bg-[var(--color-surface-btn-hover)] active:text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-[var(--color-surface-btn-hover)]"
+                  className="
+                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
+                    hover:outline-0!
+                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
+                    active:bg-surface-btn-hover active:text-text-inverse
+                  "
                   onClick={() => fileInputRef.current?.click()}
                   title={t('app.buttons.browseForImageFile')}
                 >
                   <svg
-                    className="w-[2.67cqh] h-[2.67cqh]"
+                    className="h-[2.67cqh] w-[2.67cqh]"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -224,14 +242,14 @@ const PauseMainView = ({
         />
         {sceneEditEnabled && (
           <>
-            <div className="flex items-center gap-[1.5cqh] mt-[2cqh]">
-              <div className="flex-1 h-px bg-border-subtle" />
+            <div className="mt-[2cqh] flex items-center gap-[1.5cqh]">
+              <div className="h-px flex-1 bg-border-subtle" />
               <span className="font-serif text-caption text-text-muted">{t('app.pause.generateScene.divider')}</span>
-              <div className="flex-1 h-px bg-border-subtle" />
+              <div className="h-px flex-1 bg-border-subtle" />
             </div>
-            <div className="mt-[1.5cqh] relative">
+            <div className="relative mt-[1.5cqh]">
               {generateState === 'error' && generateError && (
-                <p className="m-0 font-serif text-caption text-red-400 mb-[0.8cqh]">{generateError}</p>
+                <p className="m-0 mb-[0.8cqh] font-serif text-caption text-red-400">{generateError}</p>
               )}
               <input
                 type="text"
@@ -239,7 +257,13 @@ const PauseMainView = ({
                 onChange={(e) => setPromptText(e.target.value)}
                 disabled={isGenerating}
                 placeholder={t('app.pause.generateScene.placeholder')}
-                className={`${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} w-full outline-none focus:ring-1 focus:ring-border-medium disabled:opacity-50`}
+                className={`
+                  ${SETTINGS_CONTROL_BASE}
+                  ${SETTINGS_CONTROL_TEXT}
+                  w-full outline-none
+                  focus:ring-1 focus:ring-border-medium
+                  disabled:opacity-50
+                `}
                 onKeyDown={(e) => {
                   e.stopPropagation()
                   if (e.key === 'Enter') {
@@ -253,7 +277,12 @@ const PauseMainView = ({
                 onKeyUp={(e) => e.stopPropagation()}
               />
               {isGenerating && (
-                <div className="absolute right-[1.2cqh] top-1/2 -translate-y-1/2 h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary" />
+                <div
+                  className="
+                    absolute top-1/2 right-[1.2cqh] h-[2cqh] w-[2cqh] -translate-y-1/2 animate-spin rounded-full
+                    border-[0.3cqh] border-text-muted border-t-text-primary
+                  "
+                />
               )}
             </div>
           </>
@@ -264,18 +293,22 @@ const PauseMainView = ({
         <span className="inline-flex items-end gap-[1.42cqh]">
           <span>{t('app.pause.title')}</span>
           <span
-            className={`self-end font-serif text-[2.13cqh] leading-[1.0] tracking-[0.03em] text-[rgba(245,249,255,0.62)] transition-opacity duration-120 ${
-              showPauseLockoutTimer
-                ? 'opacity-100 [animation:pauseUnlockHintPulse_1200ms_ease-out_forwards]'
-                : 'opacity-0'
-            }`}
+            className={`
+              self-end font-serif text-[2.13cqh] leading-none tracking-[0.03em] text-[rgba(245,249,255,0.62)]
+              transition-opacity duration-120
+              ${
+                showPauseLockoutTimer
+                  ? 'animate-[pauseUnlockHintPulse_1200ms_ease-out_forwards] opacity-100'
+                  : 'opacity-0'
+              }
+            `}
           >
             {showPauseLockoutTimer ? t('app.pause.unlockIn', { seconds: pauseLockoutSecondsText }) : ''}
           </span>
         </span>
       </ViewLabel>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex w-btn-w flex-col gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
           label="app.buttons.reset"

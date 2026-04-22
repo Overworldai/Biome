@@ -20,6 +20,7 @@ const config: ForgeConfig = {
       './seeds',
       './licensing',
       './backgrounds',
+      './assets/9SALERNO.TTF',
       './app-icon.ico',
       './app-icon.png'
     ]

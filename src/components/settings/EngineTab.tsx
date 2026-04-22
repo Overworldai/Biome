@@ -1,10 +1,10 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
-import { useSettings } from '../../hooks/useSettings'
-import { useStreaming } from '../../context/StreamingContext'
+import { useSettings } from '../../hooks/settingsContextValue'
+import { useStreaming } from '../../context/streamingContextValue'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -47,9 +47,12 @@ export type EngineTabHandle = {
 type EngineTabProps = {
   settings: Settings
   active: boolean
+  menuEngineMode: 'server' | 'standalone'
+  setMenuEngineMode: (mode: 'server' | 'standalone') => void
 }
 
-const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, active }, ref) => {
+const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
+  const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
   const { saveSettings } = useSettings()
   const { engineStatus, checkEngineStatus, setupEngine, nukeAndReinstallEngine } = useStreaming()
@@ -57,11 +60,8 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
-  const savedCustomModels = settings.custom_models ?? []
+  const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
 
-  const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
-    configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
-  )
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
@@ -361,10 +361,10 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
         <SettingsSection
           title="app.settings.serverUrl.title"
           rawDescription={
-            <span className="inline-flex items-center gap-[0.71cqh] flex-wrap">
+            <span className="inline-flex flex-wrap items-center gap-[0.71cqh]">
               {t('app.settings.serverUrl.descriptionPrefix')} ·{' '}
               <a
-                className="underline cursor-pointer text-inherit"
+                className="cursor-pointer text-inherit underline"
                 onClick={() =>
                   window.open(
                     'https://github.com/Overworldai/Biome/blob/main/server-components/README.md',
@@ -379,13 +379,23 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
               {serverUrlStatus === 'valid' && (
                 <>
                   {` · ${t('app.settings.serverUrl.connected')}`}
-                  <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
+                  <span
+                    className="
+                      inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)]
+                      shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]
+                    "
+                  />
                 </>
               )}
               {serverUrlStatus === 'error' && (
                 <>
                   {` · ${t('app.settings.serverUrl.unreachable')}`}
-                  <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
+                  <span
+                    className="
+                      inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)]
+                      shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]
+                    "
+                  />
                 </>
               )}
             </span>
@@ -457,7 +467,14 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>(({ settings, activ
           }
         />
         {menuModelsError && (
-          <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0.35cqh_0_0.8cqh]`}>{menuModelsError}</p>
+          <p
+            className={`
+              ${SETTINGS_MUTED_TEXT}
+              m-[0.35cqh_0_0.8cqh] text-left
+            `}
+          >
+            {menuModelsError}
+          </p>
         )}
       </SettingsSection>
 

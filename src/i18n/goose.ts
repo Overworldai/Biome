@@ -30,6 +30,7 @@ const goose = {
         abort: 'Abort',
         aborting: 'Aborting...',
         copy: 'Copy',
+        open: 'Open',
         pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
@@ -76,6 +77,15 @@ const goose = {
           title: 'Delete Model?',
           description:
             '<bold>{{modelId}}</bold> is nesting on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
+        },
+        recordings: {
+          title: 'Pond Footage',
+          empty: 'No footage in the nest yet. Turn on recording to capture your next flight.',
+          openFolder: 'Open nest',
+          refresh: 'Refresh',
+          confirmDeleteTitle: 'Cast this footage out?',
+          confirmDeleteDescription: 'Delete <bold>{{filename}}</bold>? Once gone, it cannot be un-honked.',
+          openExternally: 'Open'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -255,12 +265,30 @@ const goose = {
             sceneEdit: 'Scene Edit'
           }
         },
+        offlineMode: {
+          title: 'Pond Isolation',
+          description: 'want to use the flock away from the open waters of the internet?',
+          enabled: 'Nest Offline',
+          enabledDescription:
+            "Keep paddling with whatever's already in the nest, but engine reinstalls and model downloads will honk and fail."
+        },
         experimental: {
           title: 'Experimental',
           description: 'want to try some half-baked eggs that might hatch or roll away?',
           sceneEdit: 'Scene Edit',
           sceneEditDescription:
             'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        },
+        recording: {
+          title: 'Pond Footage',
+          description: 'want to record your flight?',
+          enabled: 'Record Gameplay',
+          enabledDescription: "Saves smooth filmstrips at the model's full framerate.",
+          outputFolder: 'Nesting folder',
+          outputFolderHint: 'Leave blank to use the usual migration route.',
+          browse: 'Waddle to folder...',
+          manage: 'Manage Footage',
+          manageDescription: 'Review or cast out past honks of gameplay.'
         },
         debugMetrics: {
           title: 'Metrics',
@@ -342,6 +370,8 @@ const goose = {
         startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not honking back at {{url}}',
+        networkUnreachable:
+          "Can't reach the open waters of the internet. If your engine and model are already nested in the pond, switch on Pond Isolation in General Settings to waddle along without a network.\n\nDetails: {{message}}",
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',

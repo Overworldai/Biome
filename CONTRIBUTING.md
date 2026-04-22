@@ -91,6 +91,19 @@ The goal is to verify that the release behaves reasonably on an arbitrary user s
 - [ ] Remove individual fields — Zod defaults fill them in, other fields are preserved
 - [ ] Write malformed JSON — app boots and falls back to defaults rather than refusing to start
 
+## Running Offline
+
+To reproduce issues tied to missing internet access — and to verify the **Offline Mode** toggle in General Settings — you don't need to unplug your machine. Use a network namespace.
+
+```bash
+bwrap --dev-bind / / --unshare-net npm run dev
+```
+
+- `--dev-bind / /` keeps the root filesystem visible.
+- `--unshare-net` creates an isolated net namespace; bwrap sets up loopback automatically, so `ws://localhost:PORT/ws` (the World Engine WebSocket) still works.
+
+**Before running**, do one full online run so the UV binary under `.uv/`, the Python `.venv`, and the HuggingFace model cache are populated.
+
 ## Architecture
 
 Biome is an Electron desktop app that runs AI-generated worlds locally on GPU via a Python-based World Engine server.
@@ -294,7 +307,7 @@ Other components use prop-level `raw` prefixes for escape hatches:
 | `SettingsSelect` option | `label: TranslationKey`                                                 | `rawLabel: string`                    |
 | `SettingsSelect`        | `customLabel`, `deleteLabel`: `TranslationKey`                          | `rawCustomPrefix: string`             |
 | `ConfirmModal`          | `title`, `description`, `confirmLabel`, `cancelLabel`: `TranslationKey` | `descriptionParams` for interpolation |
-| `Modal`, `OverlayModal` | `title: TranslationKey`                                                 | —                                     |
+| `Modal`                 | `title: TranslationKey`                                                 | —                                     |
 | `SettingsCheckbox`      | `label: TranslationKey`                                                 | —                                     |
 | `SettingsSlider`        | `label: TranslationKey`                                                 | —                                     |
 | `SettingsTextInput`     | `placeholder: TranslationKey`                                           | —                                     |

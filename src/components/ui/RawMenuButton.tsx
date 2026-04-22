@@ -11,7 +11,10 @@ type RawMenuButtonProps = {
 const RawMenuButton = ({ className = '', ...rest }: RawMenuButtonProps) => (
   <RawButton
     autoShrinkLabel
-    className={`min-h-[5.2cqh] leading-[1.05] py-[0.8cqh] px-[2.67cqh] text-body ${className}`}
+    className={`
+      min-h-[5.2cqh] px-[2.67cqh] py-[0.8cqh] text-body leading-[1.05]
+      ${className}
+    `}
     {...rest}
   />
 )

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import { useEngineLogs } from '../hooks/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
@@ -79,16 +80,16 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="absolute inset-0 z-[12] flex items-center justify-center bg-[var(--color-overlay-scrim)] backdrop-blur-sm"
+      className="fixed inset-0 z-10000 flex items-center justify-center bg-overlay-scrim backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
       <FocusScope
         autoFocus
         onCancel={engineSetupInProgress ? undefined : onClose}
-        className="w-[135.11cqh] max-w-[92vw] pointer-events-auto"
+        className="pointer-events-auto w-[135.11cqh] max-w-[92vw]"
       >
         <ServerLogDisplay
           title="app.dialogs.install.title"
@@ -115,7 +116,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   variant="secondary"
                   autoShrinkLabel
                   label={isAbortingInstall ? 'app.buttons.aborting' : 'app.buttons.abort'}
-                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
+                  className="px-[1.2cqh] py-[0.25cqh] text-[1.8cqh]"
                   onClick={() => void handleAbortInstall()}
                   disabled={isAbortingInstall}
                   aria-label={t('app.dialogs.install.abortEngineInstall')}
@@ -127,7 +128,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
                   variant="secondary"
                   autoShrinkLabel
                   label="app.buttons.close"
-                  className="text-[1.8cqh] px-[1.2cqh] py-[0.25cqh]"
+                  className="px-[1.2cqh] py-[0.25cqh] text-[1.8cqh]"
                   onClick={onClose}
                   aria-label={t('app.dialogs.install.closeInstallLogs')}
                   data-default-focus
@@ -137,7 +138,8 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
           }
         />
       </FocusScope>
-    </div>
+    </div>,
+    document.body
   )
 }
 

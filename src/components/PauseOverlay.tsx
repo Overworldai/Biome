@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
 import { PAUSE_VIEW, type PauseViewKey } from '../constants'
@@ -13,7 +13,7 @@ import { useSceneActions } from '../hooks/useSceneActions'
 import { RpcError } from '../lib/wsRpc'
 import type { GenerateSceneResponse } from '../types/ws'
 import type { SeedRecord } from '../types/app'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
@@ -24,8 +24,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const [generateState, setGenerateState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
-  const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
-    usePointerLockFeedback(isActive)
+  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
 
   const {
     seeds,
@@ -119,9 +118,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       active={isActive && view !== PAUSE_VIEW.SETTINGS}
       autoFocus
       onCancel={requestPointerLock}
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      className={`
+        absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
+        ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
+      `}
     >
-      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
         {view === PAUSE_VIEW.SETTINGS ? (
           <motion.div
@@ -162,7 +164,6 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
-              showUnlockHint={showUnlockHint}
               generateState={generateState}
               generateError={generateError}
               onGenerateScene={handleGenerateScene}

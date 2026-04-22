@@ -176,8 +176,13 @@ const SceneGrid = ({
   }
 
   return (
-    <div className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] flex-1 min-h-0 mt-[1.1cqh] ${className ?? ''}`}>
-      <div className="grid grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh] w-full">
+    <div
+      className={`
+        styled-scrollbar mt-[1.1cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh]
+        ${className ?? ''}
+      `}
+    >
+      <div className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
         {before}
         {/* `display: contents` wrapper so the default-focus marker only covers
             scene tiles (not the user-scenes "paste / browse" buttons in `before`)
@@ -192,7 +197,7 @@ const SceneGrid = ({
                 <motion.div
                   layout
                   transition={LAYOUT_TRANSITION}
-                  className="col-span-full h-px bg-border-subtle my-[0.6cqh]"
+                  className="col-span-full my-[0.6cqh] h-px bg-border-subtle"
                   aria-hidden="true"
                   onDragOver={canDrag ? handleSeparatorDragOver : undefined}
                   onDrop={canDrag ? handleSeparatorDrop : undefined}

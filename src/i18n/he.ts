@@ -30,6 +30,7 @@ const he = {
         abort: 'בטל',
         aborting: 'מבטל...',
         copy: 'העתק',
+        open: 'פתח',
         pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה',
         delete: 'מחק'
@@ -73,6 +74,15 @@ const he = {
           title: 'למחוק את המודל?',
           description:
             '<bold>{{modelId}}</bold> מורד למכשיר זה. מחיקתו תפנה מקום בדיסק, אך יהיה צורך להוריד את המודל מחדש לפני שניתן יהיה להשתמש בו שוב.'
+        },
+        recordings: {
+          title: 'הקלטות',
+          empty: 'עדיין אין הקלטות. הפעל הקלטה כדי לשמור את הסשן הבא.',
+          openFolder: 'פתח תיקייה',
+          refresh: 'רענן',
+          confirmDeleteTitle: 'למחוק את ההקלטה?',
+          confirmDeleteDescription: 'למחוק את <bold>{{filename}}</bold>? לא ניתן לבטל פעולה זו.',
+          openExternally: 'פתח'
         },
         serverUnreachable: {
           title: 'אי אפשר להגיע לשרת',
@@ -249,12 +259,29 @@ const he = {
             sceneEdit: 'עריכת סצנה'
           }
         },
+        offlineMode: {
+          title: 'מצב לא מקוון',
+          description: 'רוצה להשתמש ב-Biome ללא חיבור לאינטרנט?',
+          enabled: 'עבוד לא מקוון',
+          enabledDescription: 'אפשר להמשיך להשתמש במה שכבר מותקן, אך התקנות מנוע מחדש והורדות מודלים ייכשלו.'
+        },
         experimental: {
           title: 'ניסיוני',
           description: 'רוצה לנסות רעיונות גולמיים שעלולים להשתנות או להיעלם?',
           sceneEdit: 'עריכת סצנה',
           sceneEditDescription:
             'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
+        },
+        recording: {
+          title: 'הקלטת וידאו',
+          description: 'רוצה להקליט את המשחק שלך?',
+          enabled: 'הקלט את המשחק',
+          enabledDescription: 'שומר סרטונים חלקים בקצב הפריימים המלא של המודל.',
+          outputFolder: 'תיקיית פלט',
+          outputFolderHint: 'השאר ריק כדי להשתמש בברירת המחדל של המערכת.',
+          browse: 'עיון...',
+          manage: 'ניהול הקלטות',
+          manageDescription: 'צפה או מחק סרטונים שהוקלטו בעבר.'
         },
         debugMetrics: {
           title: 'מדדים',
@@ -336,6 +363,8 @@ const he = {
         startupTimeout: 'תם הזמן להפעלת השרת — בדוק את הלוגים לשגיאות',
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
+        networkUnreachable:
+          'לא ניתן להגיע לאינטרנט. אם המנוע והמודל הרצויים כבר הורדו, ניתן להפעיל מצב לא מקוון בהגדרות הכלליות כדי להשתמש בהם ללא רשת.\n\nפרטים: {{message}}',
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',

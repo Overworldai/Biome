@@ -7,8 +7,9 @@ import { getUvBinaryPath, getUvEnvVars } from '../lib/uv.js'
 import { getHiddenWindowOptions, getUvArchiveName, getVenvPythonPath } from '../lib/platform.js'
 import { getServerState, stopServerSync } from '../lib/serverState.js'
 import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
-import { copyServerComponentFiles } from '../lib/serverFiles.js'
+import { copyServerComponentFiles, ensureEngineFont } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
+import { getOfflineEnv } from './settings.js'
 
 const UV_VERSION = '0.10.9'
 let engineInstallAbortController: AbortController | null = null
@@ -36,6 +37,9 @@ function unpackServerFilesInner(force: boolean): string {
   const hasKey =
     fs.existsSync(path.join(engineDir, 'pyproject.toml')) && fs.existsSync(path.join(engineDir, 'server.py'))
   if (hasKey) {
+    // Re-run the font copy so upgrades from older installs (which didn't
+    // unpack fonts) pick it up without a full reinstall.
+    ensureEngineFont(engineDir)
     return 'Files already exist, skipped unpacking'
   }
 
@@ -66,7 +70,7 @@ async function syncEngineDependencies(signal?: AbortSignal): Promise<void> {
   await runUvSyncWithMirroredLogs(
     uvBinary,
     engineDir,
-    { ...process.env, ...uvEnv },
+    { ...process.env, ...uvEnv, ...getOfflineEnv() },
     {
       logPrefix: '[ENGINE]',
       signal,
@@ -203,7 +207,6 @@ export function registerEngineIpc(): void {
     console.log(`[ENGINE] check-engine-status: start (caller=${caller})`)
     const engineDir = getEngineDir()
     const uvBinary = getUvBinaryPath()
-    const uvDir = getUvDir()
     const uvEnv = getUvEnvVars()
 
     // Check if our local uv binary exists and works

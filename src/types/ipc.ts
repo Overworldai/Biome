@@ -205,6 +205,26 @@ export type AppUpdateInfo = {
   update_available: boolean
 }
 
+/** Semantic session state parsed from a recording's MP4 `comment` atom.
+ *  Matches the dataclass in server-components/video_recorder.py. All fields
+ *  optional on the renderer side because older files may lack the atom or
+ *  its contents may be malformed. */
+export type RecordingProperties = {
+  biome_version?: string
+  model?: string | null
+  quant?: string
+  seed?: string | null
+  scene_edit_enabled?: boolean
+}
+
+export type RecordingEntry = {
+  filename: string
+  path: string
+  size_bytes: number
+  mtime_ms: number
+  properties: RecordingProperties | null
+}
+
 /**
  * Maps each IPC command channel to its argument tuple and return type.
  * This is the single source of truth for all invoke() calls.
@@ -237,6 +257,7 @@ export type IpcCommandMap = {
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
   'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'get-last-server-exit-tail': { args: []; return: string | null }
 
   // Seeds
   'list-seeds': { args: []; return: SeedFileRecord[] }
@@ -269,6 +290,15 @@ export type IpcCommandMap = {
 
   // Updates
   'check-for-app-update': { args: []; return: AppUpdateInfo }
+
+  // Recordings
+  'get-default-video-dir': { args: []; return: string }
+  'resolve-video-dir': { args: [configured: string]; return: string }
+  'pick-video-dir': { args: [currentValue: string]; return: string | null }
+  'list-recordings': { args: [configured: string]; return: RecordingEntry[] }
+  'delete-recording': { args: [filePath: string]; return: void }
+  'open-recording-externally': { args: [filePath: string]; return: void }
+  'open-recordings-folder': { args: [configured: string]; return: void }
 }
 
 /**

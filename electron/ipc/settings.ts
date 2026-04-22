@@ -142,7 +142,7 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
   return { settings: settingsSchema.parse({}), dirty: true }
 }
 
-function readSettingsSync(): Settings {
+export function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
   const { settings, dirty } = loadSettings(settingsPath)
   const repaired = repairMissingPinnedScenes(settings)
@@ -150,6 +150,12 @@ function readSettingsSync(): Settings {
     fs.writeFileSync(settingsPath, JSON.stringify(repaired, null, 2))
   }
   return repaired
+}
+
+/** Env vars injected into any uv / python subprocess when offline mode is on.
+ *  Single source of truth — both engine setup and the server spawn consume this. */
+export function getOfflineEnv(): Record<string, string> {
+  return readSettingsSync().offline_mode ? { UV_OFFLINE: '1', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' } : {}
 }
 
 export function registerSettingsIpc(): void {

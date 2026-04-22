@@ -30,6 +30,7 @@ const ja = {
         abort: '中止',
         aborting: '中止中...',
         copy: 'コピー',
+        open: '開く',
         pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
         browseForImageFile: '画像ファイルを選択',
         delete: '削除'
@@ -75,6 +76,15 @@ const ja = {
           title: 'モデルを削除しますか？',
           description:
             '<bold>{{modelId}}</bold> はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
+        },
+        recordings: {
+          title: '録画',
+          empty: 'まだ録画がありません。録画を有効にすると、次のセッションから保存されます。',
+          openFolder: 'フォルダを開く',
+          refresh: '更新',
+          confirmDeleteTitle: '録画を削除しますか？',
+          confirmDeleteDescription: '<bold>{{filename}}</bold> を削除しますか？この操作は取り消せません。',
+          openExternally: '開く'
         },
         serverUnreachable: {
           title: 'サーバーに接続できません',
@@ -253,12 +263,30 @@ const ja = {
             sceneEdit: 'シーン編集'
           }
         },
+        offlineMode: {
+          title: 'オフラインモード',
+          description: 'インターネット接続なしでBiomeを使用しますか？',
+          enabled: 'オフラインで動作',
+          enabledDescription:
+            'すでにセットアップ済みのものはそのまま使用できますが、エンジンの再インストールやモデルのダウンロードは失敗します。'
+        },
         experimental: {
           title: '実験的機能',
           description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
           sceneEdit: 'シーン編集',
           sceneEditDescription:
             'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
+        },
+        recording: {
+          title: '動画録画',
+          description: 'プレイ内容を録画しますか？',
+          enabled: 'プレイを録画',
+          enabledDescription: 'モデル本来のフレームレートで滑らかな動画を保存します。',
+          outputFolder: '保存先フォルダ',
+          outputFolderHint: '空欄の場合はシステム既定の場所を使用します。',
+          browse: '参照...',
+          manage: '録画の管理',
+          manageDescription: '過去に録画した動画を表示または削除します。'
         },
         debugMetrics: {
           title: 'メトリクス',
@@ -340,6 +368,8 @@ const ja = {
         startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
+        networkUnreachable:
+          'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',

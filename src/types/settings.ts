@@ -62,6 +62,7 @@ export const settingsSchema = z.object({
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
+  offline_mode: z.boolean().default(false),
   custom_models: z.array(z.string()).default([]),
   mouse_sensitivity: sensitivitySchema,
   gamepad_sensitivity: sensitivitySchema,
@@ -103,7 +104,21 @@ export const settingsSchema = z.object({
       frame_timeline: z.boolean().default(false),
       action_logging: z.boolean().default(false)
     })
-    .default({ performance_stats: false, input: false, frame_timeline: false, action_logging: false })
+    .default({
+      performance_stats: false,
+      input: false,
+      frame_timeline: false,
+      action_logging: false
+    }),
+  // Video recording (standalone mode only). output_dir is user-configurable;
+  // the empty-string default means "use the OS video directory + /Biome",
+  // resolved at the Electron layer via resolve-video-dir.
+  recording: z
+    .object({
+      enabled: z.boolean().default(false),
+      output_dir: z.string().default('')
+    })
+    .default({ enabled: false, output_dir: '' })
 })
 
 export type Settings = z.infer<typeof settingsSchema>

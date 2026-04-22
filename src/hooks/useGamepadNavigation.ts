@@ -17,7 +17,7 @@ import {
   isInViewport,
   type NavDirection
 } from '../lib/focusNavigation'
-import { getActiveScopeRoot, getTopFocusScope } from '../context/FocusScopeContext'
+import { getActiveScopeRoot, getTopFocusScope } from '../context/focusScopeStack'
 import { markGamepadInput } from '../lib/inputModality'
 
 // Standard Gamepad mapping indices.

@@ -94,9 +94,16 @@ type HfApiResponse = {
   siblings?: HfApiSibling[]
 }
 
+const EXCLUDED_SAFETENSOR_BASENAMES = new Set(['diffusion_pytorch_model.safetensors'])
+
 function extractSizeBytes(info: HfApiResponse): number | null {
   if (!info.siblings) return null
-  const safetensorFiles = info.siblings.filter((s) => s.rfilename.endsWith('.safetensors') && s.size != null)
+  const safetensorFiles = info.siblings.filter(
+    (s) =>
+      s.rfilename.endsWith('.safetensors') &&
+      s.size != null &&
+      !EXCLUDED_SAFETENSOR_BASENAMES.has(path.basename(s.rfilename))
+  )
   if (safetensorFiles.length === 0) return null
   // Deduplicate by blobId to avoid counting symlinked files twice
   const seen = new Set<string>()

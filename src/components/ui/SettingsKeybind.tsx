@@ -20,7 +20,7 @@ const MOUSE_BUTTON_TO_CODE: Record<number, InputCode> = {
   4: MOUSE_CODES.FORWARD
 }
 
-export const keyCodeToLabel = (code: InputCode): DisplayLabel => {
+const keyCodeToLabel = (code: InputCode): DisplayLabel => {
   if (code in MOUSE_CODE_LABELS) return MOUSE_CODE_LABELS[code]
   if (code.startsWith('Key')) return code.slice(3)
   if (code.startsWith('Digit')) return code.slice(5)
@@ -119,7 +119,15 @@ const SettingsKeybind = ({ value, onChange, disabled, hasError }: SettingsKeybin
     <button
       ref={buttonRef}
       type="button"
-      className={`w-full min-w-0 text-left rounded-none ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'} ${SETTINGS_CONTROL_BASE} ${SETTINGS_CONTROL_TEXT} ${SETTINGS_OUTLINE_HOVER} appearance-none break-words ${listening ? 'border-text-primary' : hasError ? 'border-error' : ''}`}
+      className={`
+        w-full min-w-0 rounded-none text-left
+        ${disabled ? 'cursor-default opacity-50' : 'cursor-pointer'}
+        ${SETTINGS_CONTROL_BASE}
+        ${SETTINGS_CONTROL_TEXT}
+        ${SETTINGS_OUTLINE_HOVER}
+        appearance-none wrap-break-word
+        ${listening ? 'border-text-primary' : hasError ? 'border-error' : ''}
+      `}
       onMouseEnter={disabled ? undefined : playHover}
       onClick={handleClick}
       onBlur={handleBlur}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettings } from './useSettings'
+import { useSettings } from './settingsContextValue'
 import type { SeedRecord } from '../types/app'
 
 /** Managed scene ordering: pinned list + unpinned list, both persisted. */

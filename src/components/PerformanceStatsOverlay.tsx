@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import Sparkline from './Sparkline'
 
 const BUFFER_SIZE = 60
@@ -132,7 +132,13 @@ const PerformanceStatsOverlay = () => {
 
   return (
     <div
-      className={`absolute top-[1.5cqh] left-[1.5cqh] z-10 pointer-events-none ${OVERLAY_BG} ${OVERLAY_BORDER} rounded-[0.4cqh] p-[1cqh] ${OVERLAY_TEXT}`}
+      className={`
+        pointer-events-none absolute top-[1.5cqh] left-[1.5cqh] z-10
+        ${OVERLAY_BG}
+        ${OVERLAY_BORDER}
+        rounded-[0.4cqh] p-[1cqh]
+        ${OVERLAY_TEXT}
+      `}
     >
       <Row label="CPU" value={systemInfo?.cpu_name ?? '[Unknown CPU]'} color={COLOR_HUD} />
       <Row label="GPU" value={systemInfo?.gpu_name ?? '[Unknown GPU]'} color={COLOR_HUD} />
@@ -195,10 +201,10 @@ const PerformanceStatsOverlay = () => {
         sparkValues={latBuf.values}
         sparkColor={COLOR_WARM}
       />
-      <div className="border-t border-white/15 mt-[0.5cqh] mb-[0.3cqh]" />
+      <div className="mt-[0.5cqh] mb-[0.3cqh] border-t border-white/15" />
       <div className="flex gap-[1.5cqh]">
         <div className="flex-1">
-          <div style={{ color: COLOR_LABEL }} className="text-center mb-[0.3cqh]">
+          <div style={{ color: COLOR_LABEL }} className="mb-[0.3cqh] text-center">
             GEN stats
           </div>
           <Row label="MEAN" value={ftStats ? `${ftStats.mean.toFixed(1)} ms` : '--'} color={COLOR_WARM} />
@@ -210,7 +216,7 @@ const PerformanceStatsOverlay = () => {
         </div>
         {p && (
           <div className="flex-1">
-            <div style={{ color: COLOR_LABEL }} className="text-center mb-[0.3cqh]">
+            <div style={{ color: COLOR_LABEL }} className="mb-[0.3cqh] text-center">
               Frame profile
             </div>
             <Row label="INFER" value={`${p.inferMs.toFixed(1)} ms`} color={COLOR_HUD} />
@@ -243,8 +249,13 @@ type RowProps = {
 }
 
 const Row = ({ label, value, color, sparkValues, sparkColor, sparkMax, className = '' }: RowProps) => (
-  <div className={`flex items-center gap-[0.8cqh] ${className}`}>
-    <span className={`text-[${COLOR_LABEL}] w-[5.5cqh] text-right shrink-0`}>{label}</span>
+  <div
+    className={`
+      flex items-center gap-[0.8cqh]
+      ${className}
+    `}
+  >
+    <span className="w-[5.5cqh] shrink-0 text-right">{label}</span>
     {sparkValues !== undefined ? (
       <>
         <span style={{ color }} className="w-[14cqh] shrink-0 tabular-nums">

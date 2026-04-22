@@ -4,21 +4,17 @@ import fs from 'node:fs'
 import { registerAllIpc } from './ipc/index.js'
 import { stopServerSync } from './lib/serverState.js'
 import { getBackgroundsDir } from './ipc/backgrounds.js'
+import { getCurrentRecordingsDir } from './ipc/recordings.js'
 
-// Register biome-bg as a privileged scheme so <video> elements can stream from it.
-// Must be called before app.whenReady().
+// Register biome-bg / biome-recording as privileged schemes so <video> elements
+// can stream from them. Must be called before app.whenReady().
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'biome-bg',
     privileges: { standard: true, supportFetchAPI: true, stream: true, bypassCSP: true }
-  }
-])
-
-// Register biome-bg as a privileged scheme so <video> elements can stream from it.
-// Must be called before app.whenReady().
-protocol.registerSchemesAsPrivileged([
+  },
   {
-    scheme: 'biome-bg',
+    scheme: 'biome-recording',
     privileges: { standard: true, supportFetchAPI: true, stream: true, bypassCSP: true }
   }
 ])
@@ -138,6 +134,27 @@ app
       const backgroundsDir = getBackgroundsDir()
       const filePath = path.join(backgroundsDir, filename)
 
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        return new Response('Not found', { status: 404 })
+      }
+
+      return net.fetch(`file://${filePath}`)
+    })
+
+    // biome-recording://serve/<basename>.mp4 streams a single file from the
+    // currently-configured recordings dir (set by list-recordings /
+    // resolve-video-dir). basename-only: refuses anything with path separators.
+    protocol.handle('biome-recording', (request) => {
+      const url = new URL(request.url)
+      const filename = path.basename(url.pathname)
+      if (!filename || filename !== decodeURIComponent(url.pathname.replace(/^\/+/, ''))) {
+        return new Response('Not found', { status: 404 })
+      }
+
+      const dir = getCurrentRecordingsDir()
+      if (!dir) return new Response('Not found', { status: 404 })
+
+      const filePath = path.join(dir, filename)
       if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         return new Response('Not found', { status: 404 })
       }

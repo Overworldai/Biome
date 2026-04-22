@@ -30,6 +30,7 @@ const zh = {
         abort: '中止',
         aborting: '正在中止...',
         copy: '复制',
+        open: '打开',
         pasteImageFromClipboard: '从剪贴板粘贴图片',
         browseForImageFile: '浏览图片文件',
         delete: '删除'
@@ -72,6 +73,15 @@ const zh = {
         deleteModelCache: {
           title: '删除模型？',
           description: '<bold>{{modelId}}</bold> 已下载到此设备。删除后可释放磁盘空间，但再次使用前需要重新下载该模型。'
+        },
+        recordings: {
+          title: '录制',
+          empty: '还没有录制。开启录制后，下一局游戏将被保存。',
+          openFolder: '打开文件夹',
+          refresh: '刷新',
+          confirmDeleteTitle: '删除录制？',
+          confirmDeleteDescription: '删除 <bold>{{filename}}</bold>？此操作无法撤销。',
+          openExternally: '打开'
         },
         serverUnreachable: {
           title: '无法连接到服务器',
@@ -246,11 +256,28 @@ const zh = {
             sceneEdit: '场景编辑'
           }
         },
+        offlineMode: {
+          title: '离线模式',
+          description: '想要在没有网络连接的情况下使用 Biome 吗？',
+          enabled: '离线工作',
+          enabledDescription: '你可以继续使用已经配置好的内容，但引擎重新安装和模型下载将会失败。'
+        },
         experimental: {
           title: '实验性功能',
           description: '想尝试一些可能会改变或消失的粗略想法吗？',
           sceneEdit: '场景编辑',
           sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
+        },
+        recording: {
+          title: '视频录制',
+          description: '想录制你的游戏过程吗？',
+          enabled: '录制游戏',
+          enabledDescription: '以模型完整帧率保存流畅视频。',
+          outputFolder: '输出文件夹',
+          outputFolderHint: '留空则使用系统默认位置。',
+          browse: '浏览...',
+          manage: '管理录制',
+          manageDescription: '查看或删除之前录制的视频。'
         },
         debugMetrics: {
           title: '指标',
@@ -331,6 +358,8 @@ const zh = {
         startupTimeout: '服务器启动超时 - 请检查日志',
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
+        networkUnreachable:
+          '无法连接到互联网。如果你想要的引擎和模型已经下载过，可以在「通用设置」中启用离线模式，无需网络即可使用。\n\n详情：{{message}}',
         error: {
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
