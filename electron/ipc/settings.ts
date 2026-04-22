@@ -2,7 +2,7 @@ import { ipcMain, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getConfigDir, getSeedsDefaultDir, getSeedsUploadsDir } from '../lib/paths.js'
-import { settingsSchema, DEFAULT_PINNED_SCENES } from '../../src/types/settings.js'
+import { settingsSchema, DEFAULT_SCENE_ORDER } from '../../src/types/settings.js'
 import type { Settings } from '../../src/types/settings.js'
 
 const SETTINGS_FILENAME = 'settings.json'
@@ -54,19 +54,38 @@ function migrateFromLegacyConfig(parsed: Record<string, unknown>): Partial<Setti
       migrated.mouse_sensitivity = features.mouse_sensitivity
     }
     if (Array.isArray(features.pinned_scenes)) {
-      migrated.pinned_scenes = features.pinned_scenes.filter((v) => typeof v === 'string')
+      migrated.scene_order = features.pinned_scenes.filter((v): v is string => typeof v === 'string')
     }
   }
 
   return migrated
 }
 
-function validateDefaultPinnedScenes(): void {
+/** Previous versions of the app stored scene order under `pinned_scenes` (and
+ *  later also `unpinned_scene_order`). Combine them into the new `scene_order`
+ *  field when present so upgrades don't reset a user's customised order. */
+function migrateLegacySceneFields(parsed: unknown): unknown {
+  if (typeof parsed !== 'object' || parsed === null) return parsed
+  const obj = parsed as Record<string, unknown>
+  if ('scene_order' in obj) return parsed
+
+  const pinned = Array.isArray(obj.pinned_scenes)
+    ? obj.pinned_scenes.filter((v): v is string => typeof v === 'string')
+    : []
+  const unpinned = Array.isArray(obj.unpinned_scene_order)
+    ? obj.unpinned_scene_order.filter((v): v is string => typeof v === 'string')
+    : []
+  if (pinned.length === 0 && unpinned.length === 0) return parsed
+
+  return { ...obj, scene_order: [...pinned, ...unpinned] }
+}
+
+function validateDefaultScenes(): void {
   const defaultDir = getSeedsDefaultDir()
   const uploadsDir = getSeedsUploadsDir()
   const missing: string[] = []
 
-  for (const filename of DEFAULT_PINNED_SCENES) {
+  for (const filename of DEFAULT_SCENE_ORDER) {
     const inDefault = fs.existsSync(path.join(defaultDir, filename))
     const inUploads = fs.existsSync(path.join(uploadsDir, filename))
     if (!inDefault && !inUploads) {
@@ -76,7 +95,7 @@ function validateDefaultPinnedScenes(): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `Default pinned scene files are missing from seeds directories: ${missing.join(', ')}. ` +
+      `Default scene files are missing from seeds directories: ${missing.join(', ')}. ` +
         `Ensure these files exist in "${defaultDir}" or "${uploadsDir}".`
     )
   }
@@ -88,22 +107,22 @@ function seedFileExists(filename: string): boolean {
   return fs.existsSync(path.join(defaultDir, filename)) || fs.existsSync(path.join(uploadsDir, filename))
 }
 
-/** Replace any pinned scenes whose seed files no longer exist with defaults.
- *  Returns the same object if no changes, or a new object with replacements. */
-function repairMissingPinnedScenes(settings: Settings): Settings {
-  const pinned = settings.pinned_scenes
-  const missing = pinned.filter((f) => !seedFileExists(f))
+/** Replace any scenes in the order list whose seed files no longer exist
+ *  with defaults. Returns the same object if no changes. */
+function repairMissingScenes(settings: Settings): Settings {
+  const order = settings.scene_order
+  const missing = order.filter((f) => !seedFileExists(f))
   if (missing.length === 0) return settings
 
-  const kept = pinned.filter((f) => seedFileExists(f))
+  const kept = order.filter((f) => seedFileExists(f))
   const keptSet = new Set(kept)
-  const replacements = DEFAULT_PINNED_SCENES.filter((f) => !keptSet.has(f))
+  const replacements = DEFAULT_SCENE_ORDER.filter((f) => !keptSet.has(f))
 
-  const repaired = [...kept, ...replacements].slice(0, Math.max(pinned.length, DEFAULT_PINNED_SCENES.length))
+  const repaired = [...kept, ...replacements].slice(0, Math.max(order.length, DEFAULT_SCENE_ORDER.length))
 
-  console.log(`[SETTINGS] Replaced ${missing.length} missing pinned scene(s): ${missing.join(', ')}`)
+  console.log(`[SETTINGS] Replaced ${missing.length} missing scene(s): ${missing.join(', ')}`)
 
-  return { ...settings, pinned_scenes: repaired }
+  return { ...settings, scene_order: repaired }
 }
 
 function loadSettings(settingsPath: string): { settings: Settings; dirty: boolean } {
@@ -133,9 +152,10 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
     return { settings: settingsSchema.parse({}), dirty: true }
   }
 
-  const result = settingsSchema.safeParse(parsed)
+  const migrated = migrateLegacySceneFields(parsed)
+  const result = settingsSchema.safeParse(migrated)
   if (result.success) {
-    return { settings: result.data, dirty: false }
+    return { settings: result.data, dirty: migrated !== parsed }
   }
 
   console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
@@ -145,7 +165,7 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
 export function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
   const { settings, dirty } = loadSettings(settingsPath)
-  const repaired = repairMissingPinnedScenes(settings)
+  const repaired = repairMissingScenes(settings)
   if (dirty || repaired !== settings) {
     fs.writeFileSync(settingsPath, JSON.stringify(repaired, null, 2))
   }
@@ -159,9 +179,9 @@ export function getOfflineEnv(): Record<string, string> {
 }
 
 export function registerSettingsIpc(): void {
-  // Validate default pinned scenes exist at startup
+  // Validate default scene files exist at startup
   try {
-    validateDefaultPinnedScenes()
+    validateDefaultScenes()
   } catch (err) {
     console.error('[SETTINGS]', err instanceof Error ? err.message : err)
     throw err

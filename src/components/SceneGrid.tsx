@@ -3,22 +3,19 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { SeedRecord } from '../types/app'
 import SceneCard from './SceneCard'
 
-type Region = 'pinned' | 'unpinned'
 // Track the hovered card + which half the cursor is on. This preserves the
 // visual intent of the cursor: "right half of rightmost-of-row-1" renders on
 // row 1, "left half of first-of-row-2" renders on row 2 — even though those
 // two cases would collapse to the same insert-index.
-type DropTarget = { region: Region; hoveredFilename: string; side: 'left' | 'right' }
+type DropTarget = { hoveredFilename: string; side: 'left' | 'right' }
 
 interface SceneGridProps {
-  pinnedSeeds: SeedRecord[]
-  unpinnedSeeds: SeedRecord[]
+  scenes: SeedRecord[]
   thumbnails: Record<string, string>
   selectCooldown: boolean
   onSelect: (filename: string) => void
-  onTogglePin: (filename: string) => void
   onRemove: (seed: SeedRecord) => void
-  onMoveScene?: (filename: string, targetRegion: Region, targetIdx: number) => void
+  onMoveScene?: (filename: string, targetIdx: number) => void
   className?: string
   before?: ReactNode
   emptyState?: ReactNode
@@ -40,12 +37,10 @@ const AUTO_SCROLL_EDGE_PX = 48
 const AUTO_SCROLL_MAX_SPEED_PX = 16
 
 const SceneGrid = ({
-  pinnedSeeds,
-  unpinnedSeeds,
+  scenes,
   thumbnails,
   selectCooldown,
   onSelect,
-  onTogglePin,
   onRemove,
   onMoveScene,
   className,
@@ -60,20 +55,10 @@ const SceneGrid = ({
   const cursorYRef = useRef<number | null>(null)
   const autoScrollRafRef = useRef<number | null>(null)
 
-  const pinnedIds = useMemo(() => pinnedSeeds.map((s) => s.filename), [pinnedSeeds])
-  const unpinnedIds = useMemo(() => unpinnedSeeds.map((s) => s.filename), [unpinnedSeeds])
-  const draggedIsPinned = draggedFilename ? pinnedIds.includes(draggedFilename) : false
+  const sceneIds = useMemo(() => scenes.map((s) => s.filename), [scenes])
 
-  const seedMap = useMemo(() => {
-    const m = new Map<string, SeedRecord>()
-    pinnedSeeds.forEach((s) => m.set(s.filename, s))
-    unpinnedSeeds.forEach((s) => m.set(s.filename, s))
-    return m
-  }, [pinnedSeeds, unpinnedSeeds])
-
-  const isEmpty = pinnedIds.length === 0 && unpinnedIds.length === 0
-  const totalCount = pinnedIds.length + unpinnedIds.length
-  const canDrag = onMoveScene !== undefined && totalCount > 1
+  const isEmpty = sceneIds.length === 0
+  const canDrag = onMoveScene !== undefined && sceneIds.length > 1
 
   // Indicator is rendered at the wrapper level (outside the scroll container)
   // so it can sit in the gap past the leftmost/rightmost cards without being
@@ -154,19 +139,16 @@ const SceneGrid = ({
   }
 
   const seedInitialTarget = (filename: string): DropTarget | null => {
-    const inPinned = pinnedIds.indexOf(filename)
-    const [region, regionIds] =
-      inPinned !== -1 ? (['pinned', pinnedIds] as const) : (['unpinned', unpinnedIds] as const)
-    const idx = regionIds.indexOf(filename)
+    const idx = sceneIds.indexOf(filename)
     if (idx === -1) return null
-    const withoutDragged = regionIds.filter((f) => f !== filename)
+    const withoutDragged = sceneIds.filter((f) => f !== filename)
     if (withoutDragged.length === 0) return null
     // Seed on the card adjacent to the dragged scene so the preview stays
     // anchored at the drag's original position until the cursor moves.
     if (idx < withoutDragged.length) {
-      return { region, hoveredFilename: withoutDragged[idx], side: 'left' }
+      return { hoveredFilename: withoutDragged[idx], side: 'left' }
     }
-    return { region, hoveredFilename: withoutDragged[withoutDragged.length - 1], side: 'right' }
+    return { hoveredFilename: withoutDragged[withoutDragged.length - 1], side: 'right' }
   }
 
   const handleDragStart = (filename: string, event: DragEvent<HTMLButtonElement>) => {
@@ -178,37 +160,23 @@ const SceneGrid = ({
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  const pinnedEndTarget = (): DropTarget | null => {
-    const lastPinned = pinnedIds.filter((f) => f !== draggedFilename).at(-1)
-    if (!lastPinned) return null
-    return { region: 'pinned', hoveredFilename: lastPinned, side: 'right' }
-  }
-
-  const handleCardDragOver = (hoveredFilename: string, region: Region, event: DragEvent<HTMLButtonElement>) => {
+  const handleCardDragOver = (hoveredFilename: string, event: DragEvent<HTMLButtonElement>) => {
     if (!draggedFilename) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
     cursorYRef.current = event.clientY
 
-    // Pinned stays pinned: clamp to end of pinned if cursor strays into unpinned cards.
-    if (draggedIsPinned && region === 'unpinned') {
-      const target = pinnedEndTarget()
-      if (target) setDropTarget(target)
-      return
-    }
-
     // Hovering the dragged card itself — leave the seeded target in place.
     if (hoveredFilename === draggedFilename) return
 
     const rect = event.currentTarget.getBoundingClientRect()
     const side: 'left' | 'right' = event.clientX < rect.left + rect.width / 2 ? 'left' : 'right'
-    setDropTarget({ region, hoveredFilename, side })
+    setDropTarget({ hoveredFilename, side })
   }
 
   const resolveInsertIdx = (target: DropTarget): number => {
-    const regionIds = target.region === 'pinned' ? pinnedIds : unpinnedIds
-    const withoutDragged = regionIds.filter((f) => f !== draggedFilename)
+    const withoutDragged = sceneIds.filter((f) => f !== draggedFilename)
     const hoveredIdx = withoutDragged.indexOf(target.hoveredFilename)
     if (hoveredIdx === -1) return withoutDragged.length
     return target.side === 'left' ? hoveredIdx : hoveredIdx + 1
@@ -221,7 +189,7 @@ const SceneGrid = ({
     }
     event.preventDefault()
     event.stopPropagation()
-    onMoveScene(draggedFilename, dropTarget.region, resolveInsertIdx(dropTarget))
+    onMoveScene(draggedFilename, resolveInsertIdx(dropTarget))
     resetDrag()
   }
 
@@ -229,7 +197,7 @@ const SceneGrid = ({
 
   // Gaps between cards don't receive events, so the grid-level handler fires
   // there too. Guard with the last-card measurement so the fallback only
-  // targets "end of region" when the cursor is genuinely past all cards.
+  // targets "end of list" when the cursor is genuinely past all cards.
   const handleGridDragOver = (event: DragEvent<HTMLDivElement>) => {
     if (!draggedFilename) return
     event.preventDefault()
@@ -245,51 +213,38 @@ const SceneGrid = ({
       event.clientY > lastRect.bottom || (event.clientY >= lastRect.top && event.clientX > lastRect.right)
     if (!pastLastCard) return
 
-    if (draggedIsPinned) {
-      const target = pinnedEndTarget()
-      if (target) setDropTarget(target)
-      return
-    }
-
-    const lastUnpinned = unpinnedIds.filter((f) => f !== draggedFilename).at(-1)
-    if (lastUnpinned) {
-      setDropTarget({ region: 'unpinned', hoveredFilename: lastUnpinned, side: 'right' })
+    const lastScene = sceneIds.filter((f) => f !== draggedFilename).at(-1)
+    if (lastScene) {
+      setDropTarget({ hoveredFilename: lastScene, side: 'right' })
     }
   }
 
   const handleGridDrop = (event: DragEvent<HTMLDivElement>) => commitDrop(event)
 
-  const renderCard = (filename: string, region: Region) => {
-    const record = seedMap.get(filename)
-    if (!record) return null
-    return (
-      <motion.div
-        key={filename}
-        layout
-        transition={REORDER_TRANSITION}
-        data-scene-tile
-        data-scene-filename={filename}
-        className="relative w-full"
-      >
-        <SceneCard
-          seed={record}
-          thumbnailSrc={thumbnails[filename]}
-          isPinned={region === 'pinned'}
-          pinVariant="toggle"
-          selectCooldown={selectCooldown}
-          onSelect={onSelect}
-          onTogglePin={onTogglePin}
-          onRemove={onRemove}
-          draggable={canDrag}
-          isBeingDragged={draggedFilename === filename}
-          onDragStart={canDrag ? handleDragStart : undefined}
-          onDragOver={canDrag ? (f, e) => handleCardDragOver(f, region, e) : undefined}
-          onDrop={canDrag ? handleCardDrop : undefined}
-          onDragEnd={canDrag ? resetDrag : undefined}
-        />
-      </motion.div>
-    )
-  }
+  const renderCard = (scene: SeedRecord) => (
+    <motion.div
+      key={scene.filename}
+      layout
+      transition={REORDER_TRANSITION}
+      data-scene-tile
+      data-scene-filename={scene.filename}
+      className="relative w-full"
+    >
+      <SceneCard
+        seed={scene}
+        thumbnailSrc={thumbnails[scene.filename]}
+        selectCooldown={selectCooldown}
+        onSelect={onSelect}
+        onRemove={onRemove}
+        draggable={canDrag}
+        isBeingDragged={draggedFilename === scene.filename}
+        onDragStart={canDrag ? handleDragStart : undefined}
+        onDragOver={canDrag ? handleCardDragOver : undefined}
+        onDrop={canDrag ? handleCardDrop : undefined}
+        onDragEnd={canDrag ? resetDrag : undefined}
+      />
+    </motion.div>
+  )
 
   return (
     <div
@@ -311,14 +266,7 @@ const SceneGrid = ({
               scene tiles (not the user-scenes "paste / browse" buttons in `before`)
               without breaking the grid layout. */}
           <div data-default-focus className="contents">
-            {isEmpty ? (
-              emptyState
-            ) : (
-              <>
-                {pinnedIds.map((f) => renderCard(f, 'pinned'))}
-                {unpinnedIds.map((f) => renderCard(f, 'unpinned'))}
-              </>
-            )}
+            {isEmpty ? emptyState : scenes.map(renderCard)}
           </div>
         </div>
       </div>

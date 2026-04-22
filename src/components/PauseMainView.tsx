@@ -11,16 +11,14 @@ import { useTranslation } from 'react-i18next'
 import { useSettings } from '../hooks/settingsContextValue'
 
 interface PauseMainViewProps {
-  pinnedScenes: SeedRecord[]
-  unpinnedScenes: SeedRecord[]
+  scenes: SeedRecord[]
   thumbnails: Record<string, string>
   selectCooldown: boolean
   uploadingImage: boolean
   uploadError: string | null
   onSceneSelect: (filename: string) => void
-  onTogglePin: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
-  onMoveScene: (filename: string, targetRegion: 'pinned' | 'unpinned', targetIdx: number) => void
+  onMoveScene: (filename: string, targetIdx: number) => void
   onResetAndResume: () => void
   onNavigateSettings: () => void
   onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
@@ -35,14 +33,12 @@ interface PauseMainViewProps {
 }
 
 const PauseMainView = ({
-  pinnedScenes,
-  unpinnedScenes,
+  scenes,
   thumbnails,
   selectCooldown,
   uploadingImage,
   uploadError,
   onSceneSelect,
-  onTogglePin,
   onRemoveScene,
   onMoveScene,
   onResetAndResume,
@@ -61,7 +57,6 @@ const PauseMainView = ({
   const { settings } = useSettings()
   const sceneEditEnabled = settings.experimental?.scene_edit_enabled ?? false
   const isGenerating = generateState === 'loading'
-  const totalSceneCount = pinnedScenes.length + unpinnedScenes.length
   const [promptText, setPromptText] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -159,7 +154,7 @@ const PauseMainView = ({
       >
         <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
         <p className={VIEW_DESCRIPTION}>
-          {t('app.pause.scenes.description', { count: totalSceneCount })}
+          {t('app.pause.scenes.description', { count: scenes.length })}
           {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
         </p>
         {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
@@ -167,12 +162,10 @@ const PauseMainView = ({
           <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
         )}
         <SceneGrid
-          pinnedSeeds={pinnedScenes}
-          unpinnedSeeds={unpinnedScenes}
+          scenes={scenes}
           thumbnails={thumbnails}
           selectCooldown={selectCooldown}
           onSelect={onSceneSelect}
-          onTogglePin={onTogglePin}
           onRemove={onRemoveScene}
           onMoveScene={onMoveScene}
           before={

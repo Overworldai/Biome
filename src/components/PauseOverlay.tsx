@@ -42,17 +42,15 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     onPinnedSceneRemoved: (filename: string) => removeScene(filename)
   })
 
-  const { pinnedSceneIds, unpinnedSceneIds, togglePinnedScene, removeScene, moveScene } = useSceneOrder({
+  const { sceneIds, removeScene, moveScene } = useSceneOrder({
     seeds,
     isLoaded: seedsLoaded
   })
 
-  const { pinnedScenes, unpinnedScenes } = useMemo(() => {
+  const scenes = useMemo(() => {
     const byFilename = new Map(seeds.map((s) => [s.filename, s]))
-    const resolve = (ids: string[]): SeedRecord[] =>
-      ids.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
-    return { pinnedScenes: resolve(pinnedSceneIds), unpinnedScenes: resolve(unpinnedSceneIds) }
-  }, [seeds, pinnedSceneIds, unpinnedSceneIds])
+    return sceneIds.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
+  }, [seeds, sceneIds])
 
   const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
 
@@ -146,14 +144,12 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             exit="exit"
           >
             <PauseMainView
-              pinnedScenes={pinnedScenes}
-              unpinnedScenes={unpinnedScenes}
+              scenes={scenes}
               thumbnails={thumbnails}
               selectCooldown={selectCooldown}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
               onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
               onRemoveScene={removeSceneFile}
               onMoveScene={moveScene}
               onResetAndResume={handleResetAndResume}
