@@ -120,7 +120,7 @@ const SceneCard = ({
           }
         `}
       >
-        {!seed.is_default && onRemove && !hideSecondaryActions && (
+        {seed.source !== 'default' && onRemove && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}

@@ -265,7 +265,9 @@ const zh = {
           title: '场景创作',
           description: '想通过文字提示创建和修改场景吗？',
           enabled: '启用场景创作',
-          enabledDescription: '使用本地图像模型通过文字提示生成新场景或编辑当前场景。需要额外 8-10GB 显存。'
+          enabledDescription: '使用本地图像模型通过文字提示生成新场景或编辑当前场景。需要额外 8-10GB 显存。',
+          saveGenerated: '保存生成的场景',
+          saveGeneratedDescription: '将生成的每个场景保留在场景列表中，以便日后重新使用或删除。'
         },
         recording: {
           title: '视频录制',

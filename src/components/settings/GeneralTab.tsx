@@ -134,12 +134,20 @@ const GeneralTab = ({
       </SettingsSection>
 
       <SettingsSection title="app.settings.sceneAuthoring.title" description="app.settings.sceneAuthoring.description">
-        <SettingsCheckbox
-          label="app.settings.sceneAuthoring.enabled"
-          description="app.settings.sceneAuthoring.enabledDescription"
-          checked={menuSceneAuthoringEnabled}
-          onChange={setMenuSceneAuthoringEnabled}
-        />
+        <div className="flex flex-col gap-[1cqh]">
+          <SettingsCheckbox
+            label="app.settings.sceneAuthoring.enabled"
+            description="app.settings.sceneAuthoring.enabledDescription"
+            checked={menuSceneAuthoringEnabled}
+            onChange={setMenuSceneAuthoringEnabled}
+          />
+          <SettingsCheckbox
+            label="app.settings.sceneAuthoring.saveGenerated"
+            description="app.settings.sceneAuthoring.saveGeneratedDescription"
+            checked={settings.scene_authoring_save_generated ?? true}
+            onChange={(v) => void saveSettings({ ...settings, scene_authoring_save_generated: v })}
+          />
+        </div>
       </SettingsSection>
 
       {showRecording && (

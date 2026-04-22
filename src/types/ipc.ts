@@ -1,4 +1,4 @@
-import type { EngineStatus, SeedFileRecord } from './app'
+import type { EngineStatus, SeedFileRecord, SeedSource } from './app'
 import type { Settings } from './settings'
 import type { PortalSparksTuning } from '../lib/portalSparksTuning'
 
@@ -264,7 +264,8 @@ export type IpcCommandMap = {
   'get-seed-image-base64': { args: [filename: string]; return: { base64: string } }
   'get-seed-thumbnail-base64': { args: [filename: string]; return: string }
   'upload-seed': { args: [filename: string, base64: string]; return: SeedFileRecord }
-  'delete-seed': { args: [filename: string]; return: void }
+  'save-generated-seed': { args: [base64: string]; return: SeedFileRecord }
+  'delete-seed': { args: [filename: string, source: SeedSource]; return: void }
   'get-seeds-dir-path': { args: []; return: string }
   'open-seeds-dir': { args: []; return: void }
   'read-image-files': { args: [paths: string[]]; return: { name: string; base64: string; mimeType: string }[] }

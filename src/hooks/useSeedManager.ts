@@ -59,7 +59,9 @@ async function parseClipboardFilePaths(items: ClipboardItems): Promise<string[]>
 }
 
 function sortSeeds(a: SeedFileRecord, b: SeedFileRecord) {
-  if (a.is_default !== b.is_default) return a.is_default ? 1 : -1
+  const aDefault = a.source === 'default'
+  const bDefault = b.source === 'default'
+  if (aDefault !== bDefault) return aDefault ? 1 : -1
   if (a.modifiedAt !== b.modifiedAt) return b.modifiedAt - a.modifiedAt
   return a.filename.localeCompare(b.filename)
 }
@@ -113,7 +115,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
     const seedRecords: SeedRecord[] = sorted.map((r) => ({
       filename: r.filename,
       is_safe: null,
-      is_default: r.is_default
+      source: r.source
     }))
 
     console.log(`[PauseOverlay] Loaded ${seedRecords.length} seeds`)
@@ -174,9 +176,9 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
   }, [loadSeedsAndThumbnails])
 
   const removeScene = async (seed: SeedRecord) => {
-    if (seed.is_default) return
+    if (seed.source === 'default') return
     try {
-      await invoke('delete-seed', seed.filename)
+      await invoke('delete-seed', seed.filename, seed.source)
       onPinnedSceneRemoved(seed.filename)
       await refreshSeeds()
     } catch (err) {
@@ -283,6 +285,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
     uploadingImage,
     uploadError,
     removeScene,
+    refreshSeeds,
     handleImageUpload,
     handleImageDrop,
     handleClipboardUpload

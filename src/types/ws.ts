@@ -108,6 +108,14 @@ export type GenerateSceneRequest = {
 }
 export type GenerateSceneResponse = {
   elapsed_ms: number
+  /** JPEG bytes (base64) of the generated image, so the client can save it to disk. */
+  image_jpeg_base64: string
+  /** Prompt as the user typed it. */
+  user_prompt: string
+  /** Prompt after VLM sanitisation/refinement (what the image model actually saw). */
+  sanitized_prompt: string
+  /** HuggingFace repo id of the image model that produced this frame. */
+  image_model: string
 }
 
 export type ClientRpcRequest = CheckSeedSafetyRequest | SceneEditRequest | GenerateSceneRequest

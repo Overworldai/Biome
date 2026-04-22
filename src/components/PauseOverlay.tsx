@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
+import { invoke } from '../bridge'
 import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
@@ -33,6 +34,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     uploadingImage,
     uploadError,
     removeScene: removeSceneFile,
+    refreshSeeds,
     handleImageUpload,
     handleImageDrop,
     handleClipboardUpload
@@ -90,7 +92,17 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       setGenerateState('loading')
       setGenerateError(null)
       try {
-        await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
+        const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
+        if (settings.scene_authoring_save_generated ?? true) {
+          try {
+            await invoke('save-generated-seed', response.image_jpeg_base64)
+            await refreshSeeds()
+          } catch (saveErr) {
+            // Saving is a best-effort side-channel; the scene is already live in
+            // the engine so we shouldn't fail the RPC on a disk error.
+            console.warn('Failed to save generated scene:', saveErr)
+          }
+        }
         setGenerateState('idle')
       } catch (err) {
         let msg: string
@@ -103,7 +115,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
         setGenerateError(msg)
       }
     },
-    [wsRequest, t]
+    [wsRequest, t, settings.scene_authoring_save_generated, refreshSeeds]
   )
 
   const handleResetAndResume = () => {

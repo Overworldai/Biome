@@ -94,6 +94,7 @@ export const settingsSchema = z.object({
     })
     .default(DEFAULT_AUDIO),
   scene_authoring_enabled: z.boolean().default(false),
+  scene_authoring_save_generated: z.boolean().default(true),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),

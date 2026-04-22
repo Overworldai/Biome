@@ -22,8 +22,8 @@ export function useSceneOrder({ seeds, isLoaded: seedsLoaded }: { seeds: SeedRec
   }, [isLoaded, settings.scene_order])
 
   // Reconcile ordering with live seeds: drop filenames that no longer exist,
-  // and prepend seeds we haven't seen before so newly added scenes show at the
-  // top of the list.
+  // and append seeds we haven't seen before so newly added scenes land at the
+  // end of the list (preserving whatever the user has curated above).
   useEffect(() => {
     if (!isLoaded || !hasHydratedRef.current || !seedsLoaded) return
 
@@ -33,7 +33,7 @@ export function useSceneOrder({ seeds, isLoaded: seedsLoaded }: { seeds: SeedRec
     const valid = sceneIds.filter((f) => seedSet.has(f))
     const tracked = new Set(valid)
     const newlySeen = seedFilenames.filter((f) => !tracked.has(f))
-    const next = [...newlySeen, ...valid]
+    const next = [...valid, ...newlySeen]
 
     const changed = next.length !== sceneIds.length || next.some((f, i) => f !== sceneIds[i])
     if (changed) setSceneIds(next)

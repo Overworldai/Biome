@@ -7,8 +7,10 @@ construction and content sanitisation.
 import asyncio
 import base64
 import gc
+import json
 import logging
 import time
+from dataclasses import asdict, dataclass
 from io import BytesIO
 
 import numpy as np
@@ -21,6 +23,28 @@ logger = logging.getLogger(__name__)
 
 SCENE_EDIT_SAFETY_MESSAGE_ID = "app.server.error.sceneEditSafetyRejected"
 GENERATE_SCENE_SAFETY_MESSAGE_ID = "app.server.error.generateSceneSafetyRejected"
+
+
+@dataclass(frozen=True)
+class GeneratedSceneProperties:
+    """Metadata embedded into every Scene Authoring generated JPEG — parallel to
+    RecordingProperties in video_recorder.py. Callers (server.py) construct this
+    explicitly rather than passing a free-form dict, so the schema is fixed and
+    searchable. Persisted in the JPEG's COM segment so each image is
+    self-describing."""
+
+    biome_version: str = "unknown"
+    image_model: str = ""
+    user_prompt: str = ""
+    sanitized_prompt: str = ""
+    generated_at: float = 0.0
+
+
+def properties_to_jpeg_comment(properties: GeneratedSceneProperties) -> bytes:
+    """Encode GeneratedSceneProperties as a compact JSON blob for the JPEG COM
+    marker — same shape as video_recorder's `comment` atom, so tooling that
+    reads one can trivially read the other."""
+    return json.dumps(asdict(properties), separators=(",", ":")).encode("utf-8")
 
 
 class SafetyRejectionError(RuntimeError):
@@ -426,13 +450,13 @@ class ImageGenManager:
         self,
         prompt: str,
         seed_target_size: tuple[int, int],
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, str]:
         """Generate a new scene from a text prompt using a blank canvas as the
         reference image.  The VLM sanitises / refines the prompt (text-only,
         no image input), then Klein produces the image.
 
         Returns:
-            Generated frame as a uint8 CUDA tensor (HxWx3).
+            (generated frame as uint8 CUDA tensor HxWx3, sanitised prompt string).
         """
         h, w = seed_target_size
 
@@ -464,7 +488,7 @@ class ImageGenManager:
             .to(dtype=torch.uint8, device="cuda")
             .contiguous()
         )
-        return result_tensor
+        return result_tensor, generation_prompt
 
     def unload(self):
         """Free GPU memory used by both models."""

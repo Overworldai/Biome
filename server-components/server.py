@@ -20,6 +20,7 @@ logger.info("Starting server...")
 import asyncio
 import base64
 import hashlib
+import io
 import json
 import os
 import pickle
@@ -491,7 +492,6 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
         return {"success": True, "data": {"is_safe": cached["is_safe"], "hash": img_hash}}
 
     # Run safety check (decode + inference off the event loop)
-    import io
     try:
         def _check_safety():
             pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -513,23 +513,35 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
 
 
 
-def _run_generate_scene_on_generator(prompt: str) -> dict:
+def _run_generate_scene_on_generator(prompt: str, biome_version: Optional[str]) -> dict:
     """Generate a new scene from a text prompt and load it as the current seed.
 
     Runs on the generator thread.  Uses the inpainting pipeline with a blank
-    canvas so the VLM can still sanitise the prompt.
+    canvas so the VLM can still sanitise the prompt.  Returns the generated
+    image (base64 JPEG) plus metadata (user prompt, sanitised prompt, model id)
+    so the client can persist it if Scene Authoring auto-save is enabled.
+
+    Image/image_gen imports are function-scoped to keep torch out of the
+    server module's import graph — the logged startup block in this file
+    imports torch once with progress reporting, and nothing at module level
+    should trigger a second uninstrumented load.
     """
-    import time as _time
-    from image_gen import SafetyRejectionError, GENERATE_SCENE_SAFETY_MESSAGE_ID
+    from PIL import Image
+    from image_gen import (
+        EDIT_MODEL_ID,
+        GENERATE_SCENE_SAFETY_MESSAGE_ID,
+        GeneratedSceneProperties,
+        SafetyRejectionError,
+        properties_to_jpeg_comment,
+    )
 
-    t0 = _time.perf_counter()
+    t0 = time.perf_counter()
 
-    generated = image_gen._generate_scene_sync(
+    generated, sanitized_prompt = image_gen._generate_scene_sync(
         prompt, world_engine.seed_target_size
     )
 
     # Safety check on the generated image
-    from PIL import Image
     generated_np = world_engine._tensor_to_numpy(generated)
     generated_pil = Image.fromarray(generated_np)
     safety_result = safety_checker.check_pil_image(generated_pil)
@@ -538,6 +550,26 @@ def _run_generate_scene_on_generator(prompt: str) -> dict:
             f"[GENERATE_SCENE] Safety checker rejected generated image: {safety_result['scores']}"
         )
         raise SafetyRejectionError(GENERATE_SCENE_SAFETY_MESSAGE_ID)
+
+    # Encode the generated image as JPEG so the client can save it to disk.
+    # Done before expanding to multiframe so we encode a single HxWx3 frame.
+    # Metadata is embedded via a JPEG COM-marker JSON blob — parallel to how
+    # video_recorder.py stuffs RecordingProperties into the MP4 comment atom.
+    properties = GeneratedSceneProperties(
+        biome_version=biome_version or "unknown",
+        image_model=EDIT_MODEL_ID,
+        user_prompt=prompt,
+        sanitized_prompt=sanitized_prompt,
+        generated_at=time.time(),
+    )
+    jpeg_buf = io.BytesIO()
+    generated_pil.save(
+        jpeg_buf,
+        format="JPEG",
+        quality=92,
+        comment=properties_to_jpeg_comment(properties),
+    )
+    image_b64 = base64.b64encode(jpeg_buf.getvalue()).decode("ascii")
 
     # Expand to full temporal_compression for multiframe models
     if world_engine.is_multiframe:
@@ -561,14 +593,18 @@ def _run_generate_scene_on_generator(prompt: str) -> dict:
 
     world_engine.cuda_executor.submit(_reset_with_frame).result()
 
-    elapsed_ms = (_time.perf_counter() - t0) * 1000
+    elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(f"[GENERATE_SCENE] Complete in {elapsed_ms:.0f}ms")
-    return {"elapsed_ms": round(elapsed_ms)}
+    return {
+        "elapsed_ms": round(elapsed_ms),
+        "image_jpeg_base64": image_b64,
+        "user_prompt": prompt,
+        "sanitized_prompt": sanitized_prompt,
+        "image_model": EDIT_MODEL_ID,
+    }
 
 
 def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
-    from image_gen import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
-    from image_gen import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
@@ -576,8 +612,12 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     to the CUDA executor (required for CUDA graph compatibility), and
     returns preview data for the RPC response.
     """
-    import base64
     from PIL import Image
+    from image_gen import (
+        EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT,
+        EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET,
+        SafetyRejectionError,
+    )
 
     last_frame_np = cpu_frames[-1]
 
@@ -596,7 +636,6 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     preview_b64 = base64.b64encode(preview_jpeg).decode("ascii")
 
     # Safety check on the inpainted result
-    from image_gen import SafetyRejectionError
     inpainted_pil = Image.fromarray(inpainted_np)
     safety_result = safety_checker.check_pil_image(inpainted_pil)
     if not safety_result["is_safe"]:
@@ -827,7 +866,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 return False
         else:
             # Run safety check (decode + inference off the event loop)
-            import io
             try:
                 def _check_safety():
                     pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -1411,7 +1449,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         req = generate_scene_request
                         generate_scene_request = None
                         try:
-                            data = _run_generate_scene_on_generator(req["prompt"])
+                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                             # Send the generated seed as a single frame so the
@@ -1496,7 +1534,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         generate_scene_request = None
                         _flush_pending()
                         try:
-                            data = _run_generate_scene_on_generator(req["prompt"])
+                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                         except Exception as e:
