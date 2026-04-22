@@ -19,7 +19,7 @@ export const localhostUrl = (port: number) => `http://localhost:${port}`
 /** The default standalone server URL. */
 export const DEFAULT_STANDALONE_URL = localhostUrl(STANDALONE_PORT)
 
-export const DEFAULT_PINNED_SCENES = [
+export const DEFAULT_SCENE_ORDER = [
   'default.jpg',
   'mountain_ruins_gun.jpg',
   'enchanted_swamp_torch.jpg',
@@ -66,7 +66,9 @@ export const settingsSchema = z.object({
   custom_models: z.array(z.string()).default([]),
   mouse_sensitivity: sensitivitySchema,
   gamepad_sensitivity: sensitivitySchema,
-  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
+  // Ordered list of scene filenames as shown in the pause-menu grid. Users
+  // drag to reorder; whatever's at the top is most prominent.
+  scene_order: z.array(z.string()).default(DEFAULT_SCENE_ORDER),
   keybindings: z
     .object({
       moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),
@@ -91,11 +93,8 @@ export const settingsSchema = z.object({
       music_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.music_volume)
     })
     .default(DEFAULT_AUDIO),
-  experimental: z
-    .object({
-      scene_edit_enabled: z.boolean().default(false)
-    })
-    .default({ scene_edit_enabled: false }),
+  scene_authoring_enabled: z.boolean().default(false),
+  scene_authoring_save_generated: z.boolean().default(true),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),

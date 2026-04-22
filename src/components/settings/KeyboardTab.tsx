@@ -35,25 +35,28 @@ export type KeyboardTabHandle = {
 type KeyboardTabProps = {
   settings: Settings
   active: boolean
-  menuSceneEditEnabled: boolean
+  menuSceneAuthoringEnabled: boolean
   initialMouseSensitivityFallback: number
   onConflictChange: (hasConflict: boolean) => void
 }
 
 const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
-  ({ settings, active, menuSceneEditEnabled, initialMouseSensitivityFallback, onConflictChange }, ref) => {
+  ({ settings, active, menuSceneAuthoringEnabled, initialMouseSensitivityFallback, onConflictChange }, ref) => {
     const { t } = useTranslation()
     const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
       sensitivityToMenu(settings.mouse_sensitivity ?? initialMouseSensitivityFallback)
     )
     const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
 
-    /** Keybind actions currently rendered in the UI. Experimental-only actions
-     *  (scene edit) vanish from both the render and the conflict pool when the
-     *  experimental flag is off — so the user can reuse Q while it's hidden. */
+    /** Keybind actions currently rendered in the UI. Scene Authoring-gated
+     *  actions (scene edit) vanish from both the render and the conflict pool
+     *  when the umbrella toggle is off — so the user can reuse Q while it's hidden. */
     const visibleKeybindActions = useMemo(
-      () => GAME_ACTIONS.filter((a) => a.keyboard !== undefined && (!a.experimental || menuSceneEditEnabled)),
-      [menuSceneEditEnabled]
+      () =>
+        GAME_ACTIONS.filter(
+          (a) => a.keyboard !== undefined && (!a.requiresSceneAuthoring || menuSceneAuthoringEnabled)
+        ),
+      [menuSceneAuthoringEnabled]
     )
 
     const hasConflict = useMemo(() => {

@@ -1,7 +1,6 @@
 /** View key constants for PauseOverlay */
 export const PAUSE_VIEW = {
   MAIN: 'pause-main',
-  SCENES: 'pause-scenes',
   SETTINGS: 'pause-settings'
 } as const
 export type PauseViewKey = (typeof PAUSE_VIEW)[keyof typeof PAUSE_VIEW]

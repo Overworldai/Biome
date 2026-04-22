@@ -20,7 +20,6 @@ const zh = {
         editUrl: '编辑 URL',
         revert: '恢复',
         reset: '重置',
-        scenes: '场景',
         resume: '继续',
         copyReport: '复制报告',
         saveReport: '保存报告',
@@ -32,7 +31,6 @@ const zh = {
         aborting: '正在中止...',
         copy: '复制',
         open: '打开',
-        pasteImageFromClipboard: '从剪贴板粘贴图片',
         browseForImageFile: '浏览图片文件',
         delete: '删除'
       },
@@ -263,11 +261,13 @@ const zh = {
           enabled: '离线工作',
           enabledDescription: '你可以继续使用已经配置好的内容，但引擎重新安装和模型下载将会失败。'
         },
-        experimental: {
-          title: '实验性功能',
-          description: '想尝试一些可能会改变或消失的粗略想法吗？',
-          sceneEdit: '场景编辑',
-          sceneEditDescription: '在游戏过程中按键，使用本地图像编辑模型通过文字提示编辑场景。需要额外8-10GB显存。'
+        sceneAuthoring: {
+          title: '场景创作',
+          description: '想通过文字提示创建和修改场景吗？',
+          enabled: '启用场景创作',
+          enabledDescription: '使用本地图像模型通过文字提示生成新场景或编辑当前场景。需要额外 8-10GB 显存。',
+          saveGenerated: '保存生成的场景',
+          saveGeneratedDescription: '将生成的每个场景保留在场景列表中，以便日后重新使用或删除。'
         },
         recording: {
           title: '视频录制',
@@ -302,18 +302,13 @@ const zh = {
       },
       pause: {
         title: '已暂停',
-        pinnedScenes: {
-          title: '已固定场景',
-          description: '这是你固定的场景。使用场景按钮可{{suffix}}更多场景。',
-          uploadSuffix: '查看、固定或上传',
-          pinSuffix: '查看或固定'
-        },
         unlockIn: '{{seconds}} 秒后解锁',
         scenes: {
           title: '场景',
           description_one: '你一共有 {{count}} 个场景。',
           description_other: '你一共有 {{count}} 个场景。',
           uploadHint: '可使用按钮添加更多场景，或直接拖放 / 粘贴。',
+          reorderHint: '拖动场景可重新排序。',
           dropImagesToAddScenes: '拖放图片以添加场景'
         },
         sceneCard: {
@@ -321,6 +316,10 @@ const zh = {
           unpinScene: '取消固定场景',
           pinScene: '固定场景',
           removeScene: '删除场景'
+        },
+        generateScene: {
+          divider: '或',
+          placeholder: '你想玩什么？'
         }
       },
       scenes: {
@@ -366,12 +365,12 @@ const zh = {
         error: {
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
-          sceneEditModelLoadFailed: '场景编辑模型加载失败：{{message}}',
+          sceneAuthoringModelLoadFailed: '场景创作模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
           generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
-          sceneEditEmptyPrompt: '提示词为空',
-          sceneEditModelNotLoaded: '场景编辑模型未加载。请在实验性功能设置中启用场景编辑。',
-          sceneEditAlreadyInProgress: '场景编辑已在进行中',
+          sceneAuthoringEmptyPrompt: '提示词为空',
+          sceneAuthoringModelNotLoaded: '场景创作模型未加载。请在设置中启用场景创作。',
+          sceneAuthoringAlreadyInProgress: '场景创作已在进行中',
           contentFilterLoadFailed: '内容过滤器加载失败',
           quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
           cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
@@ -416,8 +415,8 @@ const zh = {
           done: '模型已加载！'
         },
         inpainting: {
-          load: '正在加载场景编辑模型...',
-          ready: '场景编辑模型已就绪。'
+          load: '正在加载场景创作模型...',
+          ready: '场景创作模型已就绪。'
         },
         safety: {
           load: '正在加载内容过滤器...',

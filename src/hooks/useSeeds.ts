@@ -23,7 +23,7 @@ function fileRecordsToSeedRecords(records: SeedFileRecord[]): SeedRecord[] {
     .map((r) => ({
       filename: r.filename,
       is_safe: null,
-      is_default: r.is_default
+      source: r.source
     }))
     .sort((a, b) => a.filename.localeCompare(b.filename))
 }

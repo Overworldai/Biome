@@ -70,6 +70,12 @@ const FocusReticle = () => {
   const [target, setTarget] = useState<HTMLElement | null>(null)
   const [rect, setRect] = useState<ReticleRect | null>(null)
   const snapNextRef = useRef(true)
+  // True while the target's position is changing frame-to-frame (e.g. a
+  // framer-motion layout animation in progress). In that window we drop the
+  // position/size CSS transitions so the reticle snaps every frame and tracks
+  // the target directly — the 150ms transition turns into lag when new targets
+  // arrive every 16ms.
+  const continuousRef = useRef(false)
   const overlayRef = useRef<HTMLDivElement>(null)
 
   // Track the currently-focused element. We only track "interesting" focuses —
@@ -105,27 +111,46 @@ const FocusReticle = () => {
     }
   }, [])
 
-  // Recompute position when the target or its layout changes.
+  // Track the target's position per-frame. Event listeners (scroll, resize,
+  // ResizeObserver) miss transform-driven motion — e.g. framer-motion's layout
+  // animations move the tile via `transform`, which fires none of those. rAF
+  // polling is cheap and subsumes all of them: only setRect when something
+  // actually changed, so React re-renders only on real movement.
   useLayoutEffect(() => {
     if (!target) {
       setRect(null)
       snapNextRef.current = true
       return
     }
-    const update = () => setRect(readRect(target))
-    update()
-
-    const ro = new ResizeObserver(update)
-    ro.observe(target)
-
-    // Scroll changes anywhere in the tree can move the target — listen broadly.
-    window.addEventListener('scroll', update, true)
-    window.addEventListener('resize', update)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('scroll', update, true)
-      window.removeEventListener('resize', update)
+    let rafId = 0
+    let last: ReticleRect | null = null
+    let lastChangeAt = 0
+    const tick = () => {
+      const next = readRect(target)
+      if (
+        !last ||
+        last.cx !== next.cx ||
+        last.cy !== next.cy ||
+        last.w !== next.w ||
+        last.h !== next.h ||
+        last.rotate !== next.rotate ||
+        last.radius !== next.radius
+      ) {
+        const nowMs = performance.now()
+        // A change within ~2 frames of the previous one is continuous motion
+        // (rAF-driven); a change after a long stable stretch is a discrete
+        // scroll / resize / layout shift where the smooth slide looks better.
+        continuousRef.current = nowMs - lastChangeAt < 40
+        lastChangeAt = nowMs
+        last = next
+        setRect(next)
+      } else {
+        continuousRef.current = false
+      }
+      rafId = requestAnimationFrame(tick)
     }
+    tick()
+    return () => cancelAnimationFrame(rafId)
   }, [target])
 
   // After a snap, re-enable transitions on the next frame.
@@ -162,9 +187,10 @@ const FocusReticle = () => {
     border: '2px solid var(--color-text-primary)',
     borderRadius: rect.radius,
     boxShadow: '0 0 12px 2px var(--color-text-primary)',
-    transition: snapNextRef.current
-      ? 'none'
-      : 'transform 150ms ease-out, width 150ms ease-out, height 150ms ease-out, opacity 100ms ease-out'
+    transition:
+      snapNextRef.current || continuousRef.current
+        ? 'opacity 100ms ease-out'
+        : 'transform 150ms ease-out, width 150ms ease-out, height 150ms ease-out, opacity 100ms ease-out'
   }
 
   return <div ref={overlayRef} style={style} aria-hidden="true" />

@@ -4,7 +4,16 @@
  *
  *  Only active when `enabled` — game-input paths that also read the gamepad
  *  should be gated on `!enabled` so a D-pad press in the menu doesn't also fire
- *  as a game input. */
+ *  as a game input.
+ *
+ *  Hold-to-drag gesture: holding A past a threshold dispatches a cancelable
+ *  `gamepadholdstart` event on the focused element. If the handler calls
+ *  `preventDefault()`, the gesture is "captured": subsequent A / B / D-pad input
+ *  is routed as `gamepadholdmove` (CustomEvent with `detail.direction`),
+ *  `gamepadholdend` (A release), and `gamepadholdcancel` (B press) instead of
+ *  the usual click / focus move / scope cancel. Lets a focusable container
+ *  (e.g. SceneGrid) implement pick-up-and-move reordering without
+ *  gamepad-specific code here. */
 
 import { useEffect } from 'react'
 import {
@@ -31,6 +40,9 @@ const BTN_DPAD_RIGHT = 15
 
 const DPAD_REPEAT_DELAY_MS = 400
 const DPAD_REPEAT_INTERVAL_MS = 80
+/** How long A must be held before `gamepadholdstart` is dispatched. Below
+ *  this, A release still triggers a click. */
+const A_HOLD_THRESHOLD_MS = 400
 
 const STICK_DEAD_ZONE = 0.2
 /** Right-stick scroll speed, as a fraction of the scroller's clientHeight per frame. */
@@ -99,6 +111,32 @@ const activate = () => {
   if (focused instanceof HTMLElement) focused.click()
 }
 
+const dispatchHoldStart = (): boolean => {
+  const focused = document.activeElement
+  if (!(focused instanceof HTMLElement)) return false
+  const event = new CustomEvent('gamepadholdstart', { bubbles: true, cancelable: true })
+  focused.dispatchEvent(event)
+  return event.defaultPrevented
+}
+
+const dispatchHoldMove = (direction: NavDirection) => {
+  const focused = document.activeElement
+  if (!(focused instanceof HTMLElement)) return
+  focused.dispatchEvent(new CustomEvent('gamepadholdmove', { bubbles: true, detail: { direction } }))
+}
+
+const dispatchHoldEnd = () => {
+  const focused = document.activeElement
+  if (!(focused instanceof HTMLElement)) return
+  focused.dispatchEvent(new CustomEvent('gamepadholdend', { bubbles: true }))
+}
+
+const dispatchHoldCancel = () => {
+  const focused = document.activeElement
+  if (!(focused instanceof HTMLElement)) return
+  focused.dispatchEvent(new CustomEvent('gamepadholdcancel', { bubbles: true }))
+}
+
 const cancel = () => {
   // Dispatch a synthetic Escape first: if the focused element has a local
   // escape handler (e.g. SettingsKeybind while listening for a key to bind),
@@ -146,15 +184,37 @@ export const useGamepadNavigation = (enabled: boolean): void => {
     // Held-since timestamps for D-pad repeat handling.
     const heldSince: Record<NavDirection, number | null> = { up: null, down: null, left: null, right: null }
     const lastRepeat: Record<NavDirection, number> = { up: 0, down: 0, left: 0, right: 0 }
+    // A-hold gesture state. `aPressStartAt` is the timestamp of the most recent
+    // A edge-press (null if A isn't pressed or was pressed before effect mount).
+    // `holdStartDispatched` guards against double-firing `gamepadholdstart` for
+    // the same A press (threshold vs. pre-threshold d-pad promotion).
+    // `holdCaptured` goes true after a focused element opts into the hold by
+    // preventDefault-ing `gamepadholdstart`.
+    let aPressStartAt: number | null = null
+    let holdStartDispatched = false
+    let holdCaptured = false
 
     const stepDirection = (direction: NavDirection, down: boolean, now: number) => {
       const was = prev[direction]
       prev[direction] = down
+      const step = () => {
+        markGamepadInput()
+        // Pre-threshold d-pad while A is held: commit to the hold gesture now
+        // rather than letting the d-pad navigate focus. Otherwise the reticle
+        // slides to a neighbour before the threshold fires, and when it finally
+        // does the wrong tile gets picked up.
+        if (aPressStartAt !== null && !holdStartDispatched) {
+          holdCaptured = dispatchHoldStart()
+          holdStartDispatched = true
+          aPressStartAt = null
+        }
+        if (holdCaptured) dispatchHoldMove(direction)
+        else moveFocus(direction)
+      }
       if (down && !was) {
         heldSince[direction] = now
         lastRepeat[direction] = now
-        markGamepadInput()
-        moveFocus(direction)
+        step()
         return
       }
       if (down && heldSince[direction] !== null) {
@@ -162,8 +222,7 @@ export const useGamepadNavigation = (enabled: boolean): void => {
         if (held < DPAD_REPEAT_DELAY_MS) return
         if (now - lastRepeat[direction] < DPAD_REPEAT_INTERVAL_MS) return
         lastRepeat[direction] = now
-        markGamepadInput()
-        moveFocus(direction)
+        step()
         return
       }
       if (!down) heldSince[direction] = null
@@ -220,15 +279,43 @@ export const useGamepadNavigation = (enabled: boolean): void => {
           continue
         }
 
+        // A button: fire click on release (short press) to leave room for a
+        // hold gesture. If the focused element captures `gamepadholdstart`
+        // (via preventDefault) either at `A_HOLD_THRESHOLD_MS` or earlier via
+        // a d-pad promotion, the release dispatches `gamepadholdend` instead
+        // of clicking. A hold past the threshold with no capture marks the
+        // press as dispatched so release does nothing — a long press is a
+        // distinct gesture, not a slow tap.
         if (a && !prev.a) {
           markGamepadInput()
-          activate()
+          aPressStartAt = now
+          holdStartDispatched = false
+        } else if (a && aPressStartAt !== null && !holdStartDispatched && now - aPressStartAt >= A_HOLD_THRESHOLD_MS) {
+          holdCaptured = dispatchHoldStart()
+          holdStartDispatched = true
+          aPressStartAt = null
+        } else if (!a && prev.a) {
+          if (holdCaptured) {
+            dispatchHoldEnd()
+            holdCaptured = false
+          } else if (aPressStartAt !== null && !holdStartDispatched) {
+            activate()
+          }
+          aPressStartAt = null
+          holdStartDispatched = false
         }
         prev.a = a
 
         if (b && !prev.b) {
           markGamepadInput()
-          cancel()
+          if (holdCaptured) {
+            dispatchHoldCancel()
+            holdCaptured = false
+            holdStartDispatched = false
+            aPressStartAt = null
+          } else {
+            cancel()
+          }
         }
         prev.b = b
 

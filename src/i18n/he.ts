@@ -20,7 +20,6 @@ const he = {
         editUrl: 'URL ערוך כתובת',
         revert: 'שחזר',
         reset: 'איפוס',
-        scenes: 'סצנות',
         resume: 'המשך',
         copyReport: 'העתק דוח',
         saveReport: 'שמור דוח',
@@ -32,7 +31,6 @@ const he = {
         aborting: 'מבטל...',
         copy: 'העתק',
         open: 'פתח',
-        pasteImageFromClipboard: 'הדבק תמונה מהלוח',
         browseForImageFile: 'בחר קובץ תמונה',
         delete: 'מחק'
       },
@@ -266,12 +264,15 @@ const he = {
           enabled: 'עבוד לא מקוון',
           enabledDescription: 'אפשר להמשיך להשתמש במה שכבר מותקן, אך התקנות מנוע מחדש והורדות מודלים ייכשלו.'
         },
-        experimental: {
-          title: 'ניסיוני',
-          description: 'רוצה לנסות רעיונות גולמיים שעלולים להשתנות או להיעלם?',
-          sceneEdit: 'עריכת סצנה',
-          sceneEditDescription:
-            'לחץ על מקש במהלך המשחק כדי לערוך את הסצנה עם פרומפט טקסט בעזרת מודל מקומי לעריכת תמונה. דורש 8–10GB נוספים של VRAM.'
+        sceneAuthoring: {
+          title: 'יצירת סצנות',
+          description: 'רוצה ליצור ולערוך סצנות באמצעות פרומפטים של טקסט?',
+          enabled: 'הפעל יצירת סצנות',
+          enabledDescription:
+            'צור סצנות חדשות או ערוך את הסצנה הנוכחית בעזרת פרומפט טקסט, מופעל על ידי מודל תמונה מקומי. דורש 8–10GB נוספים של VRAM.',
+          saveGenerated: 'שמור סצנות שנוצרו',
+          saveGeneratedDescription:
+            'שמור כל סצנה שנוצרה ברשימת הסצנות שלך כדי שתוכל לחזור אליה או למחוק אותה מאוחר יותר.'
         },
         recording: {
           title: 'הקלטת וידאו',
@@ -307,18 +308,13 @@ const he = {
       },
       pause: {
         title: 'מושהה',
-        pinnedScenes: {
-          title: 'סצנות מוצמדות',
-          description: 'הסצנות המוצמדות שלך. השתמש בכפתור סצנות כדי לצפות בעוד סצנות{{suffix}}.',
-          uploadSuffix: ', להצמיד או להעלות',
-          pinSuffix: ' או להצמיד'
-        },
         unlockIn: 'ייפתח בעוד {{seconds}}ש׳',
         scenes: {
           title: 'סצנות',
           description_one: 'כל {{count}} הסצנה שלך.',
           description_other: 'כל {{count}} הסצנות שלך.',
-          uploadHint: 'השתמש בכפתורים כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
+          uploadHint: 'השתמש בכפתור כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
+          reorderHint: 'גרור סצנות כדי לשנות את סדרן.',
           dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות'
         },
         sceneCard: {
@@ -326,6 +322,10 @@ const he = {
           unpinScene: 'בטל הצמדה של סצנה',
           pinScene: 'הצמד סצנה',
           removeScene: 'הסר סצנה'
+        },
+        generateScene: {
+          divider: 'או',
+          placeholder: 'במה תרצה לשחק?'
         }
       },
       scenes: {
@@ -371,12 +371,12 @@ const he = {
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
-          sceneEditModelLoadFailed: 'טעינת מודל עריכת הסצנה נכשלה: {{message}}',
+          sceneAuthoringModelLoadFailed: 'טעינת מודל יצירת הסצנות נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
-          sceneEditEmptyPrompt: 'פרומפט ריק',
-          sceneEditModelNotLoaded: 'מודל עריכת הסצנה לא נטען. הפעל את Scene Edit בהגדרות הניסיוניות.',
-          sceneEditAlreadyInProgress: 'עריכת סצנה כבר מתבצעת',
+          sceneAuthoringEmptyPrompt: 'פרומפט ריק',
+          sceneAuthoringModelNotLoaded: 'מודל יצירת הסצנות לא נטען. הפעל את יצירת סצנות בהגדרות.',
+          sceneAuthoringAlreadyInProgress: 'יצירת סצנה כבר מתבצעת',
           contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
           quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
           cudaRecoveryFailed: 'שגיאת CUDA — השחזור נכשל. נא להתחבר מחדש.'
@@ -421,8 +421,8 @@ const he = {
           done: 'המודל נטען!'
         },
         inpainting: {
-          load: 'טוען מודל עריכת סצנה...',
-          ready: 'מודל עריכת הסצנה מוכן.'
+          load: 'טוען מודל יצירת סצנות...',
+          ready: 'מודל יצירת הסצנות מוכן.'
         },
         safety: {
           load: 'טוען מסנן תוכן...',

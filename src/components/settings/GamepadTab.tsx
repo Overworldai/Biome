@@ -28,12 +28,12 @@ type GamepadTabProps = {
   settings: Settings
   active: boolean
   gamepadConnected: boolean
-  menuSceneEditEnabled: boolean
+  menuSceneAuthoringEnabled: boolean
   initialSensitivityFallback: number
 }
 
 const GamepadTab = forwardRef<GamepadTabHandle, GamepadTabProps>(
-  ({ settings, active, gamepadConnected, menuSceneEditEnabled, initialSensitivityFallback }, ref) => {
+  ({ settings, active, gamepadConnected, menuSceneAuthoringEnabled, initialSensitivityFallback }, ref) => {
     const { t } = useTranslation()
     const [menuGamepadSensitivity, setMenuGamepadSensitivity] = useState(() =>
       sensitivityToMenu(settings.gamepad_sensitivity ?? initialSensitivityFallback)
@@ -73,15 +73,15 @@ const GamepadTab = forwardRef<GamepadTabHandle, GamepadTabProps>(
               : `${t('app.settings.gamepad.description')} ${t('app.settings.gamepad.notDetectedHint')}`
           }
         >
-          {GAME_ACTIONS.filter((a) => a.gamepad !== undefined && (!a.experimental || menuSceneEditEnabled)).map(
-            (action) => (
-              <KeybindRow
-                key={action.id}
-                label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
-                fixedLabel={action.gamepad!.button}
-              />
-            )
-          )}
+          {GAME_ACTIONS.filter(
+            (a) => a.gamepad !== undefined && (!a.requiresSceneAuthoring || menuSceneAuthoringEnabled)
+          ).map((action) => (
+            <KeybindRow
+              key={action.id}
+              label={t(`app.settings.gamepad.labels.${action.id}`, { defaultValue: action.id })}
+              fixedLabel={action.gamepad!.button}
+            />
+          ))}
         </SettingsSection>
       </div>
     )

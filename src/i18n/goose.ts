@@ -20,7 +20,6 @@ const goose = {
         editUrl: 'Edit URL',
         revert: 'Revert',
         reset: 'Reset',
-        scenes: 'Ponds',
         resume: 'Resume',
         copyReport: 'Copy Report',
         saveReport: 'Save Report',
@@ -32,7 +31,6 @@ const goose = {
         aborting: 'Aborting...',
         copy: 'Copy',
         open: 'Open',
-        pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
       },
@@ -273,12 +271,15 @@ const goose = {
           enabledDescription:
             "Keep paddling with whatever's already in the nest, but engine reinstalls and model downloads will honk and fail."
         },
-        experimental: {
-          title: 'Experimental',
-          description: 'want to try some half-baked eggs that might hatch or roll away?',
-          sceneEdit: 'Scene Edit',
-          sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        sceneAuthoring: {
+          title: 'Pond Authoring',
+          description: 'want to honk new ponds into shape with text prompts?',
+          enabled: 'Enable Pond Authoring',
+          enabledDescription:
+            'Honk up a fresh pond or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
+          saveGenerated: 'Save generated ponds',
+          saveGeneratedDescription:
+            'Keep every generated pond in your Ponds list so you can revisit or waddle away from it later.'
         },
         recording: {
           title: 'Pond Footage',
@@ -314,25 +315,24 @@ const goose = {
       },
       pause: {
         title: 'Paused',
-        pinnedScenes: {
-          title: 'Pinned Ponds',
-          description: 'Your pinned ponds. Use the Ponds button to view{{suffix}} more ponds.',
-          uploadSuffix: ', pin or upload',
-          pinSuffix: ' or pin'
-        },
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Ponds',
           description_one: 'All of your {{count}} pond.',
           description_other: 'All of your {{count}} ponds.',
-          uploadHint: 'Use the buttons to add more ponds, or drag/paste them in.',
+          uploadHint: 'Use the button to add more ponds, or drag/paste them in.',
+          reorderHint: 'Drag ponds to reorder.',
           dropImagesToAddScenes: 'Drop images to add ponds'
         },
         sceneCard: {
           unsafe: 'Fox nearby',
-          unpinScene: 'Unpin pond',
-          pinScene: 'Pin pond',
-          removeScene: 'Remove pond'
+          unpinScene: 'Leave pond',
+          pinScene: 'Claim pond',
+          removeScene: 'Abandon pond'
+        },
+        generateScene: {
+          divider: 'or',
+          placeholder: 'Where shall the goose waddle?'
         }
       },
       scenes: {
@@ -378,12 +378,12 @@ const goose = {
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
+          sceneAuthoringModelLoadFailed: 'Pond authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
-          sceneEditEmptyPrompt: 'Empty prompt',
-          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
-          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          sceneAuthoringEmptyPrompt: 'Empty prompt',
+          sceneAuthoringModelNotLoaded: 'Pond authoring model not loaded. Enable Pond Authoring in settings.',
+          sceneAuthoringAlreadyInProgress: 'Pond authoring already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
@@ -429,8 +429,8 @@ const goose = {
           done: 'The goose has landed!'
         },
         inpainting: {
-          load: 'Loading scene edit model...',
-          ready: 'Scene edit model ready.'
+          load: 'Loading pond authoring model...',
+          ready: 'Pond authoring model ready.'
         },
         safety: {
           load: 'Loading fox detector...',

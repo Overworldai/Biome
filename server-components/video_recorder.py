@@ -44,7 +44,7 @@ class RecordingProperties:
     model: Optional[str] = None
     quant: str = "none"
     seed: Optional[str] = None
-    scene_edit_enabled: bool = False
+    scene_authoring_enabled: bool = False
 
 
 def _properties_to_mp4_metadata(properties: RecordingProperties) -> dict[str, str]:

@@ -20,7 +20,6 @@ const en = {
         editUrl: 'Edit URL',
         revert: 'Revert',
         reset: 'Reset',
-        scenes: 'Scenes',
         resume: 'Resume',
         copyReport: 'Copy Report',
         saveReport: 'Save Report',
@@ -32,7 +31,6 @@ const en = {
         aborting: 'Aborting...',
         copy: 'Copy',
         open: 'Open',
-        pasteImageFromClipboard: 'Paste image from clipboard',
         browseForImageFile: 'Browse for image file',
         delete: 'Delete'
       },
@@ -272,12 +270,15 @@ const en = {
           enabledDescription:
             "You can keep using what's already set up, but engine reinstalls and model downloads will fail."
         },
-        experimental: {
-          title: 'Experimental',
-          description: 'want to try some rough ideas that might change or disappear?',
-          sceneEdit: 'Scene Edit',
-          sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        sceneAuthoring: {
+          title: 'Scene Authoring',
+          description: 'want to compose and modify scenes with text prompts?',
+          enabled: 'Enable Scene Authoring',
+          enabledDescription:
+            'Generate new scenes or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
+          saveGenerated: 'Save generated scenes',
+          saveGeneratedDescription:
+            'Keep every generated scene in your Scenes list so you can revisit or delete it later.'
         },
         recording: {
           title: 'Video Recording',
@@ -313,18 +314,13 @@ const en = {
       },
       pause: {
         title: 'Paused',
-        pinnedScenes: {
-          title: 'Pinned Scenes',
-          description: 'Your pinned scenes. Use the Scenes button to view{{suffix}} more scenes.',
-          uploadSuffix: ', pin or upload',
-          pinSuffix: ' or pin'
-        },
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Scenes',
           description_one: 'All of your {{count}} scene.',
           description_other: 'All of your {{count}} scenes.',
-          uploadHint: 'Use the buttons to add more scenes, or drag/paste them in.',
+          uploadHint: 'Use the button to add more scenes, or drag/paste them in.',
+          reorderHint: 'Drag scenes to reorder.',
           dropImagesToAddScenes: 'Drop images to add scenes'
         },
         sceneCard: {
@@ -332,6 +328,10 @@ const en = {
           unpinScene: 'Unpin scene',
           pinScene: 'Pin scene',
           removeScene: 'Remove scene'
+        },
+        generateScene: {
+          divider: 'or',
+          placeholder: 'What do you want to play?'
         }
       },
       scenes: {
@@ -377,12 +377,12 @@ const en = {
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load: {{message}}',
+          sceneAuthoringModelLoadFailed: 'Scene authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
-          sceneEditEmptyPrompt: 'Empty prompt',
-          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
-          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          sceneAuthoringEmptyPrompt: 'Empty prompt',
+          sceneAuthoringModelNotLoaded: 'Scene authoring model not loaded. Enable Scene Authoring in settings.',
+          sceneAuthoringAlreadyInProgress: 'Scene authoring already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
@@ -428,8 +428,8 @@ const en = {
           done: 'Model loaded!'
         },
         inpainting: {
-          load: 'Loading scene edit model...',
-          ready: 'Scene edit model ready.'
+          load: 'Loading scene authoring model...',
+          ready: 'Scene authoring model ready.'
         },
         safety: {
           load: 'Loading content filter...',

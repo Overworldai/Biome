@@ -244,8 +244,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       // Set lastAppliedModel before await to prevent the lifecycle machine from
       // seeing a model mismatch during the re-render triggered by applyInitResponse.
       const quant = settings.engine_quant ?? 'none'
-      lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
-        ? `${selectedModel}+scene_edit+${quant}`
+      lastAppliedModelRef.current = settings.scene_authoring_enabled
+        ? `${selectedModel}+scene_authoring+${quant}`
         : `${selectedModel}+${quant}`
 
       // Recording is standalone-only: in server mode the server owns its own
@@ -265,7 +265,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         model: selectedModel,
         seed_image_data: imageData,
         seed_filename: seedFilename,
-        scene_edit: settings.experimental?.scene_edit_enabled ?? false,
+        scene_authoring: settings.scene_authoring_enabled ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
         video_recording: recordingEnabled,
         video_output_dir: videoOutputDir,
@@ -285,7 +285,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings?.engine_model,
     settings?.engine_quant,
     settings?.cap_inference_fps,
-    settings.experimental?.scene_edit_enabled,
+    settings.scene_authoring_enabled,
     settings.debug_overlays?.action_logging,
     settings.recording?.enabled,
     settings.recording?.output_dir,
@@ -374,7 +374,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     containerRef,
     handleReset,
     settings.keybindings,
-    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null,
+    settings.scene_authoring_enabled ? handleSceneEdit : null,
     exitPointerLock
   )
 
@@ -398,7 +398,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         settingsOpen,
         isPaused,
         sceneEditActive: sceneEditGrace,
-        sceneEditEnabled: settings.experimental?.scene_edit_enabled,
+        sceneAuthoringEnabled: settings.scene_authoring_enabled,
         engineQuant: settings.engine_quant
       })
     })
@@ -408,7 +408,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     error,
     settings?.engine_model,
     settings?.engine_quant,
-    settings.experimental?.scene_edit_enabled,
+    settings.scene_authoring_enabled,
     engineError,
     hasReceivedFrame,
     isReady,

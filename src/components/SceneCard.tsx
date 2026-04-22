@@ -1,3 +1,4 @@
+import type { DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/audioContextValue'
@@ -7,50 +8,7 @@ import { useTranslation } from 'react-i18next'
 const ACTION_BASE =
   'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-secondary)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
 
-const ACTION_PINNED = 'text-warm border-warm/70 hover:text-[var(--color-warm-bright)] hover:border-warm'
-
-const ACTION_UNPINNED =
-  'text-text-muted border-[var(--color-border-subtle)] hover:text-text-primary hover:border-border-light'
-
 const ACTION_DELETE = 'text-error-muted border-error/50 hover:text-[var(--color-error-bright)] hover:border-error'
-
-const PinnedIcon = () => (
-  <svg
-    className="h-[66%] w-[66%]"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.9"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="10.6" r="4.1" />
-    <circle cx="12" cy="10.6" r="1.55" fill="currentColor" stroke="none" />
-    <path d="M12 14.7v2.35" />
-    <path d="M10.98 16.9L12 19.1 13.02 16.95z" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-const UnpinnedIcon = () => (
-  <svg
-    className="h-[66%] w-[66%]"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.9"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <g transform="rotate(-36 12 12)">
-      <rect x="9.25" y="4.1" width="5.5" height="5.6" rx="1.2" />
-      <path d="M7.5 9.7h9l-4.5 4.55z" />
-      <path d="M12 14.2v5.1" />
-      <path d="M10.92 19.1L12 22 13.08 19.15z" fill="currentColor" stroke="none" />
-    </g>
-  </svg>
-)
 
 const DeleteIcon = () => (
   <svg
@@ -74,40 +32,48 @@ const DeleteIcon = () => (
 interface SceneCardProps {
   seed: SeedRecord
   thumbnailSrc?: string
-  isPinned: boolean
-  pinVariant: 'pinned-only' | 'toggle'
   selectCooldown?: boolean
   onSelect: (filename: string) => void
-  onTogglePin: (filename: string) => void
   onRemove?: (seed: SeedRecord) => void
+  draggable?: boolean
+  isBeingDragged?: boolean
+  onDragStart?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDragOver?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDrop?: (filename: string, event: DragEvent<HTMLButtonElement>) => void
+  onDragEnd?: (event: DragEvent<HTMLButtonElement>) => void
 }
 
 const SceneCard = ({
   seed,
   thumbnailSrc,
-  isPinned,
-  pinVariant,
   selectCooldown,
   onSelect,
-  onTogglePin,
-  onRemove
+  onRemove,
+  draggable = false,
+  isBeingDragged = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd
 }: SceneCardProps) => {
   const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const { play } = useAudio()
   const modality = useInputModality()
   const isUnsafe = seed.is_safe === false
-  // Gamepad users can't reliably reach nested pin/delete actions with spatial
-  // nav (the parent scene card is what's focused). Hide them in gamepad mode.
+  // Gamepad users can't reliably reach the nested delete action with spatial
+  // nav (the parent scene card is what's focused). Hide it in gamepad mode.
   const hideSecondaryActions = modality === 'gamepad'
 
   return (
     <button
       type="button"
+      draggable={draggable}
       className={`
         group/scene relative aspect-video w-full overflow-hidden rounded-card border border-border-subtle
-        bg-surface-card p-0
+        bg-surface-card p-0 transition-opacity duration-120
         ${isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'}
+        ${isBeingDragged ? 'opacity-40' : ''}
       `}
       title={seed.filename}
       aria-disabled={isUnsafe}
@@ -117,8 +83,13 @@ const SceneCard = ({
         if (!selectCooldown) play('portal_swoosh')
         onSelect(seed.filename)
       }}
+      onDragStart={draggable && onDragStart ? (e) => onDragStart(seed.filename, e) : undefined}
+      onDragOver={onDragOver ? (e) => onDragOver(seed.filename, e) : undefined}
+      onDrop={onDrop ? (e) => onDrop(seed.filename, e) : undefined}
+      onDragEnd={onDragEnd}
     >
       <img
+        draggable={false}
         className={`
           block size-full object-cover
           ${isUnsafe ? 'brightness-[0.45] contrast-[0.8] grayscale' : ''}
@@ -149,33 +120,7 @@ const SceneCard = ({
           }
         `}
       >
-        {!isUnsafe && !hideSecondaryActions && (
-          <span
-            role="button"
-            tabIndex={0}
-            className={`
-              ${ACTION_BASE}
-              ${isPinned ? ACTION_PINNED : ACTION_UNPINNED}
-            `}
-            title={isPinned ? t('app.pause.sceneCard.unpinScene') : t('app.pause.sceneCard.pinScene')}
-            onMouseEnter={playHover}
-            onClick={(event) => {
-              event.stopPropagation()
-              playClick()
-              onTogglePin(seed.filename)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                event.stopPropagation()
-                onTogglePin(seed.filename)
-              }
-            }}
-          >
-            {pinVariant === 'pinned-only' || isPinned ? <PinnedIcon /> : <UnpinnedIcon />}
-          </span>
-        )}
-        {!seed.is_default && onRemove && !hideSecondaryActions && (
+        {seed.source !== 'default' && onRemove && !hideSecondaryActions && (
           <span
             role="button"
             tabIndex={0}

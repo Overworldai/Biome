@@ -45,6 +45,11 @@ export function getSeedsUploadsDir(): string {
   return path.join(getConfigDir(), 'seeds', 'uploads')
 }
 
+/** Get the generated seeds directory — images produced by Scene Authoring */
+export function getSeedsGeneratedDir(): string {
+  return path.join(getConfigDir(), 'seeds', 'generated')
+}
+
 /** Get the thumbnail cache directory — in user config dir */
 export function getSeedsThumbnailDir(): string {
   return path.join(getConfigDir(), 'seeds', 'thumbnails')

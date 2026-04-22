@@ -20,7 +20,6 @@ const ja = {
         editUrl: 'URLを編集',
         revert: '元に戻す',
         reset: 'リセット',
-        scenes: 'シーン',
         resume: '再開',
         copyReport: 'レポートをコピー',
         saveReport: 'レポートを保存',
@@ -32,7 +31,6 @@ const ja = {
         aborting: '中止中...',
         copy: 'コピー',
         open: '開く',
-        pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
         browseForImageFile: '画像ファイルを選択',
         delete: '削除'
       },
@@ -271,12 +269,14 @@ const ja = {
           enabledDescription:
             'すでにセットアップ済みのものはそのまま使用できますが、エンジンの再インストールやモデルのダウンロードは失敗します。'
         },
-        experimental: {
-          title: '実験的機能',
-          description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
-          sceneEdit: 'シーン編集',
-          sceneEditDescription:
-            'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
+        sceneAuthoring: {
+          title: 'シーンオーサリング',
+          description: 'テキストプロンプトでシーンを作成・編集しませんか？',
+          enabled: 'シーンオーサリングを有効化',
+          enabledDescription:
+            'ローカル画像モデルを利用して、テキストプロンプトから新しいシーンを生成したり、現在のシーンを編集したりできます。追加で8〜10GBのVRAMが必要です。',
+          saveGenerated: '生成したシーンを保存',
+          saveGeneratedDescription: '生成したシーンをすべてシーン一覧に残し、後から再利用・削除できるようにします。'
         },
         recording: {
           title: '動画録画',
@@ -312,18 +312,13 @@ const ja = {
       },
       pause: {
         title: '一時停止',
-        pinnedScenes: {
-          title: '固定シーン',
-          description: '固定したシーンです。シーンボタンを使って{{suffix}}さらにシーンを表示できます。',
-          uploadSuffix: '、固定、またはアップロードして',
-          pinSuffix: '固定して'
-        },
         unlockIn: '{{seconds}} 秒後に解除',
         scenes: {
           title: 'シーン',
           description_one: '全 {{count}} 個のシーンです。',
           description_other: '全 {{count}} 個のシーンです。',
           uploadHint: 'ボタンでシーンを追加するか、ドラッグまたは貼り付けで追加できます。',
+          reorderHint: 'シーンをドラッグして並べ替えできます。',
           dropImagesToAddScenes: '画像をドロップしてシーンを追加'
         },
         sceneCard: {
@@ -331,6 +326,10 @@ const ja = {
           unpinScene: '固定を外す',
           pinScene: '固定する',
           removeScene: 'シーンを削除'
+        },
+        generateScene: {
+          divider: 'または',
+          placeholder: '何をプレイしたいですか？'
         }
       },
       scenes: {
@@ -376,15 +375,15 @@ const ja = {
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
-          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました: {{message}}',
+          sceneAuthoringModelLoadFailed: 'シーンオーサリングモデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           generateSceneSafetyRejected:
             'シーン生成が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
-          sceneEditEmptyPrompt: 'プロンプトが空です',
-          sceneEditModelNotLoaded:
-            'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',
-          sceneEditAlreadyInProgress: 'シーン編集が既に進行中です',
+          sceneAuthoringEmptyPrompt: 'プロンプトが空です',
+          sceneAuthoringModelNotLoaded:
+            'シーンオーサリングモデルが読み込まれていません。設定でシーンオーサリングを有効にしてください。',
+          sceneAuthoringAlreadyInProgress: 'シーンオーサリングが既に進行中です',
           contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
           cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
@@ -429,8 +428,8 @@ const ja = {
           done: 'モデルを読み込みました。'
         },
         inpainting: {
-          load: 'シーン編集モデルを読み込んでいます...',
-          ready: 'シーン編集モデルの準備ができました。'
+          load: 'シーンオーサリングモデルを読み込んでいます...',
+          ready: 'シーンオーサリングモデルの準備ができました。'
         },
         safety: {
           load: 'コンテンツフィルターを読み込んでいます...',

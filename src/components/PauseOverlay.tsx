@@ -1,49 +1,66 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
+import { invoke } from '../bridge'
 import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
-import PauseScenesView from './PauseScenesView'
 import { PAUSE_VIEW, type PauseViewKey } from '../constants'
 import { viewFadeVariants } from '../transitions'
 import { useSeedManager } from '../hooks/useSeedManager'
-import { usePinnedScenes } from '../hooks/usePinnedScenes'
+import { useSceneOrder } from '../hooks/useSceneOrder'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
+import { RpcError } from '../lib/wsRpc'
+import type { GenerateSceneResponse } from '../types/ws'
+import type { SeedRecord } from '../types/app'
 import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
+  const { t } = useTranslation()
   const { requestPointerLock, reset, wsRequest } = useStreaming()
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
+  const [generateState, setGenerateState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
-
-  const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
 
   const {
     seeds,
+    seedsLoaded,
     thumbnails,
     uploadingImage,
     uploadError,
-    removeScene,
+    removeScene: removeSceneFile,
+    refreshSeeds,
     handleImageUpload,
     handleImageDrop,
     handleClipboardUpload
   } = useSeedManager({
     wsRequest,
     isActive,
-    onPinnedSceneRemoved: removePinnedScene
+    onPinnedSceneRemoved: (filename: string) => removeScene(filename)
   })
 
-  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
+  const { sceneIds, removeScene, moveScene } = useSceneOrder({
+    seeds,
+    isLoaded: seedsLoaded
+  })
 
-  const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+  const scenes = useMemo(() => {
+    const byFilename = new Map(seeds.map((s) => [s.filename, s]))
+    return sceneIds.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
+  }, [seeds, sceneIds])
+
+  const { selectScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
 
   useEffect(() => {
     if (!isActive) {
       setView(PAUSE_VIEW.MAIN)
+      setGenerateState('idle')
+      setGenerateError(null)
       return
     }
 
@@ -52,16 +69,54 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
       if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
-      if (view === PAUSE_VIEW.SCENES) {
-        setView(PAUSE_VIEW.MAIN)
-      } else {
-        requestPointerLock()
-      }
+      if (generateState === 'loading') return
+      requestPointerLock()
     }
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, requestPointerLock, pauseMenuCode])
+  }, [isActive, view, generateState, requestPointerLock, pauseMenuCode])
+
+  // Auto-dismiss generate error after 5 seconds
+  useEffect(() => {
+    if (generateState !== 'error') return
+    const timer = setTimeout(() => {
+      setGenerateState('idle')
+      setGenerateError(null)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [generateState])
+
+  const handleGenerateScene = useCallback(
+    async (prompt: string) => {
+      setGenerateState('loading')
+      setGenerateError(null)
+      try {
+        const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
+        if (settings.scene_authoring_save_generated ?? true) {
+          try {
+            await invoke('save-generated-seed', response.image_jpeg_base64)
+            await refreshSeeds()
+          } catch (saveErr) {
+            // Saving is a best-effort side-channel; the scene is already live in
+            // the engine so we shouldn't fail the RPC on a disk error.
+            console.warn('Failed to save generated scene:', saveErr)
+          }
+        }
+        setGenerateState('idle')
+      } catch (err) {
+        let msg: string
+        if (err instanceof RpcError && err.errorId) {
+          msg = t(err.errorId, { defaultValue: err.message })
+        } else {
+          msg = err instanceof Error ? err.message : String(err)
+        }
+        setGenerateState('error')
+        setGenerateError(msg)
+      }
+    },
+    [wsRequest, t, settings.scene_authoring_save_generated, refreshSeeds]
+  )
 
   const handleResetAndResume = () => {
     reset()
@@ -72,10 +127,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     <FocusScope
       active={isActive && view !== PAUSE_VIEW.SETTINGS}
       autoFocus
-      onCancel={() => {
-        if (view === PAUSE_VIEW.SCENES) setView(PAUSE_VIEW.MAIN)
-        else requestPointerLock()
-      }}
+      onCancel={requestPointerLock}
       className={`
         absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
         ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
@@ -94,7 +146,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
           >
             <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} wide />
           </motion.div>
-        ) : view === PAUSE_VIEW.MAIN ? (
+        ) : (
           <motion.div
             key={PAUSE_VIEW.MAIN}
             className="absolute inset-0"
@@ -104,42 +156,24 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             exit="exit"
           >
             <PauseMainView
-              pinnedScenes={pinnedScenes}
+              scenes={scenes}
               thumbnails={thumbnails}
-              selectCooldown={selectCooldown}
-              onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
-              onResetAndResume={handleResetAndResume}
-              onNavigate={(v) => setView(v === 'scenes' ? PAUSE_VIEW.SCENES : PAUSE_VIEW.SETTINGS)}
-              requestPointerLock={requestPointerLock}
-              showPauseLockoutTimer={showPauseLockoutTimer}
-              pauseLockoutSecondsText={pauseLockoutSecondsText}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key={PAUSE_VIEW.SCENES}
-            className="absolute inset-0"
-            variants={viewFadeVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-          >
-            <PauseScenesView
-              seeds={seeds}
-              thumbnails={thumbnails}
-              pinnedSceneIds={pinnedSceneIds}
               selectCooldown={selectCooldown}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
               onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
+              onRemoveScene={removeSceneFile}
+              onMoveScene={moveScene}
+              onResetAndResume={handleResetAndResume}
+              onNavigateSettings={() => setView(PAUSE_VIEW.SETTINGS)}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={pasteScene}
-              onBack={() => setView(PAUSE_VIEW.MAIN)}
+              requestPointerLock={requestPointerLock}
+              showPauseLockoutTimer={showPauseLockoutTimer}
+              pauseLockoutSecondsText={pauseLockoutSecondsText}
+              generateState={generateState}
+              generateError={generateError}
+              onGenerateScene={handleGenerateScene}
             />
           </motion.div>
         )}

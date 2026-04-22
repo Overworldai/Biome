@@ -12,7 +12,7 @@ import type { ServerCode } from './input'
  * Server compares against current state and only applies what changed:
  *   - model changed? → reload engine
  *   - seed_image_data changed? → load new seed (server computes hash for safety + dedup)
- *   - scene_edit/action_logging changed? → update flags
+ *   - scene_authoring/action_logging changed? → update flags
  * Responds with session metrics on success. */
 export type InitMessage = {
   type: 'init'
@@ -20,7 +20,7 @@ export type InitMessage = {
   model?: string
   seed_image_data?: string
   seed_filename?: string // informational, for action logging only
-  scene_edit?: boolean
+  scene_authoring?: boolean
   action_logging?: boolean
   video_recording?: boolean
   /** Absolute path to write recordings into. Only honoured in standalone mode;
@@ -101,7 +101,24 @@ export type SceneEditResponse = {
   edit_prompt?: string
 }
 
-export type ClientRpcRequest = CheckSeedSafetyRequest | SceneEditRequest
+export type GenerateSceneRequest = {
+  type: 'generate_scene'
+  req_id: string
+  prompt: string
+}
+export type GenerateSceneResponse = {
+  elapsed_ms: number
+  /** JPEG bytes (base64) of the generated image, so the client can save it to disk. */
+  image_jpeg_base64: string
+  /** Prompt as the user typed it. */
+  user_prompt: string
+  /** Prompt after VLM sanitisation/refinement (what the image model actually saw). */
+  sanitized_prompt: string
+  /** HuggingFace repo id of the image model that produced this frame. */
+  image_model: string
+}
+
+export type ClientRpcRequest = CheckSeedSafetyRequest | SceneEditRequest | GenerateSceneRequest
 
 // ── Server → Client: Push messages ─────────────────────────────────────────
 
