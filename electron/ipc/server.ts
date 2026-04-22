@@ -16,10 +16,18 @@ import {
 } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
+import { getOfflineEnv } from './settings.js'
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
+
+// Last abnormal server-process exit tail (stderr/stdout), for classifying startup
+// failures after start-engine-server has already returned success. Renderer fetches
+// this via the get-last-server-exit-tail IPC when waitForHealthy sees a dead server.
+let lastServerExitTail: string | null = null
+
+const LOG_TAIL_MAX_LINES = 40
 
 export function registerServerIpc(): void {
   ipcMain.handle('start-engine-server', async (_event, port: number) => {
@@ -63,7 +71,8 @@ export function registerServerIpc(): void {
       HF_HUB_DOWNLOAD_TIMEOUT: '600',
       PYTHONUNBUFFERED: '1',
       PYTHONFAULTHANDLER: '1',
-      BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log')
+      BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log'),
+      ...getOfflineEnv()
     }
 
     // Point the in-venv C compiler at the uv-managed Python headers so Triton's
@@ -101,33 +110,35 @@ export function registerServerIpc(): void {
     console.log(`[ENGINE] Server process spawned with PID: ${pid}`)
     fs.writeFileSync(logFilePath, '', 'utf-8')
 
-    // Process stdout — write to console, log file, and forward to renderer
+    // Rolling tail of recent stdout+stderr, drained from the line readers below.
+    // Kept in memory so the exit handler and immediate-crash path don't need to
+    // re-read the log file.
+    const recentLines: string[] = []
+    const handleLine = (line: string, isStderr: boolean) => {
+      console.log(`[SERVER] ${line}`)
+      fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
+      emitToAllWindows('engine-log', { line, is_stderr: isStderr })
+      recentLines.push(line)
+      if (recentLines.length > LOG_TAIL_MAX_LINES) recentLines.shift()
+    }
+
     if (child.stdout) {
-      const rl = createInterface({ input: child.stdout })
-      rl.on('line', (line) => {
-        console.log(`[SERVER] ${line}`)
-        fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
-        emitToAllWindows('engine-log', { line, is_stderr: false })
-      })
+      createInterface({ input: child.stdout }).on('line', (line) => handleLine(line, false))
     }
-
-    // Process stderr — write to console, log file, and forward to renderer
     if (child.stderr) {
-      const rl = createInterface({ input: child.stderr })
-      rl.on('line', (line) => {
-        console.log(`[SERVER] ${line}`)
-        fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
-        emitToAllWindows('engine-log', { line, is_stderr: true })
-      })
+      createInterface({ input: child.stderr }).on('line', (line) => handleLine(line, true))
     }
 
-    // Handle process exit
+    lastServerExitTail = null
+
     child.on('exit', (code, signal) => {
       console.log(`[ENGINE] Server process exited (code: ${code}, signal: ${signal})`)
+      if (code !== 0 && code !== null) {
+        lastServerExitTail = recentLines.join('\n')
+      }
       clearServerState()
     })
 
-    // Store process handle
     setServerProcess(child, port)
 
     // Wait a moment and check if the process crashed immediately
@@ -139,15 +150,8 @@ export function registerServerIpc(): void {
     } else if (child.exitCode !== null) {
       // Process exited immediately
       clearServerState()
-
-      let errorExcerpt = ''
-      if (fs.existsSync(logFilePath)) {
-        const logContents = fs.readFileSync(logFilePath, 'utf-8')
-        errorExcerpt = logContents.split('\n').slice(-30).join('\n')
-      }
-
       throw new Error(
-        `Server process exited immediately with status: ${child.exitCode}\n\nLast log output:\n${errorExcerpt}`
+        `Server process exited immediately with status: ${child.exitCode}\n\nLast log output:\n${recentLines.join('\n')}`
       )
     }
 
@@ -180,6 +184,8 @@ export function registerServerIpc(): void {
     // "Ready" is meaningful only for a managed local process.
     return Boolean(state.process) && state.ready
   })
+
+  ipcMain.handle('get-last-server-exit-tail', () => lastServerExitTail)
 
   ipcMain.handle('is-port-in-use', (_event, port: number) => {
     return new Promise<boolean>((resolve) => {

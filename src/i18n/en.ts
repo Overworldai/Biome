@@ -265,6 +265,13 @@ const en = {
             sceneEdit: 'Scene Edit'
           }
         },
+        offlineMode: {
+          title: 'Offline Mode',
+          description: 'want to use Biome without an internet connection?',
+          enabled: 'Work Offline',
+          enabledDescription:
+            "You can keep using what's already set up, but engine reinstalls and model downloads will fail."
+        },
         experimental: {
           title: 'Experimental',
           description: 'want to try some rough ideas that might change or disappear?',
@@ -365,6 +372,8 @@ const en = {
         startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
+        networkUnreachable:
+          "Couldn't reach the internet. If the engine and model you want are already downloaded, turn on Offline Mode in General Settings to use them without a network.\n\nDetails: {{message}}",
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',

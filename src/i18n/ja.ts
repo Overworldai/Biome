@@ -264,6 +264,13 @@ const ja = {
             sceneEdit: 'シーン編集'
           }
         },
+        offlineMode: {
+          title: 'オフラインモード',
+          description: 'インターネット接続なしでBiomeを使用しますか？',
+          enabled: 'オフラインで動作',
+          enabledDescription:
+            'すでにセットアップ済みのものはそのまま使用できますが、エンジンの再インストールやモデルのダウンロードは失敗します。'
+        },
         experimental: {
           title: '実験的機能',
           description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
@@ -364,6 +371,8 @@ const ja = {
         startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
+        networkUnreachable:
+          'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',

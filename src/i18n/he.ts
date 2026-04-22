@@ -260,6 +260,12 @@ const he = {
             sceneEdit: 'עריכת סצנה'
           }
         },
+        offlineMode: {
+          title: 'מצב לא מקוון',
+          description: 'רוצה להשתמש ב-Biome ללא חיבור לאינטרנט?',
+          enabled: 'עבוד לא מקוון',
+          enabledDescription: 'אפשר להמשיך להשתמש במה שכבר מותקן, אך התקנות מנוע מחדש והורדות מודלים ייכשלו.'
+        },
         experimental: {
           title: 'ניסיוני',
           description: 'רוצה לנסות רעיונות גולמיים שעלולים להשתנות או להיעלם?',
@@ -360,6 +366,8 @@ const he = {
         startupTimeout: 'תם הזמן להפעלת השרת — בדוק את הלוגים לשגיאות',
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
+        networkUnreachable:
+          'לא ניתן להגיע לאינטרנט. אם המנוע והמודל הרצויים כבר הורדו, ניתן להפעיל מצב לא מקוון בהגדרות הכלליות כדי להשתמש בהם ללא רשת.\n\nפרטים: {{message}}',
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',

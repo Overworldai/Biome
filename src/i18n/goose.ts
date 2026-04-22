@@ -266,6 +266,13 @@ const goose = {
             sceneEdit: 'Scene Edit'
           }
         },
+        offlineMode: {
+          title: 'Pond Isolation',
+          description: 'want to use the flock away from the open waters of the internet?',
+          enabled: 'Nest Offline',
+          enabledDescription:
+            "Keep paddling with whatever's already in the nest, but engine reinstalls and model downloads will honk and fail."
+        },
         experimental: {
           title: 'Experimental',
           description: 'want to try some half-baked eggs that might hatch or roll away?',
@@ -366,6 +373,8 @@ const goose = {
         startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not honking back at {{url}}',
+        networkUnreachable:
+          "Can't reach the open waters of the internet. If your engine and model are already nested in the pond, switch on Pond Isolation in General Settings to waddle along without a network.\n\nDetails: {{message}}",
         error: {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',

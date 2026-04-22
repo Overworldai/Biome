@@ -9,6 +9,7 @@ import { getServerState, stopServerSync } from '../lib/serverState.js'
 import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
 import { copyServerComponentFiles, ensureEngineFont } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
+import { getOfflineEnv } from './settings.js'
 
 const UV_VERSION = '0.10.9'
 let engineInstallAbortController: AbortController | null = null
@@ -69,7 +70,7 @@ async function syncEngineDependencies(signal?: AbortSignal): Promise<void> {
   await runUvSyncWithMirroredLogs(
     uvBinary,
     engineDir,
-    { ...process.env, ...uvEnv },
+    { ...process.env, ...uvEnv, ...getOfflineEnv() },
     {
       logPrefix: '[ENGINE]',
       signal,

@@ -257,6 +257,12 @@ const zh = {
             sceneEdit: '场景编辑'
           }
         },
+        offlineMode: {
+          title: '离线模式',
+          description: '想要在没有网络连接的情况下使用 Biome 吗？',
+          enabled: '离线工作',
+          enabledDescription: '你可以继续使用已经配置好的内容，但引擎重新安装和模型下载将会失败。'
+        },
         experimental: {
           title: '实验性功能',
           description: '想尝试一些可能会改变或消失的粗略想法吗？',
@@ -355,6 +361,8 @@ const zh = {
         startupTimeout: '服务器启动超时 - 请检查日志',
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
+        networkUnreachable:
+          '无法连接到互联网。如果你想要的引擎和模型已经下载过，可以在「通用设置」中启用离线模式，无需网络即可使用。\n\n详情：{{message}}',
         error: {
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
