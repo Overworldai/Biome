@@ -153,7 +153,7 @@ const PauseMainView = ({
 
       <section
         className={`
-          absolute top-(--edge-top-xl) bottom-[14cqh] left-(--edge-left) flex w-[77%] flex-col
+          absolute top-(--edge-top) bottom-[12cqh] left-(--edge-left) flex w-[77%] flex-col
           ${isGenerating ? 'pointer-events-none opacity-60' : ''}
         `}
       >

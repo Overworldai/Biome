@@ -137,7 +137,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
   return (
     <FocusScope onCancel={() => void handleBackClick()} autoFocus className="pointer-events-auto absolute inset-0 z-9">
-      <section className="absolute top-(--edge-top-xl) bottom-(--edge-bottom) left-(--edge-left) z-3 flex w-[90%] flex-col">
+      <section className="absolute top-(--edge-top) bottom-(--edge-bottom) left-(--edge-left) z-3 flex w-[90%] flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
         <div
