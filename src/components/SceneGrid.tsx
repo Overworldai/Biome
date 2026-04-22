@@ -1,10 +1,14 @@
-import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { SeedRecord } from '../types/app'
 import SceneCard from './SceneCard'
 
 type Region = 'pinned' | 'unpinned'
-type DropTarget = { region: Region; idx: number }
+// Track the hovered card + which half the cursor is on. This preserves the
+// visual intent of the cursor: "right half of rightmost-of-row-1" renders on
+// row 1, "left half of first-of-row-2" renders on row 2 — even though those
+// two cases would collapse to the same insert-index.
+type DropTarget = { region: Region; hoveredFilename: string; side: 'left' | 'right' }
 
 interface SceneGridProps {
   pinnedSeeds: SeedRecord[]
@@ -21,15 +25,14 @@ interface SceneGridProps {
 }
 
 const SCENE_DRAG_MIME = 'application/x-biome-scene'
-const LAYOUT_TRANSITION = { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const }
-
-const computePreview = (ids: string[], draggedFilename: string | null, target: DropTarget | null, region: Region) => {
-  if (!draggedFilename) return ids
-  const withoutDragged = ids.filter((id) => id !== draggedFilename)
-  if (!target || target.region !== region) return withoutDragged
-  const clamped = Math.max(0, Math.min(target.idx, withoutDragged.length))
-  return [...withoutDragged.slice(0, clamped), draggedFilename, ...withoutDragged.slice(clamped)]
-}
+const INDICATOR_TRANSITION = { duration: 0.14, ease: [0.22, 1, 0.36, 1] as const }
+// Layout animation that plays when scene order changes (i.e. after drop).
+// Cards between the source and destination slide to close the gap while the
+// dragged card glides into its new slot.
+const REORDER_TRANSITION = { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
+// Indicator width in px; matches w-[0.32cqh] visually closely enough without
+// having to resolve the container unit at runtime.
+const INDICATOR_WIDTH_PX = 4
 
 const SceneGrid = ({
   pinnedSeeds,
@@ -46,19 +49,12 @@ const SceneGrid = ({
 }: SceneGridProps) => {
   const [draggedFilename, setDraggedFilename] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  const outerRef = useRef<HTMLDivElement | null>(null)
+  const gridRef = useRef<HTMLDivElement | null>(null)
 
   const pinnedIds = useMemo(() => pinnedSeeds.map((s) => s.filename), [pinnedSeeds])
   const unpinnedIds = useMemo(() => unpinnedSeeds.map((s) => s.filename), [unpinnedSeeds])
   const draggedIsPinned = draggedFilename ? pinnedIds.includes(draggedFilename) : false
-
-  const previewPinned = useMemo(
-    () => computePreview(pinnedIds, draggedFilename, dropTarget, 'pinned'),
-    [pinnedIds, draggedFilename, dropTarget]
-  )
-  const previewUnpinned = useMemo(
-    () => computePreview(unpinnedIds, draggedFilename, dropTarget, 'unpinned'),
-    [unpinnedIds, draggedFilename, dropTarget]
-  )
 
   const seedMap = useMemo(() => {
     const m = new Map<string, SeedRecord>()
@@ -69,35 +65,78 @@ const SceneGrid = ({
 
   const isEmpty = pinnedIds.length === 0 && unpinnedIds.length === 0
   const totalCount = pinnedIds.length + unpinnedIds.length
-  const showSeparator = previewPinned.length > 0 && previewUnpinned.length > 0
   const canDrag = onMoveScene !== undefined && totalCount > 1
+
+  // Resolve the indicator's pixel rect from the hovered card's position,
+  // relative to the outer scroll container. Rendering the indicator at the top
+  // level sidesteps per-card containing-block clipping.
+  const [indicatorPos, setIndicatorPos] = useState<{ left: number; top: number; height: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!dropTarget || !gridRef.current || !outerRef.current) {
+      setIndicatorPos(null)
+      return
+    }
+    const card = gridRef.current.querySelector<HTMLElement>(
+      `[data-scene-filename="${CSS.escape(dropTarget.hoveredFilename)}"]`
+    )
+    if (!card) {
+      setIndicatorPos(null)
+      return
+    }
+    const cardRect = card.getBoundingClientRect()
+    const outerRect = outerRef.current.getBoundingClientRect()
+    const scrollTop = outerRef.current.scrollTop
+
+    const gapPx = parseFloat(window.getComputedStyle(gridRef.current).columnGap) || 0
+    const halfGap = gapPx / 2
+    const halfWidth = INDICATOR_WIDTH_PX / 2
+
+    const rawLeft =
+      dropTarget.side === 'left'
+        ? cardRect.left - outerRect.left - halfGap - halfWidth
+        : cardRect.right - outerRect.left + halfGap - halfWidth
+    // Clamp so edge cards still show the indicator inside the visible clip
+    // region — snaps to the container's inner edge rather than overflowing.
+    const maxLeft = outerRef.current.clientWidth - INDICATOR_WIDTH_PX
+    const left = Math.max(0, Math.min(rawLeft, maxLeft))
+    const top = cardRect.top - outerRect.top + scrollTop
+    setIndicatorPos({ left, top, height: cardRect.height })
+  }, [dropTarget])
 
   const resetDrag = () => {
     setDraggedFilename(null)
     setDropTarget(null)
   }
 
+  const seedInitialTarget = (filename: string): DropTarget | null => {
+    const inPinned = pinnedIds.indexOf(filename)
+    const [region, regionIds] =
+      inPinned !== -1 ? (['pinned', pinnedIds] as const) : (['unpinned', unpinnedIds] as const)
+    const idx = regionIds.indexOf(filename)
+    if (idx === -1) return null
+    const withoutDragged = regionIds.filter((f) => f !== filename)
+    if (withoutDragged.length === 0) return null
+    // Seed on the card adjacent to the dragged scene so the preview stays
+    // anchored at the drag's original position until the cursor moves.
+    if (idx < withoutDragged.length) {
+      return { region, hoveredFilename: withoutDragged[idx], side: 'left' }
+    }
+    return { region, hoveredFilename: withoutDragged[withoutDragged.length - 1], side: 'right' }
+  }
+
   const handleDragStart = (filename: string, event: DragEvent<HTMLButtonElement>) => {
     setDraggedFilename(filename)
-    // Seed the drop target at the dragged scene's original position so the
-    // preview keeps rendering it until the cursor reaches another card.
-    const pinnedIdx = pinnedIds.indexOf(filename)
-    if (pinnedIdx !== -1) {
-      setDropTarget({ region: 'pinned', idx: pinnedIdx })
-    } else {
-      const unpinnedIdx = unpinnedIds.indexOf(filename)
-      setDropTarget(unpinnedIdx === -1 ? null : { region: 'unpinned', idx: unpinnedIdx })
-    }
+    setDropTarget(seedInitialTarget(filename))
     event.dataTransfer.setData(SCENE_DRAG_MIME, filename)
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  const pinnedEndTarget = (): DropTarget => ({
-    region: 'pinned',
-    idx: pinnedIds.filter((f) => f !== draggedFilename).length
-  })
-
-  const unpinnedStartTarget = (): DropTarget => ({ region: 'unpinned', idx: 0 })
+  const pinnedEndTarget = (): DropTarget | null => {
+    const lastPinned = pinnedIds.filter((f) => f !== draggedFilename).at(-1)
+    if (!lastPinned) return null
+    return { region: 'pinned', hoveredFilename: lastPinned, side: 'right' }
+  }
 
   const handleCardDragOver = (hoveredFilename: string, region: Region, event: DragEvent<HTMLButtonElement>) => {
     if (!draggedFilename) return
@@ -105,29 +144,27 @@ const SceneGrid = ({
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
 
-    // Pinned scenes stay pinned: clamp to end of pinned if cursor strays into unpinned cards.
+    // Pinned stays pinned: clamp to end of pinned if cursor strays into unpinned cards.
     if (draggedIsPinned && region === 'unpinned') {
-      setDropTarget(pinnedEndTarget())
+      const target = pinnedEndTarget()
+      if (target) setDropTarget(target)
       return
     }
 
-    const rect = event.currentTarget.getBoundingClientRect()
-    const isLeftHalf = event.clientX < rect.left + rect.width / 2
-    const regionIds = (region === 'pinned' ? pinnedIds : unpinnedIds).filter((f) => f !== draggedFilename)
-    const hoveredIdx = regionIds.indexOf(hoveredFilename)
-    if (hoveredIdx === -1) return
+    // Hovering the dragged card itself — leave the seeded target in place.
+    if (hoveredFilename === draggedFilename) return
 
-    const insertIdx = isLeftHalf ? hoveredIdx : hoveredIdx + 1
-    setDropTarget({ region, idx: insertIdx })
+    const rect = event.currentTarget.getBoundingClientRect()
+    const side: 'left' | 'right' = event.clientX < rect.left + rect.width / 2 ? 'left' : 'right'
+    setDropTarget({ region, hoveredFilename, side })
   }
 
-  const handleSeparatorDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!draggedFilename) return
-    event.preventDefault()
-    event.stopPropagation()
-    event.dataTransfer.dropEffect = 'move'
-    // Hovering the divider: pinned stays at end of pinned; unpinned snaps to start of unpinned.
-    setDropTarget(draggedIsPinned ? pinnedEndTarget() : unpinnedStartTarget())
+  const resolveInsertIdx = (target: DropTarget): number => {
+    const regionIds = target.region === 'pinned' ? pinnedIds : unpinnedIds
+    const withoutDragged = regionIds.filter((f) => f !== draggedFilename)
+    const hoveredIdx = withoutDragged.indexOf(target.hoveredFilename)
+    if (hoveredIdx === -1) return withoutDragged.length
+    return target.side === 'left' ? hoveredIdx : hoveredIdx + 1
   }
 
   const commitDrop = (event: DragEvent) => {
@@ -137,26 +174,57 @@ const SceneGrid = ({
     }
     event.preventDefault()
     event.stopPropagation()
-    onMoveScene(draggedFilename, dropTarget.region, dropTarget.idx)
+    onMoveScene(draggedFilename, dropTarget.region, resolveInsertIdx(dropTarget))
     resetDrag()
   }
 
   const handleCardDrop = (_filename: string, event: DragEvent<HTMLButtonElement>) => commitDrop(event)
-  const handleSeparatorDrop = (event: DragEvent<HTMLDivElement>) => commitDrop(event)
+
+  // Gaps between cards don't receive events, so the grid-level handler fires
+  // there too. Guard with the last-card measurement so the fallback only
+  // targets "end of region" when the cursor is genuinely past all cards.
+  const handleGridDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!draggedFilename) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+
+    const grid = gridRef.current
+    if (!grid) return
+    const tiles = grid.querySelectorAll<HTMLElement>('[data-scene-tile]')
+    if (tiles.length === 0) return
+    const lastRect = tiles[tiles.length - 1].getBoundingClientRect()
+    const pastLastCard =
+      event.clientY > lastRect.bottom || (event.clientY >= lastRect.top && event.clientX > lastRect.right)
+    if (!pastLastCard) return
+
+    if (draggedIsPinned) {
+      const target = pinnedEndTarget()
+      if (target) setDropTarget(target)
+      return
+    }
+
+    const lastUnpinned = unpinnedIds.filter((f) => f !== draggedFilename).at(-1)
+    if (lastUnpinned) {
+      setDropTarget({ region: 'unpinned', hoveredFilename: lastUnpinned, side: 'right' })
+    }
+  }
+
+  const handleGridDrop = (event: DragEvent<HTMLDivElement>) => commitDrop(event)
 
   const renderCard = (filename: string, region: Region) => {
-    const seed = seedMap.get(filename)
-    if (!seed) return null
+    const record = seedMap.get(filename)
+    if (!record) return null
     return (
       <motion.div
         key={filename}
         layout
-        transition={LAYOUT_TRANSITION}
-        className="w-full"
-        style={{ WebkitTapHighlightColor: 'transparent' }}
+        transition={REORDER_TRANSITION}
+        data-scene-tile
+        data-scene-filename={filename}
+        className="relative w-full"
       >
         <SceneCard
-          seed={seed}
+          seed={record}
           thumbnailSrc={thumbnails[filename]}
           isPinned={region === 'pinned'}
           pinVariant="toggle"
@@ -177,12 +245,15 @@ const SceneGrid = ({
 
   return (
     <div
+      ref={outerRef}
       className={`
-        styled-scrollbar mt-[1.1cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh]
+        styled-scrollbar relative mt-[1.1cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh]
         ${className ?? ''}
       `}
+      onDragOver={canDrag ? handleGridDragOver : undefined}
+      onDrop={canDrag ? handleGridDrop : undefined}
     >
-      <div className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
+      <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
         {before}
         {/* `display: contents` wrapper so the default-focus marker only covers
             scene tiles (not the user-scenes "paste / browse" buttons in `before`)
@@ -192,22 +263,25 @@ const SceneGrid = ({
             emptyState
           ) : (
             <>
-              {previewPinned.map((f) => renderCard(f, 'pinned'))}
-              {showSeparator && (
-                <motion.div
-                  layout
-                  transition={LAYOUT_TRANSITION}
-                  className="col-span-full my-[0.6cqh] h-px bg-border-subtle"
-                  aria-hidden="true"
-                  onDragOver={canDrag ? handleSeparatorDragOver : undefined}
-                  onDrop={canDrag ? handleSeparatorDrop : undefined}
-                />
-              )}
-              {previewUnpinned.map((f) => renderCard(f, 'unpinned'))}
+              {pinnedIds.map((f) => renderCard(f, 'pinned'))}
+              {unpinnedIds.map((f) => renderCard(f, 'unpinned'))}
             </>
           )}
         </div>
       </div>
+      <AnimatePresence>
+        {indicatorPos && (
+          <motion.div
+            key="drop-indicator"
+            initial={{ opacity: 0, left: indicatorPos.left, top: indicatorPos.top, height: indicatorPos.height }}
+            animate={{ opacity: 1, left: indicatorPos.left, top: indicatorPos.top, height: indicatorPos.height }}
+            exit={{ opacity: 0 }}
+            transition={INDICATOR_TRANSITION}
+            className="pointer-events-none absolute z-10 w-[0.32cqh] rounded-[0.16cqh] bg-text-primary"
+            aria-hidden="true"
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
