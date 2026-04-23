@@ -328,6 +328,10 @@ const he = {
           placeholder: 'במה תרצה לשחק?'
         }
       },
+      ready: {
+        heading: 'מוכן להתחיל.',
+        subtitle: 'לחץ על כרטיס כדי להתחיל לשחק.'
+      },
       scenes: {
         failedToReadImageData: 'קריאת נתוני התמונה נכשלה',
         noImageInClipboard: 'לא נמצאה תמונה בלוח'

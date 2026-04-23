@@ -1,11 +1,12 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
+import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
 import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
 import RawSettingsButton from './ui/RawSettingsButton'
-import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
+import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
 import { useSettings } from '../hooks/settingsContextValue'
@@ -26,7 +27,7 @@ interface PauseMainViewProps {
   requestPointerLock: () => void
   showPauseLockoutTimer: boolean
   pauseLockoutSecondsText: string
-  generateState: 'idle' | 'loading' | 'error'
+  isGenerating: boolean
   generateError: string | null
   onGenerateScene: (prompt: string) => void
 }
@@ -47,15 +48,13 @@ const PauseMainView = ({
   requestPointerLock,
   showPauseLockoutTimer,
   pauseLockoutSecondsText,
-  generateState,
+  isGenerating,
   generateError,
   onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
   const { settings } = useSettings()
   const sceneAuthoringEnabled = settings.scene_authoring_enabled ?? false
-  const isGenerating = generateState === 'loading'
-  const [promptText, setPromptText] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
@@ -204,51 +203,11 @@ const PauseMainView = ({
           }
         />
         {sceneAuthoringEnabled && (
-          <>
-            <div className="mt-[2cqh] flex items-center gap-[1.5cqh]">
-              <div className="h-px flex-1 bg-border-subtle" />
-              <span className="font-serif text-caption text-text-muted">{t('app.pause.generateScene.divider')}</span>
-              <div className="h-px flex-1 bg-border-subtle" />
-            </div>
-            <div className="relative mt-[1.5cqh]">
-              {generateState === 'error' && generateError && (
-                <p className="m-0 mb-[0.8cqh] font-serif text-caption text-red-400">{generateError}</p>
-              )}
-              <textarea
-                rows={3}
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                disabled={isGenerating}
-                placeholder={t('app.pause.generateScene.placeholder')}
-                className={`
-                  ${SETTINGS_CONTROL_BASE}
-                  ${SETTINGS_CONTROL_TEXT}
-                  w-full resize-none outline-none
-                  focus:ring-1 focus:ring-border-medium
-                  disabled:opacity-50
-                `}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    const trimmed = promptText.trim()
-                    if (trimmed && !isGenerating) {
-                      onGenerateScene(trimmed)
-                    }
-                  }
-                }}
-                onKeyUp={(e) => e.stopPropagation()}
-              />
-              {isGenerating && (
-                <div
-                  className="
-                    absolute top-1/2 right-[1.2cqh] h-[2cqh] w-[2cqh] -translate-y-1/2 animate-spin rounded-full
-                    border-[0.3cqh] border-text-muted border-t-text-primary
-                  "
-                />
-              )}
-            </div>
-          </>
+          <SceneAuthoringPrompt
+            isGenerating={isGenerating}
+            generateError={generateError}
+            onGenerate={onGenerateScene}
+          />
         )}
       </section>
 

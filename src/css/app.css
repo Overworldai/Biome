@@ -127,7 +127,6 @@
   --vortex-warp-x: 1;
   --vortex-warp-y: 1;
   --vortex-speed-mult: 1;
-  --vortex-progress-percent: 0;
 }
 @layer base {
   :root {
@@ -208,14 +207,6 @@
     animation-delay: 1120ms;
     will-change: clip-path;
   }
-  .loading-ui-layer.streaming-pullout .loading-vortex-layer {
-    --vortex-warp-x: 1;
-    --vortex-warp-y: 1;
-    --vortex-speed-mult: 1;
-    animation: streamingVortexPullIn 1500ms linear forwards;
-    will-change: --vortex-warp-x, --vortex-warp-y, --vortex-speed-mult;
-  }
-
   /* --- BACKGROUND SLIDESHOW --- */
   .app-background-slide {
     position: absolute;

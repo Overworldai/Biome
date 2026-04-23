@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { invoke } from '../bridge'
 import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
@@ -11,21 +9,17 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import { useSceneOrder } from '../hooks/useSceneOrder'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
-import { RpcError } from '../lib/wsRpc'
-import type { GenerateSceneResponse } from '../types/ws'
+import { useSceneGeneration } from '../hooks/useSceneGeneration'
 import type { SeedRecord } from '../types/app'
 import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
-const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { t } = useTranslation()
+const PauseOverlayContent = () => {
   const { requestPointerLock, reset, wsRequest } = useStreaming()
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const [generateState, setGenerateState] = useState<'idle' | 'loading' | 'error'>('idle')
-  const [generateError, setGenerateError] = useState<string | null>(null)
-  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(isActive)
+  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(true)
 
   const {
     seeds,
@@ -40,7 +34,7 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     handleClipboardUpload
   } = useSeedManager({
     wsRequest,
-    isActive,
+    isActive: true,
     onPinnedSceneRemoved: (filename: string) => removeScene(filename)
   })
 
@@ -54,69 +48,23 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
     return sceneIds.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
   }, [seeds, sceneIds])
 
-  const { selectScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+  const { selectScene } = useSceneActions(handleClipboardUpload, view !== PAUSE_VIEW.SETTINGS)
+
+  const { generateError, isGenerating, generate } = useSceneGeneration({ refreshSeeds, isActive: true })
 
   useEffect(() => {
-    if (!isActive) {
-      setView(PAUSE_VIEW.MAIN)
-      setGenerateState('idle')
-      setGenerateError(null)
-      return
-    }
-
     const handleKeyUp = (e: KeyboardEvent) => {
       // Escape is always a safety-escape; the user's configured pauseMenu key also re-locks.
       if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
-      if (generateState === 'loading') return
+      if (isGenerating) return
       requestPointerLock()
     }
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, generateState, requestPointerLock, pauseMenuCode])
-
-  // Auto-dismiss generate error after 5 seconds
-  useEffect(() => {
-    if (generateState !== 'error') return
-    const timer = setTimeout(() => {
-      setGenerateState('idle')
-      setGenerateError(null)
-    }, 5000)
-    return () => clearTimeout(timer)
-  }, [generateState])
-
-  const handleGenerateScene = useCallback(
-    async (prompt: string) => {
-      setGenerateState('loading')
-      setGenerateError(null)
-      try {
-        const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
-        if (settings.scene_authoring_save_generated ?? true) {
-          try {
-            await invoke('save-generated-seed', response.image_jpeg_base64)
-            await refreshSeeds()
-          } catch (saveErr) {
-            // Saving is a best-effort side-channel; the scene is already live in
-            // the engine so we shouldn't fail the RPC on a disk error.
-            console.warn('Failed to save generated scene:', saveErr)
-          }
-        }
-        setGenerateState('idle')
-      } catch (err) {
-        let msg: string
-        if (err instanceof RpcError && err.errorId) {
-          msg = t(err.errorId, { defaultValue: err.message })
-        } else {
-          msg = err instanceof Error ? err.message : String(err)
-        }
-        setGenerateState('error')
-        setGenerateError(msg)
-      }
-    },
-    [wsRequest, t, settings.scene_authoring_save_generated, refreshSeeds]
-  )
+  }, [view, isGenerating, requestPointerLock, pauseMenuCode])
 
   const handleResetAndResume = () => {
     reset()
@@ -125,13 +73,10 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
 
   return (
     <FocusScope
-      active={isActive && view !== PAUSE_VIEW.SETTINGS}
+      active={view !== PAUSE_VIEW.SETTINGS}
       autoFocus
       onCancel={requestPointerLock}
-      className={`
-        absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh] transition-opacity duration-240 ease-in-out
-        ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}
-      `}
+      className="pointer-events-auto absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh]"
     >
       <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
@@ -171,14 +116,40 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
               requestPointerLock={requestPointerLock}
               showPauseLockoutTimer={showPauseLockoutTimer}
               pauseLockoutSecondsText={pauseLockoutSecondsText}
-              generateState={generateState}
+              isGenerating={isGenerating}
               generateError={generateError}
-              onGenerateScene={handleGenerateScene}
+              onGenerateScene={generate}
             />
           </motion.div>
         )}
       </AnimatePresence>
     </FocusScope>
+  )
+}
+
+/** The pause menu: shown when the user Escapes out of gameplay after they've
+ *  already started playing (i.e. after the ready screen). Self-mounts via
+ *  AnimatePresence so App.tsx just drops `<PauseOverlay />` in and the overlay
+ *  never lingers in the DOM while inactive. */
+const PauseOverlay = () => {
+  const { isPaused, hasEnteredGameplay, sceneEditState } = useStreaming()
+  const visible = hasEnteredGameplay && isPaused && sceneEditState.phase === 'inactive'
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="pause-overlay"
+          className="absolute inset-0 z-45"
+          variants={viewFadeVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+        >
+          <PauseOverlayContent />
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

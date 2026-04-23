@@ -322,6 +322,10 @@ const zh = {
           placeholder: '你想玩什么？'
         }
       },
+      ready: {
+        heading: '准备就绪。',
+        subtitle: '点击一张卡片开始游戏。'
+      },
       scenes: {
         failedToReadImageData: '无法读取图片数据',
         noImageInClipboard: '剪贴板中未找到图片'

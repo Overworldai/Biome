@@ -332,6 +332,10 @@ const ja = {
           placeholder: '何をプレイしたいですか？'
         }
       },
+      ready: {
+        heading: '準備完了。',
+        subtitle: 'カードをクリックしてプレイを開始。'
+      },
       scenes: {
         failedToReadImageData: '画像データの読み取りに失敗しました',
         noImageInClipboard: 'クリップボードに画像が見つかりません'

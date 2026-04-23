@@ -89,6 +89,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [isPaused, setIsPaused] = useState(false)
   const [pausedAt, setPausedAt] = useState<number | null>(null)
   const [pauseElapsedMs, setPauseElapsedMs] = useState(0)
+  // Flips true the first time the user unpauses in a session. Drives the choice
+  // between the ready overlay (pre-gameplay) and the pause overlay (post-gameplay).
+  // Reset on each new LOADING transition so a fresh session starts on the ready overlay.
+  const [hasEnteredGameplay, setHasEnteredGameplay] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sceneEditState, dispatchSceneEdit] = useReducer(sceneEditReducer, initialSceneEditState)
   const sceneEditActive = sceneEditState.phase !== 'inactive'
@@ -301,6 +305,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isConnected, setPlaceholderFrame])
 
+  // Clear the ready-overlay flag when (re)entering LOADING so the next session
+  // starts on the ready overlay rather than the pause overlay.
+  useEffect(() => {
+    if (state === states.LOADING) setHasEnteredGameplay(false)
+  }, [state, states.LOADING])
+
   // Live-toggle action logging / video recording during streaming without a full re-bootstrap
   useEffect(() => {
     if (!isStreaming || !isConnected) return
@@ -511,6 +521,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     setSettingsOpen(false)
     setIsPaused(false)
     setPausedAt(null)
+    setHasEnteredGameplay(true)
     sendPause(false)
   }, [sendPause])
 
@@ -784,6 +795,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     isStreaming,
     isPaused,
+    hasEnteredGameplay,
     isUIActive: !inputEnabled,
     pausedAt,
     canUnpause,

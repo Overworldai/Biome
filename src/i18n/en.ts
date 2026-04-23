@@ -334,6 +334,10 @@ const en = {
           placeholder: 'What do you want to play?'
         }
       },
+      ready: {
+        heading: 'Ready to go.',
+        subtitle: 'Click a card to start playing.'
+      },
       scenes: {
         failedToReadImageData: 'Failed to read image data',
         noImageInClipboard: 'No image found in clipboard'

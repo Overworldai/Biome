@@ -335,6 +335,10 @@ const goose = {
           placeholder: 'Where shall the goose waddle?'
         }
       },
+      ready: {
+        heading: 'Wings up, honk!',
+        subtitle: 'Peck a pond to start flapping.'
+      },
       scenes: {
         failedToReadImageData: 'Failed to read image data',
         noImageInClipboard: 'No image found in clipboard'
