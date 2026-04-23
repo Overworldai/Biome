@@ -309,6 +309,7 @@ const he = {
       pause: {
         title: 'מושהה',
         unlockIn: 'ייפתח בעוד {{seconds}}ש׳',
+        unpauseToPlay: 'בטל את ההשהיה כדי לשחק.',
         scenes: {
           title: 'סצנות',
           sceneSubtitle: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש.',
@@ -322,7 +323,7 @@ const he = {
           removeScene: 'הסר סצנה'
         },
         generateScene: {
-          divider: 'או',
+          divider: 'או הנחה סצנה',
           placeholder: 'במה תרצה לשחק?'
         }
       },

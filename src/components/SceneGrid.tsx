@@ -20,6 +20,9 @@ interface SceneGridProps {
   className?: string
   before?: ReactNode
   emptyState?: ReactNode
+  /** When set to a scene filename, the matching card is smooth-scrolled into
+   *  view. Used after a generated scene is added so the user can see it. */
+  autoScrollTo?: string | null
 }
 
 const SCENE_DRAG_MIME = 'application/x-biome-scene'
@@ -46,7 +49,8 @@ const SceneGrid = ({
   onMoveScene,
   className,
   before,
-  emptyState
+  emptyState,
+  autoScrollTo
 }: SceneGridProps) => {
   const [draggedFilename, setDraggedFilename] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
@@ -158,6 +162,20 @@ const SceneGrid = ({
   }
 
   useEffect(() => stopAutoScroll, [])
+
+  // Scroll a specific card into view when `autoScrollTo` changes (e.g. the
+  // pause menu has just had a generated scene added and we want the user to
+  // find it). Uses the real card element so any grid row the card lands on
+  // scrolls with it. Looked up by filename so it handles late-arriving cards
+  // that weren't in the scenes array on the render the prop changed.
+  useEffect(() => {
+    if (!autoScrollTo) return
+    const grid = gridRef.current
+    if (!grid) return
+    const card = grid.querySelector<HTMLElement>(`[data-scene-filename="${CSS.escape(autoScrollTo)}"]`)
+    if (!card) return
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [autoScrollTo, scenes])
 
   // Gamepad hold-to-drag: hold A on a focused scene card to pick it up, then
   // d-pad moves the drop indicator. Release A to commit, B to cancel.

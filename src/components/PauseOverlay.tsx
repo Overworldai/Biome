@@ -50,7 +50,10 @@ const PauseOverlayContent = () => {
 
   const { selectScene } = useSceneActions(handleClipboardUpload, view !== PAUSE_VIEW.SETTINGS)
 
-  const { generateError, isGenerating, generate } = useSceneGeneration({ refreshSeeds, isActive: true })
+  const { generateError, isGenerating, lastGeneratedFilename, generate } = useSceneGeneration({
+    refreshSeeds,
+    isActive: true
+  })
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -110,6 +113,7 @@ const PauseOverlayContent = () => {
               requestPointerLock={requestPointerLock}
               isGenerating={isGenerating}
               generateError={generateError}
+              lastGeneratedFilename={lastGeneratedFilename}
               onGenerateScene={generate}
             />
           </motion.div>

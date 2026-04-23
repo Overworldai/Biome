@@ -21,11 +21,15 @@ export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGeneratio
   const { settings } = useSettings()
   const [generateState, setGenerateState] = useState<GenerateState>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
+  /** Filename of the last successfully-saved generated scene. Consumers use
+   *  this to scroll the card into view + surface a "unpause to play" hint. */
+  const [lastGeneratedFilename, setLastGeneratedFilename] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isActive) {
       setGenerateState('idle')
       setGenerateError(null)
+      setLastGeneratedFilename(null)
     }
   }, [isActive])
 
@@ -42,12 +46,14 @@ export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGeneratio
     async (prompt: string) => {
       setGenerateState('loading')
       setGenerateError(null)
+      setLastGeneratedFilename(null)
       try {
         const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
         if (settings.scene_authoring_save_generated ?? true) {
           try {
-            await invoke('save-generated-seed', response.image_jpeg_base64)
+            const record = await invoke('save-generated-seed', response.image_jpeg_base64)
             await refreshSeeds()
+            setLastGeneratedFilename(record.filename)
           } catch (saveErr) {
             // Saving is a best-effort side-channel; the scene is already live in
             // the engine so we shouldn't fail the RPC on a disk error.
@@ -73,6 +79,7 @@ export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGeneratio
     generateState,
     generateError,
     isGenerating: generateState === 'loading',
+    lastGeneratedFilename,
     generate
   }
 }

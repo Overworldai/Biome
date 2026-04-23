@@ -303,6 +303,7 @@ const zh = {
       pause: {
         title: '已暂停',
         unlockIn: '{{seconds}} 秒后解锁',
+        unpauseToPlay: '取消暂停开始游戏。',
         scenes: {
           title: '场景',
           sceneSubtitle: '点击场景开始游戏。拖动可重新排序。',
@@ -316,7 +317,7 @@ const zh = {
           removeScene: '删除场景'
         },
         generateScene: {
-          divider: '或',
+          divider: '或通过提示词生成场景',
           placeholder: '你想玩什么？'
         }
       },

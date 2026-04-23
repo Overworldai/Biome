@@ -25,6 +25,7 @@ interface PauseMainViewProps {
   requestPointerLock: () => void
   isGenerating: boolean
   generateError: string | null
+  lastGeneratedFilename: string | null
   onGenerateScene: (prompt: string) => void
 }
 
@@ -43,6 +44,7 @@ const PauseMainView = ({
   requestPointerLock,
   isGenerating,
   generateError,
+  lastGeneratedFilename,
   onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
@@ -162,6 +164,7 @@ const PauseMainView = ({
           onSelect={onSceneSelect}
           onRemove={onRemoveScene}
           onMoveScene={onMoveScene}
+          autoScrollTo={lastGeneratedFilename}
           before={
             ALLOW_USER_SCENES && (
               <div
@@ -206,6 +209,17 @@ const PauseMainView = ({
           />
         )}
       </section>
+
+      {lastGeneratedFilename && (
+        <p
+          className="
+            pointer-events-none absolute bottom-(--edge-bottom) left-(--edge-left) m-0 flex h-[5.2cqh] items-center
+            font-serif text-body text-text-primary
+          "
+        >
+          {t('app.pause.unpauseToPlay')}
+        </p>
+      )}
 
       <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex gap-[1.1cqh]">
         <MenuButton

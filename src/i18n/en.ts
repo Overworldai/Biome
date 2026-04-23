@@ -315,6 +315,7 @@ const en = {
       pause: {
         title: 'Paused',
         unlockIn: 'unlock in {{seconds}}s',
+        unpauseToPlay: 'Unpause to play.',
         scenes: {
           title: 'Scenes',
           sceneSubtitle: 'Click a scene to play. Drag to reorder.',
@@ -328,7 +329,7 @@ const en = {
           removeScene: 'Remove scene'
         },
         generateScene: {
-          divider: 'or',
+          divider: 'or prompt a scene',
           placeholder: 'What do you want to play?'
         }
       },

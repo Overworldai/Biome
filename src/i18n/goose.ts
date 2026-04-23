@@ -316,6 +316,7 @@ const goose = {
       pause: {
         title: 'Paused',
         unlockIn: 'unlock in {{seconds}}s',
+        unpauseToPlay: 'Unhonk to flap.',
         scenes: {
           title: 'Ponds',
           sceneSubtitle: 'Peck a pond to flap. Drag to rearrange.',
@@ -329,7 +330,7 @@ const goose = {
           removeScene: 'Abandon pond'
         },
         generateScene: {
-          divider: 'or',
+          divider: 'or honk a pond',
           placeholder: 'Where shall the goose waddle?'
         }
       },

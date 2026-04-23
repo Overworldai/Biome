@@ -313,6 +313,7 @@ const ja = {
       pause: {
         title: '一時停止',
         unlockIn: '{{seconds}} 秒後に解除',
+        unpauseToPlay: '一時停止を解除してプレイ。',
         scenes: {
           title: 'シーン',
           sceneSubtitle: 'シーンをクリックしてプレイ。ドラッグで並べ替え。',
@@ -326,7 +327,7 @@ const ja = {
           removeScene: 'シーンを削除'
         },
         generateScene: {
-          divider: 'または',
+          divider: 'またはシーンをプロンプトで生成',
           placeholder: '何をプレイしたいですか？'
         }
       },
