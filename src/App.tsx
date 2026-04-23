@@ -43,6 +43,7 @@ import PerformanceStatsOverlay from './components/PerformanceStatsOverlay'
 import InputOverlay from './components/InputOverlay'
 import FrameTimelineOverlay from './components/FrameTimelineOverlay'
 import I18nSync from './components/I18nSync'
+import DevLocaleCycler from './components/DevLocaleCycler'
 import FocusReticle from './components/ui/FocusReticle'
 import { useGamepadNavigation } from './hooks/useGamepadNavigation'
 import { useTranslation } from 'react-i18next'
@@ -497,6 +498,7 @@ const App = () => {
           <StreamingProvider>
             <VortexProvider>
               <I18nSync />
+              {import.meta.env.DEV && <DevLocaleCycler />}
               <AudioController />
               <AppShell />
             </VortexProvider>

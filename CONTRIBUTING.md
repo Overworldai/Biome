@@ -334,6 +334,8 @@ Other components use prop-level `raw` prefixes for escape hatches:
 
 Language display names (e.g. "English", "日本語", "中文") are **not** translation keys — they always appear in their native script regardless of the current locale. Only the "System Default" option is translated.
 
+**Dev shortcut**: in dev builds (`npm run dev`), press `Ctrl+L` to cycle through `SUPPORTED_LOCALES` — useful for eyeballing translations without opening Settings. The choice is persisted to the settings file.
+
 ### Error handling and `TranslatableError`
 
 All user-visible errors should be localised. `TranslatableError` (exported from `src/i18n/index.ts`) is an `Error` subclass that carries a `translationKey` and `translationParams`:
