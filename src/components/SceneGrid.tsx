@@ -408,7 +408,7 @@ const SceneGrid = ({
         onDragOver={canDrag ? handleGridDragOver : undefined}
         onDrop={canDrag ? handleGridDrop : undefined}
       >
-        <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,25.78cqh)] gap-[1.28cqh]">
+        <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,39cqh)] gap-[1.28cqh]">
           {before}
           {/* `display: contents` wrapper so the default-focus marker only covers
               scene tiles (not the user-scenes "paste / browse" buttons in `before`)
