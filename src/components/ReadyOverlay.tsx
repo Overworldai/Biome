@@ -89,8 +89,8 @@ const ReadyOverlayContent = () => {
         <div className="mt-[1.5cqh] flex w-full justify-end">
           <MenuButton
             variant="primary"
+            size="sm"
             label="app.buttons.returnToMainMenu"
-            className="origin-right"
             onClick={() => void cancelConnection()}
           />
         </div>

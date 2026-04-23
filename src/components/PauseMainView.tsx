@@ -233,22 +233,22 @@ const PauseMainView = ({
       <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex w-btn-w flex-col gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
+          fullWidth
           label="app.buttons.reset"
-          className="w-full px-0"
           onClick={onResetAndResume}
           disabled={isGenerating}
         />
         <MenuButton
           variant="secondary"
+          fullWidth
           label="app.buttons.settings"
-          className="w-full px-0"
           onClick={onNavigateSettings}
           disabled={isGenerating}
         />
         <MenuButton
           variant="primary"
+          fullWidth
           label="app.buttons.resume"
-          className="w-full px-0"
           onClick={requestPointerLock}
           disabled={isGenerating}
         />

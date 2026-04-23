@@ -344,10 +344,11 @@ const AppShell = () => {
 
               <MenuButton
                 variant="secondary"
+                size="lg"
                 label="app.buttons.settings"
                 className="
                   pointer-events-auto absolute right-(--edge-right) bottom-(--edge-bottom) z-1 m-0 box-border
-                  min-w-[132px] appearance-none p-[0.9cqh_2.67cqh] text-[3.91cqh] tracking-tight
+                  min-w-[132px] appearance-none p-[0.9cqh_2.67cqh] tracking-tight
                 "
                 onClick={toggleSettings}
               />

@@ -201,19 +201,11 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
       </section>
 
       <div className="absolute right-(--edge-right) bottom-(--edge-bottom) z-5 flex w-btn-w flex-col gap-[1.1cqh]">
-        <MenuButton
-          variant="secondary"
-          label="app.buttons.credits"
-          className="w-full px-0"
-          onClick={() => setShowCredits(true)}
-        />
+        <MenuButton variant="secondary" fullWidth label="app.buttons.credits" onClick={() => setShowCredits(true)} />
         <MenuButton
           variant="primary"
+          fullWidth
           label="app.buttons.back"
-          className="
-            w-full px-0
-            disabled:cursor-not-allowed disabled:opacity-50
-          "
           disabled={hasKeybindConflict}
           onClick={() => {
             void handleBackClick()
