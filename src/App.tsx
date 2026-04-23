@@ -63,6 +63,14 @@ const LAUNCH_PRE_SHRINK_MS = 420
  */
 type TransitionPhase = 'idle' | 'launch-shrink' | 'launch-reveal' | 'return-to-menu' | 'streaming-reveal'
 
+/** Phase-specific modifier class applied to the loading UI layer while it
+ *  animates. Phases not listed here don't mount the loading layer at all. */
+const LOADING_LAYER_PHASE_CLASS: Partial<Record<TransitionPhase, string>> = {
+  'launch-reveal': 'launch-revealing',
+  'return-to-menu': 'launch-concealing',
+  'streaming-reveal': 'streaming-pullout'
+}
+
 const AppShell = () => {
   const { t } = useTranslation()
   const [isPortalHovered, setIsPortalHovered] = useState(false)
@@ -74,10 +82,6 @@ const AppShell = () => {
   const editPromptKeyRef = useRef(0)
   const [prevStreamingUi, setPrevStreamingUi] = useState(false)
 
-  const isLaunchShrinking = transitionPhase === 'launch-shrink'
-  const isEnteringLoading = transitionPhase === 'launch-reveal'
-  const isReturningToMenu = transitionPhase === 'return-to-menu'
-  const isStreamingReveal = transitionPhase === 'streaming-reveal'
   const {
     state: portalState,
     states: portalStates,
@@ -101,11 +105,11 @@ const AppShell = () => {
     completePortalShrink,
     completeTransition
   } = useBackgroundCycle(
+    // Any time the portal isn't sitting idle on the main menu — hovered,
+    // settings open, animating, or already inside a session.
     isPortalHovered ||
       (!isConnected && isSettingsOpen) ||
-      isLaunchShrinking ||
-      isEnteringLoading ||
-      isReturningToMenu ||
+      transitionPhase !== 'idle' ||
       portalState === portalStates.LOADING ||
       portalState === portalStates.STREAMING
   )
@@ -131,10 +135,13 @@ const AppShell = () => {
     backgroundReadyRef.current = true
     showWindowIfReady()
   }, [showWindowIfReady])
-  const isLaunchTransition = isEnteringLoading
   const isStreamingUi = portalState === portalStates.STREAMING && isStreaming
-  const isLoadingUi = !isLaunchTransition && portalState === portalStates.LOADING
-  const isMainUi = !isLaunchTransition && !isLoadingUi && !isStreamingUi
+  // During `launch-reveal`, portalState is still MAIN_MENU (the transition to
+  // LOADING only fires on animation end), so `isLoadingUi` is naturally false.
+  // `isMainUi` needs the explicit guard — we're still on MAIN_MENU state but
+  // visually the loading layer is covering the portal.
+  const isLoadingUi = portalState === portalStates.LOADING
+  const isMainUi = !isLoadingUi && !isStreamingUi && transitionPhase !== 'launch-reveal'
   const useMainBackground = !isStreamingUi
   const backgroundBlurCqh = isMainUi ? (isSettingsOpen ? 1.94 : 0.14) : 0
   const portalGlowRgb = usePortalGlowSample(portalVisible, nextVideoElement)
@@ -166,12 +173,13 @@ const AppShell = () => {
     }
   }, [])
 
-  // Arm the streaming reveal synchronously when isStreamingUi flips on, so the
-  // loading layer's rendering condition (which includes `isStreamingReveal`)
+  // Arm the streaming-reveal phase synchronously when isStreamingUi flips on,
+  // so the loading layer's rendering condition (which depends on the phase)
   // doesn't see a one-render gap between `isLoadingUi` going false and the
-  // reveal flag going true. A useEffect would lag by a frame and the vortex
-  // canvas would briefly unmount, causing a particle reset mid-transition.
-  // React restarts the render with the new state before committing to the DOM.
+  // phase flipping to `'streaming-reveal'`. A useEffect would lag by a frame
+  // and the vortex canvas would briefly unmount, causing a particle reset
+  // mid-transition. React restarts the render with the new state before
+  // committing to the DOM.
   if (isStreamingUi !== prevStreamingUi) {
     setPrevStreamingUi(isStreamingUi)
     if (isStreamingUi) setTransitionPhase('streaming-reveal')
@@ -197,12 +205,13 @@ const AppShell = () => {
     }
   }, [portalVisible])
 
-  // Play swoosh on background cycle transitions
+  // Play swoosh on background cycle transitions, but not during the launch
+  // pre-shrink — `portal_swoosh_long` is already playing there.
   useEffect(() => {
-    if (isPortalShrinking && !isLaunchShrinking) {
+    if (isPortalShrinking && transitionPhase !== 'launch-shrink') {
       play('portal_swoosh')
     }
-  }, [isPortalShrinking, isLaunchShrinking, play])
+  }, [isPortalShrinking, transitionPhase, play])
 
   useEffect(() => {
     if (!isLoadingUi && portalState === portalStates.MAIN_MENU) {
@@ -212,22 +221,21 @@ const AppShell = () => {
   }, [isLoadingUi, portalState, portalStates.MAIN_MENU])
 
   useEffect(() => {
-    if (!isLaunchShrinking) return
+    if (transitionPhase !== 'launch-shrink') return
 
     const timer = window.setTimeout(() => {
       setTransitionPhase('launch-reveal')
     }, LAUNCH_PRE_SHRINK_MS)
 
     return () => window.clearTimeout(timer)
-  }, [isLaunchShrinking])
+  }, [transitionPhase])
 
   const handleLaunch = () => {
     if (
       portalState === portalStates.MAIN_MENU &&
       connectionState !== 'connecting' &&
       !isSettingsOpen &&
-      !isEnteringLoading &&
-      !isLaunchShrinking
+      transitionPhase === 'idle'
     ) {
       play('portal_swoosh_long')
       fadeOutLoop('portal_hum', 0.15)
@@ -236,7 +244,7 @@ const AppShell = () => {
   }
 
   const handleCancelLoading = () => {
-    if (isReturningToMenu || portalState !== portalStates.LOADING) return
+    if (transitionPhase === 'return-to-menu' || portalState !== portalStates.LOADING) return
     play('portal_swoosh_long')
     setTransitionPhase('return-to-menu')
     setIsPortalHovered(false)
@@ -270,7 +278,7 @@ const AppShell = () => {
             onInitialReady={handleBackgroundReady}
           />
         )}
-        {isMainUi && !isConnected && !isEnteringLoading && (
+        {isMainUi && !isConnected && (
           <div
             className={`
               absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-180 ease-out
@@ -306,7 +314,7 @@ const AppShell = () => {
                 hoverContent={nextVideoElement ? <VortexHost mode="portal" /> : undefined}
                 isHovered={isPortalHovered}
                 visible={portalVisible}
-                isShrinking={isPortalShrinking || isLaunchShrinking}
+                isShrinking={isPortalShrinking || transitionPhase === 'launch-shrink'}
                 isEntering={isPortalEntering}
                 isSettingsOpen={!isConnected && isSettingsOpen}
                 glowRgb={portalGlowRgb}
@@ -362,7 +370,7 @@ const AppShell = () => {
           <main
             className={`
               content-area absolute inset-0 z-5 size-full bg-black opacity-100
-              ${isStreamingReveal ? 'streaming-reveal' : ''}
+              ${transitionPhase === 'streaming-reveal' ? 'streaming-reveal' : ''}
             `}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
@@ -423,24 +431,22 @@ const AppShell = () => {
             <ConnectionLostOverlay />
           </main>
         )}
-        {(isLoadingUi || isEnteringLoading || isReturningToMenu || isStreamingReveal) && (
+        {(isLoadingUi || LOADING_LAYER_PHASE_CLASS[transitionPhase]) && (
           <div
             className={`
               loading-ui-layer absolute inset-0
-              ${isStreamingReveal ? 'z-4' : 'z-20'}
-              ${isEnteringLoading ? 'launch-revealing' : ''}
-              ${isReturningToMenu ? 'launch-concealing' : ''}
-              ${isStreamingReveal ? 'streaming-pullout' : ''}
+              ${transitionPhase === 'streaming-reveal' ? 'z-4' : 'z-20'}
+              ${LOADING_LAYER_PHASE_CLASS[transitionPhase] ?? ''}
             `}
             onAnimationEnd={(event) => {
               if (event.target !== event.currentTarget) return
               if (event.animationName !== 'portalBgReveal' && event.animationName !== 'portalBgConceal') return
-              if (isEnteringLoading) {
+              if (transitionPhase === 'launch-reveal') {
                 setTransitionPhase('idle')
                 void transitionTo(portalStates.LOADING)
                 return
               }
-              if (isReturningToMenu) {
+              if (transitionPhase === 'return-to-menu') {
                 triggerPortalEnter()
                 setTransitionPhase('idle')
                 void transitionTo(portalStates.MAIN_MENU)
@@ -450,11 +456,7 @@ const AppShell = () => {
             <div className="pointer-events-none absolute inset-0 z-7" aria-hidden="true">
               <VortexHost mode="loading" />
             </div>
-            {(isLoadingUi || isEnteringLoading || isStreamingReveal) && !isReturningToMenu && (
-              <>
-                <TerminalDisplay onCancel={handleCancelLoading} />
-              </>
-            )}
+            {transitionPhase !== 'return-to-menu' && <TerminalDisplay onCancel={handleCancelLoading} />}
           </div>
         )}
       </div>
