@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useStreaming } from '../context/streamingContextValue'
 import { useSeedManager } from '../hooks/useSeedManager'
 import SceneCard from './SceneCard'
-import MenuButton from './ui/MenuButton'
 import { FocusScope } from '../context/FocusScopeContext'
 import { viewFadeVariants } from '../transitions'
 
@@ -19,7 +18,7 @@ function shuffle<T>(items: readonly T[]): T[] {
 
 const ReadyOverlayContent = () => {
   const { t } = useTranslation()
-  const { wsRequest, canUnpause, selectSeed, requestPointerLock, cancelConnection } = useStreaming()
+  const { wsRequest, canUnpause, selectSeed, requestPointerLock } = useStreaming()
 
   const { seeds, seedsLoaded, thumbnails } = useSeedManager({
     wsRequest,
@@ -59,17 +58,10 @@ const ReadyOverlayContent = () => {
       className="pointer-events-auto absolute inset-0 z-45 grid place-items-center bg-black/34 backdrop-blur-[1.94cqh]"
     >
       <div className="overlay-darken pointer-events-none absolute inset-0" />
-      {/* Outer wrapper is `relative` but not a scroll container. Its height
-          collapses to the grid's scroll container, so `place-items-center` on
-          the FocusScope centers the grid block exactly on the viewport. The
-          heading and button are absolutely anchored above/below this wrapper,
-          outside any overflow clipping. */}
-      <div className="relative w-[80%] max-w-[160cqh]">
-        <p className="absolute inset-x-0 bottom-full mb-[2cqh] font-serif text-[7cqh] leading-none text-text-primary">
-          {t('app.ready.cta')}
-        </p>
+      <div className="relative flex max-h-[70cqh] w-[80%] max-w-[160cqh] flex-col">
+        <p className="mb-[2cqh] font-serif text-[7cqh] leading-none text-text-primary">{t('app.ready.cta')}</p>
 
-        <div className="styled-scrollbar max-h-[60cqh] overflow-y-auto pr-[0.8cqh]">
+        <div className="styled-scrollbar min-h-0 flex-1 overflow-y-auto pr-[0.8cqh]">
           <div className="grid w-full grid-cols-5 gap-[1.28cqh]">
             {shuffledScenes.map((scene) => (
               <div key={scene.filename} className="w-full">
@@ -82,15 +74,6 @@ const ReadyOverlayContent = () => {
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="absolute top-full right-0 mt-[1cqh]">
-          <MenuButton
-            variant="primary"
-            size="sm"
-            label="app.buttons.returnToMainMenu"
-            onClick={() => void cancelConnection()}
-          />
         </div>
       </div>
     </FocusScope>
