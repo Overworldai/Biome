@@ -146,50 +146,49 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       <section className="absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) z-3 flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
-        <div className="relative z-4 mt-[1.6cqh] w-full">
-          <SettingsToggle
-            options={SETTINGS_TAB_OPTIONS}
-            value={activeTab}
-            onChange={(v) => setActiveTab(v as SettingsTab)}
-          />
-        </div>
-        <div
-          className="
-            styled-scrollbar relative z-4 mt-[1.6cqh] min-h-0 w-full flex-1 overflow-y-auto pr-[0.8cqh] pb-[1.0cqh]
-          "
-        >
-          <GeneralTab
-            active={activeTab === 'general'}
-            menuEngineMode={menuEngineMode}
-            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
-            setMenuSceneAuthoringEnabled={setMenuSceneAuthoringEnabled}
-            menuOfflineMode={menuOfflineMode}
-            setMenuOfflineMode={setMenuOfflineMode}
-          />
-          <EngineTab
-            ref={engineRef}
-            settings={settings}
-            active={activeTab === 'engine'}
-            menuEngineMode={menuEngineMode}
-            setMenuEngineMode={setMenuEngineMode}
-          />
-          <KeyboardTab
-            ref={keyboardRef}
-            settings={settings}
-            active={activeTab === 'keyboard'}
-            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
-            initialMouseSensitivityFallback={mouseSensitivity}
-            onConflictChange={handleConflictChange}
-          />
-          <GamepadTab
-            ref={gamepadRef}
-            settings={settings}
-            active={activeTab === 'gamepad'}
-            gamepadConnected={gamepadConnected}
-            menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
-            initialSensitivityFallback={gamepadSensitivity}
-          />
-          <DebugTab ref={debugRef} settings={settings} active={activeTab === 'debug'} />
+        <div className="relative z-4 mt-[1.6cqh] flex min-h-0 flex-1 gap-[1.6cqh]">
+          <div className="w-[22cqh] shrink-0">
+            <SettingsToggle
+              orientation="vertical"
+              options={SETTINGS_TAB_OPTIONS}
+              value={activeTab}
+              onChange={(v) => setActiveTab(v as SettingsTab)}
+            />
+          </div>
+          <div className="styled-scrollbar min-h-0 flex-1 overflow-y-auto px-[2cqh] pb-[1.0cqh]">
+            <GeneralTab
+              active={activeTab === 'general'}
+              menuEngineMode={menuEngineMode}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              setMenuSceneAuthoringEnabled={setMenuSceneAuthoringEnabled}
+              menuOfflineMode={menuOfflineMode}
+              setMenuOfflineMode={setMenuOfflineMode}
+            />
+            <EngineTab
+              ref={engineRef}
+              settings={settings}
+              active={activeTab === 'engine'}
+              menuEngineMode={menuEngineMode}
+              setMenuEngineMode={setMenuEngineMode}
+            />
+            <KeyboardTab
+              ref={keyboardRef}
+              settings={settings}
+              active={activeTab === 'keyboard'}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              initialMouseSensitivityFallback={mouseSensitivity}
+              onConflictChange={handleConflictChange}
+            />
+            <GamepadTab
+              ref={gamepadRef}
+              settings={settings}
+              active={activeTab === 'gamepad'}
+              gamepadConnected={gamepadConnected}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              initialSensitivityFallback={gamepadSensitivity}
+            />
+            <DebugTab ref={debugRef} settings={settings} active={activeTab === 'debug'} />
+          </div>
         </div>
       </section>
 
