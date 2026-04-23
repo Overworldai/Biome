@@ -71,8 +71,15 @@ const SceneCard = ({
       draggable={draggable}
       className={`
         group/scene relative aspect-video w-full overflow-hidden rounded-card border border-border-subtle
-        bg-surface-card p-0 transition-opacity duration-120
-        ${isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'}
+        bg-surface-card p-0 transition-[opacity,border-color] duration-140 ease-out
+        ${
+          isUnsafe
+            ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]'
+            : `
+              cursor-pointer
+              hover:border-white
+            `
+        }
         ${isBeingDragged ? 'opacity-40' : ''}
       `}
       title={seed.filename}
