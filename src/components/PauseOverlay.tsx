@@ -15,11 +15,11 @@ import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlayContent = () => {
-  const { requestPointerLock, reset, wsRequest } = useStreaming()
+  const { requestPointerLock, wsRequest } = useStreaming()
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const { showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } = usePointerLockFeedback(true)
+  const { selectCooldown } = usePointerLockFeedback(true)
 
   const {
     seeds,
@@ -66,11 +66,6 @@ const PauseOverlayContent = () => {
     return () => window.removeEventListener('keyup', handleKeyUp)
   }, [view, isGenerating, requestPointerLock, pauseMenuCode])
 
-  const handleResetAndResume = () => {
-    reset()
-    requestPointerLock()
-  }
-
   return (
     <FocusScope
       active={view !== PAUSE_VIEW.SETTINGS}
@@ -89,7 +84,7 @@ const PauseOverlayContent = () => {
             animate="animate"
             exit="exit"
           >
-            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} wide />
+            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} />
           </motion.div>
         ) : (
           <motion.div
@@ -109,13 +104,10 @@ const PauseOverlayContent = () => {
               onSceneSelect={selectScene}
               onRemoveScene={removeSceneFile}
               onMoveScene={moveScene}
-              onResetAndResume={handleResetAndResume}
               onNavigateSettings={() => setView(PAUSE_VIEW.SETTINGS)}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
               requestPointerLock={requestPointerLock}
-              showPauseLockoutTimer={showPauseLockoutTimer}
-              pauseLockoutSecondsText={pauseLockoutSecondsText}
               isGenerating={isGenerating}
               generateError={generateError}
               onGenerateScene={generate}
@@ -127,13 +119,13 @@ const PauseOverlayContent = () => {
   )
 }
 
-/** The pause menu: shown when the user Escapes out of gameplay after they've
- *  already started playing (i.e. after the ready screen). Self-mounts via
+/** The pause menu: shown whenever the user is paused mid-stream. Doubles as
+ *  the first-entry screen (right after LOADING→STREAMING). Self-mounts via
  *  AnimatePresence so App.tsx just drops `<PauseOverlay />` in and the overlay
  *  never lingers in the DOM while inactive. */
 const PauseOverlay = () => {
-  const { isPaused, hasEnteredGameplay, sceneEditState } = useStreaming()
-  const visible = hasEnteredGameplay && isPaused && sceneEditState.phase === 'inactive'
+  const { isPaused, sceneEditState } = useStreaming()
+  const visible = isPaused && sceneEditState.phase === 'inactive'
 
   return (
     <AnimatePresence>

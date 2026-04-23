@@ -311,10 +311,8 @@ const he = {
         unlockIn: 'ייפתח בעוד {{seconds}}ש׳',
         scenes: {
           title: 'סצנות',
-          description_one: 'כל {{count}} הסצנה שלך.',
-          description_other: 'כל {{count}} הסצנות שלך.',
-          uploadHint: 'השתמש בכפתור כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
-          reorderHint: 'גרור סצנות כדי לשנות את סדרן.',
+          sceneSubtitle: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש.',
+          sceneSubtitleWithUserScenes: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש. הוסף בעזרת הכפתור או הדבקה.',
           dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות'
         },
         sceneCard: {
@@ -327,9 +325,6 @@ const he = {
           divider: 'או',
           placeholder: 'במה תרצה לשחק?'
         }
-      },
-      ready: {
-        cta: 'לחץ על סצנה כדי להתחיל לשחק.'
       },
       scenes: {
         failedToReadImageData: 'קריאת נתוני התמונה נכשלה',

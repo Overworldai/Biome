@@ -315,10 +315,8 @@ const ja = {
         unlockIn: '{{seconds}} 秒後に解除',
         scenes: {
           title: 'シーン',
-          description_one: '全 {{count}} 個のシーンです。',
-          description_other: '全 {{count}} 個のシーンです。',
-          uploadHint: 'ボタンでシーンを追加するか、ドラッグまたは貼り付けで追加できます。',
-          reorderHint: 'シーンをドラッグして並べ替えできます。',
+          sceneSubtitle: 'シーンをクリックしてプレイ。ドラッグで並べ替え。',
+          sceneSubtitleWithUserScenes: 'シーンをクリックしてプレイ。ドラッグで並べ替え。ボタンまたは貼り付けで追加。',
           dropImagesToAddScenes: '画像をドロップしてシーンを追加'
         },
         sceneCard: {
@@ -331,9 +329,6 @@ const ja = {
           divider: 'または',
           placeholder: '何をプレイしたいですか？'
         }
-      },
-      ready: {
-        cta: 'シーンをクリックしてプレイを開始。'
       },
       scenes: {
         failedToReadImageData: '画像データの読み取りに失敗しました',

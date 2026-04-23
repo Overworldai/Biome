@@ -38,7 +38,7 @@
     transform: rotate(var(--portal-tilt)) scale(1);
   }
   100% {
-    transform: rotate(var(--portal-tilt)) scale(0.6);
+    transform: rotate(var(--portal-tilt)) scale(var(--portal-shrink-end-scale));
   }
 }
 

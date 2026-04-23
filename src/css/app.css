@@ -312,10 +312,10 @@
   }
 
   .portal-preview.entering .portal-preview-shell {
-    animation: portalSpawnIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalSpawnIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .portal-preview.entering .portal-preview-frame-shell {
-    animation: portalFrameSpawnIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalFrameSpawnIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .portal-preview.shrinking .portal-preview-shell {
     --portal-float-y: 0px;
@@ -361,17 +361,31 @@
     will-change: filter, opacity;
   }
   .portal-preview.entering .portal-preview-halo-layer {
-    animation: portalGlowIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalGlowIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview.shrinking .portal-preview-core {
-    animation: portalCorePreShrink 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalCorePreShrink var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .portal-preview.shrinking .portal-preview-core-ring {
     animation: none;
   }
   .portal-preview.shrinking .portal-preview-media-rotate {
-    animation: portalPreviewImageRotateCompensate 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalPreviewImageRotateCompensate var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  /* The sparks canvas and halo layer are siblings of the shrinking core and
+     don't inherit its scale transform. Collapse them on the same timeline so
+     the particles and glow don't linger at the portal's original footprint.
+     Uses a plain CSS transition (not the keyframe) because these elements
+     have no tilt to preserve — rotating them would twist the field. */
+  .portal-preview .portal-sparks-canvas,
+  .portal-preview .portal-preview-halo-layer {
+    transform-origin: center;
+    transition: transform var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .portal-preview.shrinking .portal-sparks-canvas,
+  .portal-preview.shrinking .portal-preview-halo-layer {
+    transform: scale(var(--portal-shrink-end-scale));
   }
 
   .portal-preview-core {
@@ -392,7 +406,7 @@
     pointer-events: none;
   }
   .portal-preview.entering .portal-preview-core-overlay {
-    animation: portalOverlayIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalOverlayIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview-core-ring {
@@ -417,7 +431,7 @@
       drop-shadow(0 0 7.5cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.4)) brightness(1.62) saturate(1.38);
   }
   .portal-preview.entering .portal-preview-core-ring {
-    animation: portalRingIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalRingIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview-core-ring-fade {
@@ -454,10 +468,10 @@
     opacity: 0.42;
   }
   .portal-preview.shrinking .portal-preview-core-ring-fade {
-    animation: portalCorePreShrink 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalCorePreShrink var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .portal-preview.entering .portal-preview-core-ring-fade {
-    animation-duration: calc(var(--portal-enter-duration-ms, 1050) * 1ms);
+    animation-duration: calc(var(--portal-enter-duration-ms) * 1ms);
     animation-fill-mode: forwards;
     animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }

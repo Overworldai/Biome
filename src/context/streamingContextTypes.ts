@@ -20,9 +20,6 @@ export type StreamingContextValue = {
   isLoading: boolean
   isStreaming: boolean
   isPaused: boolean
-  /** True once the user has unpaused at least once in the current session. The ready
-   *  overlay shows while this is false; subsequent pauses show the pause overlay. */
-  hasEnteredGameplay: boolean
   /** True when the user is actively driving the game (streaming + unpaused + no menu/modal).
    *  UI surfaces consult this to decide whether gamepad input goes to the game or to
    *  UI navigation. Inverse of `inputEnabled` in game terms. */

@@ -22,7 +22,6 @@ import DebugTab, { type DebugTabHandle } from './settings/DebugTab'
 
 type MenuSettingsViewProps = {
   onBack: () => void
-  wide?: boolean
 }
 
 type SettingsTab = 'general' | 'engine' | 'keyboard' | 'gamepad' | 'debug'
@@ -35,7 +34,7 @@ const SETTINGS_TAB_OPTIONS: { value: SettingsTab; label: TranslationKey }[] = [
   { value: 'debug', label: 'app.settings.tabs.debug' }
 ]
 
-const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
+const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
   const gamepadConnected = useGamepadConnected()
@@ -144,15 +143,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
 
   return (
     <FocusScope onCancel={() => void handleBackClick()} autoFocus className="pointer-events-auto absolute inset-0 z-9">
-      <section className="absolute top-(--edge-top) bottom-(--edge-bottom) left-(--edge-left) z-3 flex w-[90%] flex-col">
+      <section className="absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) z-3 flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
-        <div
-          className={`
-            relative z-4 mt-[1.6cqh]
-            ${wide ? 'w-[83%]' : 'w-[63%]'}
-          `}
-        >
+        <div className="relative z-4 mt-[1.6cqh] w-full">
           <SettingsToggle
             options={SETTINGS_TAB_OPTIONS}
             value={activeTab}
@@ -160,10 +154,9 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           />
         </div>
         <div
-          className={`
-            styled-scrollbar relative z-4 mt-[1.6cqh] min-h-0 flex-1 overflow-y-auto pr-[0.8cqh] pb-[1.0cqh]
-            ${wide ? 'w-[83%]' : 'w-[63%]'}
-          `}
+          className="
+            styled-scrollbar relative z-4 mt-[1.6cqh] min-h-0 w-full flex-1 overflow-y-auto pr-[0.8cqh] pb-[1.0cqh]
+          "
         >
           <GeneralTab
             active={activeTab === 'general'}
@@ -200,11 +193,10 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         </div>
       </section>
 
-      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) z-5 flex w-btn-w flex-col gap-[1.1cqh]">
-        <MenuButton variant="secondary" fullWidth label="app.buttons.credits" onClick={() => setShowCredits(true)} />
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) z-5 flex gap-[1.1cqh]">
+        <MenuButton variant="secondary" label="app.buttons.credits" onClick={() => setShowCredits(true)} />
         <MenuButton
           variant="primary"
-          fullWidth
           label="app.buttons.back"
           disabled={hasKeybindConflict}
           onClick={() => {

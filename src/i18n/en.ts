@@ -317,10 +317,8 @@ const en = {
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Scenes',
-          description_one: 'All of your {{count}} scene.',
-          description_other: 'All of your {{count}} scenes.',
-          uploadHint: 'Use the button to add more scenes, or drag/paste them in.',
-          reorderHint: 'Drag scenes to reorder.',
+          sceneSubtitle: 'Click a scene to play. Drag to reorder.',
+          sceneSubtitleWithUserScenes: 'Click a scene to play. Drag to reorder. Add with button or paste.',
           dropImagesToAddScenes: 'Drop images to add scenes'
         },
         sceneCard: {
@@ -333,9 +331,6 @@ const en = {
           divider: 'or',
           placeholder: 'What do you want to play?'
         }
-      },
-      ready: {
-        cta: 'Click a scene to start playing.'
       },
       scenes: {
         failedToReadImageData: 'Failed to read image data',

@@ -1,6 +1,7 @@
 import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { usePortalMediaMount } from '../hooks/usePortalMediaMount'
 import PortalSparks from './PortalSparks'
+import { PORTAL_ENTER_DURATION_MS, PORTAL_SHRINK_DURATION_MS, PORTAL_SHRINK_END_SCALE } from '../lib/portalAnimation'
 
 type PortalPreviewProps = {
   videoElement: HTMLVideoElement | null
@@ -13,6 +14,11 @@ type PortalPreviewProps = {
   glowRgb: [number, number, number]
   portalSceneGlowRgb: [number, number, number]
   sparkGlowRgb: [number, number, number]
+  /** Override the CSS shrink-animation duration. Defaults to
+   *  `PORTAL_SHRINK_DURATION_MS` (the main-menu background-cycle value).
+   *  Callers use the override for faster externally-driven closes (e.g. the
+   *  Settings panel's `PORTAL_SHRINK_FAST_DURATION_MS`). */
+  shrinkDurationMs?: number
   onShrinkComplete: () => void
   onInitialPreviewReady: () => void
   onMediaReady: () => void
@@ -29,6 +35,7 @@ const PortalPreview = ({
   glowRgb,
   portalSceneGlowRgb,
   sparkGlowRgb,
+  shrinkDurationMs,
   onShrinkComplete,
   onInitialPreviewReady,
   onMediaReady
@@ -42,10 +49,16 @@ const PortalPreview = ({
 
   if (!visible || (!videoElement && !hoverContent)) return null
 
+  // CSS vars that app.css' portal-preview rules read. Values come from
+  // `lib/portalAnimation.ts`, which is the single source of truth for all
+  // portal timings and target states. The CSS fallbacks in app.css mirror
+  // these defaults as a safety net only.
   const portalStyle: CSSProperties = {
     ['--portal-glow-rgb' as string]: glowRgb.join(', '),
     ['--portal-border-rgb' as string]: glowRgb.join(', '),
-    ['--portal-enter-duration-ms' as string]: '1050',
+    ['--portal-enter-duration-ms' as string]: String(PORTAL_ENTER_DURATION_MS),
+    ['--portal-shrink-duration' as string]: `${shrinkDurationMs ?? PORTAL_SHRINK_DURATION_MS}ms`,
+    ['--portal-shrink-end-scale' as string]: String(PORTAL_SHRINK_END_SCALE),
     opacity: isPortalMediaReady ? 1 : 0,
     visibility: isPortalMediaReady ? 'visible' : 'hidden',
     // Skip the CSS opacity transition for the very first appearance so the

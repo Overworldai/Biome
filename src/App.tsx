@@ -22,13 +22,13 @@ import SocialCtaRow from './components/SocialCtaRow'
 import ViewLabel from './components/ui/ViewLabel'
 import MenuButton from './components/ui/MenuButton'
 import PauseOverlay from './components/PauseOverlay'
-import ReadyOverlay from './components/ReadyOverlay'
 import SceneEditOverlay from './components/SceneEditOverlay'
 import ConnectionLostOverlay from './components/ConnectionLostOverlay'
 import WindowControls from './components/WindowControls'
 import ConfirmModal from './components/ui/ConfirmModal'
 import useBackgroundCycle from './hooks/useBackgroundCycle'
 import usePortalGlowSample from './hooks/usePortalGlowSample'
+import { usePortalAnimator } from './hooks/usePortalAnimator'
 import {
   PORTAL_SPARKS_DEBUG,
   SCENE_EDIT_DEBUG_PREVIEW,
@@ -82,6 +82,11 @@ const AppShell = () => {
   const [editPreviewVisible, setEditPreviewVisible] = useState(false)
   const editPromptKeyRef = useRef(0)
   const [prevStreamingUi, setPrevStreamingUi] = useState(false)
+  // Externally-drivable portal animator. Settings opening calls `close()` to
+  // shrink + hide; settings closing calls `respawn()` to unhide (the normal
+  // enter animation then fires via PortalPreview's media-ready flow).
+  const portalAnimator = usePortalAnimator()
+  const [prevSettingsOpen, setPrevSettingsOpen] = useState(false)
 
   const {
     state: portalState,
@@ -94,9 +99,11 @@ const AppShell = () => {
   const { isStreaming, isUIActive, connectionState, prepareReturnToMainMenu, sceneEditState } = useStreaming()
   useGamepadNavigation(isUIActive)
   const {
-    getVideoElement,
+    getBackgroundVideoElement,
+    getPortalVideoElement,
     currentIndex,
     nextIndex,
+    portalIndex,
     isTransitioning,
     isPortalShrinking,
     transitionKey,
@@ -115,7 +122,7 @@ const AppShell = () => {
       portalState === portalStates.STREAMING
   )
 
-  const nextVideoElement = getVideoElement(nextIndex)
+  const nextVideoElement = getPortalVideoElement(portalIndex)
   const rendererReadySentRef = useRef(false)
   const portalReadyRef = useRef(false)
   const backgroundReadyRef = useRef(false)
@@ -184,6 +191,17 @@ const AppShell = () => {
   if (isStreamingUi !== prevStreamingUi) {
     setPrevStreamingUi(isStreamingUi)
     if (isStreamingUi) setTransitionPhase('streaming-reveal')
+  }
+
+  if (isSettingsOpen !== prevSettingsOpen) {
+    setPrevSettingsOpen(isSettingsOpen)
+    if (isSettingsOpen) portalAnimator.close()
+    else portalAnimator.respawn()
+  }
+
+  const handlePortalShrinkComplete = () => {
+    if (portalAnimator.isShrinking) portalAnimator.markShrinkComplete()
+    else completePortalShrink()
   }
 
   // Show edit prompt + preview toasts when a scene edit completes, then auto-hide
@@ -269,7 +287,7 @@ const AppShell = () => {
       >
         {useMainBackground && (
           <BackgroundSlideshow
-            getVideoElement={getVideoElement}
+            getVideoElement={getBackgroundVideoElement}
             currentIndex={currentIndex}
             nextIndex={nextIndex}
             blurCqh={backgroundBlurCqh}
@@ -279,11 +297,12 @@ const AppShell = () => {
             onInitialReady={handleBackgroundReady}
           />
         )}
-        {isMainUi && !isConnected && (
+        {isMainUi && !isConnected && !portalAnimator.isHidden && (
           <div
             className={`
-              absolute top-1/2 z-8 w-[42.67cqh] cursor-pointer transition-[transform,left] duration-180 ease-out
-              ${!isConnected && isSettingsOpen ? 'pointer-events-none left-(--portal-settings-right)' : 'pointer-events-auto left-[49%]'}`}
+              absolute top-1/2 left-[49%] z-8 w-[42.67cqh] cursor-pointer transition-transform duration-180 ease-out
+              ${isSettingsOpen ? 'pointer-events-none' : 'pointer-events-auto'}
+            `}
             style={{ transform: `translate(-50%, -50%) scale(${isPortalHovered ? 1.05 : 1})` }}
             onMouseEnter={() => {
               setIsPortalHovered(true)
@@ -315,15 +334,18 @@ const AppShell = () => {
                 hoverContent={nextVideoElement ? <VortexHost mode="portal" /> : undefined}
                 isHovered={isPortalHovered}
                 visible={portalVisible}
-                isShrinking={isPortalShrinking || transitionPhase === 'launch-shrink'}
+                isShrinking={isPortalShrinking || portalAnimator.isShrinking || transitionPhase === 'launch-shrink'}
+                shrinkDurationMs={portalAnimator.isShrinking ? portalAnimator.shrinkDurationMs : undefined}
                 isEntering={isPortalEntering}
-                isSettingsOpen={!isConnected && isSettingsOpen}
                 glowRgb={portalGlowRgb}
                 portalSceneGlowRgb={portalGlowRgb}
                 sparkGlowRgb={portalGlowRgb}
-                onShrinkComplete={completePortalShrink}
+                onShrinkComplete={handlePortalShrinkComplete}
                 onInitialPreviewReady={handleInitialPreviewReady}
-                onMediaReady={triggerPortalEnter}
+                // The cycle's enter animation is kicked off by completePortalShrink
+                // in parallel with the bg reveal. We don't want to re-trigger enter
+                // when the video element swap lands at the end of the reveal.
+                onMediaReady={() => {}}
               />
             </div>
           </div>
@@ -386,7 +408,6 @@ const AppShell = () => {
             <FrameTimelineOverlay />
             <div className="pointer-events-none absolute z-2" id="logo-container"></div>
             <PauseOverlay />
-            <ReadyOverlay />
             <SceneEditOverlay />
             {SCENE_EDIT_DEBUG_PREVIEW &&
               editPromptVisible &&

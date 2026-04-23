@@ -108,7 +108,10 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
             const conflict = getKeybindConflict(value, others)
             const warning = conflict ? (
               <Trans
-                i18nKey="app.settings.keybindings.conflictWith"
+                // as never: Trans's generic inference over the full
+                // TranslationKey union blows past TS's complexity limit.
+                // The key is a literal, so type-safety is preserved by eye.
+                i18nKey={'app.settings.keybindings.conflictWith' as never}
                 values={{ other: conflict.otherLabel }}
                 components={{ key: <span className="font-bold text-error-bright" /> }}
               />

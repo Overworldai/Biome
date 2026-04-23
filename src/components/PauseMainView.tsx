@@ -3,7 +3,6 @@ import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
 import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
-import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
 import RawSettingsButton from './ui/RawSettingsButton'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
@@ -20,13 +19,10 @@ interface PauseMainViewProps {
   onSceneSelect: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
   onMoveScene: (filename: string, targetIdx: number) => void
-  onResetAndResume: () => void
   onNavigateSettings: () => void
   onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
   onImageDrop: (files: File[]) => void
   requestPointerLock: () => void
-  showPauseLockoutTimer: boolean
-  pauseLockoutSecondsText: string
   isGenerating: boolean
   generateError: string | null
   onGenerateScene: (prompt: string) => void
@@ -41,13 +37,10 @@ const PauseMainView = ({
   onSceneSelect,
   onRemoveScene,
   onMoveScene,
-  onResetAndResume,
   onNavigateSettings,
   onImageUpload,
   onImageDrop,
   requestPointerLock,
-  showPauseLockoutTimer,
-  pauseLockoutSecondsText,
   isGenerating,
   generateError,
   onGenerateScene
@@ -145,15 +138,18 @@ const PauseMainView = ({
 
       <section
         className={`
-          absolute top-(--edge-top) bottom-[13cqh] left-(--edge-left) flex w-[77%] flex-col
+          absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) flex flex-col
           ${isGenerating ? 'pointer-events-none opacity-60' : ''}
         `}
       >
         <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
-        <p className={VIEW_DESCRIPTION}>
-          {t('app.pause.scenes.description', { count: scenes.length })}
-          {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
-          {scenes.length > 1 && ` ${t('app.pause.scenes.reorderHint')}`}
+        <p
+          className={`
+            ${VIEW_DESCRIPTION}
+            max-w-full
+          `}
+        >
+          {t(ALLOW_USER_SCENES ? 'app.pause.scenes.sceneSubtitleWithUserScenes' : 'app.pause.scenes.sceneSubtitle')}
         </p>
         {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (
@@ -211,47 +207,14 @@ const PauseMainView = ({
         )}
       </section>
 
-      <ViewLabel>
-        <span className="inline-flex items-end gap-[1.42cqh]">
-          <span>{t('app.pause.title')}</span>
-          <span
-            className={`
-              self-end font-serif text-[2.13cqh] leading-none tracking-[0.03em] text-[rgba(245,249,255,0.62)]
-              transition-opacity duration-120
-              ${
-                showPauseLockoutTimer
-                  ? 'animate-[pauseUnlockHintPulse_1200ms_ease-out_forwards] opacity-100'
-                  : 'opacity-0'
-              }
-            `}
-          >
-            {showPauseLockoutTimer ? t('app.pause.unlockIn', { seconds: pauseLockoutSecondsText }) : ''}
-          </span>
-        </span>
-      </ViewLabel>
-
-      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex w-btn-w flex-col gap-[1.1cqh]">
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
-          fullWidth
-          label="app.buttons.reset"
-          onClick={onResetAndResume}
-          disabled={isGenerating}
-        />
-        <MenuButton
-          variant="secondary"
-          fullWidth
           label="app.buttons.settings"
           onClick={onNavigateSettings}
           disabled={isGenerating}
         />
-        <MenuButton
-          variant="primary"
-          fullWidth
-          label="app.buttons.resume"
-          onClick={requestPointerLock}
-          disabled={isGenerating}
-        />
+        <MenuButton variant="primary" label="app.buttons.resume" onClick={requestPointerLock} disabled={isGenerating} />
       </div>
     </div>
   )

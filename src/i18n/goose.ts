@@ -318,10 +318,8 @@ const goose = {
         unlockIn: 'unlock in {{seconds}}s',
         scenes: {
           title: 'Ponds',
-          description_one: 'All of your {{count}} pond.',
-          description_other: 'All of your {{count}} ponds.',
-          uploadHint: 'Use the button to add more ponds, or drag/paste them in.',
-          reorderHint: 'Drag ponds to reorder.',
+          sceneSubtitle: 'Peck a pond to flap. Drag to rearrange.',
+          sceneSubtitleWithUserScenes: 'Peck a pond to flap. Drag to rearrange. Add with button or paste.',
           dropImagesToAddScenes: 'Drop images to add ponds'
         },
         sceneCard: {
@@ -334,9 +332,6 @@ const goose = {
           divider: 'or',
           placeholder: 'Where shall the goose waddle?'
         }
-      },
-      ready: {
-        cta: 'Peck a pond to start flapping.'
       },
       scenes: {
         failedToReadImageData: 'Failed to read image data',
