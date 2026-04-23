@@ -59,12 +59,17 @@ const ReadyOverlayContent = () => {
       className="pointer-events-auto absolute inset-0 z-45 grid place-items-center bg-black/34 backdrop-blur-[1.94cqh]"
     >
       <div className="overlay-darken pointer-events-none absolute inset-0" />
-      <div className="relative flex max-h-[75cqh] w-[80%] max-w-[160cqh] flex-col px-[2cqh]">
-        <p className="m-0 mb-[2.4cqh] text-left font-serif text-[7cqh] leading-none text-text-primary">
+      {/* Outer wrapper is `relative` but not a scroll container. Its height
+          collapses to the grid's scroll container, so `place-items-center` on
+          the FocusScope centers the grid block exactly on the viewport. The
+          heading and button are absolutely anchored above/below this wrapper,
+          outside any overflow clipping. */}
+      <div className="relative w-[80%] max-w-[160cqh]">
+        <p className="absolute inset-x-0 bottom-full mb-[2cqh] font-serif text-[7cqh] leading-none text-text-primary">
           {t('app.ready.cta')}
         </p>
 
-        <div className="styled-scrollbar min-h-0 w-full flex-1 overflow-y-auto pr-[0.8cqh]">
+        <div className="styled-scrollbar max-h-[60cqh] overflow-y-auto pr-[0.8cqh]">
           <div className="grid w-full grid-cols-5 gap-[1.28cqh]">
             {shuffledScenes.map((scene) => (
               <div key={scene.filename} className="w-full">
@@ -79,7 +84,7 @@ const ReadyOverlayContent = () => {
           </div>
         </div>
 
-        <div className="mt-[1.5cqh] flex w-full justify-end">
+        <div className="absolute top-full right-0 mt-[1cqh]">
           <MenuButton
             variant="primary"
             size="sm"
