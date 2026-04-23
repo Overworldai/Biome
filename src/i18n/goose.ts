@@ -336,8 +336,7 @@ const goose = {
         }
       },
       ready: {
-        heading: 'Wings up, honk!',
-        subtitle: 'Peck a pond to start flapping.'
+        cta: 'Peck a pond to start flapping.'
       },
       scenes: {
         failedToReadImageData: 'Failed to read image data',

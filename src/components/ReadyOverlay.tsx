@@ -6,7 +6,6 @@ import { useSeedManager } from '../hooks/useSeedManager'
 import SceneCard from './SceneCard'
 import MenuButton from './ui/MenuButton'
 import { FocusScope } from '../context/FocusScopeContext'
-import { HEADING_BASE } from '../styles'
 import { viewFadeVariants } from '../transitions'
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -60,16 +59,10 @@ const ReadyOverlayContent = () => {
       className="pointer-events-auto absolute inset-0 z-45 grid place-items-center bg-black/34 backdrop-blur-[1.94cqh]"
     >
       <div className="overlay-darken pointer-events-none absolute inset-0" />
-      <div className="relative flex max-h-[75cqh] w-[80%] max-w-[160cqh] flex-col items-center px-[2cqh]">
-        <h1
-          className={`
-            ${HEADING_BASE}
-            mb-[1.5cqh] text-center text-[11.73cqh] text-text-primary
-          `}
-        >
-          {t('app.ready.heading')}
-        </h1>
-        <p className="m-0 mb-[2cqh] text-center font-serif text-[3.5cqh] text-text-muted">{t('app.ready.subtitle')}</p>
+      <div className="relative flex max-h-[75cqh] w-[80%] max-w-[160cqh] flex-col px-[2cqh]">
+        <p className="m-0 mb-[2.4cqh] text-left font-serif text-[7cqh] leading-none text-text-primary">
+          {t('app.ready.cta')}
+        </p>
 
         <div className="styled-scrollbar min-h-0 w-full flex-1 overflow-y-auto pr-[0.8cqh]">
           <div className="grid w-full grid-cols-5 gap-[1.28cqh]">

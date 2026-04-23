@@ -329,8 +329,7 @@ const he = {
         }
       },
       ready: {
-        heading: 'מוכן להתחיל.',
-        subtitle: 'לחץ על כרטיס כדי להתחיל לשחק.'
+        cta: 'לחץ על סצנה כדי להתחיל לשחק.'
       },
       scenes: {
         failedToReadImageData: 'קריאת נתוני התמונה נכשלה',

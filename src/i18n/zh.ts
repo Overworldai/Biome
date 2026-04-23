@@ -323,8 +323,7 @@ const zh = {
         }
       },
       ready: {
-        heading: '准备就绪。',
-        subtitle: '点击一张卡片开始游戏。'
+        cta: '点击一个场景开始游戏。'
       },
       scenes: {
         failedToReadImageData: '无法读取图片数据',

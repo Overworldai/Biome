@@ -333,8 +333,7 @@ const ja = {
         }
       },
       ready: {
-        heading: '準備完了。',
-        subtitle: 'カードをクリックしてプレイを開始。'
+        cta: 'シーンをクリックしてプレイを開始。'
       },
       scenes: {
         failedToReadImageData: '画像データの読み取りに失敗しました',

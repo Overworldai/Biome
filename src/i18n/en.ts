@@ -335,8 +335,7 @@ const en = {
         }
       },
       ready: {
-        heading: 'Ready to go.',
-        subtitle: 'Click a card to start playing.'
+        cta: 'Click a scene to start playing.'
       },
       scenes: {
         failedToReadImageData: 'Failed to read image data',
