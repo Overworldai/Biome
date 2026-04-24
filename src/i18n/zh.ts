@@ -308,7 +308,8 @@ const zh = {
           title: '场景',
           sceneSubtitle: '点击场景开始游戏。拖动可重新排序。',
           sceneSubtitleWithUserScenes: '点击场景开始游戏。拖动可重新排序。用按钮或粘贴添加。',
-          dropImagesToAddScenes: '拖放图片以添加场景'
+          dropImagesToAddScenes: '拖放图片以添加场景',
+          scenesPerRow: '每行场景数'
         },
         sceneCard: {
           unsafe: '不安全',

@@ -69,6 +69,7 @@ export const settingsSchema = z.object({
   // Ordered list of scene filenames as shown in the pause-menu grid. Users
   // drag to reorder; whatever's at the top is most prominent.
   scene_order: z.array(z.string()).default(DEFAULT_SCENE_ORDER),
+  scene_grid_columns: z.number().int().min(3).max(7).default(4),
   keybindings: z
     .object({
       moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),

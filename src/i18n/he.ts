@@ -314,7 +314,8 @@ const he = {
           title: 'סצנות',
           sceneSubtitle: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש.',
           sceneSubtitleWithUserScenes: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש. הוסף בעזרת הכפתור או הדבקה.',
-          dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות'
+          dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות',
+          scenesPerRow: 'סצנות בשורה'
         },
         sceneCard: {
           unsafe: 'לא בטוח',

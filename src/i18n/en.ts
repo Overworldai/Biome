@@ -320,7 +320,8 @@ const en = {
           title: 'Scenes',
           sceneSubtitle: 'Click a scene to play. Drag to reorder.',
           sceneSubtitleWithUserScenes: 'Click a scene to play. Drag to reorder. Add with button or paste.',
-          dropImagesToAddScenes: 'Drop images to add scenes'
+          dropImagesToAddScenes: 'Drop images to add scenes',
+          scenesPerRow: 'scenes per row'
         },
         sceneCard: {
           unsafe: 'Unsafe',

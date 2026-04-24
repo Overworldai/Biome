@@ -318,7 +318,8 @@ const ja = {
           title: 'シーン',
           sceneSubtitle: 'シーンをクリックしてプレイ。ドラッグで並べ替え。',
           sceneSubtitleWithUserScenes: 'シーンをクリックしてプレイ。ドラッグで並べ替え。ボタンまたは貼り付けで追加。',
-          dropImagesToAddScenes: '画像をドロップしてシーンを追加'
+          dropImagesToAddScenes: '画像をドロップしてシーンを追加',
+          scenesPerRow: '1行あたりのシーン数'
         },
         sceneCard: {
           unsafe: '安全でない',

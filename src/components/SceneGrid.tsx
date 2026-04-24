@@ -23,6 +23,8 @@ interface SceneGridProps {
   /** When set to a scene filename, the matching card is smooth-scrolled into
    *  view. Used after a generated scene is added so the user can see it. */
   autoScrollTo?: string | null
+  /** Fixed number of columns. Card width scales to `(containerWidth - gaps) / columns`. */
+  columns: number
 }
 
 const SCENE_DRAG_MIME = 'application/x-biome-scene'
@@ -50,7 +52,8 @@ const SceneGrid = ({
   className,
   before,
   emptyState,
-  autoScrollTo
+  autoScrollTo,
+  columns
 }: SceneGridProps) => {
   const [draggedFilename, setDraggedFilename] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
@@ -426,7 +429,11 @@ const SceneGrid = ({
         onDragOver={canDrag ? handleGridDragOver : undefined}
         onDrop={canDrag ? handleGridDrop : undefined}
       >
-        <div ref={gridRef} className="grid w-full grid-cols-[repeat(auto-fill,39cqh)] gap-[1.28cqh]">
+        <div
+          ref={gridRef}
+          className="grid w-full gap-[1.28cqh]"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
           {before}
           {/* `display: contents` wrapper so the default-focus marker only covers
               scene tiles (not the user-scenes "paste / browse" buttons in `before`)

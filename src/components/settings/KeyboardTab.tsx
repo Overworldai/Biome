@@ -3,7 +3,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings, type Settings } from '../../types/settings'
 import { GAME_ACTIONS, getKeybindConflict } from '../../hooks/useGameInput'
 import SettingsSection from '../ui/SettingsSection'
-import SettingsSlider from '../ui/SettingsSlider'
+import Slider from '../ui/Slider'
 import Button from '../ui/Button'
 import KeybindRow from './KeybindRow'
 
@@ -85,7 +85,7 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
           title="app.settings.mouseSensitivity.title"
           description="app.settings.mouseSensitivity.description"
         >
-          <SettingsSlider
+          <Slider
             min={10}
             max={100}
             value={menuMouseSensitivity}

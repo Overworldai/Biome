@@ -8,7 +8,7 @@ import { type AppLocale } from '../../types/settings'
 import { SETTINGS_CONTROL_VMETRICS } from '../../styles'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsSelect from '../ui/SettingsSelect'
-import SettingsSlider from '../ui/SettingsSlider'
+import Slider from '../ui/Slider'
 import SettingsCheckbox from '../ui/SettingsCheckbox'
 import SettingsRow from '../ui/SettingsRow'
 import SettingsTextInput from '../ui/SettingsTextInput'
@@ -106,7 +106,7 @@ const GeneralTab = ({
 
       <SettingsSection title="app.settings.volume.title" description="app.settings.volume.description">
         <div className="flex flex-col gap-[1.5cqh]">
-          <SettingsSlider
+          <Slider
             min={0}
             max={100}
             value={volume.master}
@@ -114,7 +114,7 @@ const GeneralTab = ({
             label="app.settings.volume.master"
             suffix={`${volume.master}%`}
           />
-          <SettingsSlider
+          <Slider
             min={0}
             max={100}
             value={volume.sfx}
@@ -122,7 +122,7 @@ const GeneralTab = ({
             label="app.settings.volume.soundEffects"
             suffix={`${volume.sfx}%`}
           />
-          <SettingsSlider
+          <Slider
             min={0}
             max={100}
             value={volume.music}

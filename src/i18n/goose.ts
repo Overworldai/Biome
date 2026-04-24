@@ -321,7 +321,8 @@ const goose = {
           title: 'Ponds',
           sceneSubtitle: 'Peck a pond to flap. Drag to rearrange.',
           sceneSubtitleWithUserScenes: 'Peck a pond to flap. Drag to rearrange. Add with button or paste.',
-          dropImagesToAddScenes: 'Drop images to add ponds'
+          dropImagesToAddScenes: 'Drop images to add ponds',
+          scenesPerRow: 'ponds per row'
         },
         sceneCard: {
           unsafe: 'Fox nearby',

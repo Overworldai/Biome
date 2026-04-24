@@ -5,6 +5,7 @@ import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
 import MenuButton from './ui/MenuButton'
 import RawSettingsButton from './ui/RawSettingsButton'
+import Slider from './ui/Slider'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
@@ -48,8 +49,9 @@ const PauseMainView = ({
   onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
-  const { settings } = useSettings()
+  const { settings, saveSettings } = useSettings()
   const sceneAuthoringEnabled = settings.scene_authoring_enabled ?? false
+  const sceneGridColumns = settings.scene_grid_columns
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
@@ -144,15 +146,30 @@ const PauseMainView = ({
           ${isGenerating ? 'pointer-events-none opacity-60' : ''}
         `}
       >
-        <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
-        <p
-          className={`
-            ${VIEW_DESCRIPTION}
-            max-w-full
-          `}
-        >
-          {t(ALLOW_USER_SCENES ? 'app.pause.scenes.sceneSubtitleWithUserScenes' : 'app.pause.scenes.sceneSubtitle')}
-        </p>
+        <div className="flex items-end justify-between gap-[2cqh]">
+          <div className="min-w-0 flex-1">
+            <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
+            <p
+              className={`
+                ${VIEW_DESCRIPTION}
+                max-w-full
+              `}
+            >
+              {t(ALLOW_USER_SCENES ? 'app.pause.scenes.sceneSubtitleWithUserScenes' : 'app.pause.scenes.sceneSubtitle')}
+            </p>
+          </div>
+          <div className="w-[30cqh] shrink-0">
+            <Slider
+              variant="discrete"
+              min={3}
+              max={7}
+              value={sceneGridColumns}
+              onChange={(value) => void saveSettings({ ...settings, scene_grid_columns: value })}
+              label="app.pause.scenes.scenesPerRow"
+              suffix={String(sceneGridColumns)}
+            />
+          </div>
+        </div>
         {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (
           <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
@@ -165,6 +182,7 @@ const PauseMainView = ({
           onRemove={onRemoveScene}
           onMoveScene={onMoveScene}
           autoScrollTo={lastGeneratedFilename}
+          columns={sceneGridColumns}
           before={
             ALLOW_USER_SCENES && (
               <div

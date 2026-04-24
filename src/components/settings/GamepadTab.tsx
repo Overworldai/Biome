@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { GAME_ACTIONS } from '../../hooks/useGameInput'
 import type { Settings } from '../../types/settings'
 import SettingsSection from '../ui/SettingsSection'
-import SettingsSlider from '../ui/SettingsSlider'
+import Slider from '../ui/Slider'
 import KeybindRow from './KeybindRow'
 
 // Sensitivity slider ↔ raw settings conversion. Raw range matches the Zod
@@ -55,7 +55,7 @@ const GamepadTab = forwardRef<GamepadTabHandle, GamepadTabProps>(
           title="app.settings.gamepadSensitivity.title"
           description="app.settings.gamepadSensitivity.description"
         >
-          <SettingsSlider
+          <Slider
             min={10}
             max={100}
             value={menuGamepadSensitivity}
