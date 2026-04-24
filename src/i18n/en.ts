@@ -276,7 +276,7 @@ const en = {
           enabled: 'Enable Scene Authoring',
           enabledDescription:
             'Generate new scenes or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
-          saveGenerated: 'Save generated scenes',
+          saveGenerated: 'Save Generated Scenes',
           saveGeneratedDescription:
             'Keep every generated scene in your Scenes list so you can revisit or delete it later.'
         },

@@ -277,7 +277,7 @@ const goose = {
           enabled: 'Enable Pond Authoring',
           enabledDescription:
             'Honk up a fresh pond or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
-          saveGenerated: 'Save generated ponds',
+          saveGenerated: 'Save Generated Ponds',
           saveGeneratedDescription:
             'Keep every generated pond in your Ponds list so you can revisit or waddle away from it later.'
         },
