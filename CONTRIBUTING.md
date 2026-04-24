@@ -316,6 +316,13 @@ Other components use prop-level `raw` prefixes for escape hatches:
 
 **Prefer the translated variant.** Only reach for `Raw*` components or `raw*` props when the content genuinely cannot be a single translation key (e.g. SVG icons as button content, dynamically constructed strings, model names from an API).
 
+### Casing conventions (English)
+
+- **Section titles, button labels, toggle/switch labels, and other discrete UI controls**: Title Case (e.g. `'Save Generated Scenes'`, `'Enable Scene Authoring'`, `'Record Gameplay'`).
+- **Settings section descriptions**: phrase as a **lower-case question addressed to the user**, not a statement or label (e.g. `'want to compose and modify scenes with text prompts?'`, `'how loud should things be?'`). The tone is conversational — the title names the thing, the description asks what the user wants to do with it.
+- **Other helper/hint text and full sentences**: sentence case with normal punctuation.
+- Other locales follow their own language's conventions — only the English-style locales (`en`, `goose`) need Title Case.
+
 ### Adding new translation keys
 
 1. Add the key to `src/i18n/en.ts` (the source of truth for key structure)
