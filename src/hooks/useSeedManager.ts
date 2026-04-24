@@ -70,9 +70,13 @@ type UseSeedManagerOptions = {
   wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   isActive: boolean
   onPinnedSceneRemoved: (filename: string) => void
+  /** Invoked with the list of filenames that were successfully uploaded/pasted
+   *  in a single batch. Consumers decide what to do based on the count —
+   *  typically auto-select + unpause for one, or just surface a hint for many. */
+  onScenesAdded?: (filenames: string[]) => void
 }
 
-export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: UseSeedManagerOptions) {
+export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved, onScenesAdded }: UseSeedManagerOptions) {
   const [seeds, setSeeds] = useState<SeedRecord[]>([])
   const [seedsLoaded, setSeedsLoaded] = useState(false)
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
@@ -213,6 +217,9 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved }: Us
       await refreshSeeds()
       if (failed.length > 0) {
         setUploadError(`Failed to upload: ${failed.join(', ')}`)
+      }
+      if (succeeded.length > 0) {
+        onScenesAdded?.(succeeded)
       }
     } finally {
       setUploadingImage(false)

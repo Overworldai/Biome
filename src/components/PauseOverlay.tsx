@@ -15,11 +15,14 @@ import { useSettings } from '../hooks/settingsContextValue'
 import { FocusScope } from '../context/FocusScopeContext'
 
 const PauseOverlayContent = () => {
-  const { requestPointerLock, wsRequest } = useStreaming()
+  const { requestPointerLock, wsRequest, selectSeed } = useStreaming()
   const { settings } = useSettings()
   const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
   const { selectCooldown } = usePointerLockFeedback(true)
+  /** Filename of the most recently-added scene (via prompt OR upload/paste/drop).
+   *  Drives auto-scroll and the "unpause to play" hint in PauseMainView. */
+  const [lastAddedFilename, setLastAddedFilename] = useState<string | null>(null)
 
   const {
     seeds,
@@ -35,7 +38,19 @@ const PauseOverlayContent = () => {
   } = useSeedManager({
     wsRequest,
     isActive: true,
-    onPinnedSceneRemoved: (filename: string) => removeScene(filename)
+    onPinnedSceneRemoved: (filename: string) => removeScene(filename),
+    // Upload / drop / paste: set the CTA first so it's visible even if things
+    // go wrong. If exactly one image was added, mirror `pasteScene` — tell the
+    // engine to switch to it, then attempt to re-lock the pointer (the file
+    // picker / drop / paste gesture is usually still valid). For multi-file
+    // drops we leave the user on the pause screen with the CTA.
+    onScenesAdded: (filenames: string[]) => {
+      const last = filenames[filenames.length - 1]
+      setLastAddedFilename(last)
+      if (filenames.length === 1) {
+        void selectSeed(last).then(() => requestPointerLock())
+      }
+    }
   })
 
   const { sceneIds, removeScene, moveScene } = useSceneOrder({
@@ -50,9 +65,10 @@ const PauseOverlayContent = () => {
 
   const { selectScene } = useSceneActions(handleClipboardUpload, view !== PAUSE_VIEW.SETTINGS)
 
-  const { generateError, isGenerating, lastGeneratedFilename, generate } = useSceneGeneration({
+  const { generateError, isGenerating, generate } = useSceneGeneration({
     refreshSeeds,
-    isActive: true
+    isActive: true,
+    setLastAddedFilename
   })
 
   useEffect(() => {
@@ -113,7 +129,7 @@ const PauseOverlayContent = () => {
               requestPointerLock={requestPointerLock}
               isGenerating={isGenerating}
               generateError={generateError}
-              lastGeneratedFilename={lastGeneratedFilename}
+              lastAddedFilename={lastAddedFilename}
               onGenerateScene={generate}
             />
           </motion.div>

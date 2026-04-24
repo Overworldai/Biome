@@ -26,7 +26,7 @@ interface PauseMainViewProps {
   requestPointerLock: () => void
   isGenerating: boolean
   generateError: string | null
-  lastGeneratedFilename: string | null
+  lastAddedFilename: string | null
   onGenerateScene: (prompt: string) => void
 }
 
@@ -45,7 +45,7 @@ const PauseMainView = ({
   requestPointerLock,
   isGenerating,
   generateError,
-  lastGeneratedFilename,
+  lastAddedFilename,
   onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
@@ -181,7 +181,7 @@ const PauseMainView = ({
           onSelect={onSceneSelect}
           onRemove={onRemoveScene}
           onMoveScene={onMoveScene}
-          autoScrollTo={lastGeneratedFilename}
+          autoScrollTo={lastAddedFilename}
           columns={sceneGridColumns}
           before={
             ALLOW_USER_SCENES && (
@@ -202,7 +202,7 @@ const PauseMainView = ({
         )}
       </section>
 
-      {lastGeneratedFilename && (
+      {lastAddedFilename && (
         <p
           className="
             pointer-events-none absolute bottom-(--edge-bottom) left-(--edge-left) m-0 flex h-[5.2cqh] items-center

@@ -13,25 +13,27 @@ const ERROR_AUTO_DISMISS_MS = 5000
 type UseSceneGenerationOptions = {
   refreshSeeds: () => Promise<void>
   isActive: boolean
+  /** Publishes the filename of the most recently-saved generated scene so the
+   *  consumer can scroll it into view + surface an "unpause to play" hint.
+   *  Called with `null` when a new generation starts (to hide the old hint)
+   *  and when the pause menu goes inactive. */
+  setLastAddedFilename: (filename: string | null) => void
 }
 
-export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGenerationOptions) {
+export function useSceneGeneration({ refreshSeeds, isActive, setLastAddedFilename }: UseSceneGenerationOptions) {
   const { t } = useTranslation()
   const { wsRequest } = useStreaming()
   const { settings } = useSettings()
   const [generateState, setGenerateState] = useState<GenerateState>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
-  /** Filename of the last successfully-saved generated scene. Consumers use
-   *  this to scroll the card into view + surface a "unpause to play" hint. */
-  const [lastGeneratedFilename, setLastGeneratedFilename] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isActive) {
       setGenerateState('idle')
       setGenerateError(null)
-      setLastGeneratedFilename(null)
+      setLastAddedFilename(null)
     }
-  }, [isActive])
+  }, [isActive, setLastAddedFilename])
 
   useEffect(() => {
     if (generateState !== 'error') return
@@ -46,14 +48,14 @@ export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGeneratio
     async (prompt: string) => {
       setGenerateState('loading')
       setGenerateError(null)
-      setLastGeneratedFilename(null)
+      setLastAddedFilename(null)
       try {
         const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
         if (settings.scene_authoring_save_generated ?? true) {
           try {
             const record = await invoke('save-generated-seed', response.image_jpeg_base64)
             await refreshSeeds()
-            setLastGeneratedFilename(record.filename)
+            setLastAddedFilename(record.filename)
           } catch (saveErr) {
             // Saving is a best-effort side-channel; the scene is already live in
             // the engine so we shouldn't fail the RPC on a disk error.
@@ -72,14 +74,13 @@ export function useSceneGeneration({ refreshSeeds, isActive }: UseSceneGeneratio
         setGenerateError(msg)
       }
     },
-    [wsRequest, t, settings.scene_authoring_save_generated, refreshSeeds]
+    [wsRequest, t, settings.scene_authoring_save_generated, refreshSeeds, setLastAddedFilename]
   )
 
   return {
     generateState,
     generateError,
     isGenerating: generateState === 'loading',
-    lastGeneratedFilename,
     generate
   }
 }
