@@ -3,7 +3,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings, type Settings } from '../../types/settings'
 import { GAME_ACTIONS, getKeybindConflict } from '../../hooks/useGameInput'
 import SettingsSection from '../ui/SettingsSection'
-import SettingsSlider from '../ui/SettingsSlider'
+import Slider from '../ui/Slider'
 import Button from '../ui/Button'
 import KeybindRow from './KeybindRow'
 
@@ -85,7 +85,7 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
           title="app.settings.mouseSensitivity.title"
           description="app.settings.mouseSensitivity.description"
         >
-          <SettingsSlider
+          <Slider
             min={10}
             max={100}
             value={menuMouseSensitivity}
@@ -108,7 +108,10 @@ const KeyboardTab = forwardRef<KeyboardTabHandle, KeyboardTabProps>(
             const conflict = getKeybindConflict(value, others)
             const warning = conflict ? (
               <Trans
-                i18nKey="app.settings.keybindings.conflictWith"
+                // as never: Trans's generic inference over the full
+                // TranslationKey union blows past TS's complexity limit.
+                // The key is a literal, so type-safety is preserved by eye.
+                i18nKey={'app.settings.keybindings.conflictWith' as never}
                 values={{ other: conflict.otherLabel }}
                 components={{ key: <span className="font-bold text-error-bright" /> }}
               />

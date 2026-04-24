@@ -316,13 +316,13 @@ const goose = {
       pause: {
         title: 'Paused',
         unlockIn: 'unlock in {{seconds}}s',
+        unpauseToPlay: 'Unhonk to flap.',
         scenes: {
           title: 'Ponds',
-          description_one: 'All of your {{count}} pond.',
-          description_other: 'All of your {{count}} ponds.',
-          uploadHint: 'Use the button to add more ponds, or drag/paste them in.',
-          reorderHint: 'Drag ponds to reorder.',
-          dropImagesToAddScenes: 'Drop images to add ponds'
+          sceneSubtitle: 'Peck a pond to flap. Drag to rearrange.',
+          sceneSubtitleWithUserScenes: 'Peck a pond to flap. Drag to rearrange. Add with button or paste.',
+          dropImagesToAddScenes: 'Drop images to add ponds',
+          scenesPerRow: 'ponds per row'
         },
         sceneCard: {
           unsafe: 'Fox nearby',
@@ -331,7 +331,7 @@ const goose = {
           removeScene: 'Abandon pond'
         },
         generateScene: {
-          divider: 'or',
+          divider: 'or honk a pond',
           placeholder: 'Where shall the goose waddle?'
         }
       },

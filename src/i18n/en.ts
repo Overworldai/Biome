@@ -315,13 +315,13 @@ const en = {
       pause: {
         title: 'Paused',
         unlockIn: 'unlock in {{seconds}}s',
+        unpauseToPlay: 'Unpause to play.',
         scenes: {
           title: 'Scenes',
-          description_one: 'All of your {{count}} scene.',
-          description_other: 'All of your {{count}} scenes.',
-          uploadHint: 'Use the button to add more scenes, or drag/paste them in.',
-          reorderHint: 'Drag scenes to reorder.',
-          dropImagesToAddScenes: 'Drop images to add scenes'
+          sceneSubtitle: 'Click a scene to play. Drag to reorder.',
+          sceneSubtitleWithUserScenes: 'Click a scene to play. Drag to reorder. Add with button or paste.',
+          dropImagesToAddScenes: 'Drop images to add scenes',
+          scenesPerRow: 'scenes per row'
         },
         sceneCard: {
           unsafe: 'Unsafe',
@@ -330,7 +330,7 @@ const en = {
           removeScene: 'Remove scene'
         },
         generateScene: {
-          divider: 'or',
+          divider: 'or prompt a scene',
           placeholder: 'What do you want to play?'
         }
       },

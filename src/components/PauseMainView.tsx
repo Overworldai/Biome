@@ -1,11 +1,12 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
+import SceneCardAddButton from './SceneCardAddButton'
+import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
-import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
-import RawSettingsButton from './ui/RawSettingsButton'
-import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
+import Slider from './ui/Slider'
+import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
 import { useSettings } from '../hooks/settingsContextValue'
@@ -19,15 +20,13 @@ interface PauseMainViewProps {
   onSceneSelect: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
   onMoveScene: (filename: string, targetIdx: number) => void
-  onResetAndResume: () => void
   onNavigateSettings: () => void
   onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
   onImageDrop: (files: File[]) => void
   requestPointerLock: () => void
-  showPauseLockoutTimer: boolean
-  pauseLockoutSecondsText: string
-  generateState: 'idle' | 'loading' | 'error'
+  isGenerating: boolean
   generateError: string | null
+  lastAddedFilename: string | null
   onGenerateScene: (prompt: string) => void
 }
 
@@ -40,22 +39,19 @@ const PauseMainView = ({
   onSceneSelect,
   onRemoveScene,
   onMoveScene,
-  onResetAndResume,
   onNavigateSettings,
   onImageUpload,
   onImageDrop,
   requestPointerLock,
-  showPauseLockoutTimer,
-  pauseLockoutSecondsText,
-  generateState,
+  isGenerating,
   generateError,
+  lastAddedFilename,
   onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
-  const { settings } = useSettings()
+  const { settings, saveSettings } = useSettings()
   const sceneAuthoringEnabled = settings.scene_authoring_enabled ?? false
-  const isGenerating = generateState === 'loading'
-  const [promptText, setPromptText] = useState('')
+  const sceneGridColumns = settings.scene_grid_columns
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
@@ -146,16 +142,34 @@ const PauseMainView = ({
 
       <section
         className={`
-          absolute top-(--edge-top) bottom-[13cqh] left-(--edge-left) flex w-[77%] flex-col
+          absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) flex flex-col
           ${isGenerating ? 'pointer-events-none opacity-60' : ''}
         `}
       >
-        <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
-        <p className={VIEW_DESCRIPTION}>
-          {t('app.pause.scenes.description', { count: scenes.length })}
-          {ALLOW_USER_SCENES && ` ${t('app.pause.scenes.uploadHint')}`}
-          {scenes.length > 1 && ` ${t('app.pause.scenes.reorderHint')}`}
-        </p>
+        <div className="flex items-end justify-between gap-[2cqh]">
+          <div className="min-w-0 flex-1">
+            <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
+            <p
+              className={`
+                ${VIEW_DESCRIPTION}
+                max-w-full
+              `}
+            >
+              {t(ALLOW_USER_SCENES ? 'app.pause.scenes.sceneSubtitleWithUserScenes' : 'app.pause.scenes.sceneSubtitle')}
+            </p>
+          </div>
+          <div className="w-[30cqh] shrink-0">
+            <Slider
+              variant="discrete"
+              min={3}
+              max={7}
+              value={sceneGridColumns}
+              onChange={(value) => void saveSettings({ ...settings, scene_grid_columns: value })}
+              label="app.pause.scenes.scenesPerRow"
+              suffix={String(sceneGridColumns)}
+            />
+          </div>
+        </div>
         {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
         {ALLOW_USER_SCENES && (
           <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
@@ -167,132 +181,46 @@ const PauseMainView = ({
           onSelect={onSceneSelect}
           onRemove={onRemoveScene}
           onMoveScene={onMoveScene}
+          autoScrollTo={lastAddedFilename}
+          columns={sceneGridColumns}
           before={
             ALLOW_USER_SCENES && (
-              <div
-                className={`
-                  relative aspect-video w-full overflow-hidden border border-[rgba(245,249,255,0.84)]
-                  bg-[rgba(248,248,245,0.14)] p-0
-                  ${uploadingImage ? 'pointer-events-none opacity-60' : ''}
-                `}
-              >
-                <RawSettingsButton
-                  variant="secondary"
-                  className="
-                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
-                    hover:outline-0!
-                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
-                    active:bg-surface-btn-hover active:text-text-inverse
-                  "
-                  onClick={() => fileInputRef.current?.click()}
-                  title={t('app.buttons.browseForImageFile')}
-                >
-                  <svg
-                    className="h-[2.67cqh] w-[2.67cqh]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
-                    <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
-                    <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </RawSettingsButton>
-              </div>
+              <SceneCardAddButton
+                onClick={() => fileInputRef.current?.click()}
+                title={t('app.buttons.browseForImageFile')}
+                disabled={uploadingImage}
+              />
             )
           }
         />
         {sceneAuthoringEnabled && (
-          <>
-            <div className="mt-[2cqh] flex items-center gap-[1.5cqh]">
-              <div className="h-px flex-1 bg-border-subtle" />
-              <span className="font-serif text-caption text-text-muted">{t('app.pause.generateScene.divider')}</span>
-              <div className="h-px flex-1 bg-border-subtle" />
-            </div>
-            <div className="relative mt-[1.5cqh]">
-              {generateState === 'error' && generateError && (
-                <p className="m-0 mb-[0.8cqh] font-serif text-caption text-red-400">{generateError}</p>
-              )}
-              <textarea
-                rows={3}
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                disabled={isGenerating}
-                placeholder={t('app.pause.generateScene.placeholder')}
-                className={`
-                  ${SETTINGS_CONTROL_BASE}
-                  ${SETTINGS_CONTROL_TEXT}
-                  w-full resize-none outline-none
-                  focus:ring-1 focus:ring-border-medium
-                  disabled:opacity-50
-                `}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    const trimmed = promptText.trim()
-                    if (trimmed && !isGenerating) {
-                      onGenerateScene(trimmed)
-                    }
-                  }
-                }}
-                onKeyUp={(e) => e.stopPropagation()}
-              />
-              {isGenerating && (
-                <div
-                  className="
-                    absolute top-1/2 right-[1.2cqh] h-[2cqh] w-[2cqh] -translate-y-1/2 animate-spin rounded-full
-                    border-[0.3cqh] border-text-muted border-t-text-primary
-                  "
-                />
-              )}
-            </div>
-          </>
+          <SceneAuthoringPrompt
+            isGenerating={isGenerating}
+            generateError={generateError}
+            onGenerate={onGenerateScene}
+          />
         )}
       </section>
 
-      <ViewLabel>
-        <span className="inline-flex items-end gap-[1.42cqh]">
-          <span>{t('app.pause.title')}</span>
-          <span
-            className={`
-              self-end font-serif text-[2.13cqh] leading-none tracking-[0.03em] text-[rgba(245,249,255,0.62)]
-              transition-opacity duration-120
-              ${
-                showPauseLockoutTimer
-                  ? 'animate-[pauseUnlockHintPulse_1200ms_ease-out_forwards] opacity-100'
-                  : 'opacity-0'
-              }
-            `}
-          >
-            {showPauseLockoutTimer ? t('app.pause.unlockIn', { seconds: pauseLockoutSecondsText }) : ''}
-          </span>
-        </span>
-      </ViewLabel>
+      {lastAddedFilename && (
+        <p
+          className="
+            pointer-events-none absolute bottom-(--edge-bottom) left-(--edge-left) m-0 flex h-[5.2cqh] items-center
+            font-serif text-body text-text-primary
+          "
+        >
+          {t('app.pause.unpauseToPlay')}
+        </p>
+      )}
 
-      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex w-btn-w flex-col gap-[1.1cqh]">
-        <MenuButton
-          variant="secondary"
-          label="app.buttons.reset"
-          className="w-full px-0"
-          onClick={onResetAndResume}
-          disabled={isGenerating}
-        />
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
           label="app.buttons.settings"
-          className="w-full px-0"
           onClick={onNavigateSettings}
           disabled={isGenerating}
         />
-        <MenuButton
-          variant="primary"
-          label="app.buttons.resume"
-          className="w-full px-0"
-          onClick={requestPointerLock}
-          disabled={isGenerating}
-        />
+        <MenuButton variant="primary" label="app.buttons.resume" onClick={requestPointerLock} disabled={isGenerating} />
       </div>
     </div>
   )

@@ -309,13 +309,13 @@ const he = {
       pause: {
         title: 'מושהה',
         unlockIn: 'ייפתח בעוד {{seconds}}ש׳',
+        unpauseToPlay: 'בטל את ההשהיה כדי לשחק.',
         scenes: {
           title: 'סצנות',
-          description_one: 'כל {{count}} הסצנה שלך.',
-          description_other: 'כל {{count}} הסצנות שלך.',
-          uploadHint: 'השתמש בכפתור כדי להוסיף עוד סצנות, או גרור/הדבק אותן.',
-          reorderHint: 'גרור סצנות כדי לשנות את סדרן.',
-          dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות'
+          sceneSubtitle: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש.',
+          sceneSubtitleWithUserScenes: 'לחץ על סצנה כדי לשחק. גרור לסידור מחדש. הוסף בעזרת הכפתור או הדבקה.',
+          dropImagesToAddScenes: 'גרור תמונות כדי להוסיף סצנות',
+          scenesPerRow: 'סצנות בשורה'
         },
         sceneCard: {
           unsafe: 'לא בטוח',
@@ -324,7 +324,7 @@ const he = {
           removeScene: 'הסר סצנה'
         },
         generateScene: {
-          divider: 'או',
+          divider: 'או הנחה סצנה',
           placeholder: 'במה תרצה לשחק?'
         }
       },

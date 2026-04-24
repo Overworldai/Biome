@@ -106,17 +106,11 @@ export function VortexProvider({ children }: { children: ReactNode }) {
     const rawWarpX = Number.parseFloat(styles.getPropertyValue('--vortex-warp-x'))
     const rawWarpY = Number.parseFloat(styles.getPropertyValue('--vortex-warp-y'))
     const rawSpeedMult = Number.parseFloat(styles.getPropertyValue('--vortex-speed-mult'))
-    const rawProgress = Number.parseFloat(styles.getPropertyValue('--vortex-progress-percent'))
     const warpX = Number.isFinite(rawWarpX) ? rawWarpX : 1
     const warpY = Number.isFinite(rawWarpY) ? rawWarpY : 1
     const speedMult = Number.isFinite(rawSpeedMult) ? rawSpeedMult : 1
-    const progressPercent = clamp(Number.isFinite(rawProgress) ? rawProgress : 0, 0, 100)
-    const progressBoostX = 1 + (progressPercent / 100) * 0.2
-    const progressBoostY = 1 + (progressPercent / 100) * 0.08
-    const effectiveWarpY = Math.min(1.3, warpY * progressBoostY)
-    renderer.setViewWarp(warpX * progressBoostX, effectiveWarpY)
-    const progressSpeedBoost = 1 + (progressPercent / 100) * 0.6
-    renderer.setSpeedMultiplier(speedMult * progressSpeedBoost)
+    renderer.setViewWarp(warpX, warpY)
+    renderer.setSpeedMultiplier(speedMult)
   }, [])
 
   const frame = useCallback(

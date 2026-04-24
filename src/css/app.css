@@ -70,11 +70,14 @@
   --color-surface-modal: rgba(8, 12, 20, 0.7);
   --color-surface-card: rgba(4, 7, 12, 0.5);
   --color-surface-control: rgba(2, 5, 10, 0.54);
+  --color-surface-unsafe: rgba(42, 47, 56, 0.62);
+  --color-surface-badge: rgba(214, 218, 228, 0.92);
 
   /* Border colors */
   --color-border-light: rgba(245, 249, 255, 0.8);
   --color-border-medium: rgba(245, 249, 255, 0.68);
   --color-border-subtle: rgba(245, 249, 255, 0.52);
+  --color-border-unsafe: rgba(184, 188, 198, 0.72);
 
   /* Overlay colors */
   --color-overlay-scrim: rgba(2, 6, 16, 0.55);
@@ -127,7 +130,6 @@
   --vortex-warp-x: 1;
   --vortex-warp-y: 1;
   --vortex-speed-mult: 1;
-  --vortex-progress-percent: 0;
 }
 @layer base {
   :root {
@@ -208,14 +210,6 @@
     animation-delay: 1120ms;
     will-change: clip-path;
   }
-  .loading-ui-layer.streaming-pullout .loading-vortex-layer {
-    --vortex-warp-x: 1;
-    --vortex-warp-y: 1;
-    --vortex-speed-mult: 1;
-    animation: streamingVortexPullIn 1500ms linear forwards;
-    will-change: --vortex-warp-x, --vortex-warp-y, --vortex-speed-mult;
-  }
-
   /* --- BACKGROUND SLIDESHOW --- */
   .app-background-slide {
     position: absolute;
@@ -321,10 +315,10 @@
   }
 
   .portal-preview.entering .portal-preview-shell {
-    animation: portalSpawnIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalSpawnIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .portal-preview.entering .portal-preview-frame-shell {
-    animation: portalFrameSpawnIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalFrameSpawnIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .portal-preview.shrinking .portal-preview-shell {
     --portal-float-y: 0px;
@@ -370,17 +364,31 @@
     will-change: filter, opacity;
   }
   .portal-preview.entering .portal-preview-halo-layer {
-    animation: portalGlowIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalGlowIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview.shrinking .portal-preview-core {
-    animation: portalCorePreShrink 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalCorePreShrink var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .portal-preview.shrinking .portal-preview-core-ring {
     animation: none;
   }
   .portal-preview.shrinking .portal-preview-media-rotate {
-    animation: portalPreviewImageRotateCompensate 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalPreviewImageRotateCompensate var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  /* The sparks canvas and halo layer are siblings of the shrinking core and
+     don't inherit its scale transform. Collapse them on the same timeline so
+     the particles and glow don't linger at the portal's original footprint.
+     Uses a plain CSS transition (not the keyframe) because these elements
+     have no tilt to preserve — rotating them would twist the field. */
+  .portal-preview .portal-sparks-canvas,
+  .portal-preview .portal-preview-halo-layer {
+    transform-origin: center;
+    transition: transform var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .portal-preview.shrinking .portal-sparks-canvas,
+  .portal-preview.shrinking .portal-preview-halo-layer {
+    transform: scale(var(--portal-shrink-end-scale));
   }
 
   .portal-preview-core {
@@ -401,7 +409,7 @@
     pointer-events: none;
   }
   .portal-preview.entering .portal-preview-core-overlay {
-    animation: portalOverlayIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalOverlayIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview-core-ring {
@@ -426,7 +434,7 @@
       drop-shadow(0 0 7.5cqh rgba(var(--portal-glow-rgb, 140, 206, 244), 0.4)) brightness(1.62) saturate(1.38);
   }
   .portal-preview.entering .portal-preview-core-ring {
-    animation: portalRingIn calc(var(--portal-enter-duration-ms, 1050) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: portalRingIn calc(var(--portal-enter-duration-ms) * 1ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .portal-preview-core-ring-fade {
@@ -463,10 +471,10 @@
     opacity: 0.42;
   }
   .portal-preview.shrinking .portal-preview-core-ring-fade {
-    animation: portalCorePreShrink 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: portalCorePreShrink var(--portal-shrink-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .portal-preview.entering .portal-preview-core-ring-fade {
-    animation-duration: calc(var(--portal-enter-duration-ms, 1050) * 1ms);
+    animation-duration: calc(var(--portal-enter-duration-ms) * 1ms);
     animation-fill-mode: forwards;
     animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }

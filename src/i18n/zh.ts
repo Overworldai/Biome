@@ -303,13 +303,13 @@ const zh = {
       pause: {
         title: '已暂停',
         unlockIn: '{{seconds}} 秒后解锁',
+        unpauseToPlay: '取消暂停开始游戏。',
         scenes: {
           title: '场景',
-          description_one: '你一共有 {{count}} 个场景。',
-          description_other: '你一共有 {{count}} 个场景。',
-          uploadHint: '可使用按钮添加更多场景，或直接拖放 / 粘贴。',
-          reorderHint: '拖动场景可重新排序。',
-          dropImagesToAddScenes: '拖放图片以添加场景'
+          sceneSubtitle: '点击场景开始游戏。拖动可重新排序。',
+          sceneSubtitleWithUserScenes: '点击场景开始游戏。拖动可重新排序。用按钮或粘贴添加。',
+          dropImagesToAddScenes: '拖放图片以添加场景',
+          scenesPerRow: '每行场景数'
         },
         sceneCard: {
           unsafe: '不安全',
@@ -318,7 +318,7 @@ const zh = {
           removeScene: '删除场景'
         },
         generateScene: {
-          divider: '或',
+          divider: '或通过提示词生成场景',
           placeholder: '你想玩什么？'
         }
       },

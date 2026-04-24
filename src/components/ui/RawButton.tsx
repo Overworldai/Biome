@@ -92,6 +92,7 @@ const RawButton = ({
         border text-center font-serif whitespace-nowrap outline-0
         transition-[color,background-color,border-color,outline-color,transform,box-shadow] duration-150
         hover:outline-2
+        disabled:cursor-not-allowed disabled:opacity-50
         ${variantClasses[variant]}
         ${className}
       `}

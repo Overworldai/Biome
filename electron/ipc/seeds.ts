@@ -14,6 +14,8 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   '.bmp': 'image/bmp'
 }
 
+const SEED_THUMBNAIL_WIDTH_PX = 600
+
 function isSupportedImage(filename: string): boolean {
   const ext = path.extname(filename).slice(1).toLowerCase()
   return SUPPORTED_IMAGE_EXTENSIONS.includes(ext)
@@ -79,7 +81,9 @@ export function registerSeedsIpc(): void {
     if (!filePath) return null
 
     const thumbDir = getSeedsThumbnailDir()
-    const thumbName = `${path.parse(filename).name}.jpg`
+    // Width-suffixed filename so any change to the thumbnail resolution
+    // naturally invalidates the cache for existing installs.
+    const thumbName = `${path.parse(filename).name}.w${SEED_THUMBNAIL_WIDTH_PX}.jpg`
     const thumbPath = path.join(thumbDir, thumbName)
 
     // Check if cached thumbnail exists and is newer than source
@@ -95,7 +99,7 @@ export function registerSeedsIpc(): void {
       }
     }
 
-    // Generate thumbnail via Electron nativeImage (scale to 300px wide, aspect ratio preserved automatically)
+    // Generate thumbnail via Electron nativeImage (aspect ratio preserved automatically)
     fs.mkdirSync(thumbDir, { recursive: true })
     const img = nativeImage.createFromPath(filePath)
     if (img.isEmpty()) {
@@ -103,7 +107,7 @@ export function registerSeedsIpc(): void {
       return null
     }
     const { width } = img.getSize()
-    const resized = img.resize({ width: Math.min(300, width) })
+    const resized = img.resize({ width: Math.min(SEED_THUMBNAIL_WIDTH_PX, width) })
     const thumbBuffer = resized.toJPEG(85)
     fs.writeFileSync(thumbPath, thumbBuffer)
     return thumbBuffer.toString('base64')
@@ -148,7 +152,9 @@ export function registerSeedsIpc(): void {
 
     // Also delete cached thumbnail
     const thumbDir = getSeedsThumbnailDir()
-    const thumbName = `${path.parse(filename).name}.jpg`
+    // Width-suffixed filename so any change to the thumbnail resolution
+    // naturally invalidates the cache for existing installs.
+    const thumbName = `${path.parse(filename).name}.w${SEED_THUMBNAIL_WIDTH_PX}.jpg`
     const thumbPath = path.join(thumbDir, thumbName)
     if (fs.existsSync(thumbPath)) {
       try {

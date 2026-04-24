@@ -38,6 +38,11 @@ const ConfirmModal = ({
           // as a TranslationKey at the component boundary.
           <Trans i18nKey={description as never} values={descriptionParams} components={descriptionComponents} />
         ) : (
+          // @ts-expect-error TS complexity bailout — t()'s options parameter
+          // is an intersection of every possible param shape across the full
+          // TranslationKey union, which hits TS's inference limit.
+          // `description` is already validated as a TranslationKey at the
+          // component boundary.
           t(description, descriptionParams)
         )}
       </p>

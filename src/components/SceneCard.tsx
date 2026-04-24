@@ -4,11 +4,15 @@ import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/audioContextValue'
 import { useInputModality } from '../lib/inputModality'
 import { useTranslation } from 'react-i18next'
+import SceneCardBase from './SceneCardBase'
 
 const ACTION_BASE =
   'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-secondary)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
 
 const ACTION_DELETE = 'text-error-muted border-error/50 hover:text-[var(--color-error-bright)] hover:border-error'
+
+const CARD_STATE_SAFE = 'cursor-pointer hover:border-white'
+const CARD_STATE_UNSAFE = 'cursor-not-allowed border-border-unsafe bg-surface-unsafe'
 
 const DeleteIcon = () => (
   <svg
@@ -66,18 +70,14 @@ const SceneCard = ({
   const hideSecondaryActions = modality === 'gamepad'
 
   return (
-    <button
-      type="button"
+    <SceneCardBase
       draggable={draggable}
+      title={seed.filename}
+      ariaDisabled={isUnsafe}
       className={`
-        group/scene relative aspect-video w-full overflow-hidden rounded-card border border-border-subtle
-        bg-surface-card p-0 transition-opacity duration-120
-        ${isUnsafe ? 'cursor-not-allowed border-[rgba(184,188,198,0.72)] bg-[rgba(42,47,56,0.62)]' : 'cursor-pointer'}
+        ${isUnsafe ? CARD_STATE_UNSAFE : CARD_STATE_SAFE}
         ${isBeingDragged ? 'opacity-40' : ''}
       `}
-      title={seed.filename}
-      aria-disabled={isUnsafe}
-      onMouseEnter={() => !isUnsafe && playHover()}
       onClick={() => {
         if (isUnsafe) return
         if (!selectCooldown) play('portal_swoosh')
@@ -100,8 +100,8 @@ const SceneCard = ({
       {isUnsafe && (
         <span
           className="
-            absolute top-1 left-1 bg-[rgba(214,218,228,0.92)] px-[0.58cqh] py-[0.18cqh] text-[1.11cqh] font-semibold
-            tracking-[0.08em] text-[rgba(16,20,28,0.95)] uppercase
+            absolute top-1 left-1 bg-surface-badge px-[0.58cqh] py-[0.18cqh] text-[1.11cqh] font-semibold
+            tracking-[0.08em] text-text-inverse uppercase
           "
         >
           {t('app.pause.sceneCard.unsafe')}
@@ -147,7 +147,7 @@ const SceneCard = ({
           </span>
         )}
       </span>
-    </button>
+    </SceneCardBase>
   )
 }
 

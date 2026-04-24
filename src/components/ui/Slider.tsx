@@ -4,16 +4,18 @@ import type { TranslationKey } from '../../i18n'
 import { SETTINGS_CONTROL_BASE, SETTINGS_OUTLINE_HOVER, SETTINGS_MUTED_TEXT } from '../../styles'
 import { useUISound } from '../../hooks/useUISound'
 
-type SettingsSliderProps = {
+type SliderProps = {
   value: number
   onChange: (value: number) => void
   min: number
   max: number
   label?: TranslationKey
   suffix?: string
+  /** `'discrete'` renders tick marks at each integer step. Default `'continuous'`. */
+  variant?: 'continuous' | 'discrete'
 }
 
-const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSliderProps) => {
+const Slider = ({ value, onChange, min, max, label, suffix, variant = 'continuous' }: SliderProps) => {
   const { t } = useTranslation()
   const { playHover, playClick } = useUISound()
   const trackRef = useRef<HTMLDivElement>(null)
@@ -90,6 +92,21 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
           className="pointer-events-none absolute inset-0 bg-surface-btn-primary"
           style={{ width: `${fraction * 100}%` }}
         />
+        {variant === 'discrete' &&
+          Array.from({ length: Math.max(0, max - min - 1) }).map((_, i) => {
+            const stepFraction = (i + 1) / (max - min)
+            const isFilled = stepFraction <= fraction
+            return (
+              <div
+                key={i}
+                className={`
+                  pointer-events-none absolute inset-y-[25%] w-px
+                  ${isFilled ? 'bg-text-inverse/60' : 'bg-border-medium'}
+                `}
+                style={{ left: `${stepFraction * 100}%` }}
+              />
+            )
+          })}
         <span className="invisible">X</span>
       </div>
       {(label || suffix) && (
@@ -107,4 +124,4 @@ const SettingsSlider = ({ value, onChange, min, max, label, suffix }: SettingsSl
   )
 }
 
-export default SettingsSlider
+export default Slider

@@ -313,13 +313,13 @@ const ja = {
       pause: {
         title: '一時停止',
         unlockIn: '{{seconds}} 秒後に解除',
+        unpauseToPlay: '一時停止を解除してプレイ。',
         scenes: {
           title: 'シーン',
-          description_one: '全 {{count}} 個のシーンです。',
-          description_other: '全 {{count}} 個のシーンです。',
-          uploadHint: 'ボタンでシーンを追加するか、ドラッグまたは貼り付けで追加できます。',
-          reorderHint: 'シーンをドラッグして並べ替えできます。',
-          dropImagesToAddScenes: '画像をドロップしてシーンを追加'
+          sceneSubtitle: 'シーンをクリックしてプレイ。ドラッグで並べ替え。',
+          sceneSubtitleWithUserScenes: 'シーンをクリックしてプレイ。ドラッグで並べ替え。ボタンまたは貼り付けで追加。',
+          dropImagesToAddScenes: '画像をドロップしてシーンを追加',
+          scenesPerRow: '1行あたりのシーン数'
         },
         sceneCard: {
           unsafe: '安全でない',
@@ -328,7 +328,7 @@ const ja = {
           removeScene: 'シーンを削除'
         },
         generateScene: {
-          divider: 'または',
+          divider: 'またはシーンをプロンプトで生成',
           placeholder: '何をプレイしたいですか？'
         }
       },
