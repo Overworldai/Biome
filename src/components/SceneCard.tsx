@@ -4,6 +4,7 @@ import { useUISound } from '../hooks/useUISound'
 import { useAudio } from '../context/audioContextValue'
 import { useInputModality } from '../lib/inputModality'
 import { useTranslation } from 'react-i18next'
+import SceneCardBase from './SceneCardBase'
 
 const ACTION_BASE =
   'w-[5cqh] h-[5cqh] grid place-items-center bg-[var(--color-surface-btn-secondary)] text-[2.54cqh] leading-none rounded-[2px] cursor-pointer transition-[color,border-color] duration-[140ms] ease-in-out border'
@@ -69,18 +70,14 @@ const SceneCard = ({
   const hideSecondaryActions = modality === 'gamepad'
 
   return (
-    <button
-      type="button"
+    <SceneCardBase
       draggable={draggable}
+      title={seed.filename}
+      ariaDisabled={isUnsafe}
       className={`
-        group/scene relative aspect-video w-full overflow-hidden rounded-card border border-border-subtle
-        bg-surface-card p-0 transition-[opacity,border-color] duration-140 ease-out
         ${isUnsafe ? CARD_STATE_UNSAFE : CARD_STATE_SAFE}
         ${isBeingDragged ? 'opacity-40' : ''}
       `}
-      title={seed.filename}
-      aria-disabled={isUnsafe}
-      onMouseEnter={() => !isUnsafe && playHover()}
       onClick={() => {
         if (isUnsafe) return
         if (!selectCooldown) play('portal_swoosh')
@@ -150,7 +147,7 @@ const SceneCard = ({
           </span>
         )}
       </span>
-    </button>
+    </SceneCardBase>
   )
 }
 

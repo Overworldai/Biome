@@ -434,7 +434,11 @@ const SceneGrid = ({
           className="grid w-full gap-[1.28cqh]"
           style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
         >
-          {before}
+          {before && (
+            <motion.div layout transition={REORDER_TRANSITION} className="relative w-full">
+              {before}
+            </motion.div>
+          )}
           {/* `display: contents` wrapper so the default-focus marker only covers
               scene tiles (not the user-scenes "paste / browse" buttons in `before`)
               without breaking the grid layout. */}

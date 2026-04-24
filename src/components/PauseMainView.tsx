@@ -1,10 +1,10 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
+import SceneCardAddButton from './SceneCardAddButton'
 import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
 import MenuButton from './ui/MenuButton'
-import RawSettingsButton from './ui/RawSettingsButton'
 import Slider from './ui/Slider'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
@@ -185,37 +185,11 @@ const PauseMainView = ({
           columns={sceneGridColumns}
           before={
             ALLOW_USER_SCENES && (
-              <div
-                className={`
-                  relative aspect-video w-full overflow-hidden border border-[rgba(245,249,255,0.84)]
-                  bg-[rgba(248,248,245,0.14)] p-0
-                  ${uploadingImage ? 'pointer-events-none opacity-60' : ''}
-                `}
-              >
-                <RawSettingsButton
-                  variant="secondary"
-                  className="
-                    grid size-full place-items-center rounded-none! border-0! p-0! outline-0!
-                    hover:outline-0!
-                    focus-visible:outline-2 focus-visible:outline-surface-btn-hover
-                    active:bg-surface-btn-hover active:text-text-inverse
-                  "
-                  onClick={() => fileInputRef.current?.click()}
-                  title={t('app.buttons.browseForImageFile')}
-                >
-                  <svg
-                    className="h-[2.67cqh] w-[2.67cqh]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
-                    <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round" />
-                    <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </RawSettingsButton>
-              </div>
+              <SceneCardAddButton
+                onClick={() => fileInputRef.current?.click()}
+                title={t('app.buttons.browseForImageFile')}
+                disabled={uploadingImage}
+              />
             )
           }
         />
