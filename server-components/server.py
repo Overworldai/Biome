@@ -366,28 +366,15 @@ async def get_model_info(model_id: str):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get_app_state_ws)):
-    """
-    WebSocket endpoint for frame streaming and RPC.
+    """WebSocket endpoint — wiring shell.
 
-    Protocol:
-        Server -> Client:
-            {"type": "status", "code": str, "stage": {...}}
-            Binary frame: [4-byte LE header_len][JSON header][JPEG bytes]
-              Header: {"frame_id": int, "client_ts": float, "gen_ms": float}
-            {"type": "error", "message": str}
-            {"type": "response", "req_id": str, "success": bool, "data": ..., "error": ...}
-            {"type": "log", "line": str, "level": str}
-
-        Client -> Server:
-            {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_authoring": bool, "action_logging": bool, "quant": str|null}
-            {"type": "reset"}
-            {"type": "pause"}
-            {"type": "resume"}
-            # Request/response (includes req_id):
-            {"type": "check_seed_safety", "req_id": "...", "image_data": str}
-
-    Status codes: waiting_for_seed, init, loading, ready, reset, warmup, startup
+    Owns the per-connection lifecycle: log streaming, startup-progress
+    replay, the pre-init handshake, scene-authoring warmup, world-engine
+    warmup, then spawns the receiver / sender / generator workers in
+    `ws_session.py`. The wire format itself is defined in `protocol.py`
+    as a Pydantic discriminated union — see `ClientMessage` /
+    `ServerPushMessage` for the canonical shape, and `MessageId` for
+    the enumerated translation keys.
     """
     client_host = websocket.client.host if websocket.client else "unknown"
     logger.info(f"Client connected: {client_host}")
@@ -451,9 +438,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         return
 
     # Past the startup gate: these are guaranteed populated by `_heavy_init`.
-    # Bind to locals so the rest of this function can use non-Optional types
-    # without state.X. attribute prefixes everywhere; step 6 replaces this
-    # with an explicit "ready" state machine on AppState.
+    # Bind to locals so the rest of this function reads them as non-Optional;
+    # the asserts also let basedpyright narrow the types downstream.
     assert state.world_engine is not None
     assert state.image_gen is not None
     assert state.safety_checker is not None

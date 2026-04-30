@@ -476,13 +476,6 @@ class WorldEngineManager:
         """Convert frame tensor to JPEG bytes using simplejpeg (fast) or PIL (fallback)."""
         return self._numpy_to_jpeg(self._tensor_to_numpy(frame), quality)
 
-    async def generate_frame(self, ctrl_input) -> torch.Tensor:
-        """Generate next frame using WorldEngine."""
-        if self.engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
-        frame = await self._run_on_cuda_thread(lambda: self.engine.gen_frame(ctrl=ctrl_input))
-        return frame
-
     def reset_state(self) -> None:
         """Reset engine state. Synchronous — submits work to the cuda_executor
         and waits. Safe to call from the generator thread (the only caller).
