@@ -28,11 +28,12 @@ take only what they need rather than reaching through a god object.
 
 import asyncio
 import os
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+from pydantic import BaseModel
 
 from engine import Engines
 from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
@@ -44,6 +45,43 @@ from util.server_logging import logger, stream_logs_to_client
 from util.system_info import SystemMonitor
 
 router = APIRouter()
+
+
+# ============================================================================
+# HTTP response types
+# ============================================================================
+
+
+class WorldEngineHealth(BaseModel):
+    loaded: bool
+    warmed_up: bool
+    has_seed: bool
+
+
+class SafetyHealth(BaseModel):
+    loaded: bool
+
+
+class HealthResponse(BaseModel):
+    """Body of `GET /health`. The renderer uses this to gate "engine ready"
+    UI; the frontend checks reachability via the request itself, so the
+    response shape is for the engine-status panel only."""
+
+    status: Literal["ok"] = "ok"
+    startup_complete: bool
+    world_engine: WorldEngineHealth
+    safety: SafetyHealth
+
+
+class ModelInfoResponse(BaseModel):
+    """Body of `GET /api/model-info/{model_id}`. Mirrors the `ModelInfo` TS
+    type in `src/types/ipc.ts` — the renderer consumes this when populating
+    the model picker."""
+
+    id: str
+    size_bytes: int | None
+    exists: bool
+    error: str | None
 
 
 # ============================================================================
@@ -82,32 +120,29 @@ def get_system_monitor_ws(websocket: WebSocket) -> SystemMonitor:
 
 
 @router.get("/health")
-async def health(request: Request, startup: ServerStartup = Depends(get_startup)):
+async def health(request: Request, startup: ServerStartup = Depends(get_startup)) -> HealthResponse:
     """Health check for Biome backend. Reads through to `app.state` directly
     for engine handles since they may not be populated yet during startup."""
     engines: Engines | None = getattr(request.app.state, "engines", None)
     we = engines.world_engine if engines else None
-    return JSONResponse(
-        {
-            "status": "ok",
-            "startup_complete": startup.complete,
-            "world_engine": {
-                "loaded": we is not None and we.is_loaded,
-                "warmed_up": we is not None and we.engine_warmed_up,
-                "has_seed": we is not None and we.seed_frame is not None,
-            },
-            "safety": {"loaded": engines is not None},
-        }
+    return HealthResponse(
+        startup_complete=startup.complete,
+        world_engine=WorldEngineHealth(
+            loaded=we is not None and we.is_loaded,
+            warmed_up=we is not None and we.engine_warmed_up,
+            has_seed=we is not None and we.seed_frame is not None,
+        ),
+        safety=SafetyHealth(loaded=engines is not None),
     )
 
 
 @router.get("/api/model-info/{model_id:path}")
-async def get_model_info(model_id: str):
+async def get_model_info(model_id: str) -> ModelInfoResponse:
     """Fetch model metadata from HuggingFace Hub."""
 
-    def _fetch():
+    def _fetch() -> ModelInfoResponse:
         info = hf_model_info(model_id, files_metadata=True)
-        size_bytes = None
+        size_bytes: int | None = None
         if hasattr(info, "siblings") and info.siblings:
             excluded_basenames = {"diffusion_pytorch_model.safetensors"}
             st_files = [
@@ -117,24 +152,23 @@ async def get_model_info(model_id: str):
                 and s.size is not None
                 and os.path.basename(s.rfilename) not in excluded_basenames
             ]
-            seen_blobs = set()
+            seen_blobs: set[str] = set()
             for s in st_files:
                 blob_key = getattr(s, "blob_id", None) or s.rfilename
                 if blob_key not in seen_blobs:
                     seen_blobs.add(blob_key)
                     size_bytes = (size_bytes or 0) + (s.size or 0)
-        return {"id": model_id, "size_bytes": size_bytes, "exists": True, "error": None}
+        return ModelInfoResponse(id=model_id, size_bytes=size_bytes, exists=True, error=None)
 
     try:
-        data = await asyncio.to_thread(_fetch)
-        return JSONResponse(data)
+        return await asyncio.to_thread(_fetch)
     except RepositoryNotFoundError:
-        return JSONResponse({"id": model_id, "size_bytes": None, "exists": False, "error": "Model not found"})
+        return ModelInfoResponse(id=model_id, size_bytes=None, exists=False, error="Model not found")
     except GatedRepoError:
-        return JSONResponse({"id": model_id, "size_bytes": None, "exists": True, "error": "Private or gated model"})
+        return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Private or gated model")
     except Exception as e:
         logger.warning(f"model-info error for {model_id}: {e}")
-        return JSONResponse({"id": model_id, "size_bytes": None, "exists": True, "error": "Could not check model"})
+        return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Could not check model")
 
 
 # ============================================================================
