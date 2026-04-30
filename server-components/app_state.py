@@ -31,6 +31,15 @@ if TYPE_CHECKING:
     from safety import SafetyChecker
 
 
+@dataclass(frozen=True)
+class StartupConfig:
+    """Process-launch configuration set in `__main__` and read by the
+    lifespan. Lives on `app.state.startup_config` so it's available
+    before AppState is constructed inside the lifespan itself."""
+
+    parent_pid: int | None = None
+
+
 class SafetyCacheEntry(TypedDict):
     """One entry in the on-disk safety cache (`.safety_cache.bin`).
     Step 7 converts the cache file to JSON-with-Pydantic; until then
@@ -83,3 +92,14 @@ def attach_app_state(app: FastAPI, state: AppState) -> None:
     """Stash the AppState on the FastAPI instance. Called once from
     the lifespan; the typed accessors above retrieve it back."""
     app.state.app_state = state
+
+
+def attach_startup_config(app: FastAPI, cfg: StartupConfig) -> None:
+    """Stash StartupConfig on the FastAPI instance. Called from
+    `__main__` before uvicorn.run; the lifespan reads it back."""
+    app.state.startup_config = cfg
+
+
+def get_startup_config(app: FastAPI) -> StartupConfig:
+    cfg: StartupConfig = app.state.startup_config
+    return cfg

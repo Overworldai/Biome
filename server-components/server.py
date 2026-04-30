@@ -40,9 +40,12 @@ from action_logger import ActionLogger
 from app_state import (
     AppState,
     SafetyCacheEntry,
+    StartupConfig,
     attach_app_state,
+    attach_startup_config,
     get_app_state,
     get_app_state_ws,
+    get_startup_config,
 )
 from progress_stages import (
     SESSION_INPAINTING_LOAD,
@@ -146,33 +149,38 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 logger.info("Basic imports done")
 
-# If launched with --parent-pid, ask the OS to kill us when the parent dies (Linux only),
-# and start a background thread to poll the parent PID as a cross-platform fallback.
-_parent_pid: int | None = None
+# If launched with --parent-pid, poll the parent PID and exit if it dies.
+# Linux's prctl(PR_SET_PDEATHSIG) is the kernel-level fallback we'd ideally
+# use, but Python doesn't expose it portably; the polling watchdog covers
+# both Linux and Windows.
 
 
-def _check_parent_alive() -> None:
-    """Check if the monitored parent process is still alive. Exit if not."""
-    if _parent_pid is None:
-        return
-    try:
-        os.kill(_parent_pid, 0)
-    except OSError:
-        logger.error(f"Parent process (PID {_parent_pid}) is already gone, shutting down")
-        os._exit(1)
+class ParentWatchdog:
+    """Monitors a parent process and force-exits this process if the
+    parent dies. Constructed in `__main__` (one-shot startup check),
+    then run as an asyncio task by the lifespan (continuous polling)."""
 
+    def __init__(self, parent_pid: int) -> None:
+        self.parent_pid = parent_pid
 
-async def _watch_parent_pid() -> None:
-    """Periodically check if the parent process is still alive. Exit if it's gone."""
-    if _parent_pid is None:
-        return
-    while True:
-        await asyncio.sleep(2)
+    def check_alive_or_exit(self) -> None:
+        """Synchronous one-shot check at startup, in case the parent
+        is already gone by the time we get here."""
         try:
-            os.kill(_parent_pid, 0)  # Signal 0 = check if process exists
+            os.kill(self.parent_pid, 0)
         except OSError:
-            logger.error(f"Parent process (PID {_parent_pid}) is gone, shutting down")
+            logger.error(f"Parent process (PID {self.parent_pid}) is already gone, shutting down")
             os._exit(1)
+
+    async def run(self) -> None:
+        """Continuous polling. Run as an asyncio task from the lifespan."""
+        while True:
+            await asyncio.sleep(2)
+            try:
+                os.kill(self.parent_pid, 0)  # signal 0 = existence check
+            except OSError:
+                logger.error(f"Parent process (PID {self.parent_pid}) is gone, shutting down")
+                os._exit(1)
 
 
 try:
@@ -372,10 +380,11 @@ async def lifespan(app: FastAPI):
     # Start heavy init in background so /health responds immediately
     init_task = asyncio.create_task(_heavy_init(state))
 
-    # Start parent-process watchdog
+    # Start parent-process watchdog if launched with --parent-pid
+    cfg = get_startup_config(app)
     watchdog_task = None
-    if _parent_pid is not None:
-        watchdog_task = asyncio.create_task(_watch_parent_pid())
+    if cfg.parent_pid is not None:
+        watchdog_task = asyncio.create_task(ParentWatchdog(cfg.parent_pid).run())
 
     yield
 
@@ -1746,10 +1755,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    attach_startup_config(app, StartupConfig(parent_pid=args.parent_pid))
     if args.parent_pid is not None:
-        _parent_pid = args.parent_pid
-        logger.info(f"Monitoring parent process PID {_parent_pid}")
-        _check_parent_alive()
+        logger.info(f"Monitoring parent process PID {args.parent_pid}")
+        ParentWatchdog(args.parent_pid).check_alive_or_exit()
 
     try:
         uvicorn.run(
