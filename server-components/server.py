@@ -23,13 +23,11 @@ import hashlib
 import io
 import json
 import os
-import pickle
 import struct
 import threading
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from pathlib import Path
 
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
@@ -38,7 +36,6 @@ from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 from action_logger import ActionLogger
 from app_state import (
     AppState,
-    SafetyCacheEntry,
     StartupConfig,
     attach_app_state,
     attach_startup_config,
@@ -87,6 +84,7 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
+from safety_cache import load_safety_cache, save_safety_cache
 from scene_authoring import run_generate_scene, run_scene_edit
 from ws_session import Connection, run_sender
 
@@ -204,38 +202,6 @@ def _read_log_tail_lines(max_lines: int) -> list[str]:
         return lines[-max_lines:]
     except Exception:
         return []
-
-
-# ============================================================================
-# Safety Cache
-# ============================================================================
-
-
-SAFETY_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.bin"
-
-
-def load_safety_cache() -> dict[str, SafetyCacheEntry]:
-    """Load hash-based safety cache from binary file."""
-    if not SAFETY_CACHE_FILE.exists():
-        return {}
-    try:
-        with open(SAFETY_CACHE_FILE, "rb") as f:
-            cache = pickle.load(f)
-        logger.info(f"Loaded safety cache with {len(cache)} entries")
-        return cache
-    except Exception as e:
-        logger.error(f"Failed to load safety cache: {e}")
-        return {}
-
-
-def save_safety_cache(cache: dict[str, SafetyCacheEntry]) -> None:
-    """Save hash-based safety cache to binary file."""
-    try:
-        SAFETY_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(SAFETY_CACHE_FILE, "wb") as f:
-            pickle.dump(cache, f)
-    except Exception as e:
-        logger.error(f"Failed to save safety cache: {e}")
 
 
 def compute_bytes_hash(data: bytes) -> str:
@@ -705,12 +671,12 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             conn.action_logging_requested = req.action_logging
         if "video_recording" in present and req.video_recording is not None:
             conn.video_recording_requested = req.video_recording
-        if "conn.video_output_dir" in present:
-            conn.video_output_dir = req.conn.video_output_dir
-        if "conn.biome_version" in present:
-            conn.biome_version = req.conn.biome_version
-        if "conn.cap_inference_fps" in present and req.conn.cap_inference_fps is not None:
-            conn.cap_inference_fps = req.conn.cap_inference_fps
+        if "video_output_dir" in present:
+            conn.video_output_dir = req.video_output_dir
+        if "biome_version" in present:
+            conn.biome_version = req.biome_version
+        if "cap_inference_fps" in present and req.cap_inference_fps is not None:
+            conn.cap_inference_fps = req.cap_inference_fps
 
         # Sync action logger with requested state during gameplay
         if is_game_loop:
