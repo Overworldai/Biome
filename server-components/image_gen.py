@@ -2,6 +2,10 @@
 Image generation module - Uses FLUX.2 Klein 4B for reference-based image editing
 and text-to-image generation, with Qwen3.5 vision (via llama.cpp) for prompt
 construction and content sanitisation.
+
+Includes the Qwen3-style XML tool-call parser used to extract structured
+edit instructions from VLM output — that parser is a VLM implementation
+detail, not a general-purpose utility, so it lives here.
 """
 
 import asyncio
@@ -9,20 +13,82 @@ import base64
 import gc
 import json
 import logging
+import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from io import BytesIO
 
 import numpy as np
 import torch
 from PIL import Image
 
-from qwen_tool_parser import parse_tool_calls
-
 logger = logging.getLogger(__name__)
 
 SCENE_EDIT_SAFETY_MESSAGE_ID = "app.server.error.sceneEditSafetyRejected"
 GENERATE_SCENE_SAFETY_MESSAGE_ID = "app.server.error.generateSceneSafetyRejected"
+
+
+# ─── Qwen3 tool-call parser ──────────────────────────────────────────
+# Extracts <tool_call><function=NAME><parameter=K>V</parameter>...
+# blocks from VLM output. Tolerates truncated tags (model hit
+# max_new_tokens) by falling back to a partial-final-param regex.
+
+
+@dataclass
+class ToolCall:
+    """A parsed tool call with function name and string parameters."""
+
+    name: str
+    arguments: dict[str, str] = field(default_factory=dict)
+
+
+# Matches a <tool_call> block, with or without a closing </tool_call> tag
+_TOOL_CALL_RE = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.DOTALL)
+# Matches <function=name> or <function name="name">
+_FUNCTION_RE = re.compile(r'<function(?:=|\s+name=")([^">]+)"?>')
+# Matches <parameter=name>value</close_tag> — tolerates missing "=" (e.g.
+# <parameter>name>) and wrong closing tags (e.g. </instruction>).
+_PARAMETER_RE = re.compile(r"<parameter[>=]([^>]+)>(.*?)</[^>]+>", re.DOTALL)
+# Matches a truncated final parameter: <parameter=name>value (no closing tag)
+_TRUNCATED_PARAM_RE = re.compile(r"<parameter[>=]([^>]+)>([^<]+)$", re.DOTALL)
+
+
+def parse_tool_calls(text: str) -> list[ToolCall]:
+    """Parse all tool calls from VLM output text. Tolerates truncated
+    output where closing tags may be missing due to token limits.
+    Raises ValueError if no valid tool calls are found."""
+    results = []
+
+    for block_match in _TOOL_CALL_RE.finditer(text):
+        block = block_match.group(1)
+
+        func_match = _FUNCTION_RE.search(block)
+        if not func_match:
+            continue
+
+        name = func_match.group(1).strip()
+        arguments: dict[str, str] = {}
+
+        for param_match in _PARAMETER_RE.finditer(block):
+            param_name = param_match.group(1).strip()
+            param_value = param_match.group(2).strip()
+            arguments[param_name] = param_value
+
+        # Check for a truncated final parameter (no closing </parameter>)
+        if not arguments or block.rstrip().endswith("</parameter>") is False:
+            trunc_match = _TRUNCATED_PARAM_RE.search(block)
+            if trunc_match:
+                param_name = trunc_match.group(1).strip()
+                param_value = trunc_match.group(2).strip()
+                if param_name not in arguments and param_value:
+                    arguments[param_name] = param_value
+
+        results.append(ToolCall(name=name, arguments=arguments))
+
+    if not results:
+        raise ValueError(f"No valid tool calls found in output: {text!r}")
+
+    return results
 
 
 @dataclass(frozen=True)
