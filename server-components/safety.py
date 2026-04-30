@@ -6,16 +6,14 @@ Uses Freepik/nsfw_image_detector model to check images for inappropriate content
 
 import logging
 import threading
-from typing import List, Dict
 
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from transformers import AutoModelForImageClassification
-from timm.data.transforms_factory import create_transform
-from torchvision.transforms import Compose
 from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
 from timm.models import get_pretrained_cfg
+from transformers import AutoModelForImageClassification
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +100,7 @@ class SafetyChecker:
         """Return True if the model should be unloaded after a check."""
         return not self._resident
 
-    def check_pil_image(self, image: Image.Image) -> Dict[str, any]:
+    def check_pil_image(self, image: Image.Image) -> dict[str, any]:
         """
         Check a PIL image for NSFW content.
         Uses the resident device if loaded, otherwise CPU.
@@ -135,8 +133,8 @@ class SafetyChecker:
                     self.unload_model()
 
     def predict_batch_values(
-        self, img_batch: List[Image.Image], device: str = "cpu"
-    ) -> List[Dict[str, float]]:
+        self, img_batch: list[Image.Image], device: str = "cpu"
+    ) -> list[dict[str, float]]:
         """
         Process a batch of images and return prediction scores for each NSFW category.
 
@@ -184,11 +182,11 @@ class SafetyChecker:
 
     def prediction(
         self,
-        img_batch: List[Image.Image],
+        img_batch: list[Image.Image],
         class_to_predict: str,
         threshold: float = 0.5,
         device: str = "cpu",
-    ) -> List[bool]:
+    ) -> list[bool]:
         """
         Predict if images meet or exceed a specific NSFW threshold.
 

@@ -49,3 +49,77 @@ llama-cpp-python = [
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+  "F",    # pyflakes
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "I",    # isort
+  "N",    # pep8-naming
+  "UP",   # pyupgrade
+  "B",    # flake8-bugbear
+  "A",    # flake8-builtins
+  "C4",   # flake8-comprehensions
+  "SIM",  # flake8-simplify
+  "RET",  # flake8-return
+  "PIE",  # flake8-pie
+  "TC",   # flake8-type-checking
+  "ICN",  # flake8-import-conventions
+  "ARG",  # flake8-unused-arguments
+  "FBT",  # flake8-boolean-trap (Rust-style: keyword-only bools)
+  "BLE",  # flake8-blind-except
+  "DTZ",  # flake8-datetimez
+  "ASYNC",# flake8-async
+  "TRY",  # tryceratops (exception handling patterns)
+  "RUF",  # ruff-specific
+  "PLE",  # pylint errors
+  "PLW",  # pylint warnings
+  "PERF", # perflint
+]
+ignore = [
+  # ─── Permanent ignores ───────────────────────────────────────────────
+  "TRY003",  # long error messages — MessageId enum is the structured replacement
+  "TRY300",  # consider else block — often hurts readability
+  "TRY400",  # use logger.exception over logger.error — too noisy
+  "PLW2901", # loop variable overwrites iter — sometimes intentional
+  "B008",    # function call in default arg — FastAPI Depends pattern
+  "RUF012",  # mutable class attrs require ClassVar — TypedDict subclasses trip this
+  "N812",    # lowercase-imported-as-non-lowercase — torch.nn.functional as F is convention
+  "N817",    # camelcase-imported-as-acronym — same: library naming conventions
+
+  # ─── Tracking: removed by a specific later refactor step ─────────────
+  # Step 3 (AppState — kill module globals):
+  "PLW0603", # use of `global` keyword
+
+  # Step 4 (Decompose websocket_endpoint):
+  "E402",    # module imports not at top of file — server.py's instrumented import block
+
+  # Step 6 (Tighten engine_manager / boundary types):
+  "FBT001",  # boolean-type-hint-positional-arg
+  "FBT002",  # boolean-default-value-positional-arg
+
+  # Step 7 (Cleanup pass):
+  "BLE001",  # blind except — pervasive defensive code, audit one-by-one
+  "SIM105",  # try/except/pass → contextlib.suppress — same audit as BLE001
+  "SIM115",  # use context manager when opening a file
+  "DTZ005",  # datetime.now() without tzinfo
+  "B023",    # function uses loop variable — real bug shape, fix in cleanup
+  "E501",    # line too long — many are legitimate (URLs, log strings)
+  "E741",    # ambiguous variable name
+  "N806",    # non-lowercase variable in function
+  "RET504",  # unnecessary assign before return
+  "RUF059",  # unused unpacked variable
+  "UP007",   # non-pep604 annotation union — last hold-out lives in a forward ref
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `dispatch_request(msg, websocket)` dies with the typed protocol in step 2;
+# `lifespan(app)` signature is FastAPI-mandated and gets revisited in step 3.
+"server.py" = ["ARG001"]
+
+

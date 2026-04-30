@@ -10,9 +10,9 @@ Usage:
 Client connects via WebSocket to ws://localhost:7987/ws
 """
 
-from server_logging import TeeStream, SERVER_LOG_FILE, logger  # noqa: E402 — must be first
-
 import sys
+
+from server_logging import SERVER_LOG_FILE, TeeStream, logger
 
 logger.info(f"Python {sys.version}")
 logger.info("Starting server...")
@@ -27,31 +27,29 @@ import pickle
 import struct
 import threading
 import time
-import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
-from queue import Empty, Queue
-from typing import Optional, TypedDict
+from queue import Queue
+from typing import TypedDict
+
+# ---------------------------------------------------------------------------
+from huggingface_hub import model_info as hf_model_info
+from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 
 from action_logger import ActionLogger
-from video_recorder import RecordingProperties, VideoRecorder
 from progress_stages import (
-    Stage,
-    STARTUP_BEGIN,
-    STARTUP_ENGINE_MANAGER,
-    STARTUP_SAFETY_CHECKER,
-    STARTUP_SAFETY_READY,
-    STARTUP_READY,
-    SESSION_WAITING_FOR_SEED,
     SESSION_INPAINTING_LOAD,
     SESSION_INPAINTING_READY,
     SESSION_READY,
+    SESSION_WAITING_FOR_SEED,
+    STARTUP_BEGIN,
+    STARTUP_ENGINE_MANAGER,
+    STARTUP_READY,
+    STARTUP_SAFETY_CHECKER,
+    STARTUP_SAFETY_READY,
+    Stage,
 )
-
-# ---------------------------------------------------------------------------
-
-from huggingface_hub import model_info as hf_model_info
-from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+from video_recorder import RecordingProperties, VideoRecorder
 
 # Resolve HuggingFace token: env var > CLI-cached token file.
 # Biome overrides HF_HOME to keep model cache inside world_engine/, which means
@@ -60,7 +58,7 @@ from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 # side's resolution order.
 
 
-def resolve_hf_token() -> Optional[str]:
+def resolve_hf_token() -> str | None:
     """Resolve HuggingFace token from env vars and well-known file locations.
 
     Mirrors the Electron-side getHfToken() resolution order so both paths
@@ -114,7 +112,7 @@ logger.info("Basic imports done")
 
 # If launched with --parent-pid, ask the OS to kill us when the parent dies (Linux only),
 # and start a background thread to poll the parent PID as a cross-platform fallback.
-_parent_pid: Optional[int] = None
+_parent_pid: int | None = None
 
 
 def _check_parent_alive() -> None:
@@ -167,7 +165,7 @@ try:
     logger.info("FastAPI imported")
 
     logger.info("Importing Engine Manager module...")
-    from engine_manager import WorldEngineManager, Session, BUTTON_CODES
+    from engine_manager import BUTTON_CODES, Session, WorldEngineManager
 
     logger.info("Engine Manager module imported")
 
@@ -203,7 +201,7 @@ safety_hash_cache: dict[str, "SafetyCacheEntry"] = {}
 # ============================================================================
 
 startup_complete: bool = False
-startup_error: Optional[str] = None
+startup_error: str | None = None
 startup_stages: list[dict] = []  # accumulated stage messages
 # WS clients waiting for startup progress register a Queue here
 ws_startup_waiters: list[asyncio.Queue] = []
@@ -216,7 +214,7 @@ def _read_log_tail_lines(max_lines: int) -> list[str]:
     if max_lines <= 0:
         return []
     try:
-        with open(SERVER_LOG_FILE, "r", encoding="utf-8", errors="replace") as fp:
+        with open(SERVER_LOG_FILE, encoding="utf-8", errors="replace") as fp:
             lines = [line.rstrip("\r\n") for line in fp if line.strip()]
         return lines[-max_lines:]
     except Exception:
@@ -280,7 +278,7 @@ def _broadcast_startup_stage(stage: Stage) -> None:
     startup_stages.append(payload)
     # Also log to stdout so file-based logs capture it
     logger.info(f"Startup stage: {stage.id}")
-    for q in list(ws_startup_waiters):
+    for q in ws_startup_waiters:
         try:
             q.put_nowait(payload)
         except asyncio.QueueFull:
@@ -326,7 +324,7 @@ async def _heavy_init() -> None:
         startup_complete = True
 
         # Signal all waiters that startup is done
-        for q in list(ws_startup_waiters):
+        for q in ws_startup_waiters:
             try:
                 q.put_nowait({"type": "_startup_done"})
             except asyncio.QueueFull:
@@ -336,7 +334,7 @@ async def _heavy_init() -> None:
         startup_error = str(exc)
         logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
         startup_complete = True  # mark done so waiters unblock
-        for q in list(ws_startup_waiters):
+        for q in ws_startup_waiters:
             try:
                 q.put_nowait({"type": "_startup_done"})
             except asyncio.QueueFull:
@@ -466,8 +464,7 @@ async def dispatch_request(msg: dict, websocket: WebSocket) -> dict | BinaryResp
 
     if req_type == "check_seed_safety":
         return await _handle_check_seed_safety(msg)
-    else:
-        return {"success": False, "error": f"Unknown request type: {req_type}"}
+    return {"success": False, "error": f"Unknown request type: {req_type}"}
 
 
 # ---- individual request handlers ----
@@ -513,7 +510,7 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
 
 
 
-def _run_generate_scene_on_generator(prompt: str, biome_version: Optional[str]) -> dict:
+def _run_generate_scene_on_generator(prompt: str, biome_version: str | None) -> dict:
     """Generate a new scene from a text prompt and load it as the current seed.
 
     Runs on the generator thread.  Uses the inpainting pipeline with a blank
@@ -527,6 +524,7 @@ def _run_generate_scene_on_generator(prompt: str, biome_version: Optional[str]) 
     should trigger a second uninstrumented load.
     """
     from PIL import Image
+
     from image_gen import (
         EDIT_MODEL_ID,
         GENERATE_SCENE_SAFETY_MESSAGE_ID,
@@ -613,9 +611,14 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     returns preview data for the RPC response.
     """
     from PIL import Image
+
     from image_gen import (
         EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT,
+    )
+    from image_gen import (
         EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET,
+    )
+    from image_gen import (
         SafetyRejectionError,
     )
 
@@ -758,7 +761,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if stage_msg.get("type") == "_startup_done":
                     break
                 await websocket.send_text(json.dumps(stage_msg))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
         ws_startup_waiters.remove(startup_queue)
 
@@ -1032,7 +1035,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         f"[{client_host}] Ignoring message type '{msg_type}' while waiting for init"
                     )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
                 await send_json(_error_payload(message_id="app.server.error.timeoutWaitingForSeed"))
                 return

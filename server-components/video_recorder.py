@@ -17,7 +17,6 @@ import tempfile
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 import imageio_ffmpeg
 import numpy as np
@@ -41,9 +40,9 @@ class RecordingProperties:
     dict, so the schema is fixed and searchable."""
 
     biome_version: str = "unknown"
-    model: Optional[str] = None
+    model: str | None = None
     quant: str = "none"
-    seed: Optional[str] = None
+    seed: str | None = None
     scene_authoring_enabled: bool = False
 
 
@@ -109,7 +108,7 @@ class VideoRecorder:
         width: int,
         height: int,
         fps: int,
-        properties: Optional[RecordingProperties] = None,
+        properties: RecordingProperties | None = None,
     ) -> None:
         """End any active segment and start a new video file. `properties`
         captures the semantic session state (model, quant, seed, …) and is

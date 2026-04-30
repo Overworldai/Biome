@@ -16,7 +16,7 @@ live together.
 
 from __future__ import annotations
 
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 import torch
 
@@ -24,11 +24,11 @@ from server_logging import logger
 
 
 class SystemInfo(TypedDict, total=False):
-    cpu_name: Optional[str]
-    gpu_name: Optional[str]
-    vram_total_bytes: Optional[int]
-    cuda_version: Optional[str]
-    driver_version: Optional[str]
+    cpu_name: str | None
+    gpu_name: str | None
+    vram_total_bytes: int | None
+    cuda_version: str | None
+    driver_version: str | None
     torch_version: str
     gpu_count: int
 

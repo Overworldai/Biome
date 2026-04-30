@@ -559,7 +559,7 @@ class WorldEngineManager:
             )
         else:
             logger.info(
-                f"[INIT] No prompt conditioning enabled, skipping engine.set_prompt()"
+                "[INIT] No prompt conditioning enabled, skipping engine.set_prompt()"
             )
 
     async def recover_from_cuda_error(self):
