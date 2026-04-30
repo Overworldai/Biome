@@ -111,6 +111,7 @@ def model_config_from_engine_cfg(engine_model_cfg: object) -> ModelConfig:
         inference_fps=int(getattr(engine_model_cfg, "inference_fps", base.inference_fps)),
     )
 
+
 BUTTON_CODES = {}
 # A-Z keys
 for i in range(65, 91):

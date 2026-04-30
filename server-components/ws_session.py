@@ -1,37 +1,33 @@
 """
-Per-WebSocket-connection mutable state container.
+Per-WebSocket-connection state container.
 
-`Connection` bundles the state that used to live as ~25 nonlocals across
-the receiver / sender / generator closures inside `websocket_endpoint`.
-Created once per connection, passed by reference into every helper.
-Fields are mutated in place; the object itself is the long-lived owner.
+`Connection` bundles the slowly-mutating per-connection state that used
+to live as nonlocals across the closures inside `websocket_endpoint`:
+init flags, recorder instances, seed metadata, the pending init-RPC
+tracker.  Created once per connection, mutated in place by handle_init
+and the recorder lifecycle helpers.
 
-Step 4's class extractions (Receiver / Sender / Generator) all consume
-a `Connection` instance — the object is the seam between the asyncio
-loop, the generator thread, and the CUDA executor.
+Thread/loop-bound state (queues, events, control input, GPU metric
+cache) deliberately stays out of `Connection` — those have construction
+constraints (asyncio.Event needs the loop) and naturally migrate onto
+the extracted Receiver / Generator classes later in step 4.
 
 This module is strict-typed by construction — none of the legacy ignore
 rules in pyproject.toml fire on this code. Keep it that way.
 """
 
-import asyncio
-import threading
-from dataclasses import dataclass, field
-from queue import Queue
+from dataclasses import dataclass
 
 from fastapi import WebSocket
-from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import AppState
-from protocol import StatusMessage
 from video_recorder import VideoRecorder
 
 
 @dataclass
 class Connection:
-    """Per-WebSocket-connection state. One instance for the lifetime of
-    the websocket; mutated in place by handler closures. Reference-equality
+    """Per-WebSocket-connection state, mutated in place. Reference-equality
     semantics — never compare two `Connection` instances structurally."""
 
     # ─── Immutable references (set at construction) ────────────────
@@ -59,41 +55,3 @@ class Connection:
 
     # ─── Pending init RPC ID (response deferred until warmup ends) ──
     init_req_id: str | None = None
-
-    # ─── Game-loop state (running ↔ paused ↔ resetting) ─────────────
-    running: bool = True
-    paused: bool = False
-    reset_flag: bool = False
-    prompt_pending: str | None = None
-
-    # ─── Scene-authoring RPC handoff to generator thread ────────────
-    # Receiver posts a {"prompt": str, "future": Future}; generator
-    # picks it up at a clean frame boundary and resolves the future.
-    scene_edit_request: dict | None = None
-    generate_scene_request: dict | None = None
-
-    # Most recent CPU numpy frames, kept so scene_edit can inpaint
-    # the last subframe rendered.
-    last_generated_cpu_frames: list | None = None
-
-    # ─── Inter-thread channels ──────────────────────────────────────
-    # `frame_queue` carries Pydantic models or raw binary frames from
-    # the generator thread to the asyncio sender; `frame_ready` is the
-    # cross-thread wakeup signal.
-    frame_queue: Queue[BaseModel | bytes] = field(default_factory=lambda: Queue(maxsize=16))
-    frame_ready: asyncio.Event | None = None  # initialised inside the loop
-    progress_queue: asyncio.Queue[StatusMessage] | None = None  # ditto
-    log_queue: asyncio.Queue[str] | None = None  # ditto
-    main_loop: asyncio.AbstractEventLoop | None = None  # ditto
-
-    # ─── Control input shared between receiver (writes) + generator (reads) ─
-    ctrl_buttons: set[int] = field(default_factory=set)
-    ctrl_mouse_dx: float = 0.0
-    ctrl_mouse_dy: float = 0.0
-    ctrl_client_ts: float = 0.0
-    ctrl_dirty: bool = False
-    ctrl_lock: threading.Lock = field(default_factory=threading.Lock)
-
-    # ─── Cached GPU metrics embedded in frame headers ───────────────
-    cached_vram_used_bytes: int = -1
-    cached_gpu_util_percent: int = -1

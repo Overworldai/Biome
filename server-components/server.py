@@ -92,6 +92,7 @@ from protocol import (
 )
 from scene_authoring import run_generate_scene, run_scene_edit
 from video_recorder import RecordingProperties, VideoRecorder
+from ws_session import Connection
 
 apply_resolved_token()
 
@@ -510,6 +511,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     """
     client_host = websocket.client.host if websocket.client else "unknown"
     logger.info(f"Client connected: {client_host}")
+    conn = Connection(websocket=websocket, state=state, client_host=client_host)
 
     await websocket.accept()
 
@@ -634,7 +636,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     async def load_seed_from_data(image_data_b64: str | None, seed_filename: str | None = None) -> bool:
         """Validate safety and load seed from base64 image data."""
-        nonlocal current_seed_hash, current_seed_filename
         if not image_data_b64:
             logger.warning(f"[{client_host}] Missing seed image data")
             await send_warning(MessageId.SEED_MISSING_DATA)
@@ -650,7 +651,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         img_hash = compute_bytes_hash(image_bytes)
 
         # Check if same seed is already loaded (dedup by hash)
-        if img_hash == current_seed_hash:
+        if img_hash == conn.current_seed_hash:
             logger.info(f"[{client_host}] Seed unchanged (hash match), skipping reload")
             return True
 
@@ -699,8 +700,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         world_engine.seed_frame = loaded_frame
         world_engine.original_seed_frame = loaded_frame
-        current_seed_hash = img_hash
-        current_seed_filename = seed_filename
+        conn.current_seed_hash = img_hash
+        conn.current_seed_filename = seed_filename
         logger.info(f"[{client_host}] Seed loaded successfully")
         return True
 
@@ -712,16 +713,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         `model_fields_set` distinguishes "field absent" (leave untouched) from
         "field present, possibly None" (apply update) — preserving the existing
         partial-delta semantics."""
-        nonlocal \
-            scene_authoring_requested, \
-            action_logging_requested, \
-            video_recording_requested, \
-            video_output_dir, \
-            biome_version, \
-            action_logger, \
-            video_recorder, \
-            cap_inference_fps
-
         present = req.model_fields_set
         model_uri = (req.model or "").strip()
         seed_data = req.seed_image_data
@@ -730,41 +721,41 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         # Update flags
         if "scene_authoring" in present and req.scene_authoring is not None:
-            scene_authoring_requested = req.scene_authoring
+            conn.scene_authoring_requested = req.scene_authoring
         if "action_logging" in present and req.action_logging is not None:
-            action_logging_requested = req.action_logging
+            conn.action_logging_requested = req.action_logging
         if "video_recording" in present and req.video_recording is not None:
-            video_recording_requested = req.video_recording
-        if "video_output_dir" in present:
-            video_output_dir = req.video_output_dir
-        if "biome_version" in present:
-            biome_version = req.biome_version
-        if "cap_inference_fps" in present and req.cap_inference_fps is not None:
-            cap_inference_fps = req.cap_inference_fps
+            conn.video_recording_requested = req.video_recording
+        if "conn.video_output_dir" in present:
+            conn.video_output_dir = req.conn.video_output_dir
+        if "conn.biome_version" in present:
+            conn.biome_version = req.conn.biome_version
+        if "conn.cap_inference_fps" in present and req.conn.cap_inference_fps is not None:
+            conn.cap_inference_fps = req.conn.cap_inference_fps
 
         # Sync action logger with requested state during gameplay
         if is_game_loop:
-            if action_logging_requested and action_logger is None:
-                action_logger = ActionLogger(client_host)
-                action_logger.new_segment(
+            if conn.action_logging_requested and conn.action_logger is None:
+                conn.action_logger = ActionLogger(client_host)
+                conn.action_logger.new_segment(
                     model=world_engine.model_uri,
-                    seed=current_seed_filename,
+                    seed=conn.current_seed_filename,
                     temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=world_engine.has_prompt_conditioning,
                 )
                 logger.info(f"[{client_host}] Action logging enabled")
-            elif not action_logging_requested and action_logger is not None:
-                action_logger.end_segment()
-                action_logger = None
+            elif not conn.action_logging_requested and conn.action_logger is not None:
+                conn.action_logger.end_segment()
+                conn.action_logger = None
                 logger.info(f"[{client_host}] Action logging disabled")
 
-            if video_recording_requested and video_recorder is None:
+            if conn.video_recording_requested and conn.video_recorder is None:
                 _video_recorder_new_segment()
                 logger.info(f"[{client_host}] Video recording enabled")
-            elif not video_recording_requested and video_recorder is not None:
-                video_recorder.end_segment()
-                video_recorder = None
+            elif not conn.video_recording_requested and conn.video_recorder is not None:
+                conn.video_recorder.end_segment()
+                conn.video_recorder = None
                 logger.info(f"[{client_host}] Video recording disabled")
 
         # Model delta — reload if model URI or quantization changed.
@@ -796,19 +787,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         ready = seed_loaded or (world_engine.seed_frame is not None)
         return ready, seed_loaded
 
-    scene_authoring_requested = False
-    action_logging_requested = False
-    video_recording_requested = False
-    video_output_dir: str | None = None
-    biome_version: str | None = None
-    cap_inference_fps = True
-    action_logger: ActionLogger | None = None
-    video_recorder: VideoRecorder | None = None
-    current_seed_hash: str | None = None
-    current_seed_filename: str | None = None
-
-    init_req_id: str | None = None
-
     try:
         await send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for init message...")
@@ -828,13 +806,15 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         await websocket.send_text(result.model_dump_json(exclude_none=True))
                     case InitRequest() as req:
                         # init RPC: response is deferred until after warmup/session init completes
-                        init_req_id = req.req_id
+                        conn.init_req_id = req.req_id
                         ready, _ = await handle_init(req)
                         if not ready:
                             await websocket.send_text(
-                                rpc_err(init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
+                                rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(
+                                    exclude_none=True
+                                )
                             )
-                            init_req_id = None
+                            conn.init_req_id = None
                     case SceneEditRequest() | GenerateSceneRequest():
                         # Authoring RPCs require an active session.
                         await websocket.send_text(
@@ -858,18 +838,18 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 f"[{client_host}] Seed frame missing before initialization; client likely disconnected/reconnected during model switch"
             )
             world_engine.set_progress_callback(None)
-            if init_req_id:
-                await send_message(rpc_err(init_req_id, error_id=MessageId.INIT_FAILED))
+            if conn.init_req_id:
+                await send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
             return
 
         # Load or unload scene authoring model based on flag.
         # Loading happens BEFORE WorldEngine warmup so CUDA graphs
         # are compiled with the model's memory already allocated.
-        if not scene_authoring_requested and image_gen is not None and image_gen.is_loaded:
+        if not conn.scene_authoring_requested and image_gen is not None and image_gen.is_loaded:
             logger.info(f"[{client_host}] Scene authoring disabled — unloading model")
             await asyncio.to_thread(image_gen.unload)
 
-        if scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
+        if conn.scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
             await send_stage(SESSION_INPAINTING_LOAD)
             try:
                 await image_gen.warmup()
@@ -879,8 +859,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 await send_message(
                     build_error_message(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
                 )
-                if init_req_id:
-                    await send_message(rpc_err(init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
+                if conn.init_req_id:
+                    await send_message(rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
                 return
 
         # Warmup on first connection AFTER seed is loaded
@@ -918,46 +898,45 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         await send_stage(SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
 
-        action_logger = ActionLogger(client_host) if action_logging_requested else None
+        conn.action_logger = ActionLogger(client_host) if conn.action_logging_requested else None
 
         def _video_recorder_new_segment() -> None:
             """Ensure the video recorder exists when recording is requested,
             then start a new segment with the current session's metadata."""
-            nonlocal video_recorder
-            if not video_recording_requested:
+            if not conn.video_recording_requested:
                 return
-            if video_recorder is None:
-                video_recorder = VideoRecorder(client_host, output_dir=video_output_dir)
-            video_recorder.new_segment(
+            if conn.video_recorder is None:
+                conn.video_recorder = VideoRecorder(client_host, output_dir=conn.video_output_dir)
+            conn.video_recorder.new_segment(
                 width=world_engine.seed_target_size[1],
                 height=world_engine.seed_target_size[0],
                 fps=int(world_engine.inference_fps),
                 properties=RecordingProperties(
-                    biome_version=biome_version or "unknown",
+                    biome_version=conn.biome_version or "unknown",
                     model=world_engine.model_uri,
                     quant=world_engine.quant or "none",
-                    seed=current_seed_filename,
-                    scene_authoring_enabled=scene_authoring_requested,
+                    seed=conn.current_seed_filename,
+                    scene_authoring_enabled=conn.scene_authoring_requested,
                 ),
             )
 
         def _video_recorder_end_segment() -> None:
-            if video_recorder is not None:
-                video_recorder.end_segment()
+            if conn.video_recorder is not None:
+                conn.video_recorder.end_segment()
 
         def _action_logger_new_segment() -> None:
-            if action_logger is not None:
-                action_logger.new_segment(
+            if conn.action_logger is not None:
+                conn.action_logger.new_segment(
                     model=world_engine.model_uri,
-                    seed=current_seed_filename,
+                    seed=conn.current_seed_filename,
                     temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
                     has_prompt_conditioning=world_engine.has_prompt_conditioning,
                 )
 
         def _action_logger_end_segment() -> None:
-            if action_logger is not None:
-                action_logger.end_segment()
+            if conn.action_logger is not None:
+                conn.action_logger.end_segment()
 
         _action_logger_new_segment()
         _video_recorder_new_segment()
@@ -1031,9 +1010,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             )
 
         # Respond to init RPC with session metrics
-        if init_req_id:
-            await send_message(rpc_ok(init_req_id, build_init_response_data()))
-            init_req_id = None
+        if conn.init_req_id:
+            await send_message(rpc_ok(conn.init_req_id, build_init_response_data()))
+            conn.init_req_id = None
 
         async def receiver() -> None:
             nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request
@@ -1063,8 +1042,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             # the next clean frame boundary — post a request and
                             # await the future.
                             prompt = req.prompt.strip()
-                            if action_logger is not None:
-                                action_logger.scene_edit(prompt)
+                            if conn.action_logger is not None:
+                                conn.action_logger.scene_edit(prompt)
                             if not prompt:
                                 edit_response: RpcSuccess[SceneEditResponseData] | RpcError = rpc_err(
                                     req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT
@@ -1256,9 +1235,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     )
 
                 if session.perceptual_frame_count % 60 == 0:
-                    logger.info(
-                        f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={p.gen_time:.1f}ms)"
-                    )
+                    logger.info(f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={p.gen_time:.1f}ms)")
 
             _gen_was_paused = False
             next_frame_time = 0.0  # perf_counter target for frame pacing
@@ -1277,7 +1254,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         req = generate_scene_request
                         generate_scene_request = None
                         try:
-                            data = run_generate_scene(state, req["prompt"], biome_version)
+                            data = run_generate_scene(state, req["prompt"], conn.biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                             # Send the generated seed as a single frame so the
@@ -1307,7 +1284,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                     # Frame pacing: sleep until target time, just before
                     # reading input, so we use the freshest controls.
-                    if cap_inference_fps and next_frame_time > 0.0:
+                    if conn.cap_inference_fps and next_frame_time > 0.0:
                         sleep_time = next_frame_time - time.perf_counter()
                         if sleep_time > 0.001:
                             time.sleep(sleep_time)
@@ -1345,8 +1322,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         try:
                             preview = run_scene_edit(state, req["prompt"], last_generated_cpu_frames)
                             session.perceptual_frame_count = 0
-                            if video_recorder is not None:
-                                video_recorder.note_edit(req["prompt"])
+                            if conn.video_recorder is not None:
+                                conn.video_recorder.note_edit(req["prompt"])
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
@@ -1359,7 +1336,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         generate_scene_request = None
                         _flush_pending()
                         try:
-                            data = run_generate_scene(state, req["prompt"], biome_version)
+                            data = run_generate_scene(state, req["prompt"], conn.biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                         except Exception as e:
@@ -1385,8 +1362,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                     ctrl = world_engine.CtrlInput(button=buttons, mouse=(mouse_dx, mouse_dy))
 
-                    if action_logger is not None:
-                        action_logger.frame_input(
+                    if conn.action_logger is not None:
+                        conn.action_logger.frame_input(
                             buttons=buttons,
                             mouse_dx=mouse_dx,
                             mouse_dy=mouse_dy,
@@ -1399,7 +1376,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     t_infer_start = time.perf_counter()
 
                     # Advance frame pacing target for next iteration.
-                    if cap_inference_fps:
+                    if conn.cap_inference_fps:
                         fps = world_engine.inference_fps
                         if fps > 0:
                             frame_interval = world_engine.temporal_compression / fps
@@ -1437,8 +1414,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     # Keep all subframes for scene editing (read by receiver thread)
                     last_generated_cpu_frames = cpu_frames
 
-                    if video_recorder is not None:
-                        video_recorder.write_frames(cpu_frames)
+                    if conn.video_recorder is not None:
+                        conn.video_recorder.write_frames(cpu_frames)
 
                     # Stash this batch's CPU frames for deferred JPEG encoding
                     pending = PendingFlush(
@@ -1526,10 +1503,10 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         TeeStream.unregister_client(log_queue)
         progress_drain_task.cancel()
         world_engine.set_progress_callback(None)
-        if action_logger is not None:
-            action_logger.end_segment()
-        if video_recorder is not None:
-            video_recorder.end_segment()
+        if conn.action_logger is not None:
+            conn.action_logger.end_segment()
+        if conn.video_recorder is not None:
+            conn.video_recorder.end_segment()
         logger.info(f"[{client_host}] Disconnected (frames: {session.perceptual_frame_count})")
 
 
