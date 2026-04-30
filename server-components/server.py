@@ -746,11 +746,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             if action_logging_requested and action_logger is None:
                 action_logger = ActionLogger(client_host)
                 action_logger.new_segment(
-                    model=getattr(world_engine, "model_uri", None),
+                    model=world_engine.model_uri,
                     seed=current_seed_filename,
                     temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
-                    has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
+                    has_prompt_conditioning=world_engine.has_prompt_conditioning,
                 )
                 logger.info(f"[{client_host}] Action logging enabled")
             elif not action_logging_requested and action_logger is not None:
@@ -770,8 +770,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         # The engine must be loaded before the seed so that seed_target_size
         # and temporal_compression are resolved from the actual model config.
         model_changed = False
-        quant_changed = "quant" in present and quant != getattr(world_engine, "quant", None)
-        if model_uri and (model_uri != getattr(world_engine, "model_uri", None) or quant_changed):
+        quant_changed = "quant" in present and quant != world_engine.quant
+        if model_uri and (model_uri != world_engine.model_uri or quant_changed):
             logger.info(
                 f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri} (quant={quant})"
             )
@@ -933,8 +933,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 fps=int(world_engine.inference_fps),
                 properties=RecordingProperties(
                     biome_version=biome_version or "unknown",
-                    model=getattr(world_engine, "model_uri", None),
-                    quant=getattr(world_engine, "quant", None) or "none",
+                    model=world_engine.model_uri,
+                    quant=world_engine.quant or "none",
                     seed=current_seed_filename,
                     scene_authoring_enabled=scene_authoring_requested,
                 ),
@@ -947,11 +947,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         def _action_logger_new_segment() -> None:
             if action_logger is not None:
                 action_logger.new_segment(
-                    model=getattr(world_engine, "model_uri", None),
+                    model=world_engine.model_uri,
                     seed=current_seed_filename,
                     temporal_compression=world_engine.temporal_compression,
                     seed_target_size=world_engine.seed_target_size,
-                    has_prompt_conditioning=getattr(world_engine, "has_prompt_conditioning", False),
+                    has_prompt_conditioning=world_engine.has_prompt_conditioning,
                 )
 
         def _action_logger_end_segment() -> None:
@@ -1023,11 +1023,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             return struct.pack("<I", len(header)) + header + jpeg
 
         def build_init_response_data() -> InitResponseData:
-            from engine_manager import DEFAULT_INFERENCE_FPS
-
             return InitResponseData(
-                model=getattr(world_engine, "model_uri", "") or "",
-                inference_fps=getattr(world_engine, "inference_fps", DEFAULT_INFERENCE_FPS),
+                model=world_engine.model_uri or "",
+                inference_fps=world_engine.inference_fps,
                 system_info=SystemInfo(**system_info_module.system_info),
             )
 
