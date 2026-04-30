@@ -19,9 +19,10 @@ rules in pyproject.toml fire on this code. Keep it that way.
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, WebSocket
+from pydantic import BaseModel, ConfigDict
 
 from protocol import StatusMessage
 
@@ -40,10 +41,13 @@ class StartupConfig:
     parent_pid: int | None = None
 
 
-class SafetyCacheEntry(TypedDict):
-    """One entry in the on-disk safety cache (`.safety_cache.bin`).
-    Step 7 converts the cache file to JSON-with-Pydantic; until then
-    the entry shape is preserved as a TypedDict for pickle compatibility."""
+class SafetyCacheEntry(BaseModel):
+    """One entry in the on-disk safety cache. Frozen Pydantic model —
+    persisted as JSON via `safety_cache.py` so the cache file is
+    human-readable and version-tolerant. `extra="forbid"` rejects
+    unknown fields; adding new optional fields stays backwards-compat."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     is_safe: bool
     scores: dict[str, float]

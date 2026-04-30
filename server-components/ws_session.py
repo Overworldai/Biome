@@ -36,7 +36,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from action_logger import ActionLogger
-from app_state import AppState
+from app_state import AppState, SafetyCacheEntry
 from progress_stages import SESSION_WAITING_FOR_SEED, Stage
 from protocol import (
     CheckSeedSafetyRequest,
@@ -334,7 +334,7 @@ async def handle_check_seed_safety(
         cached = cache[img_hash]
         return rpc_ok(
             req.req_id,
-            CheckSeedSafetyResponseData(is_safe=cached["is_safe"], hash=img_hash),
+            CheckSeedSafetyResponseData(is_safe=cached.is_safe, hash=img_hash),
         )
 
     safety_checker = state.safety_checker
@@ -350,11 +350,11 @@ async def handle_check_seed_safety(
         return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
     is_safe = safety_result.get("is_safe", False)
-    cache[img_hash] = {
-        "is_safe": is_safe,
-        "scores": safety_result.get("scores", {}),
-        "checked_at": time.time(),
-    }
+    cache[img_hash] = SafetyCacheEntry(
+        is_safe=is_safe,
+        scores=safety_result.get("scores", {}),
+        checked_at=time.time(),
+    )
     save_safety_cache(cache)
 
     return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=is_safe, hash=img_hash))
@@ -395,7 +395,7 @@ async def load_seed_from_data(
     cache = conn.state.safety_hash_cache
     if img_hash in cache:
         cached = cache[img_hash]
-        if not cached.get("is_safe", False):
+        if not cached.is_safe:
             logger.warning(f"[{conn.client_host}] Seed marked as unsafe (cached)")
             await conn.send_warning(MessageId.SEED_UNSAFE)
             return False
@@ -413,11 +413,11 @@ async def load_seed_from_data(
             return False
 
         is_safe = safety_result.get("is_safe", False)
-        cache[img_hash] = {
-            "is_safe": is_safe,
-            "scores": safety_result.get("scores", {}),
-            "checked_at": time.time(),
-        }
+        cache[img_hash] = SafetyCacheEntry(
+            is_safe=is_safe,
+            scores=safety_result.get("scores", {}),
+            checked_at=time.time(),
+        )
         save_safety_cache(cache)
 
         if not is_safe:
