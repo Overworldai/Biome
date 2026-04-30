@@ -502,8 +502,10 @@ class WorldEngineManager:
         self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
-    async def init_session(self):
-        """Reset engine, load seed, render initial frame and report progress."""
+    def init_session(self) -> None:
+        """Reset engine, load seed, render initial frame and report progress.
+        Synchronous — runs on cuda_executor via submit().result(). Asyncio
+        callers should use `await asyncio.to_thread(world_engine.init_session)`."""
         if self.engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
@@ -512,13 +514,13 @@ class WorldEngineManager:
         self._report_progress(SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
-        await self._run_on_cuda_thread(self.engine.reset)
+        self.cuda_executor.submit(self.engine.reset).result()
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
-        await self._run_on_cuda_thread(lambda: self.engine.append_frame(self.seed_frame))
+        self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(SESSION_INIT_FRAME)

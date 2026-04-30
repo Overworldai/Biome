@@ -22,9 +22,7 @@ import json
 import os
 import struct
 import threading
-import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
@@ -58,8 +56,6 @@ from protocol import (
     ClientMessage,
     ClientMessageAdapter,
     ControlNotif,
-    ErrorMessage,
-    ErrorSnapshot,
     GenerateSceneRequest,
     InitRequest,
     LogMessage,
@@ -75,12 +71,13 @@ from protocol import (
     rpc_ok,
 )
 from safety_cache import load_safety_cache
-from scene_authoring import run_generate_scene, run_scene_edit
 from ws_session import (
     Connection,
+    build_error_message,
     build_init_response_data,
     handle_check_seed_safety,
     handle_init,
+    run_generator,
     run_receiver,
     run_sender,
 )
@@ -165,24 +162,6 @@ try:
 except Exception as e:
     logger.fatal(f"Import failed: {e}", exc_info=True)
     sys.exit(1)
-
-
-def build_error_message(
-    *,
-    message_id: MessageId | None = None,
-    message: str | None = None,
-    params: dict[str, str] | None = None,
-) -> ErrorMessage:
-    """Build an ErrorMessage with an attached snapshot of ephemeral state
-    (RAM/VRAM/GPU util at error time).  Every outgoing `error` push should
-    go through this so bug reports capture what the server was actually
-    doing at the failure point."""
-    return ErrorMessage(
-        message_id=message_id,
-        message=message,
-        params=params,
-        snapshot=ErrorSnapshot(**system_info_module.capture_error_snapshot()),
-    )
 
 
 LOG_TAIL_INITIAL_LINES = 220
@@ -507,16 +486,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     progress_drain_task = asyncio.create_task(_drain_progress_queue())
 
-    async def reset_engine():
-        # Restore the original seed (before any scene edits) on reset
-        if world_engine.original_seed_frame is not None:
-            world_engine.seed_frame = world_engine.original_seed_frame
-        world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
-        await world_engine.init_session()
-        world_engine.set_progress_callback(None)
-        session.perceptual_frame_count = 0
-        logger.info(f"[{client_host}] Engine Reset")
-
     try:
         await conn.send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for init message...")
@@ -615,7 +584,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 raise
 
         # Init session (reset, seed, prompt) with granular progress
-        await world_engine.init_session()
+        await asyncio.to_thread(world_engine.init_session)
 
         # Send initial frame so client has something to display
         initial_display_frame = world_engine.seed_frame[0] if world_engine.is_multiframe else world_engine.seed_frame
@@ -649,303 +618,12 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             )
             conn.init_req_id = None
 
-        def generator() -> None:
-            def run_coro(coro):
-                return asyncio.run_coroutine_threadsafe(coro, conn.main_loop).result()
-
-            @dataclass
-            class PendingFlush:
-                """One batch of CPU frames stashed by the inference path
-                so the next loop iteration can JPEG-encode + send them
-                while the GPU works on the following frame. The fields
-                cover both the frames themselves and the timing
-                breakdown that ends up in the binary frame header."""
-
-                cpu_frames: list
-                gen_time: float
-                temporal_compression: int
-                client_ts: float
-                t_infer_start: float
-                t_infer: float
-                t_sync: float
-
-            pending: PendingFlush | None = None
-
-            def _flush_pending() -> None:
-                """JPEG-encode + queue any pending CPU frames."""
-                nonlocal pending
-                if pending is None:
-                    return
-                p = pending
-                pending = None
-
-                t_enc_start = time.perf_counter()
-                encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in p.cpu_frames]
-                t_enc = time.perf_counter()
-
-                if session.perceptual_frame_count % 5 == 0:
-                    conn.update_gpu_metrics()
-                t_metrics = time.perf_counter()
-
-                for jpeg in encoded:
-                    session.perceptual_frame_count += 1
-                    t_queued = time.perf_counter()
-                    profile = {
-                        "t_infer_ms": round((p.t_infer - p.t_infer_start) * 1000, 1),
-                        "t_sync_ms": round((p.t_sync - p.t_infer) * 1000, 1),
-                        "t_enc_ms": round((t_enc - t_enc_start) * 1000, 1),
-                        "t_metrics_ms": round((t_metrics - t_enc) * 1000, 1),
-                        "t_overhead_ms": round((t_queued - t_metrics) * 1000, 1),
-                    }
-                    conn.queue_send(
-                        conn.build_frame_envelope(
-                            jpeg,
-                            session.perceptual_frame_count,
-                            p.client_ts,
-                            p.gen_time,
-                            temporal_compression=p.temporal_compression,
-                            profile=profile,
-                        )
-                    )
-
-                if session.perceptual_frame_count % 60 == 0:
-                    logger.info(f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={p.gen_time:.1f}ms)")
-
-            _gen_was_paused = False
-            next_frame_time = 0.0  # perf_counter target for frame pacing
-
-            while conn.running:
-                if conn.paused:
-                    _flush_pending()
-                    if not _gen_was_paused:
-                        conn.end_action_log_segment()
-                        conn.end_video_segment()
-                        _gen_was_paused = True
-
-                    # Handle generate_scene while paused (it's triggered from
-                    # the pause menu, so the generator must process it here).
-                    if conn.generate_scene_request is not None:
-                        req = conn.generate_scene_request
-                        conn.generate_scene_request = None
-                        try:
-                            data = run_generate_scene(state, req["prompt"], conn.biome_version)
-                            session.perceptual_frame_count = 0
-                            req["future"].set_result(data)
-                            # Send the generated seed as a single frame so the
-                            # pause overlay background updates to show the new scene.
-                            seed = world_engine.seed_frame
-                            if seed.dim() == 4:
-                                seed = seed[0]  # First subframe for multiframe models
-                            seed_jpeg = world_engine.frame_to_jpeg(seed)
-                            conn.queue_send(
-                                conn.build_frame_envelope(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0)
-                            )
-                        except Exception as e:
-                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
-                            req["future"].set_exception(e)
-
-                    time.sleep(0.01)
-                    next_frame_time = 0.0
-                    continue
-
-                if _gen_was_paused:
-                    _gen_was_paused = False
-                    conn.start_action_log_segment(world_engine)
-                    conn.start_video_segment(world_engine)
-
-                try:
-                    # Start frame timer before pacing sleep so gen_time
-                    # reflects actual frame-to-frame throughput.
-                    t0 = time.perf_counter()
-
-                    # Frame pacing: sleep until target time, just before
-                    # reading input, so we use the freshest controls.
-                    if conn.cap_inference_fps and next_frame_time > 0.0:
-                        sleep_time = next_frame_time - time.perf_counter()
-                        if sleep_time > 0.001:
-                            time.sleep(sleep_time)
-
-                    if conn.prompt_pending is not None:
-                        _flush_pending()
-                        conn.prompt_pending = None
-                        run_coro(reset_engine())
-                        conn.start_action_log_segment(world_engine)
-                        conn.start_video_segment(world_engine)
-                        next_frame_time = 0.0
-
-                    # Auto-reset at context length limit (single-frame models only;
-                    # multiframe models don't support mid-session reset).
-                    auto_reset = (
-                        not world_engine.is_multiframe
-                        and session.perceptual_frame_count >= session.max_perceptual_frames
-                    )
-                    if conn.reset_flag or auto_reset:
-                        _flush_pending()
-                        if auto_reset:
-                            logger.info(f"[{client_host}] Auto-reset at frame limit")
-                        run_coro(reset_engine())
-                        conn.reset_flag = False
-                        conn.start_action_log_segment(world_engine)
-                        conn.start_video_segment(world_engine)
-                        next_frame_time = 0.0
-
-                    # Handle pending scene edit — runs inpainting on the last
-                    # subframe from the most recent gen_frame, then appends.
-                    if conn.scene_edit_request is not None and conn.last_generated_cpu_frames is not None:
-                        req = conn.scene_edit_request
-                        conn.scene_edit_request = None
-                        _flush_pending()
-                        try:
-                            preview = run_scene_edit(state, req["prompt"], conn.last_generated_cpu_frames)
-                            session.perceptual_frame_count = 0
-                            if conn.video_recorder is not None:
-                                conn.video_recorder.note_edit(req["prompt"])
-                            req["future"].set_result(preview)
-                        except Exception as e:
-                            logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
-                            req["future"].set_exception(e)
-
-                    # Handle pending generate_scene — creates a new seed from
-                    # a text prompt (blank canvas + inpainting pipeline).
-                    if conn.generate_scene_request is not None:
-                        req = conn.generate_scene_request
-                        conn.generate_scene_request = None
-                        _flush_pending()
-                        try:
-                            data = run_generate_scene(state, req["prompt"], conn.biome_version)
-                            session.perceptual_frame_count = 0
-                            req["future"].set_result(data)
-                        except Exception as e:
-                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
-                            req["future"].set_exception(e)
-
-                    with conn.ctrl_lock:
-                        if not conn.ctrl.dirty:
-                            buttons = None
-                        else:
-                            buttons = set(conn.ctrl.buttons)
-                            mouse_dx = float(conn.ctrl.mouse_dx)
-                            mouse_dy = float(conn.ctrl.mouse_dy)
-                            client_ts = conn.ctrl.client_ts
-                            conn.ctrl.mouse_dx = 0.0
-                            conn.ctrl.mouse_dy = 0.0
-                            conn.ctrl.dirty = False
-
-                    if buttons is None:
-                        _flush_pending()
-                        time.sleep(0.001)
-                        continue
-
-                    ctrl = world_engine.CtrlInput(button=buttons, mouse=(mouse_dx, mouse_dy))
-
-                    if conn.action_logger is not None:
-                        conn.action_logger.frame_input(
-                            buttons=buttons,
-                            mouse_dx=mouse_dx,
-                            mouse_dy=mouse_dy,
-                            client_ts=client_ts,
-                        )
-
-                    # client_ts is a performance.now() timestamp from the browser;
-                    # we can't compare clocks, but we CAN forward it so the client
-                    # can measure the full round-trip on its own clock.
-                    t_infer_start = time.perf_counter()
-
-                    # Advance frame pacing target for next iteration.
-                    if conn.cap_inference_fps:
-                        fps = world_engine.inference_fps
-                        if fps > 0:
-                            frame_interval = world_engine.temporal_compression / fps
-                            if next_frame_time == 0.0:
-                                next_frame_time = t_infer_start + frame_interval
-                            else:
-                                next_frame_time = max(t_infer_start, next_frame_time) + frame_interval
-
-                    # Submit inference to CUDA thread (non-blocking) so we can
-                    # overlap JPEG encoding of the previous batch with GPU work.
-                    gpu_future = world_engine.cuda_executor.submit(lambda c=ctrl: world_engine.engine.gen_frame(ctrl=c))
-
-                    # Encode + send previous batch while GPU is busy
-                    _flush_pending()
-
-                    # Wait for GPU result
-                    result = gpu_future.result()
-                    t_infer = time.perf_counter()
-
-                    if torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    t_sync = time.perf_counter()
-
-                    gen_time = (t_sync - t0) * 1000
-                    temporal_compression = world_engine.temporal_compression
-
-                    # Transfer result tensors to CPU numpy arrays immediately
-                    # while the data is still valid (gen_frame may reuse GPU
-                    # buffers on the next call).
-                    if temporal_compression > 1:
-                        cpu_frames = [world_engine._tensor_to_numpy(result[i]) for i in range(result.shape[0])]
-                    else:
-                        cpu_frames = [world_engine._tensor_to_numpy(result)]
-
-                    # Keep all subframes for scene editing (read by receiver thread)
-                    conn.last_generated_cpu_frames = cpu_frames
-
-                    if conn.video_recorder is not None:
-                        conn.video_recorder.write_frames(cpu_frames)
-
-                    # Stash this batch's CPU frames for deferred JPEG encoding
-                    pending = PendingFlush(
-                        cpu_frames=cpu_frames,
-                        gen_time=gen_time,
-                        temporal_compression=temporal_compression,
-                        client_ts=client_ts,
-                        t_infer_start=t_infer_start,
-                        t_infer=t_infer,
-                        t_sync=t_sync,
-                    )
-
-                except Exception as cuda_err:
-                    pending = None
-
-                    error_msg = str(cuda_err)
-                    is_cuda_error = any(
-                        keyword in error_msg.lower()
-                        for keyword in ["cuda", "cublas", "graph capture", "offset increment"]
-                    )
-
-                    if is_cuda_error:
-                        logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
-                        try:
-                            recovery_success = world_engine.recover_from_cuda_error()
-                        except Exception:
-                            recovery_success = False
-
-                        if recovery_success:
-                            conn.queue_send(
-                                StatusMessage(
-                                    stage="session.reset",
-                                    message="Recovered from CUDA error - engine reset",
-                                )
-                            )
-                            logger.info(f"[{client_host}] Successfully recovered from CUDA error")
-                        else:
-                            conn.queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
-                            logger.error(f"[{client_host}] Failed to recover from CUDA error")
-                            conn.running = False
-                            break
-                    else:
-                        logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
-                        conn.queue_send(build_error_message(message=str(cuda_err)))
-                        conn.running = False
-                        break
-
-            # Flush the last batch before the thread exits
-            try:
-                _flush_pending()
-            except Exception:
-                pass
-
-        gen_thread = threading.Thread(target=generator, daemon=True, name=f"gen-{client_host}")
+        gen_thread = threading.Thread(
+            target=run_generator,
+            args=(conn, world_engine, session),
+            daemon=True,
+            name=f"gen-{client_host}",
+        )
         gen_thread.start()
 
         recv_task = asyncio.create_task(
