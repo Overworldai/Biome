@@ -47,9 +47,9 @@ from server.protocol import (
 from server.session.connection import Connection, build_error_message
 
 if TYPE_CHECKING:
-    from engine.image_gen import ImageGenManager
     from engine.manager import WorldEngineManager
     from engine.safety import SafetyChecker
+    from engine.scene_authoring import SceneAuthoringManager
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ async def run_preinit_handshake(
 async def prepare_session(
     conn: Connection,
     world_engine: "WorldEngineManager",
-    image_gen: "ImageGenManager",
+    scene_authoring: "SceneAuthoringManager",
 ) -> bool:
     """Run the post-handshake preparation phase: scene-authoring model
     load/unload, engine warmup, session init, initial frame.
@@ -312,11 +312,11 @@ async def prepare_session(
                 await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
             return False
 
-        # Scene-authoring: bring the image_gen state in line with what
-        # this session needs. Loading happens BEFORE WorldEngine warmup
-        # so the CUDA graphs see the model's memory already allocated.
+        # Bring the scene-authoring model state in line with what this session
+        # needs. Loading happens BEFORE WorldEngine warmup so the CUDA graphs
+        # see the model's memory already allocated.
         try:
-            loaded = await image_gen.configure_for_session(conn.scene_authoring_requested)
+            loaded = await scene_authoring.configure_for_session(conn.scene_authoring_requested)
         except Exception as e:
             logger.error(f"[{conn.client_host}] Scene authoring warmup failed: {e}", exc_info=True)
             await conn.send_message(

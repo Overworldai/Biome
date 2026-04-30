@@ -140,7 +140,7 @@ async def run_receiver(
     `conn.scene_edit_request` / `conn.generate_scene_request` for the
     generator thread to resolve at the next clean frame boundary."""
     world_engine = engines.world_engine
-    image_gen = engines.image_gen
+    scene_authoring = engines.scene_authoring
     safety_checker = engines.safety_checker
 
     while conn.running:
@@ -174,7 +174,7 @@ async def run_receiver(
                     edit_response: RpcSuccess | RpcError
                     if not prompt:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
-                    elif not image_gen.is_loaded:
+                    elif not scene_authoring.is_loaded:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                     elif conn.scene_edit_request is not None:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
@@ -201,7 +201,7 @@ async def run_receiver(
                     gen_response: RpcSuccess | RpcError
                     if not prompt:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
-                    elif not image_gen.is_loaded:
+                    elif not scene_authoring.is_loaded:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                     elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
@@ -310,7 +310,7 @@ def run_generator(
         pending = None
 
         t_enc_start = time.perf_counter()
-        encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in p.cpu_frames]
+        encoded = [world_engine.numpy_to_jpeg(rgb) for rgb in p.cpu_frames]
         t_enc = time.perf_counter()
 
         if conn.perceptual_frame_count % 5 == 0:
@@ -363,9 +363,8 @@ def run_generator(
                     req["future"].set_result(data)
                     # Send the generated seed as a single frame so the pause
                     # overlay background updates to show the new scene.
-                    seed = world_engine.seed_frame
-                    if seed.dim() == 4:
-                        seed = seed[0]  # First subframe for multiframe models
+                    seed = world_engine.primary_seed_frame
+                    assert seed is not None, "seed must be loaded after generate_scene"
                     seed_jpeg = world_engine.frame_to_jpeg(seed)
                     conn.queue_send(conn.build_frame_envelope(seed_jpeg, conn.perceptual_frame_count, 0.0, 0.0))
                 except Exception as e:
@@ -488,7 +487,7 @@ def run_generator(
 
             # Submit inference to CUDA thread (non-blocking) so we can
             # overlap JPEG encoding of the previous batch with GPU work.
-            gpu_future = world_engine.cuda_executor.submit(lambda c=ctrl: world_engine.engine.gen_frame(ctrl=c))
+            gpu_future = world_engine.submit_gen_frame(ctrl)
 
             # Encode + send previous batch while GPU is busy
             _flush_pending()
@@ -508,9 +507,9 @@ def run_generator(
             # while the data is still valid (gen_frame may reuse GPU
             # buffers on the next call).
             if temporal_compression > 1:
-                cpu_frames = [world_engine._tensor_to_numpy(result[i]) for i in range(result.shape[0])]
+                cpu_frames = [world_engine.tensor_to_numpy(result[i]) for i in range(result.shape[0])]
             else:
-                cpu_frames = [world_engine._tensor_to_numpy(result)]
+                cpu_frames = [world_engine.tensor_to_numpy(result)]
 
             # Keep all subframes for scene editing (read by receiver thread)
             conn.last_generated_cpu_frames = cpu_frames

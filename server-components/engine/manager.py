@@ -121,7 +121,7 @@ class WorldEngineManager:
         # convenience @property delegators below raise on access pre-load,
         # so callers must either check `is_loaded` or be downstream of the
         # AppState-level startup-complete gate.
-        self.engine = None
+        self._engine = None
         self.model_config: ModelConfig | None = None
         self.seed_frame = None
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
@@ -135,11 +135,11 @@ class WorldEngineManager:
         self._model_load_lock = asyncio.Lock()
         # Single-threaded executor for CUDA operations to maintain thread-local storage
         # This is critical for CUDA graphs which must run in the same thread they were compiled in
-        self.cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
+        self._cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
 
     @property
     def is_loaded(self) -> bool:
-        return self.engine is not None and self.model_config is not None
+        return self._engine is not None and self.model_config is not None
 
     def _require_config(self) -> ModelConfig:
         if self.model_config is None:
@@ -201,7 +201,7 @@ class WorldEngineManager:
     async def _run_on_cuda_thread(self, fn):
         """Run callable on the dedicated CUDA thread."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self.cuda_executor, fn)
+        return await loop.run_in_executor(self._cuda_executor, fn)
 
     def _free_cuda_memory_sync(self):
         """Best-effort cleanup of CUDA allocations and compiled graph caches."""
@@ -234,7 +234,7 @@ class WorldEngineManager:
         """Drop current engine/tensors and aggressively free CUDA memory.
         Resets model_config to None so accidental access on the unloaded
         manager raises rather than returning stale per-model defaults."""
-        self.engine = None
+        self._engine = None
         self.model_config = None
         self.seed_frame = None
         self.engine_warmed_up = False
@@ -306,11 +306,11 @@ class WorldEngineManager:
             model_unchanged = requested_model == self.model_uri
             quant_unchanged = requested_quant == self.quant
 
-            if self.engine is not None and model_unchanged and quant_unchanged:
+            if self._engine is not None and model_unchanged and quant_unchanged:
                 logger.info(f"[ENGINE] Model already loaded: {requested_model} (quant={self.quant})")
                 return
 
-            if self.engine is not None:
+            if self._engine is not None:
                 if not model_unchanged:
                     logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
                 if not quant_unchanged:
@@ -381,14 +381,14 @@ class WorldEngineManager:
                 raise (last_error if last_error is not None else RuntimeError("Failed to initialize WorldEngine"))
 
             self._report_progress(StageId.SESSION_LOADING_WEIGHTS)
-            self.engine = new_engine
+            self._engine = new_engine
             logger.info(f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s")
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
 
             # Resolve typed runtime config from per-model defaults overridden
             # by the engine's model_cfg attributes.
-            self.model_config = model_config_from_engine_cfg(self.engine.model_cfg)
+            self.model_config = model_config_from_engine_cfg(self._engine.model_cfg)
             cfg = self.model_config
             logger.info(f"[2/4] Model type: {cfg.label}")
             logger.info(f"[2/4] Context length (n_frames): {cfg.n_frames}")
@@ -413,14 +413,14 @@ class WorldEngineManager:
             logger.info("=" * 60)
 
     @staticmethod
-    def _tensor_to_numpy(frame: torch.Tensor):
+    def tensor_to_numpy(frame: torch.Tensor):
         """Transfer a frame tensor to a CPU numpy array (uint8 RGB)."""
         if frame.dtype != torch.uint8:
             frame = frame.clamp(0, 255).to(torch.uint8)
         return frame.cpu().contiguous().numpy()
 
     @staticmethod
-    def _numpy_to_jpeg(rgb, quality: int = JPEG_QUALITY) -> bytes:
+    def numpy_to_jpeg(rgb, quality: int = JPEG_QUALITY) -> bytes:
         """Encode a CPU numpy RGB array to JPEG bytes."""
         if simplejpeg is not None:
             return simplejpeg.encode_jpeg(rgb, quality=quality, colorspace="RGB")
@@ -431,32 +431,98 @@ class WorldEngineManager:
 
     def frame_to_jpeg(self, frame: torch.Tensor, quality: int = JPEG_QUALITY) -> bytes:
         """Convert frame tensor to JPEG bytes using simplejpeg (fast) or PIL (fallback)."""
-        return self._numpy_to_jpeg(self._tensor_to_numpy(frame), quality)
+        return self.numpy_to_jpeg(self.tensor_to_numpy(frame), quality)
+
+    @property
+    def primary_seed_frame(self) -> torch.Tensor | None:
+        """Return the seed as a 3-D HxWxC tensor (first subframe for multiframe
+        models, or the raw seed for single-frame). Hides the multiframe shape
+        from callers that just want one displayable frame."""
+        if self.seed_frame is None:
+            return None
+        return self.seed_frame[0] if self.is_multiframe else self.seed_frame
+
+    def _maybe_expand_to_multiframe(self, frame: torch.Tensor) -> torch.Tensor:
+        """Expand a 3-D HxWxC tensor to the model's full temporal_compression
+        for multiframe models; pass-through otherwise. The seed-frame storage
+        format is whatever the engine consumes — callers stay shape-agnostic."""
+        if self.is_multiframe and frame.dim() == 3:
+            return frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
+        return frame
+
+    def submit_to_cuda_thread(self, fn):
+        """Submit a callable to the dedicated CUDA thread; returns the Future
+        so callers can `.result()` (block) or `asyncio.wrap_future(...)` (await).
+        Use the more specific helpers (`submit_gen_frame`, `set_seed_and_reset`,
+        `append_frame_repeatedly`) where they fit; this is the escape hatch."""
+        return self._cuda_executor.submit(fn)
+
+    def submit_gen_frame(self, ctrl):
+        """Submit a `gen_frame` call to the CUDA thread; returns the Future so
+        the generator loop can overlap GPU work with CPU encoding of the
+        previous batch."""
+        return self._cuda_executor.submit(lambda c=ctrl: self._engine.gen_frame(ctrl=c))
+
+    def set_seed_and_reset(self, frame: torch.Tensor, *, set_as_original: bool = False) -> None:
+        """Replace the seed and reset the engine to use it. The frame is
+        auto-expanded to full temporal_compression for multiframe models, so
+        callers can pass a single 3-D HxWxC tensor regardless of model shape.
+        Synchronous — runs on the CUDA thread.
+
+        `set_as_original=True` also overwrites `original_seed_frame` so a
+        subsequent reset returns to this frame (used by generate_scene, where
+        the new frame is the new starting world)."""
+        if self._engine is None:
+            raise RuntimeError("WorldEngine is not loaded")
+        frame = self._maybe_expand_to_multiframe(frame)
+        self.seed_frame = frame
+        if set_as_original:
+            self.original_seed_frame = frame
+
+        def _reset_with_frame():
+            self._engine.reset()
+            self._engine.append_frame(frame)
+
+        self._cuda_executor.submit(_reset_with_frame).result()
+
+    def append_frame_repeatedly(self, frame: torch.Tensor, count: int) -> None:
+        """Append `frame` to the engine `count` times (used to strengthen an
+        edit in the KV cache without resetting). Frame is auto-expanded for
+        multiframe models. Synchronous — runs on the CUDA thread."""
+        if self._engine is None:
+            raise RuntimeError("WorldEngine is not loaded")
+        frame = self._maybe_expand_to_multiframe(frame)
+
+        def _append():
+            for _ in range(count):
+                self._engine.append_frame(frame)
+
+        self._cuda_executor.submit(_append).result()
 
     def reset_state(self) -> None:
         """Reset engine state. Synchronous — submits work to the cuda_executor
         and waits. Safe to call from the generator thread (the only caller).
         Asyncio callers wanting to yield should `await asyncio.to_thread(...)`."""
-        if self.engine is None:
+        if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
             raise RuntimeError("Seed frame is not set")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
-        self.cuda_executor.submit(self.engine.reset).result()
+        self._cuda_executor.submit(self._engine.reset).result()
         logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.append_frame()...")
-        self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
+        self._cuda_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
     def init_session(self) -> None:
         """Reset engine, load seed, render initial frame and report progress.
         Synchronous — runs on cuda_executor via submit().result(). Asyncio
         callers should use `await asyncio.to_thread(world_engine.init_session)`."""
-        if self.engine is None:
+        if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
             raise RuntimeError("Seed frame is not set")
@@ -464,13 +530,13 @@ class WorldEngineManager:
         self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
-        self.cuda_executor.submit(self.engine.reset).result()
+        self._cuda_executor.submit(self._engine.reset).result()
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
-        self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
+        self._cuda_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_FRAME)
@@ -492,7 +558,7 @@ class WorldEngineManager:
             logger.info("[CUDA RECOVERY] CUDA caches cleared and dynamo reset")
 
         try:
-            self.cuda_executor.submit(clear_cuda).result()
+            self._cuda_executor.submit(clear_cuda).result()
             self.reset_state()
             logger.info("[CUDA RECOVERY] Recovery complete - engine ready")
             return True
@@ -507,7 +573,7 @@ class WorldEngineManager:
         unsupported on this GPU (detected via the torch error's text); callers
         translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`. Other
         runtime errors propagate as-is."""
-        if self.engine is None:
+        if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
             raise RuntimeError("Seed frame is not set")
@@ -518,19 +584,19 @@ class WorldEngineManager:
             self._report_progress(StageId.SESSION_WARMUP_RESET)
             logger.info("[5/5] Step 1: Resetting engine state...")
             reset_start = time.perf_counter()
-            self.engine.reset()
+            self._engine.reset()
             logger.info(f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_SEED)
             logger.info("[5/5] Step 2: Appending seed frame...")
             append_start = time.perf_counter()
-            self.engine.append_frame(self.seed_frame)
+            self._engine.append_frame(self.seed_frame)
             logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
             logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
             gen_start = time.perf_counter()
-            _ = self.engine.gen_frame(ctrl=self.CtrlInput(button=set(), mouse=(0.0, 0.0)))
+            _ = self._engine.gen_frame(ctrl=self.CtrlInput(button=set(), mouse=(0.0, 0.0)))
             logger.info(f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s")
 
             return time.perf_counter() - warmup_start

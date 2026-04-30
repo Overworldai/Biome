@@ -189,7 +189,7 @@ async def websocket_endpoint(
         # Phase 4: scene-authoring + engine warmup, init session, send
         # initial frame. Surfaces typed errors and acks the deferred init
         # RPC on failure so the client always gets a definitive response.
-        if not await prepare_session(conn, world_engine, engines.image_gen):
+        if not await prepare_session(conn, world_engine, engines.scene_authoring):
             return
 
         await conn.send_stage(StageId.SESSION_READY)

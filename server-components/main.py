@@ -135,9 +135,9 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
         startup.mark_stage(StageId.STARTUP_ENGINE_MANAGER)
         world_engine = WorldEngineManager()
 
-        from engine.image_gen import ImageGenManager
+        from engine.scene_authoring import SceneAuthoringManager
 
-        image_gen = ImageGenManager(world_engine.cuda_executor)
+        scene_authoring = SceneAuthoringManager(world_engine)
 
         logger.info("Initializing Safety Checker...")
         startup.mark_stage(StageId.STARTUP_SAFETY_CHECKER)
@@ -146,7 +146,7 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
 
         app.state.engines = Engines(
             world_engine=world_engine,
-            image_gen=image_gen,
+            scene_authoring=scene_authoring,
             safety_checker=safety_checker,
         )
 
