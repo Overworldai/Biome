@@ -482,8 +482,10 @@ class WorldEngineManager:
         frame = await self._run_on_cuda_thread(lambda: self.engine.gen_frame(ctrl=ctrl_input))
         return frame
 
-    async def reset_state(self):
-        """Reset engine state."""
+    def reset_state(self) -> None:
+        """Reset engine state. Synchronous — submits work to the cuda_executor
+        and waits. Safe to call from the generator thread (the only caller).
+        Asyncio callers wanting to yield should `await asyncio.to_thread(...)`."""
         if self.engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
@@ -491,12 +493,12 @@ class WorldEngineManager:
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
-        await self._run_on_cuda_thread(self.engine.reset)
+        self.cuda_executor.submit(self.engine.reset).result()
         logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.append_frame()...")
-        await self._run_on_cuda_thread(lambda: self.engine.append_frame(self.seed_frame))
+        self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
     async def init_session(self):
@@ -520,33 +522,25 @@ class WorldEngineManager:
 
         self._report_progress(SESSION_INIT_FRAME)
 
-    async def recover_from_cuda_error(self):
-        """
-        Recover from CUDA errors by clearing caches and resetting compilation.
-        This is needed when CUDA graphs become corrupted.
-        """
+    def recover_from_cuda_error(self) -> bool:
+        """Recover from a CUDA error by clearing caches, resetting dynamo,
+        and re-seeding the engine. Synchronous — called from the generator
+        thread when `gen_frame` raises a CUDA-flavoured exception. The whole
+        recovery runs on the cuda_executor thread so the generator thread
+        blocks for the duration but doesn't bounce through the asyncio loop."""
         logger.warning("[CUDA RECOVERY] Attempting to recover from CUDA error...")
 
         def clear_cuda():
-            # Synchronize to ensure all operations are complete
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-
-            # Clear CUDA caches
-            if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
             # Clear compiled functions cache (this clears corrupted CUDA graphs)
             torch._dynamo.reset()
-
             logger.info("[CUDA RECOVERY] CUDA caches cleared and dynamo reset")
 
         try:
-            await self._run_on_cuda_thread(clear_cuda)
-
-            # Reset engine state after clearing CUDA caches
-            await self.reset_state()
-
+            self.cuda_executor.submit(clear_cuda).result()
+            self.reset_state()
             logger.info("[CUDA RECOVERY] Recovery complete - engine ready")
             return True
         except Exception as e:

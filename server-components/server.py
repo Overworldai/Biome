@@ -1444,7 +1444,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     if is_cuda_error:
                         logger.error(f"[{client_host}] CUDA error detected: {cuda_err}")
                         try:
-                            recovery_success = run_coro(world_engine.recover_from_cuda_error())
+                            recovery_success = world_engine.recover_from_cuda_error()
                         except Exception:
                             recovery_success = False
 
