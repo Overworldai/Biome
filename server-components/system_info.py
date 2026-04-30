@@ -59,6 +59,7 @@ def collect_system_info() -> SystemInfo:
 
     try:
         import cpuinfo
+
         info["cpu_name"] = cpuinfo.get_cpu_info().get("brand_raw") or None
     except Exception as e:
         logger.warning(f"Failed to query CPU info: {e}")
@@ -74,10 +75,9 @@ def collect_system_info() -> SystemInfo:
 
     try:
         import pynvml
+
         pynvml.nvmlInit()
-        nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(
-            torch.cuda.current_device() if torch.cuda.is_available() else 0
-        )
+        nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device() if torch.cuda.is_available() else 0)
         try:
             raw = pynvml.nvmlSystemGetDriverVersion()
             info["driver_version"] = raw.decode("utf-8") if isinstance(raw, bytes) else raw
@@ -131,6 +131,7 @@ def get_gpu_util_percent() -> int:
     if nvml_handle is not None:
         try:
             import pynvml
+
             return int(pynvml.nvmlDeviceGetUtilizationRates(nvml_handle).gpu)
         except Exception:
             pass
@@ -184,6 +185,7 @@ def capture_error_snapshot() -> ErrorSnapshot:
 
     try:
         import psutil
+
         process = psutil.Process()
         snap["process_rss_bytes"] = process.memory_info().rss
         vm = psutil.virtual_memory()

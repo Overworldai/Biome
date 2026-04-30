@@ -60,6 +60,7 @@ def _properties_to_mp4_metadata(properties: RecordingProperties) -> dict[str, st
         "comment": json.dumps(asdict(properties), separators=(",", ":")),
     }
 
+
 # Scene-edit overlay — a "Edit: {prompt}" caption baked into the recorded video
 # after each successful scene edit. Total visible duration, with the last
 # FADE_S fading out.
@@ -126,16 +127,26 @@ class VideoRecorder:
         cmd = [
             FFMPEG_EXE,
             "-y",
-            "-f", "rawvideo",
-            "-pix_fmt", "rgb24",
-            "-s", f"{width}x{height}",
-            "-r", str(fps),
-            "-i", "pipe:0",
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "20",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "pipe:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             "-an",
         ]
         # Output-scoped -metadata flags must come before the output path.
@@ -155,9 +166,7 @@ class VideoRecorder:
             )
             logger.info(f"[{self._client_host}] Video recording -> {path}")
         except FileNotFoundError:
-            logger.warning(
-                f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled"
-            )
+            logger.warning(f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled")
             self._proc = None
 
     def note_edit(self, prompt: str) -> None:
@@ -202,9 +211,7 @@ class VideoRecorder:
         x = pad - bbox[0]
         y = frame_h - pad - text_h - bbox[1] - margin
         # Drop-shadow for contrast over light scenes.
-        draw.text(
-            (x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200)
-        )
+        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200))
         draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
         # Crop with `margin` buffer on all sides of the ink + shadow so the
@@ -213,9 +220,7 @@ class VideoRecorder:
         region_y = max(0, y + bbox[1] - margin)
         region_w = min(frame_w - region_x, text_w + shadow_offset + margin * 2)
         region_h = min(frame_h - region_y, text_h + shadow_offset + margin * 2)
-        cropped = canvas.crop(
-            (region_x, region_y, region_x + region_w, region_y + region_h)
-        )
+        cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
         self._overlay_bitmap = np.array(cropped)
         self._overlay_offset = (region_x, region_y)
 
@@ -238,9 +243,7 @@ class VideoRecorder:
         fade_start = SCENE_EDIT_OVERLAY_S - SCENE_EDIT_OVERLAY_FADE_S
         alpha_mul = 1.0
         if elapsed_s > fade_start:
-            alpha_mul = max(
-                0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S
-            )
+            alpha_mul = max(0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S)
         if alpha_mul <= 0.0:
             return frame
 
@@ -284,9 +287,7 @@ class VideoRecorder:
             self._proc.wait(timeout=30)
             if self._proc.returncode != 0:
                 stderr = stderr_bytes.decode(errors="replace") if stderr_bytes else ""
-                logger.warning(
-                    f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}"
-                )
+                logger.warning(f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}")
         except Exception as e:
             logger.warning(f"[{self._client_host}] Error closing video recorder: {e}")
             try:
@@ -309,8 +310,7 @@ class VideoRecorder:
                 try:
                     path.unlink(missing_ok=True)
                     logger.info(
-                        f"[{self._client_host}] Removed short video "
-                        f"({frame_count} frames, {duration_s:.1f}s): {path}"
+                        f"[{self._client_host}] Removed short video ({frame_count} frames, {duration_s:.1f}s): {path}"
                     )
                 except Exception:
                     pass

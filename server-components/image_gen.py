@@ -56,6 +56,7 @@ class SafetyRejectionError(RuntimeError):
         self.message_id = message_id
         super().__init__(message_id)
 
+
 # ── Edit model configuration ────────────────────────────────────────
 EDIT_MODEL_ID = "black-forest-labs/FLUX.2-klein-4B"
 EDIT_NUM_STEPS = 4
@@ -138,17 +139,17 @@ VLM_SYSTEM_PROMPT = (
     f"5. {VLM_CONTENT_POLICY}\n\n"
     "EXAMPLES:\n"
     '- User: "sword" → "Add a glowing sword held in a right hand in '
-    'the bottom-right corner of the frame, as in a first-person game. '
+    "the bottom-right corner of the frame, as in a first-person game. "
     'Keep everything else unchanged."\n'
     '- User: "dragon" → "Add a large dragon flying in the sky above '
     'the scene. Keep everything else unchanged."\n'
     '- User: "make it night" → "Change the lighting to nighttime with '
     'a dark sky, moonlight, and shadows. Keep everything else unchanged."\n'
     '- User: "remove the tree" → "Remove the tree from the scene and '
-    'fill the area with the surrounding environment. Keep everything '
+    "fill the area with the surrounding environment. Keep everything "
     'else unchanged."\n'
     '- User: "shotgun" → "Add a pump-action shotgun held in a right '
-    'hand in the bottom-right corner of the frame, as in a first-person '
+    "hand in the bottom-right corner of the frame, as in a first-person "
     'shooter. Keep everything else unchanged."\n\n'
     "Always end with 'Keep everything else unchanged.'\n\n"
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
@@ -301,9 +302,7 @@ class ImageGenManager:
                 instruction = call.arguments.get("instruction", "")
                 if instruction:
                     return instruction
-        raise ValueError(
-            f"No submit_edit_instruction tool call with an instruction found in: {text!r}"
-        )
+        raise ValueError(f"No submit_edit_instruction tool call with an instruction found in: {text!r}")
 
     def _run_vlm(
         self,
@@ -333,9 +332,7 @@ class ImageGenManager:
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
             raw_output = result["choices"][0]["message"]["content"] or ""
-            logger.info(
-                f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}"
-            )
+            logger.info(f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}")
 
             # Strip thinking block — the model wraps reasoning in
             # <think>...</think> which confuses the tool call parser.
@@ -348,13 +345,9 @@ class ImageGenManager:
                 return prompt
             except ValueError as exc:
                 last_error = exc
-                logger.warning(
-                    f"[{log_prefix}] Tool call parse failed (attempt {attempt}/{VLM_MAX_RETRIES}): {exc}"
-                )
+                logger.warning(f"[{log_prefix}] Tool call parse failed (attempt {attempt}/{VLM_MAX_RETRIES}): {exc}")
 
-        raise RuntimeError(
-            f"VLM failed to produce a valid tool call after {VLM_MAX_RETRIES} attempts: {last_error}"
-        )
+        raise RuntimeError(f"VLM failed to produce a valid tool call after {VLM_MAX_RETRIES} attempts: {last_error}")
 
     def _build_edit_prompt(self, frame_pil: Image.Image, user_request: str) -> str:
         """Ask the VLM to write a Klein edit instruction from the user's request.
@@ -423,9 +416,7 @@ class ImageGenManager:
         """
         if not self._loaded:
             raise RuntimeError("Editing models not loaded")
-        return await self._run_on_cuda_thread(
-            lambda: self._inpaint_sync(frame_numpy, prompt, seed_target_size)
-        )
+        return await self._run_on_cuda_thread(lambda: self._inpaint_sync(frame_numpy, prompt, seed_target_size))
 
     def _inpaint_sync(
         self,
@@ -453,18 +444,12 @@ class ImageGenManager:
             height=target_h,
             width=target_w,
         ).images[0]
-        logger.info(
-            f"[SCENE_EDIT] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms"
-        )
+        logger.info(f"[SCENE_EDIT] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms")
 
         # Step 4: Resize to seed target size and convert to tensor
         h, w = seed_target_size
         result = result.resize((w, h), Image.LANCZOS)
-        result_tensor = (
-            torch.from_numpy(np.array(result))
-            .to(dtype=torch.uint8, device="cuda")
-            .contiguous()
-        )
+        result_tensor = torch.from_numpy(np.array(result)).to(dtype=torch.uint8, device="cuda").contiguous()
         return result_tensor, edit_prompt
 
     def _generate_scene_sync(
@@ -498,17 +483,11 @@ class ImageGenManager:
             height=target_h,
             width=target_w,
         ).images[0]
-        logger.info(
-            f"[GENERATE_SCENE] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms"
-        )
+        logger.info(f"[GENERATE_SCENE] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms")
 
         # Resize to seed target size and convert to tensor
         result = result.resize((w, h), Image.LANCZOS)
-        result_tensor = (
-            torch.from_numpy(np.array(result))
-            .to(dtype=torch.uint8, device="cuda")
-            .contiguous()
-        )
+        result_tensor = torch.from_numpy(np.array(result)).to(dtype=torch.uint8, device="cuda").contiguous()
         return result_tensor, generation_prompt
 
     def unload(self):

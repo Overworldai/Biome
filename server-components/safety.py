@@ -132,9 +132,7 @@ class SafetyChecker:
                 if self._should_unload():
                     self.unload_model()
 
-    def predict_batch_values(
-        self, img_batch: list[Image.Image], device: str = "cpu"
-    ) -> list[dict[str, float]]:
+    def predict_batch_values(self, img_batch: list[Image.Image], device: str = "cpu") -> list[dict[str, float]]:
         """
         Process a batch of images and return prediction scores for each NSFW category.
 

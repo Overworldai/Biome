@@ -21,9 +21,7 @@ from pathlib import Path
 # Log file + TeeStream
 # ---------------------------------------------------------------------------
 
-SERVER_LOG_FILE = Path(
-    os.environ.get("BIOME_SERVER_LOG_PATH", str(Path(__file__).with_name("server.log")))
-)
+SERVER_LOG_FILE = Path(os.environ.get("BIOME_SERVER_LOG_PATH", str(Path(__file__).with_name("server.log"))))
 _log_file_lock = threading.Lock()
 
 
@@ -127,6 +125,7 @@ for _uv_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
 # ---------------------------------------------------------------------------
 # Crash hooks
 # ---------------------------------------------------------------------------
+
 
 def _install_crash_logging_hooks() -> None:
     """Force uncaught exceptions and fatal interpreter crashes into server.log."""

@@ -136,15 +136,17 @@ class ActionLogger:
         """End any active segment, open a new file, and write the header."""
         self.end_segment()
         self._open_file()
-        self._write(SessionStartEvent(
-            **self._base(),
-            type="session_start",
-            model=model,
-            seed=seed,
-            n_frames=temporal_compression,
-            seed_target_size=list(seed_target_size) if seed_target_size else None,
-            has_prompt_conditioning=has_prompt_conditioning,
-        ))
+        self._write(
+            SessionStartEvent(
+                **self._base(),
+                type="session_start",
+                model=model,
+                seed=seed,
+                n_frames=temporal_compression,
+                seed_target_size=list(seed_target_size) if seed_target_size else None,
+                has_prompt_conditioning=has_prompt_conditioning,
+            )
+        )
 
     def frame_input(
         self,
@@ -154,14 +156,16 @@ class ActionLogger:
         mouse_dy: float,
         client_ts: float,
     ) -> None:
-        self._write(FrameInputEvent(
-            **self._base(),
-            type="frame_input",
-            buttons=sorted(buttons),
-            mouse_dx=mouse_dx,
-            mouse_dy=mouse_dy,
-            client_ts=client_ts,
-        ))
+        self._write(
+            FrameInputEvent(
+                **self._base(),
+                type="frame_input",
+                buttons=sorted(buttons),
+                mouse_dx=mouse_dx,
+                mouse_dy=mouse_dy,
+                client_ts=client_ts,
+            )
+        )
         self._frame_id += 1
 
     def scene_edit(self, prompt: str) -> None:
