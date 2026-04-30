@@ -941,16 +941,10 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         _action_logger_new_segment()
         _video_recorder_new_segment()
 
-        running = True
-        paused = False
-        reset_flag = False
-        prompt_pending: str | None = None
-        # Scene edit: receiver posts a prompt + future, generator picks it up
-        # after the current gen_frame, runs inpainting on the last subframe,
-        # appends the result, and resolves the future with preview data.
-        scene_edit_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
-        generate_scene_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
-        last_generated_cpu_frames = None  # Most recent CPU numpy frames for scene editing (list)
+        # Game-loop state and scene-authoring handoff are tracked on Connection.
+        # Receiver posts {"prompt": str, "future": Future} into
+        # conn.conn.scene_edit_request / conn.conn.generate_scene_request; the generator
+        # picks them up at a clean frame boundary and resolves the future.
         ctrl_state = {
             "buttons": set(),
             "mouse_dx": 0.0,
@@ -1015,8 +1009,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             conn.init_req_id = None
 
         async def receiver() -> None:
-            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request
-            while running:
+            while conn.running:
                 try:
                     raw = await websocket.receive_text()
                     try:
@@ -1035,7 +1028,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
                             queue_send(response)
                             if new_seed:
-                                reset_flag = True
+                                conn.reset_flag = True
 
                         case SceneEditRequest() as req:
                             # scene_edit is handled by the generator thread at
@@ -1050,7 +1043,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 )
                             elif image_gen is None or not image_gen.is_loaded:
                                 edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
-                            elif scene_edit_request is not None:
+                            elif conn.scene_edit_request is not None:
                                 edit_response = rpc_err(
                                     req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS
                                 )
@@ -1058,7 +1051,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 import concurrent.futures
 
                                 fut = concurrent.futures.Future()
-                                scene_edit_request = {"prompt": prompt, "future": fut}
+                                conn.scene_edit_request = {"prompt": prompt, "future": fut}
                                 try:
                                     preview = await asyncio.wrap_future(fut)
                                     # Generator thread still resolves the future with a dict;
@@ -1082,7 +1075,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 )
                             elif image_gen is None or not image_gen.is_loaded:
                                 gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
-                            elif scene_edit_request is not None or generate_scene_request is not None:
+                            elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
                                 gen_response = rpc_err(
                                     req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS
                                 )
@@ -1090,7 +1083,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 import concurrent.futures
 
                                 fut = concurrent.futures.Future()
-                                generate_scene_request = {"prompt": prompt, "future": fut}
+                                conn.generate_scene_request = {"prompt": prompt, "future": fut}
                                 try:
                                     data = await asyncio.wrap_future(fut)
                                     gen_response = rpc_ok(req.req_id, data)
@@ -1108,21 +1101,21 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                         case ResetNotif():
                             logger.info(f"[{client_host}] Reset requested")
-                            reset_flag = True
+                            conn.reset_flag = True
 
                         case PauseNotif():
-                            paused = True
+                            conn.paused = True
                             logger.info("[RECV] Paused")
 
                         case ResumeNotif():
-                            paused = False
+                            conn.paused = False
                             logger.info("[RECV] Resumed")
 
                         case PromptNotif() as notif:
-                            prompt_pending = notif.prompt.strip()
+                            conn.prompt_pending = notif.prompt.strip()
 
                         case ControlNotif() as notif:
-                            if paused:
+                            if conn.paused:
                                 continue
                             if notif.button_codes is not None:
                                 buttons = set(notif.button_codes)
@@ -1140,16 +1133,15 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                 except WebSocketDisconnect:
                     logger.info(f"[{client_host}] Client disconnected")
-                    running = False
+                    conn.running = False
                     break
                 except Exception as e:
                     logger.error(f"[{client_host}] Receiver error: {e}", exc_info=True)
-                    running = False
+                    conn.running = False
                     break
 
         async def sender() -> None:
-            nonlocal running
-            while running:
+            while conn.running:
                 try:
                     # Wait for signal from generator thread instead of polling
                     await frame_ready.wait()
@@ -1163,19 +1155,10 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             await send_message(payload)
                 except Exception as e:
                     logger.error(f"[{client_host}] Sender error: {e}", exc_info=True)
-                    running = False
+                    conn.running = False
                     break
 
         def generator() -> None:
-            nonlocal \
-                running, \
-                paused, \
-                reset_flag, \
-                prompt_pending, \
-                scene_edit_request, \
-                generate_scene_request, \
-                last_generated_cpu_frames
-
             def run_coro(coro):
                 return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
 
@@ -1240,8 +1223,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             _gen_was_paused = False
             next_frame_time = 0.0  # perf_counter target for frame pacing
 
-            while running:
-                if paused:
+            while conn.running:
+                if conn.paused:
                     _flush_pending()
                     if not _gen_was_paused:
                         _action_logger_end_segment()
@@ -1250,9 +1233,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                     # Handle generate_scene while paused (it's triggered from
                     # the pause menu, so the generator must process it here).
-                    if generate_scene_request is not None:
-                        req = generate_scene_request
-                        generate_scene_request = None
+                    if conn.generate_scene_request is not None:
+                        req = conn.generate_scene_request
+                        conn.generate_scene_request = None
                         try:
                             data = run_generate_scene(state, req["prompt"], conn.biome_version)
                             session.perceptual_frame_count = 0
@@ -1289,9 +1272,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         if sleep_time > 0.001:
                             time.sleep(sleep_time)
 
-                    if prompt_pending is not None:
+                    if conn.prompt_pending is not None:
                         _flush_pending()
-                        prompt_pending = None
+                        conn.prompt_pending = None
                         run_coro(reset_engine())
                         _action_logger_new_segment()
                         _video_recorder_new_segment()
@@ -1303,24 +1286,24 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         not world_engine.is_multiframe
                         and session.perceptual_frame_count >= session.max_perceptual_frames
                     )
-                    if reset_flag or auto_reset:
+                    if conn.reset_flag or auto_reset:
                         _flush_pending()
                         if auto_reset:
                             logger.info(f"[{client_host}] Auto-reset at frame limit")
                         run_coro(reset_engine())
-                        reset_flag = False
+                        conn.reset_flag = False
                         _action_logger_new_segment()
                         _video_recorder_new_segment()
                         next_frame_time = 0.0
 
                     # Handle pending scene edit — runs inpainting on the last
                     # subframe from the most recent gen_frame, then appends.
-                    if scene_edit_request is not None and last_generated_cpu_frames is not None:
-                        req = scene_edit_request
-                        scene_edit_request = None
+                    if conn.scene_edit_request is not None and conn.last_generated_cpu_frames is not None:
+                        req = conn.scene_edit_request
+                        conn.scene_edit_request = None
                         _flush_pending()
                         try:
-                            preview = run_scene_edit(state, req["prompt"], last_generated_cpu_frames)
+                            preview = run_scene_edit(state, req["prompt"], conn.last_generated_cpu_frames)
                             session.perceptual_frame_count = 0
                             if conn.video_recorder is not None:
                                 conn.video_recorder.note_edit(req["prompt"])
@@ -1331,9 +1314,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                     # Handle pending generate_scene — creates a new seed from
                     # a text prompt (blank canvas + inpainting pipeline).
-                    if generate_scene_request is not None:
-                        req = generate_scene_request
-                        generate_scene_request = None
+                    if conn.generate_scene_request is not None:
+                        req = conn.generate_scene_request
+                        conn.generate_scene_request = None
                         _flush_pending()
                         try:
                             data = run_generate_scene(state, req["prompt"], conn.biome_version)
@@ -1412,7 +1395,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         cpu_frames = [world_engine._tensor_to_numpy(result)]
 
                     # Keep all subframes for scene editing (read by receiver thread)
-                    last_generated_cpu_frames = cpu_frames
+                    conn.last_generated_cpu_frames = cpu_frames
 
                     if conn.video_recorder is not None:
                         conn.video_recorder.write_frames(cpu_frames)
@@ -1455,12 +1438,12 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         else:
                             queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
                             logger.error(f"[{client_host}] Failed to recover from CUDA error")
-                            running = False
+                            conn.running = False
                             break
                     else:
                         logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
                         queue_send(build_error_message(message=str(cuda_err)))
-                        running = False
+                        conn.running = False
                         break
 
             # Flush the last batch before the thread exits
@@ -1479,7 +1462,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        running = False
+        conn.running = False
         for task in pending:
             task.cancel()
         if pending:

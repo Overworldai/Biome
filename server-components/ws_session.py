@@ -55,3 +55,23 @@ class Connection:
 
     # ─── Pending init RPC ID (response deferred until warmup ends) ──
     init_req_id: str | None = None
+
+    # ─── Game-loop state ────────────────────────────────────────────
+    # `running` flips off when receiver/sender/generator detect
+    # disconnect or terminal error. `paused` toggles the gen-loop's
+    # idle vs. active branch. `reset_flag` is set by the receiver and
+    # consumed once by the generator. `prompt_pending` similarly.
+    running: bool = True
+    paused: bool = False
+    reset_flag: bool = False
+    prompt_pending: str | None = None
+
+    # ─── Scene-authoring RPC handoff (receiver → generator thread) ──
+    # Receiver posts a {"prompt": str, "future": Future}; generator
+    # picks it up at a clean frame boundary and resolves the future.
+    scene_edit_request: dict | None = None
+    generate_scene_request: dict | None = None
+
+    # Most recent CPU numpy frames, kept so a scene_edit can inpaint
+    # the last subframe rendered.
+    last_generated_cpu_frames: list | None = None
