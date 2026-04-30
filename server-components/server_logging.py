@@ -16,6 +16,10 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ws_session import Connection
 
 # ---------------------------------------------------------------------------
 # Log file + TeeStream
@@ -164,3 +168,45 @@ def _install_crash_logging_hooks() -> None:
 
 
 _install_crash_logging_hooks()
+
+
+# ---------------------------------------------------------------------------
+# Log streaming to WebSocket clients
+# ---------------------------------------------------------------------------
+
+LOG_TAIL_INITIAL_LINES = 220
+
+
+def read_log_tail_lines(max_lines: int) -> list[str]:
+    """Read last non-empty lines from the canonical server log file."""
+    if max_lines <= 0:
+        return []
+    try:
+        with open(SERVER_LOG_FILE, encoding="utf-8", errors="replace") as fp:
+            lines = [line.rstrip("\r\n") for line in fp if line.strip()]
+        return lines[-max_lines:]
+    except Exception:
+        return []
+
+
+async def stream_logs_to_client(conn: "Connection") -> None:
+    """Replay the recent log tail, then attach to TeeStream for live updates,
+    pushing each line as a typed `LogMessage` over the WebSocket.
+
+    Run as an asyncio task; cancel to stop. The TeeStream registration is
+    lifted by `Connection.teardown` (so cancellation timing doesn't matter)."""
+    from protocol import LogMessage
+
+    try:
+        for line in read_log_tail_lines(LOG_TAIL_INITIAL_LINES):
+            await conn.send_message(LogMessage(line=line))
+        TeeStream.register_client(conn.log_queue, conn.main_loop)
+
+        while True:
+            line = await conn.log_queue.get()
+            await conn.send_message(LogMessage(line=line))
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        # Avoid recursion — don't use logger here.
+        print(f"[{conn.client_host}] Log stream stopped: {e}", flush=True)

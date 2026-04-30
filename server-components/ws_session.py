@@ -280,3 +280,61 @@ class Connection:
             self.main_loop.call_soon_threadsafe(self.frame_ready.set)
         except Exception:
             pass
+
+    # ─── Lifecycle helpers (asyncio thread; awaited) ───────────────
+    async def run_progress_drain(self) -> None:
+        """Forward `progress_queue` entries (enqueued by the engine's
+        sync progress_callback from the CUDA thread) onto the websocket.
+        Run as an asyncio task; cancel to stop."""
+        try:
+            while True:
+                msg = await self.progress_queue.get()
+                try:
+                    await self.send_message(msg)
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    async def send_initial_frame(self, world_engine: "WorldEngineManager") -> None:
+        """Encode the loaded seed as frame 0 and dispatch it so the client
+        has something to render before the gen loop starts."""
+        seed = world_engine.seed_frame
+        assert seed is not None, "send_initial_frame requires a loaded seed"
+        first_subframe = seed[0] if world_engine.is_multiframe else seed
+        jpeg = await asyncio.to_thread(world_engine.frame_to_jpeg, first_subframe)
+        header = json.dumps(
+            {"frame_id": 0, "client_ts": 0, "gen_ms": 0},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        await self.websocket.send_bytes(struct.pack("<I", len(header)) + header + jpeg)
+
+    def start_recording_segments(self, world_engine: "WorldEngineManager") -> None:
+        """Construct the action logger (if logging requested) and open
+        fresh action-log + video-recording segments. Idempotent; called
+        on session start and after a reset."""
+        if self.action_logging_requested and self.action_logger is None:
+            self.action_logger = ActionLogger(self.client_host)
+        self.start_action_log_segment(world_engine)
+        self.start_video_segment(world_engine)
+
+    def teardown(
+        self,
+        world_engine: "WorldEngineManager | None",
+        *tasks: asyncio.Task[None] | None,
+    ) -> None:
+        """End-of-session cleanup. Cancels per-connection tasks, unhooks
+        the engine progress callback, ends recorder segments, drops the
+        TeeStream registration, and logs the disconnect summary. Safe to
+        call from `finally` whether or not the session reached game-loop."""
+        from server_logging import TeeStream
+
+        for task in tasks:
+            if task is not None:
+                task.cancel()
+        TeeStream.unregister_client(self.log_queue)
+        if world_engine is not None:
+            world_engine.set_progress_callback(None)
+        self.end_action_log_segment()
+        self.end_video_segment()
+        logger.info(f"[{self.client_host}] Disconnected (frames: {self.perceptual_frame_count})")

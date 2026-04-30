@@ -18,12 +18,15 @@ rules in pyproject.toml fire on this code. Keep it that way.
 
 import asyncio
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from fastapi import WebSocketDisconnect
 
+import system_info as system_info_module
+from keymap import BUTTON_CODES
 from protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -55,6 +58,47 @@ if TYPE_CHECKING:
     from safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
+
+
+async def run_session(
+    conn: Connection,
+    world_engine: "WorldEngineManager",
+    image_gen: "ImageGenManager",
+    safety_checker: "SafetyChecker",
+) -> None:
+    """Spawn the generator thread + receiver / sender asyncio tasks for
+    the active session, then await disconnect or terminal error. The
+    first-to-finish task signals shutdown; the surviving sibling and
+    the gen thread are torn down together via `conn.running = False`."""
+    gen_thread = threading.Thread(
+        target=run_generator,
+        args=(conn, world_engine),
+        daemon=True,
+        name=f"gen-{conn.client_host}",
+    )
+    gen_thread.start()
+
+    recv_task = asyncio.create_task(
+        run_receiver(
+            conn,
+            world_engine,
+            image_gen,
+            safety_checker,
+            BUTTON_CODES,
+            system_info_module.get_system_info(),
+        )
+    )
+    send_task = asyncio.create_task(run_sender(conn))
+    _done, pending = await asyncio.wait(
+        [recv_task, send_task],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    conn.running = False
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 def reset_engine(

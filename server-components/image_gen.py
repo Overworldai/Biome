@@ -283,6 +283,20 @@ class ImageGenManager:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self.cuda_executor, fn)
 
+    async def configure_for_session(self, scene_authoring_requested: bool) -> bool:
+        """Bring the model state into line with what this session needs.
+        Loads if requested-but-unloaded; unloads if loaded-but-unwanted.
+        Returns True iff a fresh load happened (so the caller can emit
+        the corresponding stage). Re-raises warmup failures."""
+        if not scene_authoring_requested and self.is_loaded:
+            logger.info("Scene authoring disabled — unloading model")
+            await asyncio.to_thread(self.unload)
+            return False
+        if scene_authoring_requested and not self.is_loaded:
+            await self.warmup()
+            return True
+        return False
+
     async def warmup(self):
         """Load both the VLM and editing model to GPU."""
         logger.info(f"[SCENE_EDIT] Loading VLM {VLM_GGUF_REPO}/{VLM_GGUF_FILE}...")

@@ -37,6 +37,13 @@ JPEG_QUALITY = 85
 DEFAULT_INFERENCE_FPS = 60
 
 
+class QuantUnsupportedError(RuntimeError):
+    """Warmup detected that the active quantization mode is unsupported on
+    this GPU (raised on `compute capability` / `scaled_mm` torch errors).
+    Carries no payload — callers map it to `MessageId.QUANT_UNSUPPORTED_GPU`
+    with the engine's `quant` field as a param."""
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     """Runtime config resolved per loaded model. Single source of truth —
@@ -494,7 +501,12 @@ class WorldEngineManager:
             return False
 
     async def warmup(self):
-        """Perform initial warmup to compile CUDA graphs."""
+        """Perform initial warmup to compile CUDA graphs.
+
+        Raises `QuantUnsupportedError` if the active quantization mode is
+        unsupported on this GPU (detected via the torch error's text); callers
+        translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`. Other
+        runtime errors propagate as-is."""
         if self.engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
@@ -527,7 +539,14 @@ class WorldEngineManager:
         logger.info("[5/5] WARMUP - First client connected, initializing CUDA graphs...")
         logger.info("=" * 60)
 
-        warmup_time = await self._run_on_cuda_thread(do_warmup)
+        try:
+            warmup_time = await self._run_on_cuda_thread(do_warmup)
+        except RuntimeError as e:
+            err_str = str(e)
+            if "compute capability" in err_str or "scaled_mm" in err_str:
+                logger.error(f"Quantization mode unsupported on this GPU: {err_str}")
+                raise QuantUnsupportedError() from e
+            raise
 
         logger.info("=" * 60)
         logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")

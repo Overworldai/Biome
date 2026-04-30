@@ -1,13 +1,16 @@
 """
-Typed message handlers for the WebSocket protocol.
+Typed message handlers + session-phase orchestration for the WebSocket protocol.
 
-Each handler takes the values it needs explicitly (Connection +
-engine refs) and returns / produces typed Pydantic models. Stateless
-dispatchers — they read/write `conn.X` and call into engine_manager
-via the explicitly-passed handles, but own no per-handler state.
+Each handler takes the values it needs explicitly (Connection + engine
+refs) and returns / produces typed Pydantic models. Stateless dispatchers
+— they read/write `conn.X` and call into engine_manager via the
+explicitly-passed handles, but own no per-handler state.
 
-`run_receiver` (in ws_runner.py) dispatches inbound messages to these;
-the pre-init handshake in server.py also calls them directly.
+`run_receiver` (in ws_runner.py) dispatches inbound game-loop messages
+to the per-message handlers. `run_preinit_handshake` dispatches the
+pre-init message loop directly. `prepare_session` runs the warmup +
+init phase between handshake and game loop. These let the WebSocket
+endpoint (`server.py`) stay a thin protocol shell.
 
 This module is strict-typed by construction — none of the legacy ignore
 rules in pyproject.toml fire on this code. Keep it that way.
@@ -28,20 +31,30 @@ from app_state import AppState, SafetyCacheEntry
 from protocol import (
     CheckSeedSafetyRequest,
     CheckSeedSafetyResponseData,
+    ClientMessage,
+    ClientMessageAdapter,
+    ControlNotif,
+    GenerateSceneRequest,
     InitRequest,
     InitResponseData,
     MessageId,
+    PauseNotif,
+    PromptNotif,
+    ResetNotif,
+    ResumeNotif,
     RpcError,
     RpcSuccess,
+    SceneEditRequest,
     StageId,
     SystemInfo,
     rpc_err,
     rpc_ok,
 )
-from ws_session import Connection
+from ws_session import Connection, build_error_message
 
 if TYPE_CHECKING:
     from engine_manager import WorldEngineManager
+    from image_gen import ImageGenManager
     from safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
@@ -283,3 +296,122 @@ async def handle_init(
 
     ready = seed_loaded or (world_engine.seed_frame is not None)
     return ready, seed_loaded
+
+
+async def run_preinit_handshake(
+    conn: Connection,
+    state: AppState,
+    world_engine: "WorldEngineManager",
+    safety_checker: "SafetyChecker",
+) -> bool:
+    """Drive the pre-init message loop until the client's InitRequest
+    yields a loaded seed frame, or 60 s elapses without one.
+
+    Returns True iff a seed is now loaded. Authoring RPCs and gameplay
+    notifications received during this phase are explicitly rejected /
+    ignored. On timeout, surfaces `MessageId.TIMEOUT_WAITING_FOR_SEED`
+    and returns False."""
+    await conn.send_stage(StageId.SESSION_WAITING_FOR_SEED)
+    logger.info(f"[{conn.client_host}] Waiting for init message...")
+
+    while world_engine.seed_frame is None:
+        try:
+            raw = await asyncio.wait_for(conn.websocket.receive_text(), timeout=60.0)
+        except TimeoutError:
+            logger.error(f"[{conn.client_host}] Timeout waiting for init")
+            await conn.send_message(build_error_message(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED))
+            return False
+
+        try:
+            parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
+        except Exception as e:
+            logger.info(f"[{conn.client_host}] Ignoring invalid message during pre-init: {e}")
+            continue
+
+        match parsed:
+            case CheckSeedSafetyRequest() as req:
+                result = await handle_check_seed_safety(state, req)
+                await conn.websocket.send_text(result.model_dump_json(exclude_none=True))
+            case InitRequest() as req:
+                # init RPC: response is deferred until after warmup/session init completes
+                conn.init_req_id = req.req_id
+                ready, _ = await handle_init(conn, world_engine, safety_checker, req)
+                if not ready:
+                    await conn.websocket.send_text(
+                        rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
+                    )
+                    conn.init_req_id = None
+            case SceneEditRequest() | GenerateSceneRequest():
+                await conn.websocket.send_text(
+                    rpc_err(parsed.req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
+                )
+            case ControlNotif() | PauseNotif() | ResumeNotif() | ResetNotif() | PromptNotif():
+                logger.info(f"[{conn.client_host}] Ignoring notification '{parsed.type}' while waiting for init")
+
+    return True
+
+
+async def prepare_session(
+    conn: Connection,
+    world_engine: "WorldEngineManager",
+    image_gen: "ImageGenManager",
+) -> bool:
+    """Run the post-handshake preparation phase: scene-authoring model
+    load/unload, engine warmup, session init, initial frame.
+
+    Returns True iff the session is ready to enter the game loop. On
+    failure, surfaces the appropriate typed error + acks the deferred
+    init RPC with the matching `MessageId`. The progress callback is
+    wired only for the duration of this function."""
+    from engine_manager import QuantUnsupportedError
+
+    world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
+    try:
+        if world_engine.seed_frame is None:
+            # Race: client disconnected/reconnected mid-handshake; bail cleanly.
+            logger.info(
+                f"[{conn.client_host}] Seed frame missing before initialization; "
+                "client likely disconnected/reconnected during model switch"
+            )
+            if conn.init_req_id:
+                await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
+            return False
+
+        # Scene-authoring: bring the image_gen state in line with what
+        # this session needs. Loading happens BEFORE WorldEngine warmup
+        # so the CUDA graphs see the model's memory already allocated.
+        try:
+            loaded = await image_gen.configure_for_session(conn.scene_authoring_requested)
+        except Exception as e:
+            logger.error(f"[{conn.client_host}] Scene authoring warmup failed: {e}", exc_info=True)
+            await conn.send_message(
+                build_error_message(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
+            )
+            if conn.init_req_id:
+                await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
+            return False
+        if loaded:
+            await conn.send_stage(StageId.SESSION_INPAINTING_LOAD)
+            await conn.send_stage(StageId.SESSION_INPAINTING_READY)
+
+        # Engine warmup (first connection only). Quantization-not-supported
+        # is mapped from a raw torch error to a typed exception inside
+        # `WorldEngineManager.warmup`, so this catch site stays clean.
+        if not world_engine.engine_warmed_up:
+            try:
+                await world_engine.warmup()
+            except QuantUnsupportedError:
+                await conn.send_message(
+                    build_error_message(
+                        message_id=MessageId.QUANT_UNSUPPORTED_GPU,
+                        params={"quant": world_engine.quant or "unknown"},
+                    )
+                )
+                return False
+
+        await asyncio.to_thread(world_engine.init_session)
+        await conn.send_initial_frame(world_engine)
+    finally:
+        world_engine.set_progress_callback(None)
+
+    return True

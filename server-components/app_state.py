@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from engine_manager import WorldEngineManager
     from image_gen import ImageGenManager
     from safety import SafetyChecker
+    from ws_session import Connection
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,29 @@ class AppState:
 
     # ─── Safety cache ───────────────────────────────────────────────
     safety_hash_cache: dict[str, SafetyCacheEntry] = field(default_factory=dict)
+
+    async def replay_startup_to(self, conn: "Connection") -> None:
+        """If startup is in progress, replay the accumulated stages and
+        stream new ones until completion. No-op if startup already finished
+        before the client arrived. `_heavy_init` enqueues `None` to wake
+        every waiter so its replay loop exits cleanly."""
+        if self.startup_complete:
+            return
+        queue: asyncio.Queue[StatusMessage | None] = asyncio.Queue(maxsize=200)
+        self.ws_startup_waiters.append(queue)
+        try:
+            for stage_msg in self.startup_stages:
+                await conn.send_message(stage_msg)
+            while not self.startup_complete:
+                try:
+                    next_msg = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    if next_msg is None:
+                        break
+                    await conn.send_message(next_msg)
+                except TimeoutError:
+                    continue
+        finally:
+            self.ws_startup_waiters.remove(queue)
 
 
 def get_app_state(request: Request) -> AppState:
