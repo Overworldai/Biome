@@ -21,7 +21,7 @@ from protocol import ErrorSnapshot, SystemInfo
 from server_logging import logger
 
 # Module-level caches — populated by `initialize()` (called once from
-# server.py inside the heavy import block, so consumers downstream of
+# main.py inside the heavy import block, so consumers downstream of
 # the startup gate can rely on `get_system_info()` returning a value).
 _system_info: SystemInfo | None = None
 nvml_handle = None

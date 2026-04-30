@@ -1,6 +1,7 @@
 # Remote Server Setup
 
-This directory contains the Python server (`server.py`) used by Biome.
+This directory contains the Python server used by Biome. The CLI entry
+point is `main.py`; the FastAPI app lives in `server.py`.
 
 Use these steps when you want to run the server on a different machine than the Biome desktop client.
 
@@ -14,7 +15,7 @@ Use these steps when you want to run the server on a different machine than the 
 From this directory, bind to all interfaces so other devices can connect:
 
 ```bash
-uv run server.py
+uv run main.py
 ```
 
 That will setup the server with defaults `--host 0.0.0.0 --port 7987`, however if you wish to change any of those go ahead, and update the `--port` value in Biome client settings accordingly.

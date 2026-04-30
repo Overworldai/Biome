@@ -9,7 +9,8 @@ response data ready for `rpc_ok(...)`.
 
 The function-scoped `from image_gen import ...` is intentional — it
 keeps the diffusers/llama_cpp/transformers import graph out of this
-module's load-time so importing scene_authoring from server.py is light.
+module's load-time so importing scene_authoring from `server.py` is light.
+The heavy import waterfall lives in `main.py`.
 
 This module is strict-typed by construction — none of the legacy ignore
 rules in pyproject.toml fire on this code. Keep it that way.

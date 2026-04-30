@@ -212,10 +212,10 @@ Biome supports two engine modes (`engine_mode` in settings, type `EngineMode`), 
 
 **Standalone** (`'standalone'`): Biome manages a local Python server process. Setup and launch are handled by the Electron main process (`electron/ipc/engine.ts` and `electron/ipc/server.ts`):
 
-1. **Unpack server components**: Bundled Python files (`pyproject.toml`, `server.py`, etc.) are copied from the app's `server-components` resource into a `world_engine/` directory next to the executable.
+1. **Unpack server components**: Bundled Python files (`pyproject.toml`, `main.py`, `server.py`, etc.) are copied from the app's `server-components` resource into a `world_engine/` directory next to the executable.
 2. **Install UV**: The [uv](https://github.com/astral-sh/uv) package manager binary is downloaded from GitHub releases into `.uv/bin/`. All UV state (cache, Python installs, tool dirs) is kept under `.uv/` via env vars (`UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, etc.) so nothing touches the system Python.
 3. **Sync dependencies**: `uv sync` is run in `world_engine/`, which reads `pyproject.toml`, downloads a managed Python interpreter, creates an isolated `.venv`, and installs all packages.
-4. **Start server**: The server is spawned via `uv run python -u server.py --port {port}` in the `world_engine/` directory. It auto-assigns a port starting from 7987, polls `/health` until the server responds, then connects via `ws://localhost:{port}/ws`.
+4. **Start server**: The server is spawned via `uv run python -u main.py --port {port}` in the `world_engine/` directory. It auto-assigns a port starting from 7987, polls `/health` until the server responds, then connects via `ws://localhost:{port}/ws`.
 
 Process lifecycle is managed by `electron/lib/serverState.ts`. The UI shows engine health status and a "Reinstall" button (`WorldEngineSection`).
 

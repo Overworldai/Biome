@@ -34,8 +34,7 @@ function unpackServerFilesInner(force: boolean): string {
   }
 
   const engineDir = getEngineDir()
-  const hasKey =
-    fs.existsSync(path.join(engineDir, 'pyproject.toml')) && fs.existsSync(path.join(engineDir, 'server.py'))
+  const hasKey = fs.existsSync(path.join(engineDir, 'pyproject.toml')) && fs.existsSync(path.join(engineDir, 'main.py'))
   if (hasKey) {
     // Re-run the font copy so upgrades from older installs (which didn't
     // unpack fonts) pick it up without a full reinstall.
@@ -229,7 +228,7 @@ export function registerEngineIpc(): void {
     const repoCloned =
       fs.existsSync(engineDir) &&
       fs.existsSync(path.join(engineDir, 'pyproject.toml')) &&
-      fs.existsSync(path.join(engineDir, 'server.py'))
+      fs.existsSync(path.join(engineDir, 'main.py'))
 
     // Check if dependencies are synced
     let dependenciesSynced = false

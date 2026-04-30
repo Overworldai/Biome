@@ -99,7 +99,7 @@ ignore = [
   "SIM115", # use context manager when opening — fine for some quick-write cases
   "DTZ005", # datetime.now() without tzinfo — internal timestamps only
   "B023",   # function uses loop variable — flagged at one site, intentional
-  "E402",   # imports not at top — server.py's instrumented torch-load block
+  "E402",   # imports not at top — main.py's instrumented torch-load block
   "E501",   # line too long — legitimate URLs / long log strings
   "E741",   # ambiguous variable name — single legacy site
   "N806",   # non-lowercase variable in function — single legacy site
@@ -112,7 +112,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # `lifespan(app)` is FastAPI-mandated; the param is unused on purpose.
-"server.py" = ["ARG001"]
+"main.py" = ["ARG001"]
 # system_info.py legitimately has process-wide mutable state (the cached
 # SystemInfo + NVML handle); the `global` writes are confined to init.
 "system_info.py" = ["PLW0603"]

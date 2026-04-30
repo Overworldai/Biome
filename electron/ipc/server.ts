@@ -91,7 +91,7 @@ export function registerServerIpc(): void {
     // Base args for the server. Note that we use localhost for the host to prevent
     // the Windows firewall for asking for permissions to expose the server to
     // the world
-    const baseServerArgs = ['run', 'python', '-u', 'server.py', '--host', '127.0.0.1', '--port', String(port)]
+    const baseServerArgs = ['run', 'python', '-u', 'main.py', '--host', '127.0.0.1', '--port', String(port)]
 
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
     const serverArgs =

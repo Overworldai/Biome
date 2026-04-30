@@ -3,7 +3,7 @@ Server logging infrastructure.
 
 Sets up TeeStream (stdout/stderr mirroring to file + WebSocket broadcast),
 configures the Python logging system, and installs crash hooks. Imported
-at the very top of server.py before any heavy imports so that all output
+at the very top of main.py before any heavy imports so that all output
 gets timestamps and is captured.
 """
 

@@ -99,7 +99,7 @@ async def handle_check_seed_safety(
 
     # Function-level import: `safety` pulls torch transitively, so we don't
     # want to drag it into the module graph at import-time. The heavy
-    # try-block in server.py is the only place that should trigger the
+    # try-block in main.py is the only place that should trigger the
     # torch / transformers import waterfall.
     from safety import save_safety_cache
 
