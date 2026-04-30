@@ -71,12 +71,13 @@ The goal is to verify that the release behaves reasonably on an arbitrary user s
 - [ ] `cap_inference_fps`: on and off
 - [ ] `engine_model`: switch between a default model and a custom HF repo; try a private / non-existent repo (surface an error, do not crash)
 - [ ] `locale`: `ja` or `zh` (non-Latin), `he` (RTL), `goose` (novelty locale still renders without crashing)
-- [ ] `experimental.scene_edit_enabled`: off by default — when off, scene-edit UI and keybind are hidden; when on, the feature works well enough to ship even though it's experimental
+- [ ] `scene_authoring_enabled`: off by default — when off, the Scene Authoring UI and keybind are hidden; when on, both the edit-existing-scene and generate-from-prompt flows work end-to-end
+- [ ] `scene_authoring_save_generated`: on and off — when on, generated scenes are saved to disk for replay
 - [ ] `debug_overlays.*`: each of the four overlays individually, then all four at once
 
 **Keybindings**
 
-- [ ] Bind `reset_scene` and `scene_edit` to the same key — conflict warning appears
+- [ ] Bind `resetScene` and `sceneEdit` to the same key — conflict warning appears
 - [ ] Bind either to a movement / camera key — in-game input remains usable (or the conflict is surfaced)
 
 **Long-session stability** — stream for ~10 minutes, with several prompt changes and at least one model switch. Each of these resets world state, but host resources should not accumulate across resets:

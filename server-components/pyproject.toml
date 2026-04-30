@@ -18,7 +18,7 @@ dependencies = [
   "simplejpeg==1.9.0",
   "accelerate==1.12.0",
   "bitsandbytes==0.49.2",
-  "llama-cpp-python==0.3.33",
+  "llama-cpp-python==0.3.36",
   "gguf>=0.10.0",
   "imageio-ffmpeg==0.6.0",
 ]
@@ -41,8 +41,8 @@ override-dependencies = [
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 llama-cpp-python = [
-  { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-linux-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
-  { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-win-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
+  { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.36-cu128-Basic-linux-20260416/llama_cpp_python-0.3.36%2Bcu128.basic-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
+  { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.36-cu128-Basic-win-20260417/llama_cpp_python-0.3.36%2Bcu128.basic-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]

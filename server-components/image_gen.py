@@ -1,6 +1,6 @@
 """
 Image generation module - Uses FLUX.2 Klein 4B for reference-based image editing
-and text-to-image generation, with Qwen3.5 vision (via llama.cpp) for prompt
+and text-to-image generation, with Gemma 4 E4B vision (via llama.cpp) for prompt
 construction and content sanitisation.
 """
 
@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from qwen_tool_parser import parse_tool_calls
+from gemma4_tool_parser import parse_tool_calls
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +63,15 @@ EDIT_APPEND_COUNT = 32  # How many times to append the edited frame to strengthe
 EDIT_RESET_WITH_FRAME = True  # Reset engine with edited frame as new seed (vs append)
 
 # ── Vision-language model configuration ─────────────────────────────
-VLM_GGUF_REPO = "unsloth/Qwen3.5-4B-GGUF"
-VLM_GGUF_FILE = "Qwen3.5-4B-UD-Q5_K_XL.gguf"
+VLM_GGUF_REPO = "unsloth/gemma-4-E4B-it-GGUF"
+VLM_GGUF_FILE = "gemma-4-E4B-it-UD-Q4_K_XL.gguf"
 VLM_MMPROJ_FILE = "mmproj-F16.gguf"
 VLM_CTX_SIZE = 4096
 VLM_MAX_TOKENS = 1024  # Enough for thinking + tool call, prevents overthinking
 VLM_MAX_RETRIES = 3  # Retry tool-call parsing up to this many times
 VLM_IMAGE_MAX_SIZE = 384  # Downscale frame to this max dimension before sending to VLM
 
-# Tool schemas passed via `tools=` to create_chat_completion. The Qwen35
+# Tool schemas passed via `tools=` to create_chat_completion. The Gemma 4
 # chat template renders these into a system block that documents the
 # wire format the model is trained on. Putting the tool definitions
 # here (rather than as literal <tool_call> text in the system prompt)
@@ -199,7 +199,7 @@ def _pil_to_data_uri(image: Image.Image) -> str:
 
 
 class ImageGenManager:
-    """Manages FLUX.2 Klein (editing) + Qwen3.5 (vision-language) for scene editing."""
+    """Manages FLUX.2 Klein (editing) + Gemma 4 E4B (vision-language) for scene editing."""
 
     def __init__(self, cuda_executor):
         self.cuda_executor = cuda_executor
@@ -231,18 +231,16 @@ class ImageGenManager:
         self._loaded = True
 
     def _load_vlm_sync(self):
-        """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
+        """Load the Gemma 4 vision-language model via llama.cpp (GGUF)."""
         from huggingface_hub import hf_hub_download
         from llama_cpp import Llama
-        from llama_cpp.llama_chat_format import Qwen35ChatHandler
+        from llama_cpp.llama_chat_format import Gemma4ChatHandler
 
         model_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
         mmproj_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
 
-        chat_handler = Qwen35ChatHandler(
+        chat_handler = Gemma4ChatHandler(
             clip_model_path=mmproj_path,
-            enable_thinking=True,
-            add_vision_id=False,
             verbose=False,
         )
         self.vlm = Llama(
@@ -325,10 +323,8 @@ class ImageGenManager:
                 max_tokens=VLM_MAX_TOKENS,
                 temperature=1.0,
                 top_p=0.95,
-                top_k=20,
+                top_k=64,
                 min_p=0.0,
-                present_penalty=1.5,
-                repeat_penalty=1.0,
             )
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
@@ -336,11 +332,6 @@ class ImageGenManager:
             logger.info(
                 f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}"
             )
-
-            # Strip thinking block — the model wraps reasoning in
-            # <think>...</think> which confuses the tool call parser.
-            if "</think>" in raw_output:
-                raw_output = raw_output.split("</think>", 1)[1]
 
             try:
                 prompt = self._parse_edit_instruction(raw_output, safety_message_id)
