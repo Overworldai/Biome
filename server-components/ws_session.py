@@ -62,7 +62,6 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
-from safety_cache import save_safety_cache
 from scene_authoring import run_generate_scene, run_scene_edit
 from video_recorder import RecordingProperties, VideoRecorder
 
@@ -348,6 +347,12 @@ async def handle_check_seed_safety(
         logger.error(f"Safety check failed: {e}")
         return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
+    # Function-level import: `safety` pulls torch transitively, so we don't
+    # want to drag it into the module graph at ws_session.py load-time. The
+    # heavy try-block in server.py is the only place that should trigger
+    # the torch / transformers import waterfall.
+    from safety import save_safety_cache
+
     is_safe = safety_result.get("is_safe", False)
     cache[img_hash] = SafetyCacheEntry(
         is_safe=is_safe,
@@ -410,6 +415,9 @@ async def load_seed_from_data(
             logger.warning(f"[{conn.client_host}] Safety check failed: {e}")
             await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
             return False
+
+        # Function-level import: see comment in handle_check_seed_safety.
+        from safety import save_safety_cache
 
         is_safe = safety_result.get("is_safe", False)
         cache[img_hash] = SafetyCacheEntry(

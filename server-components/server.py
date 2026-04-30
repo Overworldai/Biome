@@ -59,7 +59,6 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
-from safety_cache import load_safety_cache
 from ws_session import (
     Connection,
     build_error_message,
@@ -144,7 +143,7 @@ try:
     logger.info("Engine Manager module imported")
 
     logger.info("Importing Safety module...")
-    from safety import SafetyChecker
+    from safety import SafetyChecker, load_safety_cache
 
     logger.info("Safety module imported")
 

@@ -1,21 +1,69 @@
 """
-Safety module - NSFW image detection for seed validation.
+Image safety: the NSFW classifier (`Freepik/nsfw_image_detector`) plus the
+disk-backed result cache that backs it.
 
-Uses Freepik/nsfw_image_detector model to check images for inappropriate content.
+Cache entries are SHA-256-keyed `SafetyCacheEntry` records persisted as JSON;
+loading on a missing / corrupt file returns an empty dict so the next session
+re-runs the checks (cache rebuilds, no permanent state loss). The classifier
+itself is loaded lazily on first use, optionally pinned in GPU memory via
+`load_resident()`.
 """
 
 import logging
 import threading
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from pydantic import TypeAdapter
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from timm.models import get_pretrained_cfg
 from transformers import AutoModelForImageClassification
 
+from app_state import SafetyCacheEntry
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Disk-backed safety cache
+# ---------------------------------------------------------------------------
+
+SAFETY_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.json"
+
+_cache_adapter: TypeAdapter[dict[str, SafetyCacheEntry]] = TypeAdapter(dict[str, SafetyCacheEntry])
+
+
+def load_safety_cache() -> dict[str, SafetyCacheEntry]:
+    """Load hash-keyed safety cache from JSON. Returns an empty dict if
+    the file is missing or fails to parse — failures are logged but
+    non-fatal; cache rebuilds on next session."""
+    if not SAFETY_CACHE_FILE.exists():
+        return {}
+    try:
+        cache = _cache_adapter.validate_json(SAFETY_CACHE_FILE.read_bytes())
+        logger.info(f"Loaded safety cache with {len(cache)} entries")
+        return cache
+    except Exception as e:
+        logger.error(f"Failed to load safety cache: {e}")
+        return {}
+
+
+def save_safety_cache(cache: dict[str, SafetyCacheEntry]) -> None:
+    """Persist the safety cache to disk; failures are logged but
+    non-fatal (the cache rebuilds on next session)."""
+    try:
+        SAFETY_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SAFETY_CACHE_FILE.write_bytes(_cache_adapter.dump_json(cache, indent=2))
+    except Exception as e:
+        logger.error(f"Failed to save safety cache: {e}")
+
+
+# ---------------------------------------------------------------------------
+# NSFW classifier
+# ---------------------------------------------------------------------------
 
 
 class SafetyChecker:
