@@ -49,6 +49,25 @@ from progress_stages import (
     STARTUP_SAFETY_READY,
     Stage,
 )
+from protocol import (
+    CheckSeedSafetyRequest,
+    CheckSeedSafetyResponseData,
+    ClientMessage,
+    ClientMessageAdapter,
+    ControlNotif,
+    GenerateSceneRequest,
+    InitRequest,
+    MessageId,
+    PauseNotif,
+    PromptNotif,
+    ResetNotif,
+    ResumeNotif,
+    RpcError,
+    RpcSuccess,
+    SceneEditRequest,
+    rpc_err,
+    rpc_ok,
+)
 from video_recorder import RecordingProperties, VideoRecorder
 
 # Resolve HuggingFace token: env var > CLI-cached token file.
@@ -461,38 +480,54 @@ class BinaryResponse:
 
 
 async def dispatch_request(msg: dict, websocket: WebSocket) -> dict | BinaryResponse:
-    """Route a request-type WS message to the appropriate handler.
+    """Adapter for legacy game-loop callers: validates the dict into a typed
+    request, dispatches to the typed handler, and strips the response envelope
+    back down to `{success, data}` / `{success, error}` since legacy callers
+    add `type` and `req_id` themselves.
 
-    Returns a response dict (without type/req_id — caller wraps those),
-    or a BinaryResponse for image data.
-    """
+    Goes away in step 2 commit 5 (or whenever the game-loop receiver is
+    converted to use ClientMessageAdapter directly)."""
     req_type = msg.get("type", "")
 
     if req_type == "check_seed_safety":
-        return await _handle_check_seed_safety(msg)
+        try:
+            req = CheckSeedSafetyRequest.model_validate(msg)
+        except Exception as e:
+            return {"success": False, "error": f"Invalid check_seed_safety request: {e}"}
+        result = await handle_check_seed_safety(req)
+        # Strip the envelope fields the typed wire format adds; legacy
+        # caller spreads `**result` into `{type, req_id, ...}` itself.
+        d = result.model_dump(exclude_none=True)
+        d.pop("type", None)
+        d.pop("req_id", None)
+        return d
     return {"success": False, "error": f"Unknown request type: {req_type}"}
 
 
 # ---- individual request handlers ----
 
 
-async def _handle_check_seed_safety(msg: dict) -> dict:
+async def handle_check_seed_safety(
+    req: CheckSeedSafetyRequest,
+) -> RpcSuccess[CheckSeedSafetyResponseData] | RpcError:
     """Check if a seed image is safe. Server computes hash, caches result."""
-    image_data_b64 = msg.get("image_data", "")
-    if not image_data_b64:
-        return {"success": False, "error": "image_data is required"}
+    if not req.image_data:
+        return rpc_err(req.req_id, error=MessageId.SEED_MISSING_DATA.value)
 
     try:
-        image_bytes = base64.b64decode(image_data_b64)
+        image_bytes = base64.b64decode(req.image_data)
     except Exception as e:
-        return {"success": False, "error": f"Invalid base64 data: {e}"}
+        return rpc_err(req.req_id, error=f"Invalid base64 data: {e}")
 
     img_hash = compute_bytes_hash(image_bytes)
 
     # Check cache first
     if img_hash in safety_hash_cache:
         cached = safety_hash_cache[img_hash]
-        return {"success": True, "data": {"is_safe": cached["is_safe"], "hash": img_hash}}
+        return rpc_ok(
+            req.req_id,
+            CheckSeedSafetyResponseData(is_safe=cached["is_safe"], hash=img_hash),
+        )
 
     # Run safety check (decode + inference off the event loop)
     try:
@@ -504,7 +539,7 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
         safety_result = await asyncio.to_thread(_check_safety)
     except Exception as e:
         logger.error(f"Safety check failed: {e}")
-        return {"success": False, "error": f"Safety check failed: {e}"}
+        return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
     is_safe = safety_result.get("is_safe", False)
     safety_hash_cache[img_hash] = {
@@ -514,7 +549,7 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
     }
     save_safety_cache(safety_hash_cache)
 
-    return {"success": True, "data": {"is_safe": is_safe, "hash": img_hash}}
+    return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=is_safe, hash=img_hash))
 
 
 def _run_generate_scene_on_generator(prompt: str, biome_version: str | None) -> dict:
@@ -905,10 +940,14 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[{client_host}] Seed loaded successfully")
         return True
 
-    async def handle_init(msg: dict, is_game_loop: bool = False) -> tuple[bool, bool]:
+    async def handle_init(req: InitRequest, *, is_game_loop: bool = False) -> tuple[bool, bool]:
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
-        seed_loaded=a new seed was loaded in this call."""
+        seed_loaded=a new seed was loaded in this call.
+
+        `model_fields_set` distinguishes "field absent" (leave untouched) from
+        "field present, possibly None" (apply update) — preserving the existing
+        partial-delta semantics."""
         nonlocal \
             scene_authoring_requested, \
             action_logging_requested, \
@@ -919,24 +958,25 @@ async def websocket_endpoint(websocket: WebSocket):
             video_recorder, \
             cap_inference_fps
 
-        model_uri = (msg.get("model") or "").strip()
-        seed_data = msg.get("seed_image_data")
-        seed_filename = msg.get("seed_filename")
-        quant = msg.get("quant")
+        present = req.model_fields_set
+        model_uri = (req.model or "").strip()
+        seed_data = req.seed_image_data
+        seed_filename = req.seed_filename
+        quant = req.quant
 
         # Update flags
-        if "scene_authoring" in msg:
-            scene_authoring_requested = msg["scene_authoring"]
-        if "action_logging" in msg:
-            action_logging_requested = msg["action_logging"]
-        if "video_recording" in msg:
-            video_recording_requested = msg["video_recording"]
-        if "video_output_dir" in msg:
-            video_output_dir = msg["video_output_dir"]
-        if "biome_version" in msg:
-            biome_version = msg["biome_version"]
-        if "cap_inference_fps" in msg:
-            cap_inference_fps = msg["cap_inference_fps"]
+        if "scene_authoring" in present and req.scene_authoring is not None:
+            scene_authoring_requested = req.scene_authoring
+        if "action_logging" in present and req.action_logging is not None:
+            action_logging_requested = req.action_logging
+        if "video_recording" in present and req.video_recording is not None:
+            video_recording_requested = req.video_recording
+        if "video_output_dir" in present:
+            video_output_dir = req.video_output_dir
+        if "biome_version" in present:
+            biome_version = req.biome_version
+        if "cap_inference_fps" in present and req.cap_inference_fps is not None:
+            cap_inference_fps = req.cap_inference_fps
 
         # Sync action logger with requested state during gameplay
         if is_game_loop:
@@ -967,7 +1007,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # The engine must be loaded before the seed so that seed_target_size
         # and temporal_compression are resolved from the actual model config.
         model_changed = False
-        quant_changed = "quant" in msg and quant != getattr(world_engine, "quant", None)
+        quant_changed = "quant" in present and quant != getattr(world_engine, "quant", None)
         if model_uri and (model_uri != getattr(world_engine, "model_uri", None) or quant_changed):
             logger.info(
                 f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri} (quant={quant})"
@@ -1012,40 +1052,32 @@ async def websocket_endpoint(websocket: WebSocket):
         while world_engine.seed_frame is None:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
-                msg = json.loads(raw)
-                msg_type = msg.get("type")
-
-                if "req_id" in msg and msg_type != "init":
-                    result = await dispatch_request(msg, websocket)
-                    req_id = msg["req_id"]
-                    if isinstance(result, BinaryResponse):
-                        header = json.dumps(
-                            {"req_id": req_id, "success": True},
-                            separators=(",", ":"),
-                        ).encode("utf-8")
-                        await websocket.send_bytes(struct.pack("<I", len(header)) + header + result.image_bytes)
-                    else:
-                        if "success" not in result:
-                            result = {"success": True, "data": result}
-                        await send_json({"type": "response", "req_id": req_id, **result})
+                try:
+                    parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
+                except Exception as e:
+                    logger.info(f"[{client_host}] Ignoring invalid message during pre-init: {e}")
                     continue
 
-                if msg_type == "init":
-                    # init RPC: response is deferred until after warmup/session init completes
-                    init_req_id = msg.get("req_id")
-                    ready, _ = await handle_init(msg)
-                    if not ready and init_req_id:
-                        await send_json(
-                            {
-                                "type": "response",
-                                "req_id": init_req_id,
-                                "success": False,
-                                "error_id": "app.server.error.initFailed",
-                            }
+                match parsed:
+                    case CheckSeedSafetyRequest() as req:
+                        result = await handle_check_seed_safety(req)
+                        await websocket.send_text(result.model_dump_json(exclude_none=True))
+                    case InitRequest() as req:
+                        # init RPC: response is deferred until after warmup/session init completes
+                        init_req_id = req.req_id
+                        ready, _ = await handle_init(req)
+                        if not ready:
+                            await websocket.send_text(
+                                rpc_err(init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
+                            )
+                            init_req_id = None
+                    case SceneEditRequest() | GenerateSceneRequest():
+                        # Authoring RPCs require an active session.
+                        await websocket.send_text(
+                            rpc_err(parsed.req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
                         )
-                        init_req_id = None
-                else:
-                    logger.info(f"[{client_host}] Ignoring message type '{msg_type}' while waiting for init")
+                    case ControlNotif() | PauseNotif() | ResumeNotif() | ResetNotif() | PromptNotif():
+                        logger.info(f"[{client_host}] Ignoring notification '{parsed.type}' while waiting for init")
 
             except TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
@@ -1272,8 +1304,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     if "req_id" in msg:
                         if msg_type == "init":
-                            # init RPC: apply deltas and respond with metrics
-                            ready, new_seed = await handle_init(msg, is_game_loop=True)
+                            # init RPC: apply deltas and respond with metrics.
+                            # Wrap legacy dict into typed InitRequest until commit
+                            # 3 of step 2 converts the whole receiver to typed.
+                            ready, new_seed = await handle_init(InitRequest.model_validate(msg), is_game_loop=True)
                             if ready:
                                 queue_send(
                                     {
