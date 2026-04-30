@@ -140,6 +140,15 @@ class Connection:
     async def send_stage(self, stage: Stage) -> None:
         await self.send_message(StatusMessage(stage=stage.id))
 
+    def push_progress(self, stage: Stage) -> None:
+        """Sync callback for `WorldEngineManager.set_progress_callback` —
+        safe to call from any thread; enqueues onto `progress_queue` for
+        the asyncio drain task to ferry over the websocket."""
+        try:
+            self.progress_queue.put_nowait(StatusMessage(stage=stage.id))
+        except asyncio.QueueFull:
+            pass
+
     # ─── Threadsafe enqueue helper (any thread) ────────────────────
     def queue_send(self, payload: BaseModel | bytes) -> None:
         """Enqueue a payload for the asyncio sender to dispatch.

@@ -591,13 +591,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     # which enqueues payloads; the drain task sends them over the WebSocket.
     # Queue lives on `conn` (initialised in Connection.__post_init__).
 
-    def progress_callback(stage: Stage) -> None:
-        """Sync callback safe to call from any thread — enqueues for async send."""
-        try:
-            conn.progress_queue.put_nowait(StatusMessage(stage=stage.id))
-        except asyncio.QueueFull:
-            pass
-
     async def _drain_progress_queue():
         try:
             while True:
@@ -615,7 +608,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         # Restore the original seed (before any scene edits) on reset
         if world_engine.original_seed_frame is not None:
             world_engine.seed_frame = world_engine.original_seed_frame
-        world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+        world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
         await world_engine.init_session()
         world_engine.set_progress_callback(None)
         session.perceptual_frame_count = 0
@@ -754,7 +747,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             logger.info(
                 f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri} (quant={quant})"
             )
-            world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+            world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
             await world_engine.load_engine(model_uri, quant=quant)
             world_engine.set_progress_callback(None)
             world_engine.seed_frame = None
@@ -816,7 +809,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 return
 
         # Wire progress callback so engine_manager reports granular stages
-        world_engine.set_progress_callback(progress_callback, asyncio.get_running_loop())
+        world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
 
         assert world_engine.engine is not None, "Client must specify a model in the init message"
 
