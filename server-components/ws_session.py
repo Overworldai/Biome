@@ -19,6 +19,7 @@ rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import asyncio
+import logging
 import threading
 from dataclasses import dataclass, field
 from queue import Queue
@@ -31,6 +32,8 @@ from app_state import AppState
 from progress_stages import Stage
 from protocol import MessageId, StatusMessage, WarningMessage
 from video_recorder import VideoRecorder
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -147,3 +150,26 @@ class Connection:
             self.main_loop.call_soon_threadsafe(self.frame_ready.set)
         except Exception:
             pass
+
+
+async def run_sender(conn: Connection) -> None:
+    """Drain `conn.frame_queue` and dispatch each entry over the WebSocket.
+
+    Binary frames go via `send_bytes`; Pydantic messages route through
+    `conn.send_message`. Exits when `conn.running` flips off or any
+    transport error occurs (which also flips `conn.running` to halt
+    the receiver and generator)."""
+    while conn.running:
+        try:
+            await conn.frame_ready.wait()
+            conn.frame_ready.clear()
+            while not conn.frame_queue.empty():
+                payload = conn.frame_queue.get_nowait()
+                if isinstance(payload, bytes):
+                    await conn.websocket.send_bytes(payload)
+                else:
+                    await conn.send_message(payload)
+        except Exception as e:
+            logger.error(f"[{conn.client_host}] Sender error: {e}", exc_info=True)
+            conn.running = False
+            break

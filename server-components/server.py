@@ -89,7 +89,7 @@ from protocol import (
 )
 from scene_authoring import run_generate_scene, run_scene_edit
 from video_recorder import RecordingProperties, VideoRecorder
-from ws_session import Connection
+from ws_session import Connection, run_sender
 
 apply_resolved_token()
 
@@ -1110,24 +1110,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     conn.running = False
                     break
 
-        async def sender() -> None:
-            while conn.running:
-                try:
-                    # Wait for signal from generator thread instead of polling
-                    await conn.frame_ready.wait()
-                    conn.frame_ready.clear()
-                    # Drain all available frames in one batch
-                    while not conn.frame_queue.empty():
-                        payload = conn.frame_queue.get_nowait()
-                        if isinstance(payload, bytes):
-                            await websocket.send_bytes(payload)
-                        else:
-                            await conn.send_message(payload)
-                except Exception as e:
-                    logger.error(f"[{client_host}] Sender error: {e}", exc_info=True)
-                    conn.running = False
-                    break
-
         def generator() -> None:
             def run_coro(coro):
                 return asyncio.run_coroutine_threadsafe(coro, conn.main_loop).result()
@@ -1426,7 +1408,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         gen_thread.start()
 
         recv_task = asyncio.create_task(receiver())
-        send_task = asyncio.create_task(sender())
+        send_task = asyncio.create_task(run_sender(conn))
         done, pending = await asyncio.wait(
             [recv_task, send_task],
             return_when=asyncio.FIRST_COMPLETED,
