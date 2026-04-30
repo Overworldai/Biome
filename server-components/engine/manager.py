@@ -17,6 +17,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from world_engine import CtrlInput, WorldEngine
 
 try:
     import simplejpeg
@@ -126,7 +127,6 @@ class WorldEngineManager:
         self.model_config: ModelConfig | None = None
         self.seed_frame = None
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
-        self.CtrlInput = None
         self.model_uri: str | None = None
         self.quant: str | None = None
         self.engine_warmed_up = False
@@ -325,17 +325,8 @@ class WorldEngineManager:
             logger.info("=" * 60)
             logger.info("BIOME ENGINE STARTUP")
             logger.info("=" * 60)
-            logger.info("[1/4] Importing WorldEngine...")
-            self._report_progress(StageId.SESSION_LOADING_IMPORT)
-            import_start = time.perf_counter()
-            from world_engine import CtrlInput as CI
-            from world_engine import WorldEngine
-
-            self.CtrlInput = CI
-            logger.info(f"[1/4] WorldEngine imported in {time.perf_counter() - import_start:.2f}s")
-
             self._report_progress(StageId.SESSION_LOADING_MODEL)
-            logger.info(f"[2/4] Loading model: {requested_model}")
+            logger.info(f"[1/3] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
             logger.info(f"      Device: {DEVICE}")
 
@@ -347,7 +338,7 @@ class WorldEngineManager:
 
             for dtype in dtype_attempts:
                 try:
-                    logger.info(f"[2/4] Attempting load with dtype={dtype}")
+                    logger.info(f"[1/3] Attempting load with dtype={dtype}")
 
                     def _create_engine():
                         return WorldEngine(
@@ -363,7 +354,7 @@ class WorldEngineManager:
                 except torch.OutOfMemoryError as e:
                     last_error = e
                     logger.warning(
-                        f"[2/4] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
+                        f"[1/3] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
                     )
                     await self._run_on_cuda_thread(self._unload_engine_sync)
                     self._log_cuda_memory("after OOM cleanup")
@@ -379,19 +370,19 @@ class WorldEngineManager:
 
             self._report_progress(StageId.SESSION_LOADING_WEIGHTS)
             self._engine = new_engine
-            logger.info(f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s")
-            logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
+            logger.info(f"[1/3] Model loaded in {time.perf_counter() - model_start:.2f}s")
+            logger.info(f"[1/3] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
 
             # Resolve typed runtime config from per-model defaults overridden
             # by the engine's model_cfg attributes.
             self.model_config = model_config_from_engine_cfg(self._engine.model_cfg)
             cfg = self.model_config
-            logger.info(f"[2/4] Model type: {cfg.label}")
-            logger.info(f"[2/4] Context length (n_frames): {cfg.n_frames}")
-            logger.info(f"[2/4] Temporal compression: {cfg.temporal_compression}")
-            logger.info(f"[2/4] Seed target size: {cfg.seed_target_size}")
-            logger.info(f"[2/4] Prompt conditioning: {cfg.has_prompt_conditioning}")
+            logger.info(f"[1/3] Model type: {cfg.label}")
+            logger.info(f"[1/3] Context length (n_frames): {cfg.n_frames}")
+            logger.info(f"[1/3] Temporal compression: {cfg.temporal_compression}")
+            logger.info(f"[1/3] Seed target size: {cfg.seed_target_size}")
+            logger.info(f"[1/3] Prompt conditioning: {cfg.has_prompt_conditioning}")
 
             self._report_progress(StageId.SESSION_LOADING_DONE)
             self.model_uri = requested_model
@@ -400,11 +391,11 @@ class WorldEngineManager:
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
             # seed_frame when a new seed is required after a model switch.
             if self.seed_frame is None:
-                logger.info("[3/4] Seed frame: waiting for client to provide initial seed")
+                logger.info("[2/3] Seed frame: waiting for client to provide initial seed")
             else:
-                logger.info("[3/4] Seed frame: preserved existing seed")
+                logger.info("[2/3] Seed frame: preserved existing seed")
 
-            logger.info("[4/4] Engine initialization complete")
+            logger.info("[3/3] Engine initialization complete")
             logger.info("=" * 60)
             logger.info("SERVER READY - Waiting for WebSocket connections on /ws")
             logger.info("=" * 60)
@@ -593,7 +584,7 @@ class WorldEngineManager:
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
             logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
             gen_start = time.perf_counter()
-            _ = self._engine.gen_frame(ctrl=self.CtrlInput(button=set(), mouse=(0.0, 0.0)))
+            _ = self._engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
             logger.info(f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s")
 
             return time.perf_counter() - warmup_start

@@ -18,7 +18,6 @@
   { "id": "startup.ready", "label": "Ready to load model.", "percent": 10 },
 
   { "id": "session.waiting_for_seed", "label": "Preparing scene...", "percent": 12 },
-  { "id": "session.loading_model.import", "label": "Importing model framework...", "percent": 15 },
   { "id": "session.loading_model.load", "label": "Loading model...", "percent": 20 },
   { "id": "session.loading_model.instantiate", "label": "Loading model into memory...", "percent": 28 },
   { "id": "session.loading_model.done", "label": "Model loaded!", "percent": 35 },

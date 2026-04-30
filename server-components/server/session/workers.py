@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from fastapi import WebSocketDisconnect
+from world_engine import CtrlInput
 
 from engine.keymap import BUTTON_CODES
 from engine.scene_authoring import run_generate_scene, run_scene_edit
@@ -452,7 +453,7 @@ def run_generator(
                 time.sleep(0.001)
                 continue
 
-            ctrl = world_engine.CtrlInput(button=buttons, mouse=(mouse_dx, mouse_dy))
+            ctrl = CtrlInput(button=buttons, mouse=(mouse_dx, mouse_dy))
 
             if conn.action_logger is not None:
                 conn.action_logger.frame_input(

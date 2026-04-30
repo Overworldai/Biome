@@ -52,7 +52,6 @@ class StageId(StrEnum):
     # ── Session — per-client connection lifecycle ─────────────────────
     SESSION_WAITING_FOR_SEED = "session.waiting_for_seed"
 
-    SESSION_LOADING_IMPORT = "session.loading_model.import"
     SESSION_LOADING_MODEL = "session.loading_model.load"
     SESSION_LOADING_WEIGHTS = "session.loading_model.instantiate"
     SESSION_LOADING_DONE = "session.loading_model.done"

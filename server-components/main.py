@@ -14,6 +14,7 @@ from util.server_logging import logger
 logger.info(f"Python {sys.version}")
 logger.info("Starting server...")
 
+import argparse
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -93,6 +94,7 @@ try:
     logger.info(f"torchvision {torchvision.__version__} imported")
 
     logger.info("Importing FastAPI...")
+    import uvicorn
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -207,10 +209,6 @@ app.state.system_monitor = system_monitor
 
 
 if __name__ == "__main__":
-    import argparse
-
-    import uvicorn
-
     parser = argparse.ArgumentParser(description="Biome Server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=7987, help="Port to bind to")
