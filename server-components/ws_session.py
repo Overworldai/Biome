@@ -22,26 +22,51 @@ import asyncio
 import base64
 import hashlib
 import io
+import json
 import logging
+import struct
 import threading
 import time
 from dataclasses import dataclass, field
 from queue import Queue
 from typing import TYPE_CHECKING
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image
 from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import AppState
 from progress_stages import SESSION_WAITING_FOR_SEED, Stage
-from protocol import InitRequest, MessageId, StatusMessage, WarningMessage
+from protocol import (
+    CheckSeedSafetyRequest,
+    CheckSeedSafetyResponseData,
+    ClientMessage,
+    ClientMessageAdapter,
+    ControlNotif,
+    GenerateSceneRequest,
+    InitRequest,
+    InitResponseData,
+    MessageId,
+    PauseNotif,
+    PromptNotif,
+    ResetNotif,
+    ResumeNotif,
+    RpcError,
+    RpcSuccess,
+    SceneEditRequest,
+    StatusMessage,
+    SystemInfo,
+    WarningMessage,
+    rpc_err,
+    rpc_ok,
+)
 from safety_cache import save_safety_cache
 from video_recorder import RecordingProperties, VideoRecorder
 
 if TYPE_CHECKING:
     from engine_manager import Session, WorldEngineManager
+    from image_gen import ImageGenManager
     from safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
@@ -207,6 +232,41 @@ class Connection:
         if self.video_recorder is not None:
             self.video_recorder.end_segment()
 
+    # ─── Frame-envelope helpers ────────────────────────────────────
+    def update_gpu_metrics(self) -> None:
+        """Sample dynamic GPU metrics into the cache. Called every few
+        frames from the generator thread; reads back into binary frame
+        headers via `build_frame_envelope`."""
+        import system_info as system_info_module
+
+        self.cached_vram_used_bytes = system_info_module.get_vram_used_bytes()
+        self.cached_gpu_util_percent = system_info_module.get_gpu_util_percent()
+
+    def build_frame_envelope(
+        self,
+        jpeg: bytes,
+        frame_id: int,
+        client_ts: float,
+        gen_ms: float,
+        temporal_compression: int = 1,
+        profile: dict | None = None,
+    ) -> bytes:
+        """Wrap a JPEG-encoded frame in the binary protocol envelope:
+        4-byte LE header length, JSON header (frame_id / timing / GPU
+        metrics / optional per-frame profile), JPEG payload."""
+        header_data: dict = {
+            "frame_id": frame_id,
+            "client_ts": client_ts,
+            "gen_ms": gen_ms,
+            "temporal_compression": temporal_compression,
+            "vram_used_bytes": self.cached_vram_used_bytes,
+            "gpu_util_percent": self.cached_gpu_util_percent,
+        }
+        if profile is not None:
+            header_data.update(profile)
+        header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
+        return struct.pack("<I", len(header)) + header + jpeg
+
     # ─── Threadsafe enqueue helper (any thread) ────────────────────
     def queue_send(self, payload: BaseModel | bytes) -> None:
         """Enqueue a payload for the asyncio sender to dispatch.
@@ -217,6 +277,63 @@ class Connection:
             self.main_loop.call_soon_threadsafe(self.frame_ready.set)
         except Exception:
             pass
+
+
+def build_init_response_data(world_engine: "WorldEngineManager", system_info: dict) -> InitResponseData:
+    """Pack post-warmup session metrics into the typed init RPC response."""
+    return InitResponseData(
+        model=world_engine.model_uri or "",
+        inference_fps=world_engine.inference_fps,
+        system_info=SystemInfo(**system_info),
+    )
+
+
+async def handle_check_seed_safety(
+    state: AppState,
+    req: CheckSeedSafetyRequest,
+) -> RpcSuccess[CheckSeedSafetyResponseData] | RpcError:
+    """Check whether a seed image passes the NSFW classifier. Caches by
+    SHA-256 of the raw bytes; results survive across server restarts via
+    the on-disk safety cache."""
+    if not req.image_data:
+        return rpc_err(req.req_id, error=MessageId.SEED_MISSING_DATA.value)
+
+    try:
+        image_bytes = base64.b64decode(req.image_data)
+    except Exception as e:
+        return rpc_err(req.req_id, error=f"Invalid base64 data: {e}")
+
+    img_hash = _compute_bytes_hash(image_bytes)
+
+    cache = state.safety_hash_cache
+    if img_hash in cache:
+        cached = cache[img_hash]
+        return rpc_ok(
+            req.req_id,
+            CheckSeedSafetyResponseData(is_safe=cached["is_safe"], hash=img_hash),
+        )
+
+    safety_checker = state.safety_checker
+    try:
+
+        def _check_safety():
+            pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            return safety_checker.check_pil_image(pil_img)
+
+        safety_result = await asyncio.to_thread(_check_safety)
+    except Exception as e:
+        logger.error(f"Safety check failed: {e}")
+        return rpc_err(req.req_id, error=f"Safety check failed: {e}")
+
+    is_safe = safety_result.get("is_safe", False)
+    cache[img_hash] = {
+        "is_safe": is_safe,
+        "scores": safety_result.get("scores", {}),
+        "checked_at": time.time(),
+    }
+    save_safety_cache(cache)
+
+    return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=is_safe, hash=img_hash))
 
 
 async def load_seed_from_data(
@@ -386,6 +503,143 @@ async def handle_init(
 
     ready = seed_loaded or (world_engine.seed_frame is not None)
     return ready, seed_loaded
+
+
+async def run_receiver(
+    conn: Connection,
+    world_engine: "WorldEngineManager",
+    image_gen: "ImageGenManager",
+    safety_checker: "SafetyChecker",
+    session: "Session",
+    button_codes: dict[str, int],
+    system_info: dict,
+) -> None:
+    """Drain inbound websocket messages, dispatch them via the typed
+    protocol union. Posts scene-edit / generate-scene futures into
+    `conn.scene_edit_request` / `conn.generate_scene_request` for the
+    generator thread to resolve at the next clean frame boundary."""
+    while conn.running:
+        try:
+            raw = await conn.websocket.receive_text()
+            try:
+                parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
+            except Exception as e:
+                logger.info(f"[{conn.client_host}] Ignoring invalid game-loop message: {e}")
+                continue
+
+            match parsed:
+                case InitRequest() as req:
+                    # init RPC: apply deltas and respond with metrics.
+                    ready, new_seed = await handle_init(
+                        conn, world_engine, safety_checker, session, req, is_game_loop=True
+                    )
+                    if ready:
+                        response = rpc_ok(req.req_id, build_init_response_data(world_engine, system_info))
+                    else:
+                        response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
+                    conn.queue_send(response)
+                    if new_seed:
+                        conn.reset_flag = True
+
+                case SceneEditRequest() as req:
+                    # scene_edit is handled by the generator thread at
+                    # the next clean frame boundary — post a request and
+                    # await the future.
+                    prompt = req.prompt.strip()
+                    if conn.action_logger is not None:
+                        conn.action_logger.scene_edit(prompt)
+                    edit_response: RpcSuccess | RpcError
+                    if not prompt:
+                        edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
+                    elif image_gen is None or not image_gen.is_loaded:
+                        edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
+                    elif conn.scene_edit_request is not None:
+                        edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
+                    else:
+                        import concurrent.futures
+
+                        fut = concurrent.futures.Future()
+                        conn.scene_edit_request = {"prompt": prompt, "future": fut}
+                        try:
+                            preview = await asyncio.wrap_future(fut)
+                            edit_response = rpc_ok(req.req_id, preview)
+                        except Exception as e:
+                            error_id = getattr(e, "message_id", None)
+                            if error_id is not None:
+                                edit_response = rpc_err(req.req_id, error_id=MessageId(error_id))
+                            else:
+                                edit_response = rpc_err(req.req_id, error=str(e))
+                    conn.queue_send(edit_response)
+
+                case GenerateSceneRequest() as req:
+                    # generate_scene: like scene_edit but with a blank
+                    # canvas — generates a new seed from a text prompt.
+                    prompt = req.prompt.strip()
+                    gen_response: RpcSuccess | RpcError
+                    if not prompt:
+                        gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
+                    elif image_gen is None or not image_gen.is_loaded:
+                        gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
+                    elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
+                        gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
+                    else:
+                        import concurrent.futures
+
+                        fut = concurrent.futures.Future()
+                        conn.generate_scene_request = {"prompt": prompt, "future": fut}
+                        try:
+                            data = await asyncio.wrap_future(fut)
+                            gen_response = rpc_ok(req.req_id, data)
+                        except Exception as e:
+                            error_id = getattr(e, "message_id", None)
+                            if error_id is not None:
+                                gen_response = rpc_err(req.req_id, error_id=MessageId(error_id))
+                            else:
+                                gen_response = rpc_err(req.req_id, error=str(e))
+                    conn.queue_send(gen_response)
+
+                case CheckSeedSafetyRequest() as req:
+                    seed_response = await handle_check_seed_safety(conn.state, req)
+                    conn.queue_send(seed_response)
+
+                case ResetNotif():
+                    logger.info(f"[{conn.client_host}] Reset requested")
+                    conn.reset_flag = True
+
+                case PauseNotif():
+                    conn.paused = True
+                    logger.info("[RECV] Paused")
+
+                case ResumeNotif():
+                    conn.paused = False
+                    logger.info("[RECV] Resumed")
+
+                case PromptNotif() as notif:
+                    conn.prompt_pending = notif.prompt.strip()
+
+                case ControlNotif() as notif:
+                    if conn.paused:
+                        continue
+                    if notif.button_codes is not None:
+                        buttons = set(notif.button_codes)
+                    else:
+                        buttons = {button_codes[b.upper()] for b in (notif.buttons or []) if b.upper() in button_codes}
+                    with conn.ctrl_lock:
+                        conn.ctrl.buttons = buttons
+                        conn.ctrl.mouse_dx += notif.mouse_dx
+                        conn.ctrl.mouse_dy += notif.mouse_dy
+                        if notif.ts is not None:
+                            conn.ctrl.client_ts = notif.ts
+                        conn.ctrl.dirty = True
+
+        except WebSocketDisconnect:
+            logger.info(f"[{conn.client_host}] Client disconnected")
+            conn.running = False
+            break
+        except Exception as e:
+            logger.error(f"[{conn.client_host}] Receiver error: {e}", exc_info=True)
+            conn.running = False
+            break
 
 
 async def run_sender(conn: Connection) -> None:
