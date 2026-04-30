@@ -21,6 +21,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -42,6 +43,13 @@ _DEFAULT_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_c
 # ---------------------------------------------------------------------------
 
 
+# Closed set of NSFW classifier output categories. `low`/`medium`/`high` are
+# cumulative (probability of *at least* this severity); `neutral` is the
+# standalone "definitely-safe" probability.
+NSFWCategory = Literal["neutral", "low", "medium", "high"]
+NSFWScores = dict[NSFWCategory, float]
+
+
 @dataclass(frozen=True)
 class SafetyVerdict:
     """Result of one classification — `is_safe` plus the per-category scores
@@ -49,7 +57,7 @@ class SafetyVerdict:
     images we don't cache (e.g. freshly generated scenes)."""
 
     is_safe: bool
-    scores: dict[str, float]
+    scores: NSFWScores
 
 
 @dataclass(frozen=True)
@@ -59,7 +67,7 @@ class SafetyResult:
     client uses to dedupe seed uploads."""
 
     is_safe: bool
-    scores: dict[str, float]
+    scores: NSFWScores
     image_hash: str
 
 
@@ -72,7 +80,7 @@ class SafetyCacheEntry(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     is_safe: bool
-    scores: dict[str, float]
+    scores: NSFWScores
     checked_at: float
 
 
@@ -198,15 +206,15 @@ class SafetyChecker:
                 logger.error(f"Failed to check PIL image: {e}")
                 return _FAILURE_VERDICT
 
-    def _predict_batch_values(self, img_batch: list[Image.Image]) -> list[dict[str, float]]:
-        """Run the classifier on a batch and return cumulative-probability score
-        dicts. `idx_to_label`-mapped, with high→medium→low cumulated and
-        `neutral` carrying its own (non-cumulative) probability."""
-        idx_to_label = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
+    def _predict_batch_values(self, img_batch: list[Image.Image]) -> list[NSFWScores]:
+        """Run the classifier on a batch and return cumulative-probability
+        scores per image. `low`/`medium`/`high` are cumulated high→medium→low
+        (probability of at least that severity); `neutral` is non-cumulative."""
+        idx_to_label: dict[int, NSFWCategory] = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
 
         # Prepare batch
         inputs = torch.stack([self.processor(img) for img in img_batch]).to(self._device)  # pyright: ignore[reportCallIssue]  # timm Compose typed as a tuple in its stubs but is callable at runtime
-        output: list[dict[str, float]] = []
+        output: list[NSFWScores] = []
 
         with torch.inference_mode():
             logits = self.model(inputs).logits
@@ -215,7 +223,7 @@ class SafetyChecker:
 
             for i in range(len(batch_probs)):
                 element_probs = batch_probs[i]
-                output_img: dict[str, float] = {}
+                output_img: NSFWScores = {}
                 danger_cum_sum = 0
 
                 # Cumulative sum from high to low (reverse order)
