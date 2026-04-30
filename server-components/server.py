@@ -86,7 +86,7 @@ from protocol import (
 )
 from safety_cache import load_safety_cache, save_safety_cache
 from scene_authoring import run_generate_scene, run_scene_edit
-from ws_session import Connection, run_sender
+from ws_session import Connection, handle_init, run_sender
 
 apply_resolved_token()
 
@@ -542,7 +542,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     world_engine = state.world_engine
     image_gen = state.image_gen
     safety_checker = state.safety_checker
-    safety_hash_cache = state.safety_hash_cache  # mutated in place
 
     # Push system info immediately so the client has the hardware identity
     # even if the session crashes during init (e.g. CUDA graph compilation).
@@ -579,159 +578,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         session.perceptual_frame_count = 0
         logger.info(f"[{client_host}] Engine Reset")
 
-    async def load_seed_from_data(image_data_b64: str | None, seed_filename: str | None = None) -> bool:
-        """Validate safety and load seed from base64 image data."""
-        if not image_data_b64:
-            logger.warning(f"[{client_host}] Missing seed image data")
-            await conn.send_warning(MessageId.SEED_MISSING_DATA)
-            return False
-
-        try:
-            image_bytes = base64.b64decode(image_data_b64)
-        except Exception as e:
-            logger.warning(f"[{client_host}] Invalid base64 seed data: {e}")
-            await conn.send_warning(MessageId.SEED_INVALID_DATA)
-            return False
-
-        img_hash = compute_bytes_hash(image_bytes)
-
-        # Check if same seed is already loaded (dedup by hash)
-        if img_hash == conn.current_seed_hash:
-            logger.info(f"[{client_host}] Seed unchanged (hash match), skipping reload")
-            return True
-
-        # Safety check
-        if img_hash in safety_hash_cache:
-            cached = safety_hash_cache[img_hash]
-            if not cached.get("is_safe", False):
-                logger.warning(f"[{client_host}] Seed marked as unsafe (cached)")
-                await conn.send_warning(MessageId.SEED_UNSAFE)
-                return False
-        else:
-            # Run safety check (decode + inference off the event loop)
-            try:
-
-                def _check_safety():
-                    pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-                    return safety_checker.check_pil_image(pil_img)
-
-                safety_result = await asyncio.to_thread(_check_safety)
-            except Exception as e:
-                logger.warning(f"[{client_host}] Safety check failed: {e}")
-                await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
-                return False
-
-            is_safe = safety_result.get("is_safe", False)
-            safety_hash_cache[img_hash] = {
-                "is_safe": is_safe,
-                "scores": safety_result.get("scores", {}),
-                "checked_at": time.time(),
-            }
-            save_safety_cache(safety_hash_cache)
-
-            if not is_safe:
-                logger.warning(f"[{client_host}] Seed marked as unsafe")
-                await conn.send_warning(MessageId.SEED_UNSAFE)
-                return False
-
-        # Load seed
-        display_name = seed_filename or img_hash[:12]
-        logger.info(f"[{client_host}] Loading seed '{display_name}'")
-        loaded_frame = await world_engine.load_seed_from_base64(image_data_b64)
-        if loaded_frame is None:
-            logger.error(f"[{client_host}] Failed to load seed")
-            await conn.send_warning(MessageId.SEED_LOAD_FAILED)
-            return False
-
-        world_engine.seed_frame = loaded_frame
-        world_engine.original_seed_frame = loaded_frame
-        conn.current_seed_hash = img_hash
-        conn.current_seed_filename = seed_filename
-        logger.info(f"[{client_host}] Seed loaded successfully")
-        return True
-
-    async def handle_init(req: InitRequest, *, is_game_loop: bool = False) -> tuple[bool, bool]:
-        """Handle unified init message — apply deltas for model, seed, flags.
-        Returns (ready, seed_loaded): ready=session has a seed frame,
-        seed_loaded=a new seed was loaded in this call.
-
-        `model_fields_set` distinguishes "field absent" (leave untouched) from
-        "field present, possibly None" (apply update) — preserving the existing
-        partial-delta semantics."""
-        present = req.model_fields_set
-        model_uri = (req.model or "").strip()
-        seed_data = req.seed_image_data
-        seed_filename = req.seed_filename
-        quant = req.quant
-
-        # Update flags
-        if "scene_authoring" in present and req.scene_authoring is not None:
-            conn.scene_authoring_requested = req.scene_authoring
-        if "action_logging" in present and req.action_logging is not None:
-            conn.action_logging_requested = req.action_logging
-        if "video_recording" in present and req.video_recording is not None:
-            conn.video_recording_requested = req.video_recording
-        if "video_output_dir" in present:
-            conn.video_output_dir = req.video_output_dir
-        if "biome_version" in present:
-            conn.biome_version = req.biome_version
-        if "cap_inference_fps" in present and req.cap_inference_fps is not None:
-            conn.cap_inference_fps = req.cap_inference_fps
-
-        # Sync action logger with requested state during gameplay
-        if is_game_loop:
-            if conn.action_logging_requested and conn.action_logger is None:
-                conn.action_logger = ActionLogger(client_host)
-                conn.action_logger.new_segment(
-                    model=world_engine.model_uri,
-                    seed=conn.current_seed_filename,
-                    temporal_compression=world_engine.temporal_compression,
-                    seed_target_size=world_engine.seed_target_size,
-                    has_prompt_conditioning=world_engine.has_prompt_conditioning,
-                )
-                logger.info(f"[{client_host}] Action logging enabled")
-            elif not conn.action_logging_requested and conn.action_logger is not None:
-                conn.action_logger.end_segment()
-                conn.action_logger = None
-                logger.info(f"[{client_host}] Action logging disabled")
-
-            if conn.video_recording_requested and conn.video_recorder is None:
-                conn.start_video_segment(world_engine)
-                logger.info(f"[{client_host}] Video recording enabled")
-            elif not conn.video_recording_requested and conn.video_recorder is not None:
-                conn.video_recorder.end_segment()
-                conn.video_recorder = None
-                logger.info(f"[{client_host}] Video recording disabled")
-
-        # Model delta — reload if model URI or quantization changed.
-        # The engine must be loaded before the seed so that seed_target_size
-        # and temporal_compression are resolved from the actual model config.
-        model_changed = False
-        quant_changed = "quant" in present and quant != world_engine.quant
-        if model_uri and (model_uri != world_engine.model_uri or quant_changed):
-            logger.info(
-                f"[{client_host}] {'Live model switch' if is_game_loop else 'Requested model'}: {model_uri} (quant={quant})"
-            )
-            world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
-            await world_engine.load_engine(model_uri, quant=quant)
-            world_engine.set_progress_callback(None)
-            world_engine.seed_frame = None
-            session.perceptual_frame_count = 0
-            session.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
-            model_changed = True
-            logger.info(f"[{client_host}] Model loaded: {world_engine.model_uri}")
-
-        # Seed delta
-        seed_loaded = False
-        if seed_data:
-            seed_loaded = await load_seed_from_data(seed_data, seed_filename)
-
-        if model_changed and not seed_loaded and not world_engine.seed_frame:
-            await conn.send_stage(SESSION_WAITING_FOR_SEED)
-
-        ready = seed_loaded or (world_engine.seed_frame is not None)
-        return ready, seed_loaded
-
     try:
         await conn.send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for init message...")
@@ -752,7 +598,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     case InitRequest() as req:
                         # init RPC: response is deferred until after warmup/session init completes
                         conn.init_req_id = req.req_id
-                        ready, _ = await handle_init(req)
+                        ready, _ = await handle_init(conn, world_engine, safety_checker, session, req)
                         if not ready:
                             await websocket.send_text(
                                 rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(
@@ -911,7 +757,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     match parsed:
                         case InitRequest() as req:
                             # init RPC: apply deltas and respond with metrics.
-                            ready, new_seed = await handle_init(req, is_game_loop=True)
+                            ready, new_seed = await handle_init(
+                                conn, world_engine, safety_checker, session, req, is_game_loop=True
+                            )
                             if ready:
                                 response = rpc_ok(req.req_id, build_init_response_data())
                             else:
