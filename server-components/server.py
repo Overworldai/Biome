@@ -38,6 +38,7 @@ from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 from pydantic import BaseModel
 
 from action_logger import ActionLogger
+from app_state import AppState, attach_app_state, get_app_state, get_app_state_ws
 from progress_stages import (
     SESSION_INPAINTING_LOAD,
     SESSION_INPAINTING_READY,
@@ -191,7 +192,7 @@ try:
 
     logger.info("Importing FastAPI...")
     import uvicorn
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.responses import JSONResponse
 
     logger.info("FastAPI imported")
@@ -237,16 +238,6 @@ world_engine = None
 image_gen = None
 safety_checker = None
 safety_hash_cache: dict[str, "SafetyCacheEntry"] = {}
-
-# ============================================================================
-# Startup state — shared between lifespan background task and WS clients
-# ============================================================================
-
-startup_complete: bool = False
-startup_error: str | None = None
-startup_stages: list[StatusMessage] = []  # accumulated stage messages
-# WS clients waiting for startup progress register a Queue here
-ws_startup_waiters: list[asyncio.Queue[StatusMessage | None]] = []
 
 LOG_TAIL_INITIAL_LINES = 220
 
@@ -311,15 +302,24 @@ def compute_bytes_hash(data: bytes) -> str:
 # ============================================================================
 
 
-def _broadcast_startup_stage(stage: Stage) -> None:
-    """Store a startup stage and push it to any connected WS clients."""
+def _broadcast_startup_stage(state: AppState, stage: Stage) -> None:
+    """Store a startup stage on AppState and push it to any connected WS clients."""
     msg = StatusMessage(stage=stage.id)
-    startup_stages.append(msg)
+    state.startup_stages.append(msg)
     # Also log to stdout so file-based logs capture it
     logger.info(f"Startup stage: {stage.id}")
-    for q in ws_startup_waiters:
+    for q in state.ws_startup_waiters:
         try:
             q.put_nowait(msg)
+        except asyncio.QueueFull:
+            pass
+
+
+def _signal_startup_done(state: AppState) -> None:
+    """Wake every waiter so its replay loop exits."""
+    for q in state.ws_startup_waiters:
+        try:
+            q.put_nowait(None)
         except asyncio.QueueFull:
             pass
 
@@ -329,16 +329,16 @@ def _broadcast_startup_stage(stage: Stage) -> None:
 # ============================================================================
 
 
-async def _heavy_init() -> None:
+async def _heavy_init(state: AppState) -> None:
     """Run heavy startup work (safety warmup, seed validation) in background."""
-    global world_engine, image_gen, safety_checker, safety_hash_cache, startup_complete, startup_error
+    global world_engine, image_gen, safety_checker, safety_hash_cache
 
     try:
-        _broadcast_startup_stage(STARTUP_BEGIN)
+        _broadcast_startup_stage(state, STARTUP_BEGIN)
 
         # Initialize modules
         logger.info("Initializing WorldEngine...")
-        _broadcast_startup_stage(STARTUP_ENGINE_MANAGER)
+        _broadcast_startup_stage(state, STARTUP_ENGINE_MANAGER)
         world_engine = WorldEngineManager()
 
         from image_gen import ImageGenManager
@@ -346,11 +346,11 @@ async def _heavy_init() -> None:
         image_gen = ImageGenManager(world_engine.cuda_executor)
 
         logger.info("Initializing Safety Checker...")
-        _broadcast_startup_stage(STARTUP_SAFETY_CHECKER)
+        _broadcast_startup_stage(state, STARTUP_SAFETY_CHECKER)
         safety_checker = SafetyChecker()
         await asyncio.to_thread(safety_checker.load_resident, "cuda")
         logger.info("Safety Checker loaded on GPU")
-        _broadcast_startup_stage(STARTUP_SAFETY_READY)
+        _broadcast_startup_stage(state, STARTUP_SAFETY_READY)
 
         # Load hash-based safety cache
         safety_hash_cache = load_safety_cache()
@@ -359,26 +359,16 @@ async def _heavy_init() -> None:
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
         logger.info(f"[SERVER] {len(safety_hash_cache)} safety cache entries")
         logger.info("=" * 60)
-        _broadcast_startup_stage(STARTUP_READY)
+        _broadcast_startup_stage(state, STARTUP_READY)
 
-        startup_complete = True
-
-        # Signal all waiters that startup is done
-        for q in ws_startup_waiters:
-            try:
-                q.put_nowait(None)
-            except asyncio.QueueFull:
-                pass
+        state.startup_complete = True
+        _signal_startup_done(state)
 
     except Exception as exc:
-        startup_error = str(exc)
+        state.startup_error = str(exc)
         logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
-        startup_complete = True  # mark done so waiters unblock
-        for q in ws_startup_waiters:
-            try:
-                q.put_nowait(None)
-            except asyncio.QueueFull:
-                pass
+        state.startup_complete = True  # mark done so waiters unblock
+        _signal_startup_done(state)
 
 
 @asynccontextmanager
@@ -388,8 +378,11 @@ async def lifespan(app: FastAPI):
     logger.info("BIOME SERVER STARTUP")
     logger.info("=" * 60)
 
+    state = AppState()
+    attach_app_state(app, state)
+
     # Start heavy init in background so /health responds immediately
-    init_task = asyncio.create_task(_heavy_init())
+    init_task = asyncio.create_task(_heavy_init(state))
 
     # Start parent-process watchdog
     watchdog_task = None
@@ -431,12 +424,12 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health():
+async def health(state: AppState = Depends(get_app_state)):
     """Health check for Biome backend."""
     return JSONResponse(
         {
             "status": "ok",
-            "startup_complete": startup_complete,
+            "startup_complete": state.startup_complete,
             "world_engine": {
                 "loaded": world_engine is not None and world_engine.engine is not None,
                 "warmed_up": world_engine is not None and world_engine.engine_warmed_up,
@@ -695,7 +688,7 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get_app_state_ws)):
     """
     WebSocket endpoint for frame streaming and RPC.
 
@@ -757,14 +750,14 @@ async def websocket_endpoint(websocket: WebSocket):
     # If startup is not yet complete, replay accumulated stages and stream new ones.
     # `None` enqueued from _heavy_init signals "startup done".
     startup_queue: asyncio.Queue[StatusMessage | None] | None = None
-    if not startup_complete:
+    if not state.startup_complete:
         startup_queue = asyncio.Queue(maxsize=200)
-        ws_startup_waiters.append(startup_queue)
+        state.ws_startup_waiters.append(startup_queue)
         # Replay accumulated stages
-        for stage_msg in startup_stages:
+        for stage_msg in state.startup_stages:
             await send_message(stage_msg)
         # Stream new stages until startup is done
-        while not startup_complete:
+        while not state.startup_complete:
             try:
                 next_msg = await asyncio.wait_for(startup_queue.get(), timeout=1.0)
                 if next_msg is None:
@@ -772,10 +765,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_message(next_msg)
             except TimeoutError:
                 continue
-        ws_startup_waiters.remove(startup_queue)
+        state.ws_startup_waiters.remove(startup_queue)
 
-    if startup_error:
-        await send_message(build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(startup_error)))
+    if state.startup_error:
+        await send_message(
+            build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(state.startup_error))
+        )
         log_tail_task.cancel()
         TeeStream.unregister_client(log_queue)
         await websocket.close()
