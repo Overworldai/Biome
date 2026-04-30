@@ -28,7 +28,8 @@ from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import AppState
-from protocol import StatusMessage
+from progress_stages import Stage
+from protocol import MessageId, StatusMessage, WarningMessage
 from video_recorder import VideoRecorder
 
 
@@ -124,3 +125,25 @@ class Connection:
         self.progress_queue = asyncio.Queue(maxsize=500)
         self.log_queue = asyncio.Queue(maxsize=1000)
         self.main_loop = asyncio.get_running_loop()
+
+    # ─── Async send helpers (asyncio thread; awaited) ──────────────
+    async def send_message(self, msg: BaseModel) -> None:
+        """Serialise + push a Pydantic message over the websocket."""
+        await self.websocket.send_text(msg.model_dump_json(exclude_none=True))
+
+    async def send_warning(self, message_id: MessageId, params: dict[str, str] | None = None) -> None:
+        await self.send_message(WarningMessage(message_id=message_id, params=params))
+
+    async def send_stage(self, stage: Stage) -> None:
+        await self.send_message(StatusMessage(stage=stage.id))
+
+    # ─── Threadsafe enqueue helper (any thread) ────────────────────
+    def queue_send(self, payload: BaseModel | bytes) -> None:
+        """Enqueue a payload for the asyncio sender to dispatch.
+        Safe to call from the generator thread; wakes the sender via
+        a `call_soon_threadsafe(frame_ready.set)`."""
+        try:
+            self.frame_queue.put_nowait(payload)
+            self.main_loop.call_soon_threadsafe(self.frame_ready.set)
+        except Exception:
+            pass

@@ -34,7 +34,6 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
-from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import (
@@ -85,7 +84,6 @@ from protocol import (
     StatusMessage,
     SystemInfo,
     SystemInfoMessage,
-    WarningMessage,
     rpc_err,
     rpc_ok,
 )
@@ -514,9 +512,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     await websocket.accept()
 
-    async def send_message(msg: BaseModel) -> None:
-        await websocket.send_text(msg.model_dump_json(exclude_none=True))
-
     # Stream log lines to the client. TeeStream captures all stdout/stderr
     # output (including logger output) and pushes complete lines into per-client
     # queues, so logs arrive immediately without file polling. The queue and
@@ -528,13 +523,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             # Register for live lines only AFTER reading the tail to avoid duplicates.
             initial_lines = _read_log_tail_lines(LOG_TAIL_INITIAL_LINES)
             for line in initial_lines:
-                await send_message(LogMessage(line=line))
+                await conn.send_message(LogMessage(line=line))
             TeeStream.register_client(conn.log_queue, conn.main_loop)
 
             # Stream new log lines as they arrive from TeeStream.
             while True:
                 line = await conn.log_queue.get()
-                await send_message(LogMessage(line=line))
+                await conn.send_message(LogMessage(line=line))
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -551,20 +546,20 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         state.ws_startup_waiters.append(startup_queue)
         # Replay accumulated stages
         for stage_msg in state.startup_stages:
-            await send_message(stage_msg)
+            await conn.send_message(stage_msg)
         # Stream new stages until startup is done
         while not state.startup_complete:
             try:
                 next_msg = await asyncio.wait_for(startup_queue.get(), timeout=1.0)
                 if next_msg is None:
                     break
-                await send_message(next_msg)
+                await conn.send_message(next_msg)
             except TimeoutError:
                 continue
         state.ws_startup_waiters.remove(startup_queue)
 
     if state.startup_error:
-        await send_message(
+        await conn.send_message(
             build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(state.startup_error))
         )
         log_tail_task.cancel()
@@ -586,17 +581,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     # Push system info immediately so the client has the hardware identity
     # even if the session crashes during init (e.g. CUDA graph compilation).
-    await send_message(SystemInfoMessage(**system_info_module.system_info))
+    await conn.send_message(SystemInfoMessage(**system_info_module.system_info))
 
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
     world_engine.seed_frame = None
-
-    async def send_warning(message_id: MessageId, params: dict[str, str] | None = None) -> None:
-        await send_message(WarningMessage(message_id=message_id, params=params))
-
-    async def send_stage(stage: Stage) -> None:
-        await send_message(StatusMessage(stage=stage.id))
 
     # Progress queue: engine_manager calls progress_callback (sync, from CUDA thread)
     # which enqueues payloads; the drain task sends them over the WebSocket.
@@ -614,7 +603,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             while True:
                 msg = await conn.progress_queue.get()
                 try:
-                    await send_message(msg)
+                    await conn.send_message(msg)
                 except Exception:
                     break
         except asyncio.CancelledError:
@@ -636,14 +625,14 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         """Validate safety and load seed from base64 image data."""
         if not image_data_b64:
             logger.warning(f"[{client_host}] Missing seed image data")
-            await send_warning(MessageId.SEED_MISSING_DATA)
+            await conn.send_warning(MessageId.SEED_MISSING_DATA)
             return False
 
         try:
             image_bytes = base64.b64decode(image_data_b64)
         except Exception as e:
             logger.warning(f"[{client_host}] Invalid base64 seed data: {e}")
-            await send_warning(MessageId.SEED_INVALID_DATA)
+            await conn.send_warning(MessageId.SEED_INVALID_DATA)
             return False
 
         img_hash = compute_bytes_hash(image_bytes)
@@ -658,7 +647,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             cached = safety_hash_cache[img_hash]
             if not cached.get("is_safe", False):
                 logger.warning(f"[{client_host}] Seed marked as unsafe (cached)")
-                await send_warning(MessageId.SEED_UNSAFE)
+                await conn.send_warning(MessageId.SEED_UNSAFE)
                 return False
         else:
             # Run safety check (decode + inference off the event loop)
@@ -671,7 +660,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 safety_result = await asyncio.to_thread(_check_safety)
             except Exception as e:
                 logger.warning(f"[{client_host}] Safety check failed: {e}")
-                await send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
+                await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
                 return False
 
             is_safe = safety_result.get("is_safe", False)
@@ -684,7 +673,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
             if not is_safe:
                 logger.warning(f"[{client_host}] Seed marked as unsafe")
-                await send_warning(MessageId.SEED_UNSAFE)
+                await conn.send_warning(MessageId.SEED_UNSAFE)
                 return False
 
         # Load seed
@@ -693,7 +682,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         loaded_frame = await world_engine.load_seed_from_base64(image_data_b64)
         if loaded_frame is None:
             logger.error(f"[{client_host}] Failed to load seed")
-            await send_warning(MessageId.SEED_LOAD_FAILED)
+            await conn.send_warning(MessageId.SEED_LOAD_FAILED)
             return False
 
         world_engine.seed_frame = loaded_frame
@@ -780,13 +769,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             seed_loaded = await load_seed_from_data(seed_data, seed_filename)
 
         if model_changed and not seed_loaded and not world_engine.seed_frame:
-            await send_stage(SESSION_WAITING_FOR_SEED)
+            await conn.send_stage(SESSION_WAITING_FOR_SEED)
 
         ready = seed_loaded or (world_engine.seed_frame is not None)
         return ready, seed_loaded
 
     try:
-        await send_stage(SESSION_WAITING_FOR_SEED)
+        await conn.send_stage(SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for init message...")
 
         while world_engine.seed_frame is None:
@@ -823,7 +812,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
             except TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
-                await send_message(build_error_message(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED))
+                await conn.send_message(build_error_message(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED))
                 return
 
         # Wire progress callback so engine_manager reports granular stages
@@ -837,7 +826,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             )
             world_engine.set_progress_callback(None)
             if conn.init_req_id:
-                await send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
+                await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
             return
 
         # Load or unload scene authoring model based on flag.
@@ -848,17 +837,19 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             await asyncio.to_thread(image_gen.unload)
 
         if conn.scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
-            await send_stage(SESSION_INPAINTING_LOAD)
+            await conn.send_stage(SESSION_INPAINTING_LOAD)
             try:
                 await image_gen.warmup()
-                await send_stage(SESSION_INPAINTING_READY)
+                await conn.send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Scene authoring warmup failed: {e}", exc_info=True)
-                await send_message(
+                await conn.send_message(
                     build_error_message(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
                 )
                 if conn.init_req_id:
-                    await send_message(rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
+                    await conn.send_message(
+                        rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED)
+                    )
                 return
 
         # Warmup on first connection AFTER seed is loaded
@@ -871,7 +862,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     logger.error(
                         f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}"
                     )
-                    await send_message(
+                    await conn.send_message(
                         build_error_message(
                             message_id=MessageId.QUANT_UNSUPPORTED_GPU,
                             params={"quant": world_engine.quant or "unknown"},
@@ -893,7 +884,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         await websocket.send_bytes(struct.pack("<I", len(header)) + header + jpeg)
 
         world_engine.set_progress_callback(None)
-        await send_stage(SESSION_READY)
+        await conn.send_stage(SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
 
         conn.action_logger = ActionLogger(client_host) if conn.action_logging_requested else None
@@ -946,13 +937,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         # Frame queue, control state, and inter-thread channels live on `conn`
         # (initialised in Connection.__post_init__).
 
-        def queue_send(payload: BaseModel | bytes) -> None:
-            try:
-                conn.frame_queue.put_nowait(payload)
-                conn.main_loop.call_soon_threadsafe(conn.frame_ready.set)
-            except Exception:
-                pass
-
         # Cached dynamic GPU metrics live on `conn` (initialised to -1).
         # Static identifiers (GPU/CPU name, VRAM total) live in system_info
         # and are sent once via the init response.
@@ -991,7 +975,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         # Respond to init RPC with session metrics
         if conn.init_req_id:
-            await send_message(rpc_ok(conn.init_req_id, build_init_response_data()))
+            await conn.send_message(rpc_ok(conn.init_req_id, build_init_response_data()))
             conn.init_req_id = None
 
         async def receiver() -> None:
@@ -1012,7 +996,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 response = rpc_ok(req.req_id, build_init_response_data())
                             else:
                                 response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
-                            queue_send(response)
+                            conn.queue_send(response)
                             if new_seed:
                                 conn.reset_flag = True
 
@@ -1049,7 +1033,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                         edit_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
                                         edit_response = rpc_err(req.req_id, error=str(e))
-                            queue_send(edit_response)
+                            conn.queue_send(edit_response)
 
                         case GenerateSceneRequest() as req:
                             # generate_scene: like scene_edit but with a blank
@@ -1079,11 +1063,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                         gen_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
                                         gen_response = rpc_err(req.req_id, error=str(e))
-                            queue_send(gen_response)
+                            conn.queue_send(gen_response)
 
                         case CheckSeedSafetyRequest() as req:
                             seed_response = await handle_check_seed_safety(state, req)
-                            queue_send(seed_response)
+                            conn.queue_send(seed_response)
 
                         case ResetNotif():
                             logger.info(f"[{client_host}] Reset requested")
@@ -1138,7 +1122,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         if isinstance(payload, bytes):
                             await websocket.send_bytes(payload)
                         else:
-                            await send_message(payload)
+                            await conn.send_message(payload)
                 except Exception as e:
                     logger.error(f"[{client_host}] Sender error: {e}", exc_info=True)
                     conn.running = False
@@ -1192,7 +1176,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         "t_metrics_ms": round((t_metrics - t_enc) * 1000, 1),
                         "t_overhead_ms": round((t_queued - t_metrics) * 1000, 1),
                     }
-                    queue_send(
+                    conn.queue_send(
                         build_binary_frame(
                             jpeg,
                             session.perceptual_frame_count,
@@ -1232,7 +1216,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             if seed.dim() == 4:
                                 seed = seed[0]  # First subframe for multiframe models
                             seed_jpeg = world_engine.frame_to_jpeg(seed)
-                            queue_send(build_binary_frame(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0))
+                            conn.queue_send(build_binary_frame(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0))
                         except Exception as e:
                             logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                             req["future"].set_exception(e)
@@ -1414,7 +1398,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             recovery_success = False
 
                         if recovery_success:
-                            queue_send(
+                            conn.queue_send(
                                 StatusMessage(
                                     stage="session.reset",
                                     message="Recovered from CUDA error - engine reset",
@@ -1422,13 +1406,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             )
                             logger.info(f"[{client_host}] Successfully recovered from CUDA error")
                         else:
-                            queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
+                            conn.queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
                             logger.error(f"[{client_host}] Failed to recover from CUDA error")
                             conn.running = False
                             break
                     else:
                         logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
-                        queue_send(build_error_message(message=str(cuda_err)))
+                        conn.queue_send(build_error_message(message=str(cuda_err)))
                         conn.running = False
                         break
 
@@ -1464,7 +1448,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         else:
             logger.error(f"[{client_host}] Error: {e}", exc_info=True)
             try:
-                await send_message(build_error_message(message=str(e)))
+                await conn.send_message(build_error_message(message=str(e)))
             except Exception:
                 pass
     finally:
