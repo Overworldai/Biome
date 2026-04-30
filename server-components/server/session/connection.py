@@ -45,29 +45,9 @@ from server.protocol import (
 
 if TYPE_CHECKING:
     from engine.manager import WorldEngineManager
+    from util.system_info import SystemMonitor
 
 logger = logging.getLogger(__name__)
-
-
-def build_error_message(
-    *,
-    message_id: MessageId | None = None,
-    message: str | None = None,
-    params: dict[str, str] | None = None,
-) -> ErrorMessage:
-    """Build an ErrorMessage with an attached snapshot of ephemeral state
-    (RAM/VRAM/GPU util at error time).  Every outgoing `error` push should
-    go through this so bug reports capture what the server was actually
-    doing at the failure point. Imports system_info lazily to keep this
-    module light at module-load time."""
-    from util import system_info as system_info_module
-
-    return ErrorMessage(
-        message_id=message_id,
-        message=message,
-        params=params,
-        snapshot=system_info_module.capture_error_snapshot(),
-    )
 
 
 @dataclass
@@ -90,6 +70,7 @@ class Connection:
     # ─── Immutable references (set at construction) ────────────────
     websocket: WebSocket
     client_host: str
+    system_monitor: "SystemMonitor"
 
     # ─── Init-flag deltas applied by handle_init ────────────────────
     # All default to "not requested"; the renderer ramps them up via
@@ -181,6 +162,26 @@ class Connection:
     async def send_stage(self, stage: StageId) -> None:
         await self.send_message(StatusMessage(stage=stage))
 
+    async def send_error(
+        self,
+        *,
+        message_id: MessageId | None = None,
+        message: str | None = None,
+        params: dict[str, str] | None = None,
+    ) -> None:
+        """Build + push an ErrorMessage with an attached system-state snapshot."""
+        await self.send_message(self._build_error_message(message_id=message_id, message=message, params=params))
+
+    def queue_error(
+        self,
+        *,
+        message_id: MessageId | None = None,
+        message: str | None = None,
+        params: dict[str, str] | None = None,
+    ) -> None:
+        """Build + queue an ErrorMessage from the generator thread (sync path)."""
+        self.queue_send(self._build_error_message(message_id=message_id, message=message, params=params))
+
     def push_progress(self, stage: StageId) -> None:
         """Sync callback for `WorldEngineManager.set_progress_callback` —
         safe to call from any thread; enqueues onto `progress_queue` for
@@ -233,15 +234,31 @@ class Connection:
         if self.video_recorder is not None:
             self.video_recorder.end_segment()
 
-    # ─── Frame-envelope helpers ────────────────────────────────────
+    # ─── Error / frame-envelope helpers ────────────────────────────
+    def _build_error_message(
+        self,
+        *,
+        message_id: MessageId | None = None,
+        message: str | None = None,
+        params: dict[str, str] | None = None,
+    ) -> ErrorMessage:
+        """Build an ErrorMessage with an attached snapshot of ephemeral state
+        (RAM/VRAM/GPU util at error time). Every outgoing `error` push goes
+        through `send_error` / `queue_error`, which call this — so bug reports
+        capture what the server was actually doing at the failure point."""
+        return ErrorMessage(
+            message_id=message_id,
+            message=message,
+            params=params,
+            snapshot=self.system_monitor.capture_error_snapshot(),
+        )
+
     def update_gpu_metrics(self) -> None:
         """Sample dynamic GPU metrics into the cache. Called every few
         frames from the generator thread; reads back into binary frame
         headers via `build_frame_envelope`."""
-        from util import system_info as system_info_module
-
-        self.cached_vram_used_bytes = system_info_module.get_vram_used_bytes()
-        self.cached_gpu_util_percent = system_info_module.get_gpu_util_percent()
+        self.cached_vram_used_bytes = self.system_monitor.vram_used_bytes()
+        self.cached_gpu_util_percent = self.system_monitor.gpu_util_percent()
 
     def build_frame_envelope(
         self,

@@ -44,7 +44,7 @@ from server.protocol import (
     rpc_err,
     rpc_ok,
 )
-from server.session.connection import Connection, build_error_message
+from server.session.connection import Connection
 
 if TYPE_CHECKING:
     from engine.manager import WorldEngineManager
@@ -254,7 +254,7 @@ async def run_preinit_handshake(
             raw = await asyncio.wait_for(conn.websocket.receive_text(), timeout=60.0)
         except TimeoutError:
             logger.error(f"[{conn.client_host}] Timeout waiting for init")
-            await conn.send_message(build_error_message(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED))
+            await conn.send_error(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED)
             return False
 
         try:
@@ -319,9 +319,7 @@ async def prepare_session(
             loaded = await scene_authoring.configure_for_session(conn.scene_authoring_requested)
         except Exception as e:
             logger.error(f"[{conn.client_host}] Scene authoring warmup failed: {e}", exc_info=True)
-            await conn.send_message(
-                build_error_message(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
-            )
+            await conn.send_error(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
             if conn.init_req_id:
                 await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
             return False
@@ -336,11 +334,9 @@ async def prepare_session(
             try:
                 await world_engine.warmup()
             except QuantUnsupportedError:
-                await conn.send_message(
-                    build_error_message(
-                        message_id=MessageId.QUANT_UNSUPPORTED_GPU,
-                        params={"quant": world_engine.quant or "unknown"},
-                    )
+                await conn.send_error(
+                    message_id=MessageId.QUANT_UNSUPPORTED_GPU,
+                    params={"quant": world_engine.quant or "unknown"},
                 )
                 return False
 

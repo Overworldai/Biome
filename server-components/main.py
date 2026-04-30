@@ -83,9 +83,9 @@ try:
 
     logger.info(f"torch {torch.__version__} imported")
 
-    from util import system_info as system_info_module
+    from util.system_info import SystemMonitor
 
-    system_info_module.initialize()
+    system_monitor = SystemMonitor.collect()
 
     logger.info("Importing torchvision...")
     import torchvision
@@ -202,6 +202,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+app.state.system_monitor = system_monitor
 
 
 if __name__ == "__main__":

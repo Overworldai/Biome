@@ -44,13 +44,11 @@ from server.protocol import (
     SceneEditRequest,
     StageId,
     StatusMessage,
-    SystemInfo,
     rpc_err,
     rpc_ok,
 )
-from server.session.connection import Connection, build_error_message
+from server.session.connection import Connection
 from server.session.handlers import build_init_response_data, handle_check_seed_safety, handle_init
-from util import system_info as system_info_module
 
 if TYPE_CHECKING:
     from engine import Engines
@@ -80,7 +78,6 @@ async def run_session(
             conn,
             engines,
             BUTTON_CODES,
-            system_info_module.get_system_info(),
         )
     )
     send_task = asyncio.create_task(run_sender(conn))
@@ -133,7 +130,6 @@ async def run_receiver(
     conn: Connection,
     engines: "Engines",
     button_codes: dict[str, int],
-    system_info: SystemInfo,
 ) -> None:
     """Drain inbound websocket messages, dispatch them via the typed
     protocol union. Posts scene-edit / generate-scene futures into
@@ -157,7 +153,7 @@ async def run_receiver(
                     # init RPC: apply deltas and respond with metrics.
                     ready, new_seed = await handle_init(conn, world_engine, safety_checker, req, is_game_loop=True)
                     if ready:
-                        response = rpc_ok(req.req_id, build_init_response_data(world_engine, system_info))
+                        response = rpc_ok(req.req_id, build_init_response_data(world_engine, conn.system_monitor.info))
                     else:
                         response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
                     conn.queue_send(response)
@@ -552,13 +548,13 @@ def run_generator(
                     )
                     logger.info(f"[{conn.client_host}] Successfully recovered from CUDA error")
                 else:
-                    conn.queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
+                    conn.queue_error(message_id=MessageId.CUDA_RECOVERY_FAILED)
                     logger.error(f"[{conn.client_host}] Failed to recover from CUDA error")
                     conn.running = False
                     break
             else:
                 logger.error(f"[{conn.client_host}] Generation error: {cuda_err}", exc_info=True)
-                conn.queue_send(build_error_message(message=str(cuda_err)))
+                conn.queue_error(message=str(cuda_err))
                 conn.running = False
                 break
 

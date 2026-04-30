@@ -1,18 +1,15 @@
 """
 Server system/runtime introspection.
 
-Single home for:
-  * Host identity snapshot queried once at startup (CPU/GPU/driver/etc.), logged
-    so every error in server.log has hardware context above it
-    (Overworldai/Biome#98) and reused by WS sessions instead of re-querying.
-  * Live metrics sampler (VRAM, GPU util) used by frame-header metrics.
-  * Error snapshot — a one-shot capture of ephemeral state (RAM/VRAM/GPU util)
-    attached to outgoing error push messages, so bug reports include the
-    momentary state at the failure point rather than steady-state idle values.
+`SystemMonitor` is the one-stop access point: a snapshot of static hardware
+identity queried once at startup (CPU/GPU/driver/etc.), live samplers (VRAM,
+GPU util) for frame-header metrics, and an error-snapshot builder used when
+constructing `error` push messages.
 
-All three share the same NVML handle and care about the same hardware, so they
-live together. The wire-typed `SystemInfo` / `ErrorSnapshot` Pydantic models
-live in `protocol.py`; this module produces and consumes them directly.
+One instance per process — constructed at startup in `main.py` and threaded
+through to consumers (no module globals). The wire-typed `SystemInfo` and
+`ErrorSnapshot` Pydantic models live in `protocol.py`; this module produces
+and consumes them directly.
 """
 
 import torch
@@ -20,28 +17,19 @@ import torch
 from server.protocol import ErrorSnapshot, SystemInfo
 from util.server_logging import logger
 
-# Module-level caches — populated by `initialize()` (called once from
-# main.py inside the heavy import block, so consumers downstream of
-# the startup gate can rely on `get_system_info()` returning a value).
-_system_info: SystemInfo | None = None
-nvml_handle = None
 
-
-def collect_system_info() -> SystemInfo:
-    """Query hardware / software identifiers.
-
-    Safe to call once at startup; each subsystem (cpuinfo, torch, NVML) is
-    wrapped so a failure in one doesn't prevent the others from populating.
-    Also initializes the module-level NVML handle used by the live samplers.
-    """
-    global nvml_handle
-
+def _collect_system_info_and_nvml() -> tuple[SystemInfo, object]:
+    """Query CPU / GPU / NVML once at startup. Returns the static info plus
+    the opaque NVML handle (or `None` if NVML init failed). Each subsystem
+    is wrapped so a failure in one doesn't prevent the others from
+    populating."""
     cpu_name: str | None = None
     gpu_name: str | None = None
     vram_total_bytes: int | None = None
     cuda_version: str | None = None
     driver_version: str | None = None
     gpu_count = 0
+    nvml_handle: object | None = None
 
     try:
         import cpuinfo
@@ -72,7 +60,7 @@ def collect_system_info() -> SystemInfo:
     except Exception as e:
         logger.warning(f"Failed to initialize NVML: {e}")
 
-    return SystemInfo(
+    info = SystemInfo(
         cpu_name=cpu_name,
         gpu_name=gpu_name,
         vram_total_bytes=vram_total_bytes,
@@ -81,9 +69,12 @@ def collect_system_info() -> SystemInfo:
         torch_version=torch.__version__,
         gpu_count=gpu_count,
     )
+    return info, nvml_handle
 
 
-def log_system_info(info: SystemInfo) -> None:
+def _log_system_info(info: SystemInfo) -> None:
+    """Log the static system info. Called once at startup so server.log has
+    hardware context above any later errors (Overworldai/Biome#98)."""
     gpu_name = info.gpu_name or "[unknown]"
     gpu_count = info.gpu_count
     gpu_summary = f"{gpu_name} (x{gpu_count})" if gpu_count > 1 else gpu_name
@@ -96,105 +87,101 @@ def log_system_info(info: SystemInfo) -> None:
     logger.info(f"  Torch:  {info.torch_version}")
 
 
-def initialize() -> SystemInfo:
-    """Collect + log system info. Call once at startup."""
-    global _system_info
-    _system_info = collect_system_info()
-    log_system_info(_system_info)
-    return _system_info
+class SystemMonitor:
+    """Static hardware identity + live samplers + error-state snapshots.
 
+    One instance per process; pass it down to consumers explicitly. The
+    static `info` is collected once at construction and never changes.
+    Sampler methods (`vram_used_bytes`, `gpu_util_percent`,
+    `capture_error_snapshot`) re-query each call."""
 
-def get_system_info() -> SystemInfo:
-    """Return the cached SystemInfo. Raises if `initialize()` hasn't run —
-    callers downstream of the startup gate can rely on it succeeding."""
-    if _system_info is None:
-        raise RuntimeError("system_info not initialised — call initialize() at startup")
-    return _system_info
+    info: SystemInfo
 
+    def __init__(self, info: SystemInfo, nvml_handle: object) -> None:
+        self.info = info
+        self._nvml_handle = nvml_handle
 
-# ---------------------------------------------------------------------------
-# Live samplers
-# ---------------------------------------------------------------------------
+    @classmethod
+    def collect(cls) -> "SystemMonitor":
+        """Query the host once and log the result. Call exactly once at
+        process startup; the returned instance is the canonical handle for
+        the rest of the process."""
+        info, nvml_handle = _collect_system_info_and_nvml()
+        _log_system_info(info)
+        return cls(info=info, nvml_handle=nvml_handle)
 
+    # ─── Live samplers ────────────────────────────────────────────────
 
-def get_gpu_util_percent() -> int:
-    """Current GPU utilization (0-100), or -1 if unavailable.
-
-    Prefers `torch.cuda.utilization()` (fast path); falls back to NVML which
-    talks to the same driver as nvidia-smi.
-    """
-    try:
-        util = torch.cuda.utilization()
-        if util >= 0:
-            return int(util)
-    except Exception:
-        pass
-    if nvml_handle is not None:
+    def gpu_util_percent(self) -> int:
+        """Current GPU utilization (0-100), or -1 if unavailable. Prefers
+        `torch.cuda.utilization()` (fast path); falls back to NVML which
+        talks to the same driver as nvidia-smi."""
         try:
-            import pynvml
-
-            return int(pynvml.nvmlDeviceGetUtilizationRates(nvml_handle).gpu)
+            util = torch.cuda.utilization()
+            if util >= 0:
+                return int(util)
         except Exception:
             pass
-    return -1
+        if self._nvml_handle is not None:
+            try:
+                import pynvml
 
+                return int(pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle).gpu)
+            except Exception:
+                pass
+        return -1
 
-def get_vram_used_bytes() -> int:
-    """Current VRAM allocated by torch on device 0, in bytes.  -1 if unavailable."""
-    try:
-        if torch.cuda.is_available():
-            return torch.cuda.memory_allocated()
-    except Exception:
-        pass
-    return -1
+    def vram_used_bytes(self) -> int:
+        """VRAM allocated by torch on device 0, in bytes. -1 if unavailable."""
+        try:
+            if torch.cuda.is_available():
+                return torch.cuda.memory_allocated()
+        except Exception:
+            pass
+        return -1
 
+    def vram_reserved_bytes(self) -> int:
+        """VRAM held by torch's allocator (allocated + cached), in bytes.
+        -1 if unavailable."""
+        try:
+            if torch.cuda.is_available():
+                return torch.cuda.memory_reserved()
+        except Exception:
+            pass
+        return -1
 
-def get_vram_reserved_bytes() -> int:
-    """VRAM currently held by torch's allocator (allocated + cached), in bytes."""
-    try:
-        if torch.cuda.is_available():
-            return torch.cuda.memory_reserved()
-    except Exception:
-        pass
-    return -1
+    # ─── Error snapshot ──────────────────────────────────────────────
 
+    def capture_error_snapshot(self) -> ErrorSnapshot:
+        """Best-effort snapshot of ephemeral state at the moment of an error.
 
-# ---------------------------------------------------------------------------
-# Error snapshot
-# ---------------------------------------------------------------------------
+        Attached to outgoing error push messages so bug reports include what
+        the server was actually doing at failure time, not the idle state
+        recorded when the user later clicks "Copy Report"."""
+        process_rss_bytes: int | None = None
+        ram_used_bytes: int | None = None
+        ram_total_bytes: int | None = None
 
+        try:
+            import psutil
 
-def capture_error_snapshot() -> ErrorSnapshot:
-    """Best-effort snapshot of ephemeral state at the moment of an error.
+            process = psutil.Process()
+            process_rss_bytes = process.memory_info().rss
+            vm = psutil.virtual_memory()
+            ram_used_bytes = vm.total - vm.available
+            ram_total_bytes = vm.total
+        except Exception:
+            pass
 
-    Attached to outgoing error push messages so bug reports include what the
-    server was actually doing at failure time, not the idle state recorded
-    when the user later clicks "Copy Report".
-    """
-    process_rss_bytes: int | None = None
-    ram_used_bytes: int | None = None
-    ram_total_bytes: int | None = None
+        vram_used = self.vram_used_bytes()
+        vram_reserved = self.vram_reserved_bytes()
+        util = self.gpu_util_percent()
 
-    try:
-        import psutil
-
-        process = psutil.Process()
-        process_rss_bytes = process.memory_info().rss
-        vm = psutil.virtual_memory()
-        ram_used_bytes = vm.total - vm.available
-        ram_total_bytes = vm.total
-    except Exception:
-        pass
-
-    vram_used = get_vram_used_bytes()
-    vram_reserved = get_vram_reserved_bytes()
-    util = get_gpu_util_percent()
-
-    return ErrorSnapshot(
-        process_rss_bytes=process_rss_bytes,
-        ram_used_bytes=ram_used_bytes,
-        ram_total_bytes=ram_total_bytes,
-        vram_used_bytes=vram_used if vram_used >= 0 else None,
-        vram_reserved_bytes=vram_reserved if vram_reserved >= 0 else None,
-        gpu_util_percent=util if util >= 0 else None,
-    )
+        return ErrorSnapshot(
+            process_rss_bytes=process_rss_bytes,
+            ram_used_bytes=ram_used_bytes,
+            ram_total_bytes=ram_total_bytes,
+            vram_used_bytes=vram_used if vram_used >= 0 else None,
+            vram_reserved_bytes=vram_reserved if vram_reserved >= 0 else None,
+            gpu_util_percent=util if util >= 0 else None,
+        )
