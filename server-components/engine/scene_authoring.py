@@ -66,9 +66,9 @@ def run_generate_scene(
     # Safety check on the generated image
     generated_np = world_engine._tensor_to_numpy(generated)
     generated_pil = Image.fromarray(generated_np)
-    safety_result = safety_checker.check_pil_image(generated_pil)
-    if not safety_result["is_safe"]:
-        logger.warning(f"[GENERATE_SCENE] Safety checker rejected generated image: {safety_result['scores']}")
+    verdict = safety_checker.check_pil_image(generated_pil)
+    if not verdict.is_safe:
+        logger.warning(f"[GENERATE_SCENE] Safety checker rejected generated image: {verdict.scores}")
         raise SafetyRejectionError(GENERATE_SCENE_SAFETY_MESSAGE_ID)
 
     # Encode the generated image as JPEG so the client can save it to disk.
@@ -158,9 +158,9 @@ def run_scene_edit(
 
     # Safety check on the inpainted result
     inpainted_pil = Image.fromarray(inpainted_np)
-    safety_result = safety_checker.check_pil_image(inpainted_pil)
-    if not safety_result["is_safe"]:
-        logger.warning(f"[SCENE_EDIT] Safety checker rejected inpainted image: {safety_result['scores']}")
+    verdict = safety_checker.check_pil_image(inpainted_pil)
+    if not verdict.is_safe:
+        logger.warning(f"[SCENE_EDIT] Safety checker rejected inpainted image: {verdict.scores}")
         raise SafetyRejectionError()
 
     # Expand to full temporal_compression for multiframe models

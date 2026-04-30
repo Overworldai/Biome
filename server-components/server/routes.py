@@ -35,7 +35,6 @@ from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 
 from engine import Engines
-from engine.safety import SafetyCacheEntry
 from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
 from server.session.connection import Connection, build_error_message
 from server.session.handlers import build_init_response_data, prepare_session, run_preinit_handshake
@@ -43,8 +42,6 @@ from server.session.workers import run_session
 from server.startup import ServerStartup
 from util import system_info as system_info_module
 from util.server_logging import logger, stream_logs_to_client
-
-SafetyCache = dict[str, SafetyCacheEntry]
 
 router = APIRouter()
 
@@ -62,11 +59,6 @@ def get_engines(request: Request) -> Engines:
 def get_engines_ws(websocket: WebSocket) -> Engines:
     engines: Engines = websocket.app.state.engines
     return engines
-
-
-def get_safety_cache_ws(websocket: WebSocket) -> SafetyCache:
-    cache: SafetyCache = websocket.app.state.safety_cache
-    return cache
 
 
 def get_startup(request: Request) -> ServerStartup:
@@ -90,7 +82,6 @@ async def health(request: Request, startup: ServerStartup = Depends(get_startup)
     for engine handles since they may not be populated yet during startup."""
     engines: Engines | None = getattr(request.app.state, "engines", None)
     we = engines.world_engine if engines else None
-    sc = engines.safety_checker if engines else None
     return JSONResponse(
         {
             "status": "ok",
@@ -100,7 +91,7 @@ async def health(request: Request, startup: ServerStartup = Depends(get_startup)
                 "warmed_up": we is not None and we.engine_warmed_up,
                 "has_seed": we is not None and we.seed_frame is not None,
             },
-            "safety": {"loaded": sc is not None and sc.model is not None},
+            "safety": {"loaded": engines is not None},
         }
     )
 
@@ -179,9 +170,8 @@ async def websocket_endpoint(
             )
             return
 
-        # Past the startup gate: engines + safety cache are populated.
+        # Past the startup gate: engines are populated.
         engines = get_engines_ws(websocket)
-        safety_cache = get_safety_cache_ws(websocket)
         world_engine = engines.world_engine
 
         # Phase 2: hardware identity goes out immediately so the client has
@@ -193,7 +183,7 @@ async def websocket_endpoint(
 
         # Phase 3: pre-init message dispatch — wait for an InitRequest that
         # loads a seed frame (or 60 s timeout).
-        if not await run_preinit_handshake(conn, world_engine, engines.safety_checker, safety_cache):
+        if not await run_preinit_handshake(conn, world_engine, engines.safety_checker):
             return
 
         # Phase 4: scene-authoring + engine warmup, init session, send
@@ -216,7 +206,7 @@ async def websocket_endpoint(
         # Phase 6: the game loop. Spawns the gen thread + receiver/sender
         # asyncio tasks; returns once any of them exits (which signals
         # disconnect or terminal error).
-        await run_session(conn, engines, safety_cache)
+        await run_session(conn, engines)
 
     except WebSocketDisconnect:
         logger.info(f"[{client_host}] WebSocket disconnected")

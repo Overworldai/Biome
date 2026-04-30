@@ -105,7 +105,7 @@ try:
     logger.info("Engine Manager module imported")
 
     logger.info("Importing Safety module...")
-    from engine.safety import SafetyChecker, load_safety_cache
+    from engine.safety import SafetyChecker
 
     logger.info("Safety module imported")
 
@@ -127,7 +127,7 @@ from server.startup import ServerStartup
 async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
     """Run heavy startup work (engine + safety warmup) in background so
     /health responds immediately while the GPU stack initialises. Populates
-    `app.state.engines` and `app.state.safety_cache` on success."""
+    `app.state.engines` on success."""
     try:
         startup.mark_stage(StageId.STARTUP_BEGIN)
 
@@ -141,24 +141,18 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
 
         logger.info("Initializing Safety Checker...")
         startup.mark_stage(StageId.STARTUP_SAFETY_CHECKER)
-        safety_checker = SafetyChecker()
-        await asyncio.to_thread(safety_checker.load_resident, "cuda")
-        logger.info("Safety Checker loaded on GPU")
+        safety_checker = await asyncio.to_thread(SafetyChecker, "cuda")
         startup.mark_stage(StageId.STARTUP_SAFETY_READY)
-
-        # Hash-based safety cache (mutated by sessions; shared across them).
-        safety_cache = load_safety_cache()
 
         app.state.engines = Engines(
             world_engine=world_engine,
             image_gen=image_gen,
             safety_checker=safety_checker,
         )
-        app.state.safety_cache = safety_cache
 
         logger.info("=" * 60)
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
-        logger.info(f"[SERVER] {len(safety_cache)} safety cache entries")
+        logger.info(f"[SERVER] {safety_checker.cache_size} safety cache entries")
         logger.info("=" * 60)
         startup.mark_stage(StageId.STARTUP_READY)
 

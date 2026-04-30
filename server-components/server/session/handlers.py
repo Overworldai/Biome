@@ -18,15 +18,9 @@ rules in pyproject.toml fire on this code. Keep it that way.
 
 import asyncio
 import base64
-import hashlib
-import io
 import logging
-import time
 from typing import TYPE_CHECKING
 
-from PIL import Image
-
-from engine.safety import SafetyCacheEntry
 from recording.action_logger import ActionLogger
 from server.protocol import (
     CheckSeedSafetyRequest,
@@ -57,13 +51,7 @@ if TYPE_CHECKING:
     from engine.manager import WorldEngineManager
     from engine.safety import SafetyChecker
 
-SafetyCache = dict[str, SafetyCacheEntry]
-
 logger = logging.getLogger(__name__)
-
-
-def _compute_bytes_hash(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def build_init_response_data(world_engine: "WorldEngineManager", system_info: SystemInfo) -> InitResponseData:
@@ -77,12 +65,10 @@ def build_init_response_data(world_engine: "WorldEngineManager", system_info: Sy
 
 async def handle_check_seed_safety(
     safety_checker: "SafetyChecker",
-    safety_cache: SafetyCache,
     req: CheckSeedSafetyRequest,
 ) -> RpcSuccess[CheckSeedSafetyResponseData] | RpcError:
-    """Check whether a seed image passes the NSFW classifier. Caches by
-    SHA-256 of the raw bytes; results survive across server restarts via
-    the on-disk safety cache."""
+    """Check whether a seed image passes the NSFW classifier. Cache lookup +
+    persistence are owned by `SafetyChecker.check_image_bytes`."""
     if not req.image_data:
         return rpc_err(req.req_id, error=MessageId.SEED_MISSING_DATA.value)
 
@@ -91,48 +77,19 @@ async def handle_check_seed_safety(
     except Exception as e:
         return rpc_err(req.req_id, error=f"Invalid base64 data: {e}")
 
-    img_hash = _compute_bytes_hash(image_bytes)
-
-    if img_hash in safety_cache:
-        cached = safety_cache[img_hash]
-        return rpc_ok(
-            req.req_id,
-            CheckSeedSafetyResponseData(is_safe=cached.is_safe, hash=img_hash),
-        )
-
     try:
-
-        def _check_safety():
-            pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            return safety_checker.check_pil_image(pil_img)
-
-        safety_result = await asyncio.to_thread(_check_safety)
+        result = await asyncio.to_thread(safety_checker.check_image_bytes, image_bytes)
     except Exception as e:
         logger.error(f"Safety check failed: {e}")
         return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
-    # Function-level import: `safety` pulls torch transitively, so we don't
-    # want to drag it into the module graph at import-time. The heavy
-    # try-block in main.py is the only place that should trigger the
-    # torch / transformers import waterfall.
-    from engine.safety import save_safety_cache
-
-    is_safe = safety_result.get("is_safe", False)
-    safety_cache[img_hash] = SafetyCacheEntry(
-        is_safe=is_safe,
-        scores=safety_result.get("scores", {}),
-        checked_at=time.time(),
-    )
-    save_safety_cache(safety_cache)
-
-    return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=is_safe, hash=img_hash))
+    return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=result.is_safe, hash=result.image_hash))
 
 
 async def load_seed_from_data(
     conn: Connection,
     world_engine: "WorldEngineManager",
     safety_checker: "SafetyChecker",
-    safety_cache: SafetyCache,
     image_data_b64: str | None,
     seed_filename: str | None = None,
 ) -> bool:
@@ -153,48 +110,26 @@ async def load_seed_from_data(
         await conn.send_warning(MessageId.SEED_INVALID_DATA)
         return False
 
-    img_hash = _compute_bytes_hash(image_bytes)
+    # Safety check (cache lookup is internal to SafetyChecker; same-hash repeat
+    # is a fast cache hit, so we don't pre-screen against `current_seed_hash`).
+    try:
+        result = await asyncio.to_thread(safety_checker.check_image_bytes, image_bytes)
+    except Exception as e:
+        logger.warning(f"[{conn.client_host}] Safety check failed: {e}")
+        await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
+        return False
 
-    # Same seed already loaded? Skip the safety inference + load entirely.
+    img_hash = result.image_hash
+
+    # Same seed already loaded onto the engine? Skip the redundant reload.
     if img_hash == conn.current_seed_hash:
         logger.info(f"[{conn.client_host}] Seed unchanged (hash match), skipping reload")
         return True
 
-    # Safety check (cache hit, then live inference if missing)
-    if img_hash in safety_cache:
-        cached = safety_cache[img_hash]
-        if not cached.is_safe:
-            logger.warning(f"[{conn.client_host}] Seed marked as unsafe (cached)")
-            await conn.send_warning(MessageId.SEED_UNSAFE)
-            return False
-    else:
-        try:
-
-            def _check_safety():
-                pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-                return safety_checker.check_pil_image(pil_img)
-
-            safety_result = await asyncio.to_thread(_check_safety)
-        except Exception as e:
-            logger.warning(f"[{conn.client_host}] Safety check failed: {e}")
-            await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
-            return False
-
-        # Function-level import: see comment in handle_check_seed_safety.
-        from engine.safety import save_safety_cache
-
-        is_safe = safety_result.get("is_safe", False)
-        safety_cache[img_hash] = SafetyCacheEntry(
-            is_safe=is_safe,
-            scores=safety_result.get("scores", {}),
-            checked_at=time.time(),
-        )
-        save_safety_cache(safety_cache)
-
-        if not is_safe:
-            logger.warning(f"[{conn.client_host}] Seed marked as unsafe")
-            await conn.send_warning(MessageId.SEED_UNSAFE)
-            return False
+    if not result.is_safe:
+        logger.warning(f"[{conn.client_host}] Seed marked as unsafe")
+        await conn.send_warning(MessageId.SEED_UNSAFE)
+        return False
 
     # Load the seed onto the engine
     display_name = seed_filename or img_hash[:12]
@@ -217,7 +152,6 @@ async def handle_init(
     conn: Connection,
     world_engine: "WorldEngineManager",
     safety_checker: "SafetyChecker",
-    safety_cache: SafetyCache,
     req: InitRequest,
     *,
     is_game_loop: bool = False,
@@ -291,9 +225,7 @@ async def handle_init(
     # Seed delta
     seed_loaded = False
     if seed_data:
-        seed_loaded = await load_seed_from_data(
-            conn, world_engine, safety_checker, safety_cache, seed_data, seed_filename
-        )
+        seed_loaded = await load_seed_from_data(conn, world_engine, safety_checker, seed_data, seed_filename)
 
     if model_changed and not seed_loaded and not world_engine.seed_frame:
         await conn.send_stage(StageId.SESSION_WAITING_FOR_SEED)
@@ -306,7 +238,6 @@ async def run_preinit_handshake(
     conn: Connection,
     world_engine: "WorldEngineManager",
     safety_checker: "SafetyChecker",
-    safety_cache: SafetyCache,
 ) -> bool:
     """Drive the pre-init message loop until the client's InitRequest
     yields a loaded seed frame, or 60 s elapses without one.
@@ -334,12 +265,12 @@ async def run_preinit_handshake(
 
         match parsed:
             case CheckSeedSafetyRequest() as req:
-                result = await handle_check_seed_safety(safety_checker, safety_cache, req)
+                result = await handle_check_seed_safety(safety_checker, req)
                 await conn.websocket.send_text(result.model_dump_json(exclude_none=True))
             case InitRequest() as req:
                 # init RPC: response is deferred until after warmup/session init completes
                 conn.init_req_id = req.req_id
-                ready, _ = await handle_init(conn, world_engine, safety_checker, safety_cache, req)
+                ready, _ = await handle_init(conn, world_engine, safety_checker, req)
                 if not ready:
                     await conn.websocket.send_text(
                         rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)

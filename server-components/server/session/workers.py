@@ -49,7 +49,7 @@ from server.protocol import (
     rpc_ok,
 )
 from server.session.connection import Connection, build_error_message
-from server.session.handlers import SafetyCache, build_init_response_data, handle_check_seed_safety, handle_init
+from server.session.handlers import build_init_response_data, handle_check_seed_safety, handle_init
 from util import system_info as system_info_module
 
 if TYPE_CHECKING:
@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 async def run_session(
     conn: Connection,
     engines: "Engines",
-    safety_cache: SafetyCache,
 ) -> None:
     """Spawn the generator thread + receiver / sender asyncio tasks for
     the active session, then await disconnect or terminal error. The
@@ -80,7 +79,6 @@ async def run_session(
         run_receiver(
             conn,
             engines,
-            safety_cache,
             BUTTON_CODES,
             system_info_module.get_system_info(),
         )
@@ -134,7 +132,6 @@ class _PendingFlush:
 async def run_receiver(
     conn: Connection,
     engines: "Engines",
-    safety_cache: SafetyCache,
     button_codes: dict[str, int],
     system_info: SystemInfo,
 ) -> None:
@@ -158,9 +155,7 @@ async def run_receiver(
             match parsed:
                 case InitRequest() as req:
                     # init RPC: apply deltas and respond with metrics.
-                    ready, new_seed = await handle_init(
-                        conn, world_engine, safety_checker, safety_cache, req, is_game_loop=True
-                    )
+                    ready, new_seed = await handle_init(conn, world_engine, safety_checker, req, is_game_loop=True)
                     if ready:
                         response = rpc_ok(req.req_id, build_init_response_data(world_engine, system_info))
                     else:
@@ -227,7 +222,7 @@ async def run_receiver(
                     conn.queue_send(gen_response)
 
                 case CheckSeedSafetyRequest() as req:
-                    seed_response = await handle_check_seed_safety(safety_checker, safety_cache, req)
+                    seed_response = await handle_check_seed_safety(safety_checker, req)
                     conn.queue_send(seed_response)
 
                 case ResetNotif():

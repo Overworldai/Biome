@@ -2,15 +2,24 @@
 Image safety: the NSFW classifier (`Freepik/nsfw_image_detector`) plus the
 disk-backed result cache that backs it.
 
+`SafetyChecker` owns its own cache: hand it a raw image (`check_image_bytes`)
+and it consults the on-disk cache, runs the classifier on a miss, and
+persists the new entry. Callers never touch the cache directly — the only
+way an entry lands in it is by classifying a real image. `check_pil_image`
+is the lower-level path used for already-decoded images that don't have a
+stable hash (e.g. freshly-generated scenes); those don't get cached.
+
 Cache entries are SHA-256-keyed `SafetyCacheEntry` records persisted as JSON;
-loading on a missing / corrupt file returns an empty dict so the next session
-re-runs the checks (cache rebuilds, no permanent state loss). The classifier
-itself is loaded lazily on first use, optionally pinned in GPU memory via
-`load_resident()`.
+loading on a missing / corrupt file leaves an empty cache so the next session
+re-runs the checks (cache rebuilds, no permanent state loss).
 """
 
+import hashlib
+import io
 import logging
 import threading
+import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -25,16 +34,40 @@ from transformers import AutoModelForImageClassification
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.json"
+
+
 # ---------------------------------------------------------------------------
-# Disk-backed safety cache
+# Result types
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SafetyVerdict:
+    """Result of one classification — `is_safe` plus the per-category scores
+    the model produced. No hash; this is what `check_pil_image` returns for
+    images we don't cache (e.g. freshly generated scenes)."""
+
+    is_safe: bool
+    scores: dict[str, float]
+
+
+@dataclass(frozen=True)
+class SafetyResult:
+    """`SafetyVerdict` + the SHA-256 hash of the input bytes. Returned by
+    `check_image_bytes`; the hash is what the cache is keyed on and what the
+    client uses to dedupe seed uploads."""
+
+    is_safe: bool
+    scores: dict[str, float]
+    image_hash: str
 
 
 class SafetyCacheEntry(BaseModel):
-    """One entry in the on-disk safety cache. Frozen Pydantic model —
-    persisted as JSON so the cache file is human-readable and version-tolerant.
-    `extra="forbid"` rejects unknown fields; adding new optional fields stays
-    backwards-compat."""
+    """One entry in the on-disk safety cache. Frozen Pydantic model — written
+    only by `SafetyChecker._record`, never directly by external code. The on-
+    disk format is human-readable JSON; `extra="forbid"` rejects unknown fields
+    so adding new optional fields stays backwards-compat."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -43,179 +76,137 @@ class SafetyCacheEntry(BaseModel):
     checked_at: float
 
 
-SAFETY_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.json"
-
 _cache_adapter: TypeAdapter[dict[str, SafetyCacheEntry]] = TypeAdapter(dict[str, SafetyCacheEntry])
 
 
-def load_safety_cache() -> dict[str, SafetyCacheEntry]:
-    """Load hash-keyed safety cache from JSON. Returns an empty dict if
-    the file is missing or fails to parse — failures are logged but
-    non-fatal; cache rebuilds on next session."""
-    if not SAFETY_CACHE_FILE.exists():
-        return {}
-    try:
-        cache = _cache_adapter.validate_json(SAFETY_CACHE_FILE.read_bytes())
-        logger.info(f"Loaded safety cache with {len(cache)} entries")
-        return cache
-    except Exception as e:
-        logger.error(f"Failed to load safety cache: {e}")
-        return {}
-
-
-def save_safety_cache(cache: dict[str, SafetyCacheEntry]) -> None:
-    """Persist the safety cache to disk; failures are logged but
-    non-fatal (the cache rebuilds on next session)."""
-    try:
-        SAFETY_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SAFETY_CACHE_FILE.write_bytes(_cache_adapter.dump_json(cache, indent=2))
-    except Exception as e:
-        logger.error(f"Failed to save safety cache: {e}")
+# Default treat-as-unsafe verdict returned when the underlying classification
+# raises (we never let an exception bubble up as "safe").
+_FAILURE_VERDICT = SafetyVerdict(
+    is_safe=False,
+    scores={"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
+)
 
 
 # ---------------------------------------------------------------------------
-# NSFW classifier
+# NSFW classifier + disk-backed cache
 # ---------------------------------------------------------------------------
 
 
 class SafetyChecker:
-    """NSFW content detector for seed images."""
+    """NSFW content detector for seed images.
 
-    def __init__(self):
-        self.model = None
-        self.processor = None
-        self.current_device = None  # Track which device model is currently loaded on
-        self._resident = False  # When True, model stays loaded between checks
-        self._lock = threading.Lock()  # Prevent concurrent model access
-        logger.info("SafetyChecker initialized")
+    The model is loaded once at startup via `load(device)` and stays resident
+    for the process lifetime. Owns the disk-backed cache: callers can't write
+    to it — entries land in the cache only as a side effect of
+    `check_image_bytes` classifying a real payload. `check_pil_image` is the
+    non-caching path used for images without a stable input hash (e.g. freshly
+    generated scenes)."""
 
-    def _load_model(self, device: str = "cpu"):
-        """Lazy load model on specified device."""
-        # Reload if model not loaded or device changed
-        if self.model is None or self.current_device != device:
-            if self.model is not None:
-                logger.info(f"Switching model from {self.current_device} to {device}")
-                self.unload_model()
+    def __init__(self, device: str = "cuda", cache_path: Path | None = None) -> None:
+        self._lock = threading.Lock()  # serialises model access
+        self._cache_lock = threading.Lock()  # serialises cache writes
+        self._cache_path = cache_path or _DEFAULT_CACHE_FILE
+        self._cache: dict[str, SafetyCacheEntry] = self._load_cache_from_disk()
+        self._device = device
+        logger.info(f"Loading NSFW detection model on {device} ({len(self._cache)} cache entries)...")
 
-            logger.info(f"Loading NSFW detection model on {device}...")
+        # Use float32 for CPU (better compatibility), bfloat16 for GPU
+        # (better performance).
+        dtype = torch.float32 if device == "cpu" else torch.bfloat16
+        self.model = AutoModelForImageClassification.from_pretrained(
+            "Freepik/nsfw_image_detector", torch_dtype=dtype
+        ).to(device)
 
-            # Use float32 for CPU (better compatibility), bfloat16 for GPU (better performance)
-            dtype = torch.float32 if device == "cpu" else torch.bfloat16
-            self.model = AutoModelForImageClassification.from_pretrained(
-                "Freepik/nsfw_image_detector", torch_dtype=dtype
-            ).to(device)
+        cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
+        self.processor = create_transform(**resolve_data_config(cfg.__dict__))
 
-            cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
-            self.processor = create_transform(**resolve_data_config(cfg.__dict__))
+        logger.info(f"NSFW detection model loaded on {device}")
 
-            self.current_device = device
-            logger.info(f"NSFW detection model loaded on {device}")
+    # ─── Cache lifecycle ──────────────────────────────────────────────
 
-    def unload_model(self):
-        """Unload model from memory to free resources."""
-        if self.model is not None:
-            logger.info("Unloading NSFW detection model...")
-
-            # Move to CPU before deletion if on GPU
-            if self.current_device == "cuda":
-                self.model.cpu()
-
-            # Save device before clearing for cache cleanup decision
-            was_on_cuda = self.current_device == "cuda"
-
-            # Delete model and processor
-            del self.model
-            del self.processor
-            self.model = None
-            self.processor = None
-            self.current_device = None
-            self._resident = False
-
-            # Clear CUDA cache only if was on GPU
-            # Avoids clearing world engine's CUDA cache when safety checker ran on CPU
-            if was_on_cuda and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            # Note: Removed gc.collect() as forced garbage collection can interfere
-            # with world engine's memory allocation, causing 8+ second delays in append_frame()
-
-            logger.info("NSFW detection model unloaded")
-
-    def load_resident(self, device: str = "cuda"):
-        """Load model and keep it resident in memory (no unload after checks).
-
-        Call this during session setup so the model is ready for repeated
-        checks without load/unload overhead.
-        """
-        with self._lock:
-            self._load_model(device=device)
-            self._resident = True
-            logger.info(f"Safety checker model loaded as resident on {device}")
+    def _load_cache_from_disk(self) -> dict[str, SafetyCacheEntry]:
+        """Read the on-disk cache. Failures are logged but non-fatal
+        (cache rebuilds on next session)."""
+        if not self._cache_path.exists():
+            return {}
+        try:
+            return _cache_adapter.validate_json(self._cache_path.read_bytes())
+        except Exception as e:
+            logger.error(f"Failed to load safety cache: {e}")
+            return {}
 
     @property
-    def is_resident(self) -> bool:
-        return self._resident
+    def cache_size(self) -> int:
+        return len(self._cache)
 
-    def _should_unload(self) -> bool:
-        """Return True if the model should be unloaded after a check."""
-        return not self._resident
+    def _persist_cache(self) -> None:
+        """Persist the cache to disk. Caller holds `_cache_lock`."""
+        try:
+            self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+            self._cache_path.write_bytes(_cache_adapter.dump_json(self._cache, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to save safety cache: {e}")
 
-    def check_pil_image(self, image: Image.Image) -> dict[str, object]:
-        """
-        Check a PIL image for NSFW content.
-        Uses the resident device if loaded, otherwise CPU.
+    def _record(self, image_hash: str, verdict: SafetyVerdict) -> None:
+        """Record a fresh classification + persist. Internal — only called
+        from `check_image_bytes` after a real classification."""
+        entry = SafetyCacheEntry(
+            is_safe=verdict.is_safe,
+            scores=verdict.scores,
+            checked_at=time.time(),
+        )
+        with self._cache_lock:
+            self._cache[image_hash] = entry
+            self._persist_cache()
 
-        Args:
-            image: PIL Image to check
+    # ─── Classification ───────────────────────────────────────────────
 
-        Returns:
-            {'is_safe': bool, 'scores': {'neutral': float, 'low': float, 'medium': float, 'high': float}}
-        """
+    def check_image_bytes(self, image_bytes: bytes) -> SafetyResult:
+        """Classify a raw image payload, consulting the disk-backed cache and
+        persisting any new result automatically. The only public path that
+        writes to the cache."""
+        image_hash = hashlib.sha256(image_bytes).hexdigest()
+
+        cached = self._cache.get(image_hash)
+        if cached is not None:
+            return SafetyResult(
+                is_safe=cached.is_safe,
+                scores=cached.scores,
+                image_hash=image_hash,
+            )
+
+        pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        verdict = self.check_pil_image(pil)
+        self._record(image_hash, verdict)
+        return SafetyResult(
+            is_safe=verdict.is_safe,
+            scores=verdict.scores,
+            image_hash=image_hash,
+        )
+
+    def check_pil_image(self, image: Image.Image) -> SafetyVerdict:
+        """Classify an already-decoded image. Used directly for images that
+        don't have a meaningful input hash (e.g. freshly-generated scenes);
+        results are NOT cached. On internal failure returns a treat-as-unsafe
+        verdict — failure never reads as "safe"."""
         with self._lock:
-            device = self.current_device if self._resident else "cpu"
-            self._load_model(device=device)
-
             try:
-                img = image
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                scores = self.predict_batch_values([img], device=device)[0]
-                is_safe = scores["low"] < 0.5
-                return {"is_safe": is_safe, "scores": scores}
+                img = image if image.mode == "RGB" else image.convert("RGB")
+                scores = self._predict_batch_values([img])[0]
+                return SafetyVerdict(is_safe=scores["low"] < 0.5, scores=scores)
             except Exception as e:
                 logger.error(f"Failed to check PIL image: {e}")
-                return {
-                    "is_safe": False,
-                    "scores": {"neutral": 0.0, "low": 1.0, "medium": 0.0, "high": 0.0},
-                }
-            finally:
-                if self._should_unload():
-                    self.unload_model()
+                return _FAILURE_VERDICT
 
-    def predict_batch_values(self, img_batch: list[Image.Image], device: str = "cpu") -> list[dict[str, float]]:
-        """
-        Process a batch of images and return prediction scores for each NSFW category.
-
-        Args:
-            img_batch: List of PIL images
-            device: Device to run inference on ("cpu" or "cuda")
-
-        Returns:
-            List of score dictionaries with cumulative probabilities:
-            [
-                {
-                    'neutral': float,  # Probability of being neutral (only this category)
-                    'low': float,      # Probability of being low or higher (cumulative)
-                    'medium': float,   # Probability of being medium or higher (cumulative)
-                    'high': float      # Probability of being high (cumulative)
-                }
-            ]
-        """
+    def _predict_batch_values(self, img_batch: list[Image.Image]) -> list[dict[str, float]]:
+        """Run the classifier on a batch and return cumulative-probability score
+        dicts. `idx_to_label`-mapped, with high→medium→low cumulated and
+        `neutral` carrying its own (non-cumulative) probability."""
         idx_to_label = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
 
         # Prepare batch
-        inputs = torch.stack([self.processor(img) for img in img_batch]).to(device)  # pyright: ignore[reportCallIssue]  # timm Compose typed as a tuple in its stubs but is callable at runtime
-        output = []
+        inputs = torch.stack([self.processor(img) for img in img_batch]).to(self._device)  # pyright: ignore[reportCallIssue]  # timm Compose typed as a tuple in its stubs but is callable at runtime
+        output: list[dict[str, float]] = []
 
         with torch.inference_mode():
             logits = self.model(inputs).logits
@@ -224,7 +215,7 @@ class SafetyChecker:
 
             for i in range(len(batch_probs)):
                 element_probs = batch_probs[i]
-                output_img = {}
+                output_img: dict[str, float] = {}
                 danger_cum_sum = 0
 
                 # Cumulative sum from high to low (reverse order)
@@ -237,31 +228,3 @@ class SafetyChecker:
                 output.append(output_img)
 
         return output
-
-    def prediction(
-        self,
-        img_batch: list[Image.Image],
-        class_to_predict: str,
-        threshold: float = 0.5,
-        device: str = "cpu",
-    ) -> list[bool]:
-        """
-        Predict if images meet or exceed a specific NSFW threshold.
-
-        Args:
-            img_batch: List of PIL images
-            class_to_predict: One of "low", "medium", "high"
-            threshold: Probability threshold (0.0 to 1.0)
-            device: Device to run inference on ("cpu" or "cuda")
-
-        Returns:
-            List of booleans indicating if each image meets the threshold
-        """
-        if class_to_predict not in ["low", "medium", "high"]:
-            raise ValueError("class_to_predict must be one of: low, medium, high")
-
-        if not 0 <= threshold <= 1:
-            raise ValueError("threshold must be between 0 and 1")
-
-        output = self.predict_batch_values(img_batch, device=device)
-        return [output[i][class_to_predict] >= threshold for i in range(len(output))]
