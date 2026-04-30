@@ -4,7 +4,7 @@ Entry point and lifecycle for the Biome server.
 Owns the process boundary: instrumented heavy-import waterfall, env
 setup, parent-process watchdog, FastAPI lifespan + heavy init task,
 the FastAPI `app` instance + middleware, and the uvicorn boot. Endpoint
-definitions live in `server.py`.
+definitions live in `server/routes.py`.
 """
 
 import sys
@@ -17,15 +17,9 @@ logger.info("Starting server...")
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
-from app_state import (
-    AppState,
-    StartupConfig,
-    attach_app_state,
-    attach_startup_config,
-    get_startup_config,
-)
-from server.protocol import StageId, StatusMessage
+from server.protocol import StageId
 from util.hf_token import apply_resolved_token
 
 apply_resolved_token()
@@ -34,6 +28,16 @@ apply_resolved_token()
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 logger.info("Basic imports done")
+
+
+@dataclass(frozen=True)
+class StartupConfig:
+    """Process-launch configuration set in `__main__` and read by the
+    lifespan. Lives on `app.state.startup_config` so it's available
+    before the lifespan body itself runs."""
+
+    parent_pid: int | None = None
+
 
 # If launched with --parent-pid, poll the parent PID and exit if it dies.
 # Linux's prctl(PR_SET_PDEATHSIG) is the kernel-level fallback we'd ideally
@@ -95,6 +99,7 @@ try:
     logger.info("FastAPI imported")
 
     logger.info("Importing Engine Manager module...")
+    from engine import Engines
     from engine.manager import WorldEngineManager
 
     logger.info("Engine Manager module imported")
@@ -109,80 +114,59 @@ except Exception as e:
     sys.exit(1)
 
 
-# Endpoints register onto an APIRouter in `server.py`; importing it now
-# is safe because the heavy import waterfall above has already completed.
+# Endpoints register onto an APIRouter in `server/routes.py`; importing it
+# now is safe because the heavy import waterfall above has already completed.
 from server.routes import router
-
-# ============================================================================
-# Startup broadcast helpers
-# ============================================================================
-
-
-def _broadcast_startup_stage(state: AppState, stage: StageId) -> None:
-    """Store a startup stage on AppState and push it to any connected WS clients."""
-    msg = StatusMessage(stage=stage)
-    state.startup_stages.append(msg)
-    # Also log to stdout so file-based logs capture it
-    logger.info(f"Startup stage: {stage}")
-    for q in state.ws_startup_waiters:
-        try:
-            q.put_nowait(msg)
-        except asyncio.QueueFull:
-            pass
-
-
-def _signal_startup_done(state: AppState) -> None:
-    """Wake every waiter so its replay loop exits."""
-    for q in state.ws_startup_waiters:
-        try:
-            q.put_nowait(None)
-        except asyncio.QueueFull:
-            pass
-
+from server.startup import ServerStartup
 
 # ============================================================================
 # Application lifecycle
 # ============================================================================
 
 
-async def _heavy_init(state: AppState) -> None:
+async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
     """Run heavy startup work (engine + safety warmup) in background so
-    /health responds immediately while the GPU stack initialises."""
+    /health responds immediately while the GPU stack initialises. Populates
+    `app.state.engines` and `app.state.safety_cache` on success."""
     try:
-        _broadcast_startup_stage(state, StageId.STARTUP_BEGIN)
+        startup.mark_stage(StageId.STARTUP_BEGIN)
 
         logger.info("Initializing WorldEngine...")
-        _broadcast_startup_stage(state, StageId.STARTUP_ENGINE_MANAGER)
-        state.world_engine = WorldEngineManager()
+        startup.mark_stage(StageId.STARTUP_ENGINE_MANAGER)
+        world_engine = WorldEngineManager()
 
         from engine.image_gen import ImageGenManager
 
-        state.image_gen = ImageGenManager(state.world_engine.cuda_executor)
+        image_gen = ImageGenManager(world_engine.cuda_executor)
 
         logger.info("Initializing Safety Checker...")
-        _broadcast_startup_stage(state, StageId.STARTUP_SAFETY_CHECKER)
-        state.safety_checker = SafetyChecker()
-        await asyncio.to_thread(state.safety_checker.load_resident, "cuda")
+        startup.mark_stage(StageId.STARTUP_SAFETY_CHECKER)
+        safety_checker = SafetyChecker()
+        await asyncio.to_thread(safety_checker.load_resident, "cuda")
         logger.info("Safety Checker loaded on GPU")
-        _broadcast_startup_stage(state, StageId.STARTUP_SAFETY_READY)
+        startup.mark_stage(StageId.STARTUP_SAFETY_READY)
 
-        # Load hash-based safety cache
-        state.safety_hash_cache = load_safety_cache()
+        # Hash-based safety cache (mutated by sessions; shared across them).
+        safety_cache = load_safety_cache()
+
+        app.state.engines = Engines(
+            world_engine=world_engine,
+            image_gen=image_gen,
+            safety_checker=safety_checker,
+        )
+        app.state.safety_cache = safety_cache
 
         logger.info("=" * 60)
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
-        logger.info(f"[SERVER] {len(state.safety_hash_cache)} safety cache entries")
+        logger.info(f"[SERVER] {len(safety_cache)} safety cache entries")
         logger.info("=" * 60)
-        _broadcast_startup_stage(state, StageId.STARTUP_READY)
+        startup.mark_stage(StageId.STARTUP_READY)
 
-        state.startup_complete = True
-        _signal_startup_done(state)
+        startup.mark_done()
 
     except Exception as exc:
-        state.startup_error = str(exc)
         logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
-        state.startup_complete = True  # mark done so waiters unblock
-        _signal_startup_done(state)
+        startup.mark_failed(str(exc))
 
 
 @asynccontextmanager
@@ -192,14 +176,13 @@ async def lifespan(app: FastAPI):
     logger.info("BIOME SERVER STARTUP")
     logger.info("=" * 60)
 
-    state = AppState()
-    attach_app_state(app, state)
+    startup = ServerStartup()
+    app.state.startup = startup
 
-    # Start heavy init in background so /health responds immediately
-    init_task = asyncio.create_task(_heavy_init(state))
+    # Heavy init runs in background so /health responds immediately.
+    init_task = asyncio.create_task(_heavy_init(app, startup))
 
-    # Start parent-process watchdog if launched with --parent-pid
-    cfg = get_startup_config(app)
+    cfg: StartupConfig = app.state.startup_config
     watchdog_task = None
     if cfg.parent_pid is not None:
         watchdog_task = asyncio.create_task(ParentWatchdog(cfg.parent_pid).run())
@@ -240,7 +223,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    attach_startup_config(app, StartupConfig(parent_pid=args.parent_pid))
+    app.state.startup_config = StartupConfig(parent_pid=args.parent_pid)
     if args.parent_pid is not None:
         logger.info(f"Monitoring parent process PID {args.parent_pid}")
         ParentWatchdog(args.parent_pid).check_alive_or_exit()

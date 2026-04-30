@@ -3,7 +3,7 @@ Scene authoring orchestration: scene_edit and generate_scene flows.
 
 Both functions run on the per-session generator thread (synchronous,
 called between gen_frame calls), reach into the WorldEngineManager and
-ImageGenManager via the AppState handle they're given, hand off the
+ImageGenManager via the `Engines` bundle they're given, hand off the
 GPU-side mutation through the CUDA executor, and return typed Pydantic
 response data ready for `rpc_ok(...)`.
 
@@ -20,17 +20,20 @@ import base64
 import io
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from PIL import Image
 
-from app_state import AppState
 from server.protocol import GenerateSceneResponseData, SceneEditResponseData
+
+if TYPE_CHECKING:
+    from engine import Engines
 
 logger = logging.getLogger(__name__)
 
 
 def run_generate_scene(
-    state: AppState,
+    engines: "Engines",
     prompt: str,
     biome_version: str | None,
 ) -> GenerateSceneResponseData:
@@ -52,12 +55,9 @@ def run_generate_scene(
         properties_to_jpeg_comment,
     )
 
-    assert state.world_engine is not None
-    assert state.image_gen is not None
-    assert state.safety_checker is not None
-    world_engine = state.world_engine
-    image_gen = state.image_gen
-    safety_checker = state.safety_checker
+    world_engine = engines.world_engine
+    image_gen = engines.image_gen
+    safety_checker = engines.safety_checker
 
     t0 = time.perf_counter()
 
@@ -117,7 +117,7 @@ def run_generate_scene(
 
 
 def run_scene_edit(
-    state: AppState,
+    engines: "Engines",
     prompt: str,
     cpu_frames: list,
 ) -> SceneEditResponseData:
@@ -138,12 +138,9 @@ def run_scene_edit(
         SafetyRejectionError,
     )
 
-    assert state.world_engine is not None
-    assert state.image_gen is not None
-    assert state.safety_checker is not None
-    world_engine = state.world_engine
-    image_gen = state.image_gen
-    safety_checker = state.safety_checker
+    world_engine = engines.world_engine
+    image_gen = engines.image_gen
+    safety_checker = engines.safety_checker
 
     last_frame_np = cpu_frames[-1]
 

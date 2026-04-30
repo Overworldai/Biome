@@ -49,22 +49,20 @@ from server.protocol import (
     rpc_ok,
 )
 from server.session.connection import Connection, build_error_message
-from server.session.handlers import build_init_response_data, handle_check_seed_safety, handle_init
+from server.session.handlers import SafetyCache, build_init_response_data, handle_check_seed_safety, handle_init
 from util import system_info as system_info_module
 
 if TYPE_CHECKING:
-    from engine.image_gen import ImageGenManager
+    from engine import Engines
     from engine.manager import WorldEngineManager
-    from engine.safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
 
 
 async def run_session(
     conn: Connection,
-    world_engine: "WorldEngineManager",
-    image_gen: "ImageGenManager",
-    safety_checker: "SafetyChecker",
+    engines: "Engines",
+    safety_cache: SafetyCache,
 ) -> None:
     """Spawn the generator thread + receiver / sender asyncio tasks for
     the active session, then await disconnect or terminal error. The
@@ -72,7 +70,7 @@ async def run_session(
     the gen thread are torn down together via `conn.running = False`."""
     gen_thread = threading.Thread(
         target=run_generator,
-        args=(conn, world_engine),
+        args=(conn, engines),
         daemon=True,
         name=f"gen-{conn.client_host}",
     )
@@ -81,9 +79,8 @@ async def run_session(
     recv_task = asyncio.create_task(
         run_receiver(
             conn,
-            world_engine,
-            image_gen,
-            safety_checker,
+            engines,
+            safety_cache,
             BUTTON_CODES,
             system_info_module.get_system_info(),
         )
@@ -136,9 +133,8 @@ class _PendingFlush:
 
 async def run_receiver(
     conn: Connection,
-    world_engine: "WorldEngineManager",
-    image_gen: "ImageGenManager",
-    safety_checker: "SafetyChecker",
+    engines: "Engines",
+    safety_cache: SafetyCache,
     button_codes: dict[str, int],
     system_info: SystemInfo,
 ) -> None:
@@ -146,6 +142,10 @@ async def run_receiver(
     protocol union. Posts scene-edit / generate-scene futures into
     `conn.scene_edit_request` / `conn.generate_scene_request` for the
     generator thread to resolve at the next clean frame boundary."""
+    world_engine = engines.world_engine
+    image_gen = engines.image_gen
+    safety_checker = engines.safety_checker
+
     while conn.running:
         try:
             raw = await conn.websocket.receive_text()
@@ -158,7 +158,9 @@ async def run_receiver(
             match parsed:
                 case InitRequest() as req:
                     # init RPC: apply deltas and respond with metrics.
-                    ready, new_seed = await handle_init(conn, world_engine, safety_checker, req, is_game_loop=True)
+                    ready, new_seed = await handle_init(
+                        conn, world_engine, safety_checker, safety_cache, req, is_game_loop=True
+                    )
                     if ready:
                         response = rpc_ok(req.req_id, build_init_response_data(world_engine, system_info))
                     else:
@@ -177,7 +179,7 @@ async def run_receiver(
                     edit_response: RpcSuccess | RpcError
                     if not prompt:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
-                    elif image_gen is None or not image_gen.is_loaded:
+                    elif not image_gen.is_loaded:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                     elif conn.scene_edit_request is not None:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
@@ -204,7 +206,7 @@ async def run_receiver(
                     gen_response: RpcSuccess | RpcError
                     if not prompt:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
-                    elif image_gen is None or not image_gen.is_loaded:
+                    elif not image_gen.is_loaded:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                     elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
@@ -225,7 +227,7 @@ async def run_receiver(
                     conn.queue_send(gen_response)
 
                 case CheckSeedSafetyRequest() as req:
-                    seed_response = await handle_check_seed_safety(conn.state, req)
+                    seed_response = await handle_check_seed_safety(safety_checker, safety_cache, req)
                     conn.queue_send(seed_response)
 
                 case ResetNotif():
@@ -290,7 +292,7 @@ async def run_sender(conn: Connection) -> None:
 
 def run_generator(
     conn: Connection,
-    world_engine: "WorldEngineManager",
+    engines: "Engines",
 ) -> None:
     """The per-session inference loop, run on a dedicated thread.
 
@@ -301,6 +303,7 @@ def run_generator(
     """
     import torch
 
+    world_engine = engines.world_engine
     pending: _PendingFlush | None = None
 
     def _flush_pending() -> None:
@@ -360,7 +363,7 @@ def run_generator(
                 req = conn.generate_scene_request
                 conn.generate_scene_request = None
                 try:
-                    data = run_generate_scene(conn.state, req["prompt"], conn.biome_version)
+                    data = run_generate_scene(engines, req["prompt"], conn.biome_version)
                     conn.perceptual_frame_count = 0
                     req["future"].set_result(data)
                     # Send the generated seed as a single frame so the pause
@@ -423,7 +426,7 @@ def run_generator(
                 conn.scene_edit_request = None
                 _flush_pending()
                 try:
-                    preview = run_scene_edit(conn.state, req["prompt"], conn.last_generated_cpu_frames)
+                    preview = run_scene_edit(engines, req["prompt"], conn.last_generated_cpu_frames)
                     conn.perceptual_frame_count = 0
                     if conn.video_recorder is not None:
                         conn.video_recorder.note_edit(req["prompt"])
@@ -439,7 +442,7 @@ def run_generator(
                 conn.generate_scene_request = None
                 _flush_pending()
                 try:
-                    data = run_generate_scene(conn.state, req["prompt"], conn.biome_version)
+                    data = run_generate_scene(engines, req["prompt"], conn.biome_version)
                     conn.perceptual_frame_count = 0
                     req["future"].set_result(data)
                 except Exception as e:

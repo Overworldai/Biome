@@ -12,32 +12,71 @@ and delegates every internal concern to the module that owns it.
 Phases run top-to-bottom; each is one well-named call:
 
   - log streaming           → `util.server_logging.stream_logs_to_client`
-  - startup wait            → `AppState.replay_startup_to`
+  - startup wait            → `ServerStartup.replay_to`
   - progress drain          → `Connection.run_progress_drain`
   - pre-init handshake      → `server.session.handlers.run_preinit_handshake`
   - warmup + init + frame   → `server.session.handlers.prepare_session`
   - recorders               → `Connection.start_recording_segments`
   - game loop               → `server.session.workers.run_session`
   - cleanup                 → `Connection.teardown`
+
+`app.state` carries the resources the lifespan populates: `engines`
+(an `Engines` bundle), `safety_cache`, `startup` (`ServerStartup`).
+The typed accessors below pull each piece individually so endpoints
+take only what they need rather than reaching through a god object.
 """
 
 import asyncio
 import os
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 
-from app_state import AppState, get_app_state, get_app_state_ws
+from engine import Engines
+from engine.safety import SafetyCacheEntry
 from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
 from server.session.connection import Connection, build_error_message
 from server.session.handlers import build_init_response_data, prepare_session, run_preinit_handshake
 from server.session.workers import run_session
+from server.startup import ServerStartup
 from util import system_info as system_info_module
 from util.server_logging import logger, stream_logs_to_client
 
+SafetyCache = dict[str, SafetyCacheEntry]
+
 router = APIRouter()
+
+
+# ============================================================================
+# Typed Depends accessors
+# ============================================================================
+
+
+def get_engines(request: Request) -> Engines:
+    engines: Engines = request.app.state.engines
+    return engines
+
+
+def get_engines_ws(websocket: WebSocket) -> Engines:
+    engines: Engines = websocket.app.state.engines
+    return engines
+
+
+def get_safety_cache_ws(websocket: WebSocket) -> SafetyCache:
+    cache: SafetyCache = websocket.app.state.safety_cache
+    return cache
+
+
+def get_startup(request: Request) -> ServerStartup:
+    startup: ServerStartup = request.app.state.startup
+    return startup
+
+
+def get_startup_ws(websocket: WebSocket) -> ServerStartup:
+    startup: ServerStartup = websocket.app.state.startup
+    return startup
 
 
 # ============================================================================
@@ -46,14 +85,16 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health(state: AppState = Depends(get_app_state)):
-    """Health check for Biome backend."""
-    we = state.world_engine
-    sc = state.safety_checker
+async def health(request: Request, startup: ServerStartup = Depends(get_startup)):
+    """Health check for Biome backend. Reads through to `app.state` directly
+    for engine handles since they may not be populated yet during startup."""
+    engines: Engines | None = getattr(request.app.state, "engines", None)
+    we = engines.world_engine if engines else None
+    sc = engines.safety_checker if engines else None
     return JSONResponse(
         {
             "status": "ok",
-            "startup_complete": state.startup_complete,
+            "startup_complete": startup.complete,
             "world_engine": {
                 "loaded": we is not None and we.engine is not None,
                 "warmed_up": we is not None and we.engine_warmed_up,
@@ -106,7 +147,10 @@ async def get_model_info(model_id: str):
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get_app_state_ws)):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    startup: ServerStartup = Depends(get_startup_ws),
+):
     """Per-connection lifecycle. Reads top-to-bottom as one phase per call.
 
     The wire format is the Pydantic discriminated union in `protocol.py`
@@ -116,34 +160,29 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     """
     client_host = websocket.client.host if websocket.client else "unknown"
     logger.info(f"Client connected: {client_host}")
-    conn = Connection(websocket=websocket, state=state, client_host=client_host)
+    conn = Connection(websocket=websocket, client_host=client_host)
     await websocket.accept()
 
     log_task = asyncio.create_task(stream_logs_to_client(conn))
     progress_task: asyncio.Task[None] | None = None
     # Bound after the startup gate so `teardown`'s callback-clear can no-op
     # safely when we tear down before the engines are ready.
-    world_engine = None
+    engines: Engines | None = None
 
     try:
         # Phase 1: wait for backend `_heavy_init` to finish (replay any
         # accumulated stages, then stream live ones until done).
-        await state.replay_startup_to(conn)
-        if state.startup_error:
+        await startup.replay_to(conn)
+        if startup.error:
             await conn.send_message(
-                build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(state.startup_error))
+                build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(startup.error))
             )
             return
 
-        # Past the startup gate: these are guaranteed populated by
-        # `_heavy_init`. The asserts also let basedpyright narrow the
-        # types through the rest of this function.
-        assert state.world_engine is not None
-        assert state.image_gen is not None
-        assert state.safety_checker is not None
-        world_engine = state.world_engine
-        image_gen = state.image_gen
-        safety_checker = state.safety_checker
+        # Past the startup gate: engines + safety cache are populated.
+        engines = get_engines_ws(websocket)
+        safety_cache = get_safety_cache_ws(websocket)
+        world_engine = engines.world_engine
 
         # Phase 2: hardware identity goes out immediately so the client has
         # it even if init crashes (e.g. CUDA graph compilation failure).
@@ -154,13 +193,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         # Phase 3: pre-init message dispatch — wait for an InitRequest that
         # loads a seed frame (or 60 s timeout).
-        if not await run_preinit_handshake(conn, state, world_engine, safety_checker):
+        if not await run_preinit_handshake(conn, world_engine, engines.safety_checker, safety_cache):
             return
 
         # Phase 4: scene-authoring + engine warmup, init session, send
         # initial frame. Surfaces typed errors and acks the deferred init
         # RPC on failure so the client always gets a definitive response.
-        if not await prepare_session(conn, world_engine, image_gen):
+        if not await prepare_session(conn, world_engine, engines.image_gen):
             return
 
         await conn.send_stage(StageId.SESSION_READY)
@@ -177,7 +216,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         # Phase 6: the game loop. Spawns the gen thread + receiver/sender
         # asyncio tasks; returns once any of them exits (which signals
         # disconnect or terminal error).
-        await run_session(conn, world_engine, image_gen, safety_checker)
+        await run_session(conn, engines, safety_cache)
 
     except WebSocketDisconnect:
         logger.info(f"[{client_host}] WebSocket disconnected")
@@ -194,4 +233,5 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             except Exception:
                 pass
     finally:
-        conn.teardown(world_engine, log_task, progress_task)
+        world_engine_for_teardown = engines.world_engine if engines is not None else None
+        conn.teardown(world_engine_for_teardown, log_task, progress_task)

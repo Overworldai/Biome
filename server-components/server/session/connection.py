@@ -33,7 +33,6 @@ from typing import TYPE_CHECKING
 from fastapi import WebSocket
 from pydantic import BaseModel
 
-from app_state import AppState
 from recording.action_logger import ActionLogger
 from recording.video_recorder import RecordingProperties, VideoRecorder
 from server.protocol import (
@@ -90,7 +89,6 @@ class Connection:
 
     # ─── Immutable references (set at construction) ────────────────
     websocket: WebSocket
-    state: AppState
     client_host: str
 
     # ─── Init-flag deltas applied by handle_init ────────────────────

@@ -16,13 +16,11 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from pydantic import TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from timm.models import get_pretrained_cfg
 from transformers import AutoModelForImageClassification
-
-from app_state import SafetyCacheEntry
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +28,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Disk-backed safety cache
 # ---------------------------------------------------------------------------
+
+
+class SafetyCacheEntry(BaseModel):
+    """One entry in the on-disk safety cache. Frozen Pydantic model —
+    persisted as JSON so the cache file is human-readable and version-tolerant.
+    `extra="forbid"` rejects unknown fields; adding new optional fields stays
+    backwards-compat."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    is_safe: bool
+    scores: dict[str, float]
+    checked_at: float
+
 
 SAFETY_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.json"
 
