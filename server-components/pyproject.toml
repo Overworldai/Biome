@@ -122,4 +122,60 @@ ignore = [
 # `lifespan(app)` signature is FastAPI-mandated and gets revisited in step 3.
 "server.py" = ["ARG001"]
 
+[tool.basedpyright]
+include = ["."]
+exclude = [".venv", "__pycache__", "build", "dist"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+
+# Same tiered-suppression policy as the ruff config: permanent ignores for
+# things outside our control, step-tracked ignores removed by specific later
+# refactor commits. New code we add (protocol.py, app_state.py, etc.) is
+# written strictly and won't trigger these — the suppressions only allow the
+# existing legacy code to pass while we incrementally tighten it.
+
+# ─── Permanent ──────────────────────────────────────────────────────────
+reportMissingTypeStubs = "none"      # third-party libs (timm, simplejpeg) ship no stubs
+reportPrivateImportUsage = "none"    # FastAPI/Pydantic re-export pattern
+
+# ─── Step 2 (Typed protocol module) ─────────────────────────────────────
+reportArgumentType = "none"          # boundary code passes raw dicts; protocol.py replaces them
+
+# ─── Step 4 (Decompose websocket_endpoint) ──────────────────────────────
+reportFunctionMemberAccess = "none"  # `_flush_pending.work` function-attribute hack
+
+# ─── Step 6 (Tighten engine_manager) ────────────────────────────────────
+# `engine: WorldEngine | None` and friends — remove with explicit state machine.
+reportOptionalMemberAccess = "none"
+reportOptionalCall = "none"
+reportOptionalSubscript = "none"
+reportPossiblyUnboundVariable = "none"
+reportAttributeAccessIssue = "none"
+reportMissingParameterType = "none"  # untyped server.py fn params
+
+# ─── Step 7 (Cleanup pass) ──────────────────────────────────────────────
+reportPrivateUsage = "none"
+reportIndexIssue = "none"
+reportUnnecessaryComparison = "none"
+reportUnusedVariable = "none"
+reportUnusedExcept = "none"
+reportMissingImports = "none"
+reportMatchNotExhaustive = "none"
+reportGeneralTypeIssues = "none"
+reportCallIssue = "none"
+reportOperatorIssue = "none"
+reportReturnType = "none"
+
+# ─── Library opacity (torch/PIL/diffusers — no full stubs) ──────────────
+# Will become real signal once boundary types are Pydantic and third-party
+# calls are wrapped in narrow typed adapters. Tracked by step 6.
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownParameterType = "none"
+reportMissingTypeArgument = "none"
+reportUnknownLambdaType = "none"
+
 
