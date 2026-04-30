@@ -643,10 +643,7 @@ async def run_receiver(
                 case ControlNotif() as notif:
                     if conn.paused:
                         continue
-                    if notif.button_codes is not None:
-                        buttons = set(notif.button_codes)
-                    else:
-                        buttons = {button_codes[b.upper()] for b in (notif.buttons or []) if b.upper() in button_codes}
+                    buttons = {button_codes[b.upper()] for b in notif.buttons if b.upper() in button_codes}
                     with conn.ctrl_lock:
                         conn.ctrl.buttons = buttons
                         conn.ctrl.mouse_dx += notif.mouse_dx

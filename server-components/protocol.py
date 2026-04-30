@@ -28,6 +28,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from progress_stages import StageId  # noqa: TC001  # used in Pydantic field annotation; needs runtime import
+
 # ──────────────────────────────────────────────────────────────────────
 # Translation keys for server-originated error/warning push messages.
 # Values are the full i18n key path the renderer resolves via t().
@@ -94,20 +96,18 @@ class ErrorSnapshot(BaseModel):
 
 # ──────────────────────────────────────────────────────────────────────
 # Client → Server: notifications (fire-and-forget, no req_id).
-#
-# ControlNotif accepts both `buttons` (string names — what the renderer
-# sends today) and `button_codes` (int codes — internal representation,
-# unused on the wire but kept until step 7 deletes it).  Resolution
-# happens in the receiver, not here, so this model stays a faithful
-# mirror of the wire format.
 # ──────────────────────────────────────────────────────────────────────
 
 
 class ControlNotif(BaseModel):
-    model_config = _FrozenLenient
+    """Per-frame input snapshot from the renderer. `buttons` carries
+    the keycap names (e.g. "W", "MOUSE_LEFT"); the receiver resolves
+    each via `engine_manager.BUTTON_CODES` into the int codes the
+    world engine consumes."""
+
+    model_config = _FrozenStrict
     type: Literal["control"] = "control"
-    buttons: list[str] | None = None
-    button_codes: list[int] | None = None
+    buttons: list[str] = Field(default_factory=list)
     mouse_dx: float = 0.0
     mouse_dy: float = 0.0
     ts: float | None = None
@@ -210,17 +210,14 @@ ClientMessageAdapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 
 
 class StatusMessage(BaseModel):
-    """Engine progress stage broadcast.
-
-    `stage` is a stage ID string (e.g. `session.warmup.compile`) — kept
-    as `str` for now so progress_stages.py remains the source of truth;
-    step 7 promotes it to a StageId StrEnum and decides whether
-    progress_stages.py or src/stages.json is canonical.
-    """
+    """Engine progress stage broadcast. `stage` is a `StageId` enum
+    value (e.g. `session.warmup.compile`); progress_stages.py is the
+    canonical Python-side registry, mirrored on the renderer in
+    `src/stages.json` for label / percent metadata."""
 
     model_config = _FrozenStrict
     type: Literal["status"] = "status"
-    stage: str
+    stage: StageId
     message: str | None = None
 
 
