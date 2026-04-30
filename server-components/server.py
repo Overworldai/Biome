@@ -953,17 +953,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             except Exception:
                 pass
 
-        # Cached dynamic GPU metrics, updated each latent pass and embedded in
-        # frame headers.  Static identifiers (GPU/CPU name, VRAM total) live
-        # in system_info and are sent once via the init response.
-        _cached_gpu_metrics = {
-            "vram_used_bytes": -1,
-            "gpu_util_percent": -1,
-        }
+        # Cached dynamic GPU metrics live on `conn` (initialised to -1).
+        # Static identifiers (GPU/CPU name, VRAM total) live in system_info
+        # and are sent once via the init response.
 
         def _update_gpu_metrics() -> None:
-            _cached_gpu_metrics["vram_used_bytes"] = system_info_module.get_vram_used_bytes()
-            _cached_gpu_metrics["gpu_util_percent"] = system_info_module.get_gpu_util_percent()
+            conn.cached_vram_used_bytes = system_info_module.get_vram_used_bytes()
+            conn.cached_gpu_util_percent = system_info_module.get_gpu_util_percent()
 
         def build_binary_frame(
             jpeg: bytes,
@@ -978,8 +974,9 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 "client_ts": client_ts,
                 "gen_ms": gen_ms,
                 "temporal_compression": temporal_compression,
+                "vram_used_bytes": conn.cached_vram_used_bytes,
+                "gpu_util_percent": conn.cached_gpu_util_percent,
             }
-            header_data.update(_cached_gpu_metrics)
             if profile is not None:
                 header_data.update(profile)
             header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
