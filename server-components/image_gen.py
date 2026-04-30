@@ -71,20 +71,38 @@ VLM_MAX_TOKENS = 1024  # Enough for thinking + tool call, prevents overthinking
 VLM_MAX_RETRIES = 3  # Retry tool-call parsing up to this many times
 VLM_IMAGE_MAX_SIZE = 384  # Downscale frame to this max dimension before sending to VLM
 
-VLM_TOOL_CALL_SUFFIX = (
-    "You MUST call one of these tools:\n\n"
-    "To submit an edit instruction:\n"
-    "<tool_call>\n"
-    "<function=submit_edit_instruction>\n"
-    "<parameter=instruction>YOUR INSTRUCTION HERE</parameter>\n"
-    "</function>\n"
-    "</tool_call>\n\n"
-    "To reject an unsafe request:\n"
-    "<tool_call>\n"
-    "<function=reject_request>\n"
-    "</function>\n"
-    "</tool_call>"
-)
+# Tool schemas passed via `tools=` to create_chat_completion. The Qwen35
+# chat template renders these into a system block that documents the
+# wire format the model is trained on. Putting the tool definitions
+# here (rather than as literal <tool_call> text in the system prompt)
+# avoids special-token tokenisation pitfalls in user content.
+VLM_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_edit_instruction",
+            "description": "Submit the final edit/generation instruction for the image model.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {
+                        "type": "string",
+                        "description": "The instruction to send to the image model.",
+                    },
+                },
+                "required": ["instruction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reject_request",
+            "description": "Reject a request that is entirely unsafe with no salvageable intent.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+]
 
 VLM_CONTENT_POLICY = (
     "CONTENT POLICY: You MUST sanitize the user's request before "
@@ -134,8 +152,9 @@ VLM_SYSTEM_PROMPT = (
     'shooter. Keep everything else unchanged."\n\n'
     "Always end with 'Keep everything else unchanged.'\n\n"
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
-    "immediately submit your instruction. Do not deliberate at length.\n\n"
-    + VLM_TOOL_CALL_SUFFIX
+    "immediately submit your instruction via the submit_edit_instruction "
+    "tool. Do not deliberate at length. If the request is entirely unsafe "
+    "with no salvageable intent, call reject_request instead."
 )
 
 VLM_GENERATE_SYSTEM_PROMPT = (
@@ -165,8 +184,9 @@ VLM_GENERATE_SYSTEM_PROMPT = (
     "planet. Emergency lights cast a warm amber glow. The corridor "
     'stretches ahead with sealed bulkhead doors."\n\n'
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
-    "immediately submit your instruction. Do not deliberate at length.\n\n"
-    + VLM_TOOL_CALL_SUFFIX
+    "immediately submit your prompt via the submit_edit_instruction tool. "
+    "Do not deliberate at length. If the request is entirely unsafe with "
+    "no salvageable intent, call reject_request instead."
 )
 
 
@@ -301,6 +321,7 @@ class ImageGenManager:
             t0 = time.perf_counter()
             result = self.vlm.create_chat_completion(
                 messages=messages,
+                tools=VLM_TOOLS,
                 max_tokens=VLM_MAX_TOKENS,
                 temperature=1.0,
                 top_p=0.95,
