@@ -28,7 +28,50 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from progress_stages import StageId  # noqa: TC001  # used in Pydantic field annotation; needs runtime import
+# ──────────────────────────────────────────────────────────────────────
+# Engine progress stages.
+#
+# Every stage that the server / engine manager / ws_session can report
+# is enumerated here. String values must stay in sync with the keys in
+# `src/stages.json` on the renderer (which carries the labels and
+# percentages). `StageId` is a `StrEnum`, so a value can be passed
+# wherever a `str` is expected and consumers get autocomplete + rename
+# safety; Pydantic validates inbound stages against this enum on the
+# `StatusMessage.stage` field.
+# ──────────────────────────────────────────────────────────────────────
+
+
+class StageId(StrEnum):
+    # ── Startup — server init before any client connects ──────────────
+    STARTUP_BEGIN = "startup.begin"
+    STARTUP_ENGINE_MANAGER = "startup.world_engine_manager"
+    STARTUP_SAFETY_CHECKER = "startup.safety_checker"
+    STARTUP_SAFETY_READY = "startup.safety_ready"
+    STARTUP_READY = "startup.ready"
+
+    # ── Session — per-client connection lifecycle ─────────────────────
+    SESSION_WAITING_FOR_SEED = "session.waiting_for_seed"
+
+    SESSION_LOADING_IMPORT = "session.loading_model.import"
+    SESSION_LOADING_MODEL = "session.loading_model.load"
+    SESSION_LOADING_WEIGHTS = "session.loading_model.instantiate"
+    SESSION_LOADING_DONE = "session.loading_model.done"
+
+    SESSION_WARMUP_RESET = "session.warmup.reset"
+    SESSION_WARMUP_SEED = "session.warmup.seed"
+    SESSION_WARMUP_COMPILE = "session.warmup.compile"
+
+    SESSION_INPAINTING_LOAD = "session.inpainting.load"
+    SESSION_INPAINTING_READY = "session.inpainting.ready"
+
+    SESSION_INIT_RESET = "session.init.reset"
+    SESSION_INIT_SEED = "session.init.seed"
+    SESSION_INIT_FRAME = "session.init.frame"
+
+    SESSION_RESET = "session.reset"  # CUDA-error recovery
+
+    SESSION_READY = "session.ready"
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Translation keys for server-originated error/warning push messages.

@@ -39,7 +39,6 @@ from app_state import (
     get_startup_config,
 )
 from hf_token import apply_resolved_token
-from progress_stages import StageId
 from protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -54,6 +53,7 @@ from protocol import (
     ResetNotif,
     ResumeNotif,
     SceneEditRequest,
+    StageId,
     StatusMessage,
     SystemInfoMessage,
     rpc_err,

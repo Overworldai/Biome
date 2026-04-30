@@ -37,7 +37,6 @@ from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import AppState, SafetyCacheEntry
-from progress_stages import StageId
 from protocol import (
     CheckSeedSafetyRequest,
     CheckSeedSafetyResponseData,
@@ -56,6 +55,7 @@ from protocol import (
     RpcError,
     RpcSuccess,
     SceneEditRequest,
+    StageId,
     StatusMessage,
     SystemInfo,
     WarningMessage,

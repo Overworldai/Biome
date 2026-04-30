@@ -22,7 +22,7 @@ try:
 except ImportError:
     simplejpeg = None
 
-from progress_stages import StageId
+from protocol import StageId
 
 logger = logging.getLogger(__name__)
 
