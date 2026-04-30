@@ -47,6 +47,7 @@ from app_state import (
     get_app_state_ws,
     get_startup_config,
 )
+from hf_token import apply_resolved_token
 from progress_stages import (
     SESSION_INPAINTING_LOAD,
     SESSION_INPAINTING_READY,
@@ -90,59 +91,7 @@ from protocol import (
 )
 from video_recorder import RecordingProperties, VideoRecorder
 
-# Resolve HuggingFace token: env var > CLI-cached token file.
-# Biome overrides HF_HOME to keep model cache inside world_engine/, which means
-# the huggingface_hub library won't find the user's default token at
-# ~/.cache/huggingface/token. We check multiple locations to match the Electron
-# side's resolution order.
-
-
-def resolve_hf_token() -> str | None:
-    """Resolve HuggingFace token from env vars and well-known file locations.
-
-    Mirrors the Electron-side getHfToken() resolution order so both paths
-    find the same token regardless of HF_HOME overrides.
-    """
-    # 1. HF_TOKEN env var
-    token = os.environ.get("HF_TOKEN")
-    if token:
-        return token
-    # 2. Deprecated HUGGING_FACE_HUB_TOKEN env var
-    token = os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if token:
-        return token
-    # 3. File at HF_TOKEN_PATH env var
-    token_path_env = os.environ.get("HF_TOKEN_PATH")
-    if token_path_env:
-        p = Path(token_path_env)
-        if p.is_file():
-            t = p.read_text().strip()
-            if t:
-                return t
-    # 4. File at real user HF_HOME/token (use XDG_CACHE_HOME or ~/.cache,
-    #    NOT the overridden HF_HOME which points into world_engine/)
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    if xdg:
-        p = Path(xdg) / "huggingface" / "token"
-        if p.is_file():
-            t = p.read_text().strip()
-            if t:
-                return t
-    # 5. Default fallback: ~/.cache/huggingface/token
-    p = Path.home() / ".cache" / "huggingface" / "token"
-    if p.is_file():
-        t = p.read_text().strip()
-        if t:
-            return t
-    return None
-
-
-_resolved_token = resolve_hf_token()
-if _resolved_token:
-    os.environ["HF_TOKEN"] = _resolved_token
-    logger.info("HF token resolved and set")
-else:
-    logger.warning("No HuggingFace token found (set HF_TOKEN or run `huggingface-cli login`)")
+apply_resolved_token()
 
 # Reduce CUDA allocator fragmentation during repeated model loads/switches.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
