@@ -22,19 +22,7 @@ try:
 except ImportError:
     simplejpeg = None
 
-from progress_stages import (
-    SESSION_INIT_FRAME,
-    SESSION_INIT_RESET,
-    SESSION_INIT_SEED,
-    SESSION_LOADING_DONE,
-    SESSION_LOADING_IMPORT,
-    SESSION_LOADING_MODEL,
-    SESSION_LOADING_WEIGHTS,
-    SESSION_WARMUP_COMPILE,
-    SESSION_WARMUP_RESET,
-    SESSION_WARMUP_SEED,
-    Stage,
-)
+from progress_stages import StageId
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +206,7 @@ class WorldEngineManager:
         self._progress_callback = callback
         self._progress_loop = loop
 
-    def _report_progress(self, stage: Stage):
+    def _report_progress(self, stage: StageId):
         """Report progress from any thread (including CUDA thread)."""
         cb = self._progress_callback
         loop = self._progress_loop
@@ -372,7 +360,7 @@ class WorldEngineManager:
             logger.info("BIOME ENGINE STARTUP")
             logger.info("=" * 60)
             logger.info("[1/4] Importing WorldEngine...")
-            self._report_progress(SESSION_LOADING_IMPORT)
+            self._report_progress(StageId.SESSION_LOADING_IMPORT)
             import_start = time.perf_counter()
             from world_engine import CtrlInput as CI
             from world_engine import WorldEngine
@@ -380,7 +368,7 @@ class WorldEngineManager:
             self.CtrlInput = CI
             logger.info(f"[1/4] WorldEngine imported in {time.perf_counter() - import_start:.2f}s")
 
-            self._report_progress(SESSION_LOADING_MODEL)
+            self._report_progress(StageId.SESSION_LOADING_MODEL)
             logger.info(f"[2/4] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
             logger.info(f"      Device: {DEVICE}")
@@ -423,7 +411,7 @@ class WorldEngineManager:
             if new_engine is None:
                 raise (last_error if last_error is not None else RuntimeError("Failed to initialize WorldEngine"))
 
-            self._report_progress(SESSION_LOADING_WEIGHTS)
+            self._report_progress(StageId.SESSION_LOADING_WEIGHTS)
             self.engine = new_engine
             logger.info(f"[2/4] Model loaded in {time.perf_counter() - model_start:.2f}s")
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
@@ -439,7 +427,7 @@ class WorldEngineManager:
             logger.info(f"[2/4] Seed target size: {cfg.seed_target_size}")
             logger.info(f"[2/4] Prompt conditioning: {cfg.has_prompt_conditioning}")
 
-            self._report_progress(SESSION_LOADING_DONE)
+            self._report_progress(StageId.SESSION_LOADING_DONE)
             self.model_uri = requested_model
             self.quant = requested_quant
 
@@ -504,19 +492,19 @@ class WorldEngineManager:
         if self.seed_frame is None:
             raise RuntimeError("Seed frame is not set")
 
-        self._report_progress(SESSION_INIT_RESET)
+        self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
         self.cuda_executor.submit(self.engine.reset).result()
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
-        self._report_progress(SESSION_INIT_SEED)
+        self._report_progress(StageId.SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
         self.cuda_executor.submit(lambda: self.engine.append_frame(self.seed_frame)).result()
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
-        self._report_progress(SESSION_INIT_FRAME)
+        self._report_progress(StageId.SESSION_INIT_FRAME)
 
     def recover_from_cuda_error(self) -> bool:
         """Recover from a CUDA error by clearing caches, resetting dynamo,
@@ -553,19 +541,19 @@ class WorldEngineManager:
         def do_warmup():
             warmup_start = time.perf_counter()
 
-            self._report_progress(SESSION_WARMUP_RESET)
+            self._report_progress(StageId.SESSION_WARMUP_RESET)
             logger.info("[5/5] Step 1: Resetting engine state...")
             reset_start = time.perf_counter()
             self.engine.reset()
             logger.info(f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s")
 
-            self._report_progress(SESSION_WARMUP_SEED)
+            self._report_progress(StageId.SESSION_WARMUP_SEED)
             logger.info("[5/5] Step 2: Appending seed frame...")
             append_start = time.perf_counter()
             self.engine.append_frame(self.seed_frame)
             logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
 
-            self._report_progress(SESSION_WARMUP_COMPILE)
+            self._report_progress(StageId.SESSION_WARMUP_COMPILE)
             logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
             gen_start = time.perf_counter()
             _ = self.engine.gen_frame(ctrl=self.CtrlInput(button=set(), mouse=(0.0, 0.0)))

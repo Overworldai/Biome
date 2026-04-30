@@ -37,7 +37,7 @@ from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from app_state import AppState, SafetyCacheEntry
-from progress_stages import SESSION_WAITING_FOR_SEED, Stage
+from progress_stages import StageId
 from protocol import (
     CheckSeedSafetyRequest,
     CheckSeedSafetyResponseData,
@@ -201,15 +201,15 @@ class Connection:
     async def send_warning(self, message_id: MessageId, params: dict[str, str] | None = None) -> None:
         await self.send_message(WarningMessage(message_id=message_id, params=params))
 
-    async def send_stage(self, stage: Stage) -> None:
-        await self.send_message(StatusMessage(stage=stage.id))
+    async def send_stage(self, stage: StageId) -> None:
+        await self.send_message(StatusMessage(stage=stage))
 
-    def push_progress(self, stage: Stage) -> None:
+    def push_progress(self, stage: StageId) -> None:
         """Sync callback for `WorldEngineManager.set_progress_callback` —
         safe to call from any thread; enqueues onto `progress_queue` for
         the asyncio drain task to ferry over the websocket."""
         try:
-            self.progress_queue.put_nowait(StatusMessage(stage=stage.id))
+            self.progress_queue.put_nowait(StatusMessage(stage=stage))
         except asyncio.QueueFull:
             pass
 
@@ -523,7 +523,7 @@ async def handle_init(
         seed_loaded = await load_seed_from_data(conn, world_engine, safety_checker, seed_data, seed_filename)
 
     if model_changed and not seed_loaded and not world_engine.seed_frame:
-        await conn.send_stage(SESSION_WAITING_FOR_SEED)
+        await conn.send_stage(StageId.SESSION_WAITING_FOR_SEED)
 
     ready = seed_loaded or (world_engine.seed_frame is not None)
     return ready, seed_loaded
@@ -964,7 +964,7 @@ def run_generator(
                 if recovery_success:
                     conn.queue_send(
                         StatusMessage(
-                            stage="session.reset",
+                            stage=StageId.SESSION_RESET,
                             message="Recovered from CUDA error - engine reset",
                         )
                     )

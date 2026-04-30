@@ -39,18 +39,7 @@ from app_state import (
     get_startup_config,
 )
 from hf_token import apply_resolved_token
-from progress_stages import (
-    SESSION_INPAINTING_LOAD,
-    SESSION_INPAINTING_READY,
-    SESSION_READY,
-    SESSION_WAITING_FOR_SEED,
-    STARTUP_BEGIN,
-    STARTUP_ENGINE_MANAGER,
-    STARTUP_READY,
-    STARTUP_SAFETY_CHECKER,
-    STARTUP_SAFETY_READY,
-    Stage,
-)
+from progress_stages import StageId
 from protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -184,12 +173,12 @@ def _read_log_tail_lines(max_lines: int) -> list[str]:
 # ============================================================================
 
 
-def _broadcast_startup_stage(state: AppState, stage: Stage) -> None:
+def _broadcast_startup_stage(state: AppState, stage: StageId) -> None:
     """Store a startup stage on AppState and push it to any connected WS clients."""
-    msg = StatusMessage(stage=stage.id)
+    msg = StatusMessage(stage=stage)
     state.startup_stages.append(msg)
     # Also log to stdout so file-based logs capture it
-    logger.info(f"Startup stage: {stage.id}")
+    logger.info(f"Startup stage: {stage}")
     for q in state.ws_startup_waiters:
         try:
             q.put_nowait(msg)
@@ -214,11 +203,11 @@ def _signal_startup_done(state: AppState) -> None:
 async def _heavy_init(state: AppState) -> None:
     """Run heavy startup work (safety warmup, seed validation) in background."""
     try:
-        _broadcast_startup_stage(state, STARTUP_BEGIN)
+        _broadcast_startup_stage(state, StageId.STARTUP_BEGIN)
 
         # Initialize modules
         logger.info("Initializing WorldEngine...")
-        _broadcast_startup_stage(state, STARTUP_ENGINE_MANAGER)
+        _broadcast_startup_stage(state, StageId.STARTUP_ENGINE_MANAGER)
         state.world_engine = WorldEngineManager()
 
         from image_gen import ImageGenManager
@@ -226,11 +215,11 @@ async def _heavy_init(state: AppState) -> None:
         state.image_gen = ImageGenManager(state.world_engine.cuda_executor)
 
         logger.info("Initializing Safety Checker...")
-        _broadcast_startup_stage(state, STARTUP_SAFETY_CHECKER)
+        _broadcast_startup_stage(state, StageId.STARTUP_SAFETY_CHECKER)
         state.safety_checker = SafetyChecker()
         await asyncio.to_thread(state.safety_checker.load_resident, "cuda")
         logger.info("Safety Checker loaded on GPU")
-        _broadcast_startup_stage(state, STARTUP_SAFETY_READY)
+        _broadcast_startup_stage(state, StageId.STARTUP_SAFETY_READY)
 
         # Load hash-based safety cache
         state.safety_hash_cache = load_safety_cache()
@@ -239,7 +228,7 @@ async def _heavy_init(state: AppState) -> None:
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
         logger.info(f"[SERVER] {len(state.safety_hash_cache)} safety cache entries")
         logger.info("=" * 60)
-        _broadcast_startup_stage(state, STARTUP_READY)
+        _broadcast_startup_stage(state, StageId.STARTUP_READY)
 
         state.startup_complete = True
         _signal_startup_done(state)
@@ -473,7 +462,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     progress_drain_task = asyncio.create_task(_drain_progress_queue())
 
     try:
-        await conn.send_stage(SESSION_WAITING_FOR_SEED)
+        await conn.send_stage(StageId.SESSION_WAITING_FOR_SEED)
         logger.info(f"[{client_host}] Waiting for init message...")
 
         while world_engine.seed_frame is None:
@@ -535,10 +524,10 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             await asyncio.to_thread(image_gen.unload)
 
         if conn.scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
-            await conn.send_stage(SESSION_INPAINTING_LOAD)
+            await conn.send_stage(StageId.SESSION_INPAINTING_LOAD)
             try:
                 await image_gen.warmup()
-                await conn.send_stage(SESSION_INPAINTING_READY)
+                await conn.send_stage(StageId.SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Scene authoring warmup failed: {e}", exc_info=True)
                 await conn.send_message(
@@ -582,7 +571,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         await websocket.send_bytes(struct.pack("<I", len(header)) + header + jpeg)
 
         world_engine.set_progress_callback(None)
-        await conn.send_stage(SESSION_READY)
+        await conn.send_stage(StageId.SESSION_READY)
         logger.info(f"[{client_host}] Ready for game loop")
 
         conn.action_logger = ActionLogger(client_host) if conn.action_logging_requested else None
