@@ -1310,10 +1310,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             logger.info("[RECV] Resumed")
 
                         case PromptNotif() as notif:
-                            from engine_manager import DEFAULT_PROMPT
-
-                            new_prompt = notif.prompt.strip()
-                            prompt_pending = new_prompt if new_prompt else DEFAULT_PROMPT
+                            prompt_pending = notif.prompt.strip()
 
                         case ControlNotif() as notif:
                             if paused:

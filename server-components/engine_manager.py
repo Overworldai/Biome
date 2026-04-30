@@ -88,19 +88,6 @@ BUTTON_CODES["MOUSE_LEFT"] = 0x01
 BUTTON_CODES["MOUSE_RIGHT"] = 0x02
 BUTTON_CODES["MOUSE_MIDDLE"] = 0x04
 
-# Default prompt - describes the expected visual style
-DEFAULT_PROMPT = (
-    "First-person shooter gameplay footage from a true POV perspective, "
-    "the camera locked to the player's eyes as assault rifles, carbines, "
-    "machine guns, laser-sighted firearms, bullet-fed weapons, magazines, "
-    "barrels, muzzles, tracers, ammo, and launchers dominate the frame, "
-    "with constant gun handling, recoil, muzzle flash, shell ejection, "
-    "and ballistic impacts. Continuous real-time FPS motion with no cuts, "
-    "weapon-centric framing, realistic gun physics, authentic firearm "
-    "materials, high-caliber ammunition, laser optics, iron sights, and "
-    "relentless gun-driven action, rendered in ultra-realistic 4K at 60fps."
-)
-
 
 # ============================================================================
 # Session Management
@@ -133,7 +120,7 @@ class WorldEngineManager:
         self.CtrlInput = None
         self.model_uri = None
         self.quant = None
-        self.current_prompt = DEFAULT_PROMPT
+        self.current_prompt = ""
         self.engine_warmed_up = False
         self.cfg = MODEL_CFG["waypoint-1"].copy()
         self.n_frames = DEFAULT_N_FRAMES
