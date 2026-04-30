@@ -101,22 +101,6 @@ def model_config_from_engine_cfg(engine_model_cfg: object) -> ModelConfig:
 
 
 # ============================================================================
-# Session Management
-# ============================================================================
-
-
-@dataclass
-class Session:
-    """Tracks state for a single WebSocket connection.
-
-    All frame counts are in perceptual frames (i.e. post-temporal-compression).
-    """
-
-    perceptual_frame_count: int = 0
-    max_perceptual_frames: int = DEFAULT_N_FRAMES - 2
-
-
-# ============================================================================
 # WorldEngine Manager
 # ============================================================================
 

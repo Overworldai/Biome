@@ -66,7 +66,7 @@ from scene_authoring import run_generate_scene, run_scene_edit
 from video_recorder import RecordingProperties, VideoRecorder
 
 if TYPE_CHECKING:
-    from engine_manager import Session, WorldEngineManager
+    from engine_manager import WorldEngineManager
     from image_gen import ImageGenManager
     from safety import SafetyChecker
 
@@ -181,6 +181,14 @@ class Connection:
     # read on the same thread when building binary frame headers.
     cached_vram_used_bytes: int = -1
     cached_gpu_util_percent: int = -1
+
+    # ─── Frame counters (perceptual, post-temporal-compression) ────
+    # `max_perceptual_frames` is rewritten in `handle_init` once the
+    # model loads (= (n_frames - 2) * temporal_compression). The
+    # pre-load default matches the typical 4096-frame context, which
+    # auto-reset uses to bound single-frame sessions.
+    perceptual_frame_count: int = 0
+    max_perceptual_frames: int = 4094
 
     def __post_init__(self) -> None:
         # Loop-bound channels — Connection must be constructed inside
@@ -453,7 +461,6 @@ async def handle_init(
     conn: Connection,
     world_engine: "WorldEngineManager",
     safety_checker: "SafetyChecker",
-    session: "Session",
     req: InitRequest,
     *,
     is_game_loop: bool = False,
@@ -519,8 +526,8 @@ async def handle_init(
         await world_engine.load_engine(model_uri, quant=quant)
         world_engine.set_progress_callback(None)
         world_engine.seed_frame = None
-        session.perceptual_frame_count = 0
-        session.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
+        conn.perceptual_frame_count = 0
+        conn.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
         model_changed = True
         logger.info(f"[{conn.client_host}] Model loaded: {world_engine.model_uri}")
 
@@ -541,7 +548,6 @@ async def run_receiver(
     world_engine: "WorldEngineManager",
     image_gen: "ImageGenManager",
     safety_checker: "SafetyChecker",
-    session: "Session",
     button_codes: dict[str, int],
     system_info: SystemInfo,
 ) -> None:
@@ -561,9 +567,7 @@ async def run_receiver(
             match parsed:
                 case InitRequest() as req:
                     # init RPC: apply deltas and respond with metrics.
-                    ready, new_seed = await handle_init(
-                        conn, world_engine, safety_checker, session, req, is_game_loop=True
-                    )
+                    ready, new_seed = await handle_init(conn, world_engine, safety_checker, req, is_game_loop=True)
                     if ready:
                         response = rpc_ok(req.req_id, build_init_response_data(world_engine, system_info))
                     else:
@@ -673,7 +677,6 @@ async def run_receiver(
 def reset_engine(
     conn: Connection,
     world_engine: "WorldEngineManager",
-    session: "Session",
 ) -> None:
     """Restore the original seed and reset the engine session. Synchronous —
     runs CUDA work via the executor. Called from the generator thread when
@@ -684,7 +687,7 @@ def reset_engine(
     world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
     world_engine.init_session()
     world_engine.set_progress_callback(None)
-    session.perceptual_frame_count = 0
+    conn.perceptual_frame_count = 0
     logger.info(f"[{conn.client_host}] Engine Reset")
 
 
@@ -707,7 +710,6 @@ class _PendingFlush:
 def run_generator(
     conn: Connection,
     world_engine: "WorldEngineManager",
-    session: "Session",
 ) -> None:
     """The per-session inference loop, run on a dedicated thread.
 
@@ -732,12 +734,12 @@ def run_generator(
         encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in p.cpu_frames]
         t_enc = time.perf_counter()
 
-        if session.perceptual_frame_count % 5 == 0:
+        if conn.perceptual_frame_count % 5 == 0:
             conn.update_gpu_metrics()
         t_metrics = time.perf_counter()
 
         for jpeg in encoded:
-            session.perceptual_frame_count += 1
+            conn.perceptual_frame_count += 1
             t_queued = time.perf_counter()
             profile = {
                 "t_infer_ms": round((p.t_infer - p.t_infer_start) * 1000, 1),
@@ -749,7 +751,7 @@ def run_generator(
             conn.queue_send(
                 conn.build_frame_envelope(
                     jpeg,
-                    session.perceptual_frame_count,
+                    conn.perceptual_frame_count,
                     p.client_ts,
                     p.gen_time,
                     temporal_compression=p.temporal_compression,
@@ -757,8 +759,8 @@ def run_generator(
                 )
             )
 
-        if session.perceptual_frame_count % 60 == 0:
-            logger.info(f"[{conn.client_host}] Sent frame {session.perceptual_frame_count} (gen={p.gen_time:.1f}ms)")
+        if conn.perceptual_frame_count % 60 == 0:
+            logger.info(f"[{conn.client_host}] Sent frame {conn.perceptual_frame_count} (gen={p.gen_time:.1f}ms)")
 
     gen_was_paused = False
     next_frame_time = 0.0  # perf_counter target for frame pacing
@@ -778,7 +780,7 @@ def run_generator(
                 conn.generate_scene_request = None
                 try:
                     data = run_generate_scene(conn.state, req["prompt"], conn.biome_version)
-                    session.perceptual_frame_count = 0
+                    conn.perceptual_frame_count = 0
                     req["future"].set_result(data)
                     # Send the generated seed as a single frame so the pause
                     # overlay background updates to show the new scene.
@@ -786,7 +788,7 @@ def run_generator(
                     if seed.dim() == 4:
                         seed = seed[0]  # First subframe for multiframe models
                     seed_jpeg = world_engine.frame_to_jpeg(seed)
-                    conn.queue_send(conn.build_frame_envelope(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0))
+                    conn.queue_send(conn.build_frame_envelope(seed_jpeg, conn.perceptual_frame_count, 0.0, 0.0))
                 except Exception as e:
                     logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                     req["future"].set_exception(e)
@@ -815,21 +817,19 @@ def run_generator(
             if conn.prompt_pending is not None:
                 _flush_pending()
                 conn.prompt_pending = None
-                reset_engine(conn, world_engine, session)
+                reset_engine(conn, world_engine)
                 conn.start_action_log_segment(world_engine)
                 conn.start_video_segment(world_engine)
                 next_frame_time = 0.0
 
             # Auto-reset at context length limit (single-frame models only;
             # multiframe models don't support mid-session reset).
-            auto_reset = (
-                not world_engine.is_multiframe and session.perceptual_frame_count >= session.max_perceptual_frames
-            )
+            auto_reset = not world_engine.is_multiframe and conn.perceptual_frame_count >= conn.max_perceptual_frames
             if conn.reset_flag or auto_reset:
                 _flush_pending()
                 if auto_reset:
                     logger.info(f"[{conn.client_host}] Auto-reset at frame limit")
-                reset_engine(conn, world_engine, session)
+                reset_engine(conn, world_engine)
                 conn.reset_flag = False
                 conn.start_action_log_segment(world_engine)
                 conn.start_video_segment(world_engine)
@@ -843,7 +843,7 @@ def run_generator(
                 _flush_pending()
                 try:
                     preview = run_scene_edit(conn.state, req["prompt"], conn.last_generated_cpu_frames)
-                    session.perceptual_frame_count = 0
+                    conn.perceptual_frame_count = 0
                     if conn.video_recorder is not None:
                         conn.video_recorder.note_edit(req["prompt"])
                     req["future"].set_result(preview)
@@ -859,7 +859,7 @@ def run_generator(
                 _flush_pending()
                 try:
                     data = run_generate_scene(conn.state, req["prompt"], conn.biome_version)
-                    session.perceptual_frame_count = 0
+                    conn.perceptual_frame_count = 0
                     req["future"].set_result(data)
                 except Exception as e:
                     logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)

@@ -138,7 +138,7 @@ try:
     logger.info("FastAPI imported")
 
     logger.info("Importing Engine Manager module...")
-    from engine_manager import Session, WorldEngineManager
+    from engine_manager import WorldEngineManager
     from keymap import BUTTON_CODES
 
     logger.info("Engine Manager module imported")
@@ -440,7 +440,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
     # even if the session crashes during init (e.g. CUDA graph compilation).
     await conn.send_message(SystemInfoMessage(**system_info_module.get_system_info().model_dump()))
 
-    session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
     world_engine.seed_frame = None
 
@@ -481,7 +480,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     case InitRequest() as req:
                         # init RPC: response is deferred until after warmup/session init completes
                         conn.init_req_id = req.req_id
-                        ready, _ = await handle_init(conn, world_engine, safety_checker, session, req)
+                        ready, _ = await handle_init(conn, world_engine, safety_checker, req)
                         if not ready:
                             await websocket.send_text(
                                 rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(
@@ -595,7 +594,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         gen_thread = threading.Thread(
             target=run_generator,
-            args=(conn, world_engine, session),
+            args=(conn, world_engine),
             daemon=True,
             name=f"gen-{client_host}",
         )
@@ -607,7 +606,6 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 world_engine,
                 image_gen,
                 safety_checker,
-                session,
                 BUTTON_CODES,
                 system_info_module.get_system_info(),
             )
@@ -646,7 +644,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             conn.action_logger.end_segment()
         if conn.video_recorder is not None:
             conn.video_recorder.end_segment()
-        logger.info(f"[{client_host}] Disconnected (frames: {session.perceptual_frame_count})")
+        logger.info(f"[{client_host}] Disconnected (frames: {conn.perceptual_frame_count})")
 
 
 # ============================================================================
