@@ -31,7 +31,6 @@ from progress_stages import (
     SESSION_LOADING_MODEL,
     SESSION_LOADING_WEIGHTS,
     SESSION_WARMUP_COMPILE,
-    SESSION_WARMUP_PROMPT,
     SESSION_WARMUP_RESET,
     SESSION_WARMUP_SEED,
     Stage,
@@ -120,7 +119,6 @@ class WorldEngineManager:
         self.CtrlInput = None
         self.model_uri = None
         self.quant = None
-        self.current_prompt = ""
         self.engine_warmed_up = False
         self.cfg = MODEL_CFG["waypoint-1"].copy()
         self.n_frames = DEFAULT_N_FRAMES
@@ -333,7 +331,6 @@ class WorldEngineManager:
             logger.info(f"[2/4] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
             logger.info(f"      Device: {DEVICE}")
-            logger.info(f"      Prompt: {self.current_prompt[:60]}...")
 
             model_start = time.perf_counter()
             dtype_attempts = [torch.bfloat16, torch.float16]
@@ -454,11 +451,6 @@ class WorldEngineManager:
         await self._run_on_cuda_thread(lambda: self.engine.append_frame(self.seed_frame))
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
-        t0 = time.perf_counter()
-        logger.info("[RESET] Starting engine.set_prompt()...")
-        await self._run_on_cuda_thread(lambda: self.engine.set_prompt(self.current_prompt))
-        logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
-
     async def init_session(self):
         """Reset engine, load seed, render initial frame and report progress."""
         if self.engine is None:
@@ -479,13 +471,6 @@ class WorldEngineManager:
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(SESSION_INIT_FRAME)
-        if self.has_prompt_conditioning:
-            t0 = time.perf_counter()
-            logger.info("[INIT] Starting engine.set_prompt()...")
-            await self._run_on_cuda_thread(lambda: self.engine.set_prompt(self.current_prompt))
-            logger.info(f"[INIT] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
-        else:
-            logger.info("[INIT] No prompt conditioning enabled, skipping engine.set_prompt()")
 
     async def recover_from_cuda_error(self):
         """
@@ -541,16 +526,6 @@ class WorldEngineManager:
             append_start = time.perf_counter()
             self.engine.append_frame(self.seed_frame)
             logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
-
-            self._report_progress(SESSION_WARMUP_PROMPT)
-
-            if self.has_prompt_conditioning:
-                logger.info("[5/5] Step 3: Setting prompt...")
-                prompt_start = time.perf_counter()
-                self.engine.set_prompt(self.current_prompt)
-                logger.info(f"[5/5] Step 3: Prompt set in {time.perf_counter() - prompt_start:.2f}s")
-            else:
-                logger.info("[5/5] Step 3: Skipping prompt conditioning...")
 
             self._report_progress(SESSION_WARMUP_COMPILE)
             logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
