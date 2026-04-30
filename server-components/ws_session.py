@@ -45,7 +45,6 @@ from protocol import (
     ClientMessageAdapter,
     ControlNotif,
     ErrorMessage,
-    ErrorSnapshot,
     GenerateSceneRequest,
     InitRequest,
     InitResponseData,
@@ -96,7 +95,7 @@ def build_error_message(
         message_id=message_id,
         message=message,
         params=params,
-        snapshot=ErrorSnapshot(**system_info_module.capture_error_snapshot()),
+        snapshot=system_info_module.capture_error_snapshot(),
     )
 
 
@@ -303,12 +302,12 @@ class Connection:
             pass
 
 
-def build_init_response_data(world_engine: "WorldEngineManager", system_info: dict) -> InitResponseData:
+def build_init_response_data(world_engine: "WorldEngineManager", system_info: SystemInfo) -> InitResponseData:
     """Pack post-warmup session metrics into the typed init RPC response."""
     return InitResponseData(
         model=world_engine.model_uri or "",
         inference_fps=world_engine.inference_fps,
-        system_info=SystemInfo(**system_info),
+        system_info=system_info,
     )
 
 
@@ -536,7 +535,7 @@ async def run_receiver(
     safety_checker: "SafetyChecker",
     session: "Session",
     button_codes: dict[str, int],
-    system_info: dict,
+    system_info: SystemInfo,
 ) -> None:
     """Drain inbound websocket messages, dispatch them via the typed
     protocol union. Posts scene-edit / generate-scene futures into

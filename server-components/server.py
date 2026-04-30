@@ -438,7 +438,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     # Push system info immediately so the client has the hardware identity
     # even if the session crashes during init (e.g. CUDA graph compilation).
-    await conn.send_message(SystemInfoMessage(**system_info_module.system_info))
+    await conn.send_message(SystemInfoMessage(**system_info_module.get_system_info().model_dump()))
 
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
@@ -589,7 +589,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         # Respond to init RPC with session metrics
         if conn.init_req_id:
             await conn.send_message(
-                rpc_ok(conn.init_req_id, build_init_response_data(world_engine, system_info_module.system_info))
+                rpc_ok(conn.init_req_id, build_init_response_data(world_engine, system_info_module.get_system_info()))
             )
             conn.init_req_id = None
 
@@ -609,7 +609,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 safety_checker,
                 session,
                 BUTTON_CODES,
-                system_info_module.system_info,
+                system_info_module.get_system_info(),
             )
         )
         send_task = asyncio.create_task(run_sender(conn))
