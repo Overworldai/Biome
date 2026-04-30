@@ -30,7 +30,6 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from queue import Queue
-from typing import TypedDict
 
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
@@ -38,7 +37,13 @@ from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 from pydantic import BaseModel
 
 from action_logger import ActionLogger
-from app_state import AppState, attach_app_state, get_app_state, get_app_state_ws
+from app_state import (
+    AppState,
+    SafetyCacheEntry,
+    attach_app_state,
+    get_app_state,
+    get_app_state_ws,
+)
 from progress_stages import (
     SESSION_INPAINTING_LOAD,
     SESSION_INPAINTING_READY,
@@ -230,15 +235,6 @@ def build_error_message(
     )
 
 
-# ============================================================================
-# Global Module Instances
-# ============================================================================
-
-world_engine = None
-image_gen = None
-safety_checker = None
-safety_hash_cache: dict[str, "SafetyCacheEntry"] = {}
-
 LOG_TAIL_INITIAL_LINES = 220
 
 
@@ -257,12 +253,6 @@ def _read_log_tail_lines(max_lines: int) -> list[str]:
 # ============================================================================
 # Safety Cache
 # ============================================================================
-
-
-class SafetyCacheEntry(TypedDict):
-    is_safe: bool
-    scores: dict
-    checked_at: float
 
 
 SAFETY_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.bin"
@@ -331,33 +321,31 @@ def _signal_startup_done(state: AppState) -> None:
 
 async def _heavy_init(state: AppState) -> None:
     """Run heavy startup work (safety warmup, seed validation) in background."""
-    global world_engine, image_gen, safety_checker, safety_hash_cache
-
     try:
         _broadcast_startup_stage(state, STARTUP_BEGIN)
 
         # Initialize modules
         logger.info("Initializing WorldEngine...")
         _broadcast_startup_stage(state, STARTUP_ENGINE_MANAGER)
-        world_engine = WorldEngineManager()
+        state.world_engine = WorldEngineManager()
 
         from image_gen import ImageGenManager
 
-        image_gen = ImageGenManager(world_engine.cuda_executor)
+        state.image_gen = ImageGenManager(state.world_engine.cuda_executor)
 
         logger.info("Initializing Safety Checker...")
         _broadcast_startup_stage(state, STARTUP_SAFETY_CHECKER)
-        safety_checker = SafetyChecker()
-        await asyncio.to_thread(safety_checker.load_resident, "cuda")
+        state.safety_checker = SafetyChecker()
+        await asyncio.to_thread(state.safety_checker.load_resident, "cuda")
         logger.info("Safety Checker loaded on GPU")
         _broadcast_startup_stage(state, STARTUP_SAFETY_READY)
 
         # Load hash-based safety cache
-        safety_hash_cache = load_safety_cache()
+        state.safety_hash_cache = load_safety_cache()
 
         logger.info("=" * 60)
         logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
-        logger.info(f"[SERVER] {len(safety_hash_cache)} safety cache entries")
+        logger.info(f"[SERVER] {len(state.safety_hash_cache)} safety cache entries")
         logger.info("=" * 60)
         _broadcast_startup_stage(state, STARTUP_READY)
 
@@ -426,16 +414,18 @@ app.add_middleware(
 @app.get("/health")
 async def health(state: AppState = Depends(get_app_state)):
     """Health check for Biome backend."""
+    we = state.world_engine
+    sc = state.safety_checker
     return JSONResponse(
         {
             "status": "ok",
             "startup_complete": state.startup_complete,
             "world_engine": {
-                "loaded": world_engine is not None and world_engine.engine is not None,
-                "warmed_up": world_engine is not None and world_engine.engine_warmed_up,
-                "has_seed": world_engine is not None and world_engine.seed_frame is not None,
+                "loaded": we is not None and we.engine is not None,
+                "warmed_up": we is not None and we.engine_warmed_up,
+                "has_seed": we is not None and we.seed_frame is not None,
             },
-            "safety": {"loaded": safety_checker is not None and safety_checker.model is not None},
+            "safety": {"loaded": sc is not None and sc.model is not None},
         }
     )
 
@@ -482,6 +472,7 @@ async def get_model_info(model_id: str):
 
 
 async def handle_check_seed_safety(
+    state: AppState,
     req: CheckSeedSafetyRequest,
 ) -> RpcSuccess[CheckSeedSafetyResponseData] | RpcError:
     """Check if a seed image is safe. Server computes hash, caches result."""
@@ -496,14 +487,15 @@ async def handle_check_seed_safety(
     img_hash = compute_bytes_hash(image_bytes)
 
     # Check cache first
-    if img_hash in safety_hash_cache:
-        cached = safety_hash_cache[img_hash]
+    if img_hash in state.safety_hash_cache:
+        cached = state.safety_hash_cache[img_hash]
         return rpc_ok(
             req.req_id,
             CheckSeedSafetyResponseData(is_safe=cached["is_safe"], hash=img_hash),
         )
 
     # Run safety check (decode + inference off the event loop)
+    safety_checker = state.safety_checker
     try:
 
         def _check_safety():
@@ -516,17 +508,17 @@ async def handle_check_seed_safety(
         return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
     is_safe = safety_result.get("is_safe", False)
-    safety_hash_cache[img_hash] = {
+    state.safety_hash_cache[img_hash] = {
         "is_safe": is_safe,
         "scores": safety_result.get("scores", {}),
         "checked_at": time.time(),
     }
-    save_safety_cache(safety_hash_cache)
+    save_safety_cache(state.safety_hash_cache)
 
     return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=is_safe, hash=img_hash))
 
 
-def _run_generate_scene_on_generator(prompt: str, biome_version: str | None) -> dict:
+def _run_generate_scene_on_generator(state: AppState, prompt: str, biome_version: str | None) -> dict:
     """Generate a new scene from a text prompt and load it as the current seed.
 
     Runs on the generator thread.  Uses the inpainting pipeline with a blank
@@ -548,6 +540,13 @@ def _run_generate_scene_on_generator(prompt: str, biome_version: str | None) -> 
         SafetyRejectionError,
         properties_to_jpeg_comment,
     )
+
+    assert state.world_engine is not None
+    assert state.image_gen is not None
+    assert state.safety_checker is not None
+    world_engine = state.world_engine
+    image_gen = state.image_gen
+    safety_checker = state.safety_checker
 
     t0 = time.perf_counter()
 
@@ -610,7 +609,7 @@ def _run_generate_scene_on_generator(prompt: str, biome_version: str | None) -> 
     }
 
 
-def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
+def _run_scene_edit_on_generator(state: AppState, prompt: str, cpu_frames: list) -> dict:
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
@@ -629,6 +628,13 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     from image_gen import (
         SafetyRejectionError,
     )
+
+    assert state.world_engine is not None
+    assert state.image_gen is not None
+    assert state.safety_checker is not None
+    world_engine = state.world_engine
+    image_gen = state.image_gen
+    safety_checker = state.safety_checker
 
     last_frame_np = cpu_frames[-1]
 
@@ -775,6 +781,18 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
         TeeStream.unregister_client(log_queue)
         await websocket.close()
         return
+
+    # Past the startup gate: these are guaranteed populated by `_heavy_init`.
+    # Bind to locals so the rest of this function can use non-Optional types
+    # without state.X. attribute prefixes everywhere; step 6 replaces this
+    # with an explicit "ready" state machine on AppState.
+    assert state.world_engine is not None
+    assert state.image_gen is not None
+    assert state.safety_checker is not None
+    world_engine = state.world_engine
+    image_gen = state.image_gen
+    safety_checker = state.safety_checker
+    safety_hash_cache = state.safety_hash_cache  # mutated in place
 
     # Push system info immediately so the client has the hardware identity
     # even if the session crashes during init (e.g. CUDA graph compilation).
@@ -1016,7 +1034,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                 match parsed:
                     case CheckSeedSafetyRequest() as req:
-                        result = await handle_check_seed_safety(req)
+                        result = await handle_check_seed_safety(state, req)
                         await websocket.send_text(result.model_dump_json(exclude_none=True))
                     case InitRequest() as req:
                         # init RPC: response is deferred until after warmup/session init completes
@@ -1318,7 +1336,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             queue_send(gen_response)
 
                         case CheckSeedSafetyRequest() as req:
-                            seed_response = await handle_check_seed_safety(req)
+                            seed_response = await handle_check_seed_safety(state, req)
                             queue_send(seed_response)
 
                         case ResetNotif():
@@ -1456,7 +1474,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         req = generate_scene_request
                         generate_scene_request = None
                         try:
-                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
+                            data = _run_generate_scene_on_generator(state, req["prompt"], biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                             # Send the generated seed as a single frame so the
@@ -1523,7 +1541,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         scene_edit_request = None
                         _flush_pending()
                         try:
-                            preview = _run_scene_edit_on_generator(req["prompt"], last_generated_cpu_frames)
+                            preview = _run_scene_edit_on_generator(state, req["prompt"], last_generated_cpu_frames)
                             session.perceptual_frame_count = 0
                             if video_recorder is not None:
                                 video_recorder.note_edit(req["prompt"])
@@ -1539,7 +1557,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         generate_scene_request = None
                         _flush_pending()
                         try:
-                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
+                            data = _run_generate_scene_on_generator(state, req["prompt"], biome_version)
                             session.perceptual_frame_count = 0
                             req["future"].set_result(data)
                         except Exception as e:

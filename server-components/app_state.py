@@ -19,10 +19,26 @@ rules in pyproject.toml fire on this code. Keep it that way.
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, TypedDict
 
 from fastapi import FastAPI, Request, WebSocket
 
 from protocol import StatusMessage
+
+if TYPE_CHECKING:
+    from engine_manager import WorldEngineManager
+    from image_gen import ImageGenManager
+    from safety import SafetyChecker
+
+
+class SafetyCacheEntry(TypedDict):
+    """One entry in the on-disk safety cache (`.safety_cache.bin`).
+    Step 7 converts the cache file to JSON-with-Pydantic; until then
+    the entry shape is preserved as a TypedDict for pickle compatibility."""
+
+    is_safe: bool
+    scores: dict[str, float]
+    checked_at: float
 
 
 @dataclass
@@ -37,6 +53,17 @@ class AppState:
     startup_error: str | None = None
     startup_stages: list[StatusMessage] = field(default_factory=list)
     ws_startup_waiters: list[asyncio.Queue[StatusMessage | None]] = field(default_factory=list)
+
+    # ─── Module instances (populated by `_heavy_init`) ──────────────
+    # Optional[T] until init completes; consumers downstream of the
+    # startup-complete check assert on these. Step 6 tightens the
+    # state machine so the optionality is encoded as a type, not a None.
+    world_engine: "WorldEngineManager | None" = None
+    image_gen: "ImageGenManager | None" = None
+    safety_checker: "SafetyChecker | None" = None
+
+    # ─── Safety cache ───────────────────────────────────────────────
+    safety_hash_cache: dict[str, SafetyCacheEntry] = field(default_factory=dict)
 
 
 def get_app_state(request: Request) -> AppState:
