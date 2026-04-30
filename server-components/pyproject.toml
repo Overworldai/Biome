@@ -119,8 +119,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# `dispatch_request(msg, websocket)` dies with the typed protocol in step 2;
-# `lifespan(app)` signature is FastAPI-mandated and gets revisited in step 3.
+# `lifespan(app)` signature is FastAPI-mandated; the unused `app` param
+# gets renamed/restructured in step 3 (AppState wiring), at which point
+# this ignore goes away.
 "server.py" = ["ARG001"]
 
 [tool.basedpyright]

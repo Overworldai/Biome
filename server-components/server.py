@@ -484,45 +484,8 @@ async def get_model_info(model_id: str):
 
 
 # ============================================================================
-# WS Request/Response Dispatch
+# WS Request Handlers
 # ============================================================================
-
-
-class BinaryResponse:
-    """Sentinel for RPC handlers that return raw binary data instead of JSON."""
-
-    __slots__ = ("image_bytes",)
-
-    def __init__(self, image_bytes: bytes):
-        self.image_bytes = image_bytes
-
-
-async def dispatch_request(msg: dict, websocket: WebSocket) -> dict | BinaryResponse:
-    """Adapter for legacy game-loop callers: validates the dict into a typed
-    request, dispatches to the typed handler, and strips the response envelope
-    back down to `{success, data}` / `{success, error}` since legacy callers
-    add `type` and `req_id` themselves.
-
-    Goes away in step 2 commit 5 (or whenever the game-loop receiver is
-    converted to use ClientMessageAdapter directly)."""
-    req_type = msg.get("type", "")
-
-    if req_type == "check_seed_safety":
-        try:
-            req = CheckSeedSafetyRequest.model_validate(msg)
-        except Exception as e:
-            return {"success": False, "error": f"Invalid check_seed_safety request: {e}"}
-        result = await handle_check_seed_safety(req)
-        # Strip the envelope fields the typed wire format adds; legacy
-        # caller spreads `**result` into `{type, req_id, ...}` itself.
-        d = result.model_dump(exclude_none=True)
-        d.pop("type", None)
-        d.pop("req_id", None)
-        return d
-    return {"success": False, "error": f"Unknown request type: {req_type}"}
-
-
-# ---- individual request handlers ----
 
 
 async def handle_check_seed_safety(
