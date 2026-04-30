@@ -30,7 +30,6 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from queue import Queue
 
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
@@ -520,9 +519,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     # Stream log lines to the client. TeeStream captures all stdout/stderr
     # output (including logger output) and pushes complete lines into per-client
-    # queues, so logs arrive immediately without file polling.
-    log_queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1000)
-    loop = asyncio.get_running_loop()
+    # queues, so logs arrive immediately without file polling. The queue and
+    # loop reference live on `conn`.
 
     async def _stream_logs_to_client():
         try:
@@ -531,11 +529,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             initial_lines = _read_log_tail_lines(LOG_TAIL_INITIAL_LINES)
             for line in initial_lines:
                 await send_message(LogMessage(line=line))
-            TeeStream.register_client(log_queue, loop)
+            TeeStream.register_client(conn.log_queue, conn.main_loop)
 
             # Stream new log lines as they arrive from TeeStream.
             while True:
-                line = await log_queue.get()
+                line = await conn.log_queue.get()
                 await send_message(LogMessage(line=line))
         except asyncio.CancelledError:
             pass
@@ -570,7 +568,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(state.startup_error))
         )
         log_tail_task.cancel()
-        TeeStream.unregister_client(log_queue)
+        TeeStream.unregister_client(conn.log_queue)
         await websocket.close()
         return
 
@@ -602,19 +600,19 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
     # Progress queue: engine_manager calls progress_callback (sync, from CUDA thread)
     # which enqueues payloads; the drain task sends them over the WebSocket.
-    progress_queue: asyncio.Queue[StatusMessage] = asyncio.Queue(maxsize=500)
+    # Queue lives on `conn` (initialised in Connection.__post_init__).
 
     def progress_callback(stage: Stage) -> None:
         """Sync callback safe to call from any thread — enqueues for async send."""
         try:
-            progress_queue.put_nowait(StatusMessage(stage=stage.id))
+            conn.progress_queue.put_nowait(StatusMessage(stage=stage.id))
         except asyncio.QueueFull:
             pass
 
     async def _drain_progress_queue():
         try:
             while True:
-                msg = await progress_queue.get()
+                msg = await conn.progress_queue.get()
                 try:
                     await send_message(msg)
                 except Exception:
@@ -943,24 +941,15 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         # Game-loop state and scene-authoring handoff are tracked on Connection.
         # Receiver posts {"prompt": str, "future": Future} into
-        # conn.conn.scene_edit_request / conn.conn.generate_scene_request; the generator
+        # conn.scene_edit_request / conn.generate_scene_request; the generator
         # picks them up at a clean frame boundary and resolves the future.
-        ctrl_state = {
-            "buttons": set(),
-            "mouse_dx": 0.0,
-            "mouse_dy": 0.0,
-            "client_ts": 0,
-            "dirty": False,
-        }
-        ctrl_lock = threading.Lock()
-        frame_queue: Queue[BaseModel | bytes] = Queue(maxsize=16)
-        frame_ready = asyncio.Event()
-        main_loop = asyncio.get_running_loop()
+        # Frame queue, control state, and inter-thread channels live on `conn`
+        # (initialised in Connection.__post_init__).
 
         def queue_send(payload: BaseModel | bytes) -> None:
             try:
-                frame_queue.put_nowait(payload)
-                main_loop.call_soon_threadsafe(frame_ready.set)
+                conn.frame_queue.put_nowait(payload)
+                conn.main_loop.call_soon_threadsafe(conn.frame_ready.set)
             except Exception:
                 pass
 
@@ -1123,13 +1112,13 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                                 buttons = {
                                     BUTTON_CODES[b.upper()] for b in (notif.buttons or []) if b.upper() in BUTTON_CODES
                                 }
-                            with ctrl_lock:
-                                ctrl_state["buttons"] = buttons
-                                ctrl_state["mouse_dx"] += notif.mouse_dx
-                                ctrl_state["mouse_dy"] += notif.mouse_dy
+                            with conn.ctrl_lock:
+                                conn.ctrl.buttons = buttons
+                                conn.ctrl.mouse_dx += notif.mouse_dx
+                                conn.ctrl.mouse_dy += notif.mouse_dy
                                 if notif.ts is not None:
-                                    ctrl_state["client_ts"] = notif.ts
-                                ctrl_state["dirty"] = True
+                                    conn.ctrl.client_ts = notif.ts
+                                conn.ctrl.dirty = True
 
                 except WebSocketDisconnect:
                     logger.info(f"[{client_host}] Client disconnected")
@@ -1144,11 +1133,11 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             while conn.running:
                 try:
                     # Wait for signal from generator thread instead of polling
-                    await frame_ready.wait()
-                    frame_ready.clear()
+                    await conn.frame_ready.wait()
+                    conn.frame_ready.clear()
                     # Drain all available frames in one batch
-                    while not frame_queue.empty():
-                        payload = frame_queue.get_nowait()
+                    while not conn.frame_queue.empty():
+                        payload = conn.frame_queue.get_nowait()
                         if isinstance(payload, bytes):
                             await websocket.send_bytes(payload)
                         else:
@@ -1160,7 +1149,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         def generator() -> None:
             def run_coro(coro):
-                return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
+                return asyncio.run_coroutine_threadsafe(coro, conn.main_loop).result()
 
             @dataclass
             class PendingFlush:
@@ -1326,17 +1315,17 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                             req["future"].set_exception(e)
 
-                    with ctrl_lock:
-                        if not ctrl_state["dirty"]:
+                    with conn.ctrl_lock:
+                        if not conn.ctrl.dirty:
                             buttons = None
                         else:
-                            buttons = set(ctrl_state["buttons"])
-                            mouse_dx = float(ctrl_state["mouse_dx"])
-                            mouse_dy = float(ctrl_state["mouse_dy"])
-                            client_ts = ctrl_state["client_ts"]
-                            ctrl_state["mouse_dx"] = 0.0
-                            ctrl_state["mouse_dy"] = 0.0
-                            ctrl_state["dirty"] = False
+                            buttons = set(conn.ctrl.buttons)
+                            mouse_dx = float(conn.ctrl.mouse_dx)
+                            mouse_dy = float(conn.ctrl.mouse_dy)
+                            client_ts = conn.ctrl.client_ts
+                            conn.ctrl.mouse_dx = 0.0
+                            conn.ctrl.mouse_dy = 0.0
+                            conn.ctrl.dirty = False
 
                     if buttons is None:
                         _flush_pending()
@@ -1483,7 +1472,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 pass
     finally:
         log_tail_task.cancel()
-        TeeStream.unregister_client(log_queue)
+        TeeStream.unregister_client(conn.log_queue)
         progress_drain_task.cancel()
         world_engine.set_progress_callback(None)
         if conn.action_logger is not None:
