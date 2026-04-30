@@ -35,6 +35,7 @@ from typing import TypedDict
 # ---------------------------------------------------------------------------
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+from pydantic import BaseModel
 
 from action_logger import ActionLogger
 from progress_stages import (
@@ -55,10 +56,13 @@ from protocol import (
     ClientMessage,
     ClientMessageAdapter,
     ControlNotif,
+    ErrorMessage,
+    ErrorSnapshot,
     GenerateSceneRequest,
     GenerateSceneResponseData,
     InitRequest,
     InitResponseData,
+    LogMessage,
     MessageId,
     PauseNotif,
     PromptNotif,
@@ -68,7 +72,10 @@ from protocol import (
     RpcSuccess,
     SceneEditRequest,
     SceneEditResponseData,
+    StatusMessage,
     SystemInfo,
+    SystemInfoMessage,
+    WarningMessage,
     rpc_err,
     rpc_ok,
 )
@@ -204,12 +211,22 @@ except Exception as e:
     sys.exit(1)
 
 
-def _error_payload(**fields) -> dict:
-    """Build an error push payload with an attached snapshot of ephemeral
-    state (RAM/VRAM/GPU util at error time).  Every outgoing `error` message
-    should go through this so bug reports capture what the server was
-    actually doing at the failure point."""
-    return {"type": "error", "snapshot": system_info_module.capture_error_snapshot(), **fields}
+def build_error_message(
+    *,
+    message_id: MessageId | None = None,
+    message: str | None = None,
+    params: dict[str, str] | None = None,
+) -> ErrorMessage:
+    """Build an ErrorMessage with an attached snapshot of ephemeral state
+    (RAM/VRAM/GPU util at error time).  Every outgoing `error` push should
+    go through this so bug reports capture what the server was actually
+    doing at the failure point."""
+    return ErrorMessage(
+        message_id=message_id,
+        message=message,
+        params=params,
+        snapshot=ErrorSnapshot(**system_info_module.capture_error_snapshot()),
+    )
 
 
 # ============================================================================
@@ -227,9 +244,9 @@ safety_hash_cache: dict[str, "SafetyCacheEntry"] = {}
 
 startup_complete: bool = False
 startup_error: str | None = None
-startup_stages: list[dict] = []  # accumulated stage messages
+startup_stages: list[StatusMessage] = []  # accumulated stage messages
 # WS clients waiting for startup progress register a Queue here
-ws_startup_waiters: list[asyncio.Queue] = []
+ws_startup_waiters: list[asyncio.Queue[StatusMessage | None]] = []
 
 LOG_TAIL_INITIAL_LINES = 220
 
@@ -296,16 +313,13 @@ def compute_bytes_hash(data: bytes) -> str:
 
 def _broadcast_startup_stage(stage: Stage) -> None:
     """Store a startup stage and push it to any connected WS clients."""
-    payload = {
-        "type": "status",
-        "stage": stage.id,
-    }
-    startup_stages.append(payload)
+    msg = StatusMessage(stage=stage.id)
+    startup_stages.append(msg)
     # Also log to stdout so file-based logs capture it
     logger.info(f"Startup stage: {stage.id}")
     for q in ws_startup_waiters:
         try:
-            q.put_nowait(payload)
+            q.put_nowait(msg)
         except asyncio.QueueFull:
             pass
 
@@ -352,7 +366,7 @@ async def _heavy_init() -> None:
         # Signal all waiters that startup is done
         for q in ws_startup_waiters:
             try:
-                q.put_nowait({"type": "_startup_done"})
+                q.put_nowait(None)
             except asyncio.QueueFull:
                 pass
 
@@ -362,7 +376,7 @@ async def _heavy_init() -> None:
         startup_complete = True  # mark done so waiters unblock
         for q in ws_startup_waiters:
             try:
-                q.put_nowait({"type": "_startup_done"})
+                q.put_nowait(None)
             except asyncio.QueueFull:
                 pass
 
@@ -747,10 +761,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
 
+    async def send_message(msg: BaseModel) -> None:
+        await websocket.send_text(msg.model_dump_json(exclude_none=True))
+
     # Stream log lines to the client. TeeStream captures all stdout/stderr
     # output (including logger output) and pushes complete lines into per-client
     # queues, so logs arrive immediately without file polling.
-    log_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    log_queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1000)
     loop = asyncio.get_running_loop()
 
     async def _stream_logs_to_client():
@@ -759,13 +776,13 @@ async def websocket_endpoint(websocket: WebSocket):
             # Register for live lines only AFTER reading the tail to avoid duplicates.
             initial_lines = _read_log_tail_lines(LOG_TAIL_INITIAL_LINES)
             for line in initial_lines:
-                await websocket.send_text(json.dumps({"type": "log", "line": line, "level": "info"}))
+                await send_message(LogMessage(line=line))
             TeeStream.register_client(log_queue, loop)
 
             # Stream new log lines as they arrive from TeeStream.
             while True:
                 line = await log_queue.get()
-                await websocket.send_text(json.dumps({"type": "log", "line": line, "level": "info"}))
+                await send_message(LogMessage(line=line))
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -774,29 +791,28 @@ async def websocket_endpoint(websocket: WebSocket):
 
     log_tail_task = asyncio.create_task(_stream_logs_to_client())
 
-    # If startup is not yet complete, replay accumulated stages and stream new ones
-    startup_queue: asyncio.Queue | None = None
+    # If startup is not yet complete, replay accumulated stages and stream new ones.
+    # `None` enqueued from _heavy_init signals "startup done".
+    startup_queue: asyncio.Queue[StatusMessage | None] | None = None
     if not startup_complete:
         startup_queue = asyncio.Queue(maxsize=200)
         ws_startup_waiters.append(startup_queue)
         # Replay accumulated stages
         for stage_msg in startup_stages:
-            await websocket.send_text(json.dumps(stage_msg))
+            await send_message(stage_msg)
         # Stream new stages until startup is done
         while not startup_complete:
             try:
-                stage_msg = await asyncio.wait_for(startup_queue.get(), timeout=1.0)
-                if stage_msg.get("type") == "_startup_done":
+                next_msg = await asyncio.wait_for(startup_queue.get(), timeout=1.0)
+                if next_msg is None:
                     break
-                await websocket.send_text(json.dumps(stage_msg))
+                await send_message(next_msg)
             except TimeoutError:
                 continue
         ws_startup_waiters.remove(startup_queue)
 
     if startup_error:
-        await websocket.send_text(
-            json.dumps(_error_payload(message_id="app.server.error.serverStartupFailed", message=str(startup_error)))
-        )
+        await send_message(build_error_message(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(startup_error)))
         log_tail_task.cancel()
         TeeStream.unregister_client(log_queue)
         await websocket.close()
@@ -804,48 +820,26 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Push system info immediately so the client has the hardware identity
     # even if the session crashes during init (e.g. CUDA graph compilation).
-    await websocket.send_text(
-        json.dumps(
-            {
-                "type": "system_info",
-                **system_info_module.system_info,
-            }
-        )
-    )
+    await send_message(SystemInfoMessage(**system_info_module.system_info))
 
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
     world_engine.seed_frame = None
 
-    async def send_json(data: dict):
-        await websocket.send_text(json.dumps(data))
-
-    async def send_warning(message_id: str, params: dict | None = None) -> None:
-        payload: dict = {"type": "warning", "message_id": message_id}
-        if params:
-            payload["params"] = params
-        await send_json(payload)
+    async def send_warning(message_id: MessageId, params: dict[str, str] | None = None) -> None:
+        await send_message(WarningMessage(message_id=message_id, params=params))
 
     async def send_stage(stage: Stage) -> None:
-        await send_json(
-            {
-                "type": "status",
-                "stage": stage.id,
-            }
-        )
+        await send_message(StatusMessage(stage=stage.id))
 
     # Progress queue: engine_manager calls progress_callback (sync, from CUDA thread)
     # which enqueues payloads; the drain task sends them over the WebSocket.
-    progress_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+    progress_queue: asyncio.Queue[StatusMessage] = asyncio.Queue(maxsize=500)
 
     def progress_callback(stage: Stage) -> None:
         """Sync callback safe to call from any thread — enqueues for async send."""
-        payload = {
-            "type": "status",
-            "stage": stage.id,
-        }
         try:
-            progress_queue.put_nowait(payload)
+            progress_queue.put_nowait(StatusMessage(stage=stage.id))
         except asyncio.QueueFull:
             pass
 
@@ -854,7 +848,7 @@ async def websocket_endpoint(websocket: WebSocket):
             while True:
                 msg = await progress_queue.get()
                 try:
-                    await websocket.send_text(json.dumps(msg))
+                    await send_message(msg)
                 except Exception:
                     break
         except asyncio.CancelledError:
@@ -877,14 +871,14 @@ async def websocket_endpoint(websocket: WebSocket):
         nonlocal current_seed_hash, current_seed_filename
         if not image_data_b64:
             logger.warning(f"[{client_host}] Missing seed image data")
-            await send_warning("app.server.warning.missingSeedData")
+            await send_warning(MessageId.SEED_MISSING_DATA)
             return False
 
         try:
             image_bytes = base64.b64decode(image_data_b64)
         except Exception as e:
             logger.warning(f"[{client_host}] Invalid base64 seed data: {e}")
-            await send_warning("app.server.warning.invalidSeedData")
+            await send_warning(MessageId.SEED_INVALID_DATA)
             return False
 
         img_hash = compute_bytes_hash(image_bytes)
@@ -899,7 +893,7 @@ async def websocket_endpoint(websocket: WebSocket):
             cached = safety_hash_cache[img_hash]
             if not cached.get("is_safe", False):
                 logger.warning(f"[{client_host}] Seed marked as unsafe (cached)")
-                await send_warning("app.server.warning.seedUnsafe")
+                await send_warning(MessageId.SEED_UNSAFE)
                 return False
         else:
             # Run safety check (decode + inference off the event loop)
@@ -912,7 +906,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 safety_result = await asyncio.to_thread(_check_safety)
             except Exception as e:
                 logger.warning(f"[{client_host}] Safety check failed: {e}")
-                await send_warning("app.server.warning.seedSafetyCheckFailed")
+                await send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
                 return False
 
             is_safe = safety_result.get("is_safe", False)
@@ -925,7 +919,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if not is_safe:
                 logger.warning(f"[{client_host}] Seed marked as unsafe")
-                await send_warning("app.server.warning.seedUnsafe")
+                await send_warning(MessageId.SEED_UNSAFE)
                 return False
 
         # Load seed
@@ -934,7 +928,7 @@ async def websocket_endpoint(websocket: WebSocket):
         loaded_frame = await world_engine.load_seed_from_base64(image_data_b64)
         if loaded_frame is None:
             logger.error(f"[{client_host}] Failed to load seed")
-            await send_warning("app.server.warning.seedLoadFailed")
+            await send_warning(MessageId.SEED_LOAD_FAILED)
             return False
 
         world_engine.seed_frame = loaded_frame
@@ -1085,7 +1079,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
-                await send_json(_error_payload(message_id="app.server.error.timeoutWaitingForSeed"))
+                await send_message(build_error_message(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED))
                 return
 
         # Wire progress callback so engine_manager reports granular stages
@@ -1099,14 +1093,7 @@ async def websocket_endpoint(websocket: WebSocket):
             )
             world_engine.set_progress_callback(None)
             if init_req_id:
-                await send_json(
-                    {
-                        "type": "response",
-                        "req_id": init_req_id,
-                        "success": False,
-                        "error_id": "app.server.error.initFailed",
-                    }
-                )
+                await send_message(rpc_err(init_req_id, error_id=MessageId.INIT_FAILED))
             return
 
         # Load or unload scene authoring model based on flag.
@@ -1123,18 +1110,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
                 logger.error(f"[{client_host}] Scene authoring warmup failed: {e}", exc_info=True)
-                await send_json(
-                    _error_payload(message_id="app.server.error.sceneAuthoringModelLoadFailed", message=str(e))
+                await send_message(
+                    build_error_message(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
                 )
                 if init_req_id:
-                    await send_json(
-                        {
-                            "type": "response",
-                            "req_id": init_req_id,
-                            "success": False,
-                            "error_id": "app.server.error.sceneAuthoringModelLoadFailed",
-                        }
-                    )
+                    await send_message(rpc_err(init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))
                 return
 
         # Warmup on first connection AFTER seed is loaded
@@ -1147,9 +1127,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.error(
                         f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}"
                     )
-                    await send_json(
-                        _error_payload(
-                            message_id="app.server.error.quantUnsupportedGpu",
+                    await send_message(
+                        build_error_message(
+                            message_id=MessageId.QUANT_UNSUPPORTED_GPU,
                             params={"quant": world_engine.quant or "unknown"},
                         )
                     )
@@ -1234,11 +1214,11 @@ async def websocket_endpoint(websocket: WebSocket):
             "dirty": False,
         }
         ctrl_lock = threading.Lock()
-        frame_queue: Queue = Queue(maxsize=16)
+        frame_queue: Queue[BaseModel | bytes] = Queue(maxsize=16)
         frame_ready = asyncio.Event()
         main_loop = asyncio.get_running_loop()
 
-        def queue_send(payload: dict | bytes) -> None:
+        def queue_send(payload: BaseModel | bytes) -> None:
             try:
                 frame_queue.put_nowait(payload)
                 main_loop.call_soon_threadsafe(frame_ready.set)
@@ -1288,7 +1268,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Respond to init RPC with session metrics
         if init_req_id:
-            await send_json(rpc_ok(init_req_id, build_init_response_data()).model_dump(exclude_none=True))
+            await send_message(rpc_ok(init_req_id, build_init_response_data()))
             init_req_id = None
 
         async def receiver() -> None:
@@ -1310,7 +1290,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 response = rpc_ok(req.req_id, build_init_response_data())
                             else:
                                 response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
-                            queue_send(response.model_dump(exclude_none=True))
+                            queue_send(response)
                             if new_seed:
                                 reset_flag = True
 
@@ -1347,7 +1327,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                         edit_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
                                         edit_response = rpc_err(req.req_id, error=str(e))
-                            queue_send(edit_response.model_dump(exclude_none=True))
+                            queue_send(edit_response)
 
                         case GenerateSceneRequest() as req:
                             # generate_scene: like scene_edit but with a blank
@@ -1377,11 +1357,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                         gen_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
                                         gen_response = rpc_err(req.req_id, error=str(e))
-                            queue_send(gen_response.model_dump(exclude_none=True))
+                            queue_send(gen_response)
 
                         case CheckSeedSafetyRequest() as req:
                             seed_response = await handle_check_seed_safety(req)
-                            queue_send(seed_response.model_dump(exclude_none=True))
+                            queue_send(seed_response)
 
                         case ResetNotif():
                             logger.info(f"[{client_host}] Reset requested")
@@ -1440,7 +1420,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         if isinstance(payload, bytes):
                             await websocket.send_bytes(payload)
                         else:
-                            await websocket.send_text(json.dumps(payload))
+                            await send_message(payload)
                 except Exception as e:
                     logger.error(f"[{client_host}] Sender error: {e}", exc_info=True)
                     running = False
@@ -1711,21 +1691,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         if recovery_success:
                             queue_send(
-                                {
-                                    "type": "status",
-                                    "stage": "session.reset",
-                                    "message": "Recovered from CUDA error - engine reset",
-                                }
+                                StatusMessage(
+                                    stage="session.reset",
+                                    message="Recovered from CUDA error - engine reset",
+                                )
                             )
                             logger.info(f"[{client_host}] Successfully recovered from CUDA error")
                         else:
-                            queue_send(_error_payload(message_id="app.server.error.cudaRecoveryFailed"))
+                            queue_send(build_error_message(message_id=MessageId.CUDA_RECOVERY_FAILED))
                             logger.error(f"[{client_host}] Failed to recover from CUDA error")
                             running = False
                             break
                     else:
                         logger.error(f"[{client_host}] Generation error: {cuda_err}", exc_info=True)
-                        queue_send(_error_payload(message=str(cuda_err)))
+                        queue_send(build_error_message(message=str(cuda_err)))
                         running = False
                         break
 
@@ -1761,7 +1740,7 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             logger.error(f"[{client_host}] Error: {e}", exc_info=True)
             try:
-                await send_json(_error_payload(message=str(e)))
+                await send_message(build_error_message(message=str(e)))
             except Exception:
                 pass
     finally:
