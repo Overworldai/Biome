@@ -142,9 +142,6 @@ typeCheckingMode = "strict"
 reportMissingTypeStubs = "none"      # third-party libs (timm, simplejpeg) ship no stubs
 reportPrivateImportUsage = "none"    # FastAPI/Pydantic re-export pattern
 
-# ─── Step 4 (Decompose websocket_endpoint) ──────────────────────────────
-reportFunctionMemberAccess = "none"  # `_flush_pending.work` function-attribute hack
-
 # ─── Step 7 (final audit) ───────────────────────────────────────────────
 # Step 6 reduced engine_manager's contribution to these but didn't eliminate
 # them — the lingering sites are torch/PIL/diffusers untyped APIs in

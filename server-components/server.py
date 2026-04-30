@@ -28,6 +28,7 @@ import struct
 import threading
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
 
@@ -1199,17 +1200,34 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             def run_coro(coro):
                 return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
 
-            def _flush_pending():
-                """JPEG-encode + queue pending CPU frames."""
-                if not _flush_pending.work:
+            @dataclass
+            class PendingFlush:
+                """One batch of CPU frames stashed by the inference path
+                so the next loop iteration can JPEG-encode + send them
+                while the GPU works on the following frame. The fields
+                cover both the frames themselves and the timing
+                breakdown that ends up in the binary frame header."""
+
+                cpu_frames: list
+                gen_time: float
+                temporal_compression: int
+                client_ts: float
+                t_infer_start: float
+                t_infer: float
+                t_sync: float
+
+            pending: PendingFlush | None = None
+
+            def _flush_pending() -> None:
+                """JPEG-encode + queue any pending CPU frames."""
+                nonlocal pending
+                if pending is None:
                     return
-                cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync = (
-                    _flush_pending.work
-                )
-                _flush_pending.work = None
+                p = pending
+                pending = None
 
                 t_enc_start = time.perf_counter()
-                encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in cpu_frames]
+                encoded = [world_engine._numpy_to_jpeg(rgb) for rgb in p.cpu_frames]
                 t_enc = time.perf_counter()
 
                 if session.perceptual_frame_count % 5 == 0:
@@ -1220,8 +1238,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                     session.perceptual_frame_count += 1
                     t_queued = time.perf_counter()
                     profile = {
-                        "t_infer_ms": round((t_infer - t_infer_start) * 1000, 1),
-                        "t_sync_ms": round((t_sync - t_infer) * 1000, 1),
+                        "t_infer_ms": round((p.t_infer - p.t_infer_start) * 1000, 1),
+                        "t_sync_ms": round((p.t_sync - p.t_infer) * 1000, 1),
                         "t_enc_ms": round((t_enc - t_enc_start) * 1000, 1),
                         "t_metrics_ms": round((t_metrics - t_enc) * 1000, 1),
                         "t_overhead_ms": round((t_queued - t_metrics) * 1000, 1),
@@ -1230,17 +1248,18 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         build_binary_frame(
                             jpeg,
                             session.perceptual_frame_count,
-                            client_ts,
-                            gen_time,
-                            temporal_compression=temporal_compression,
+                            p.client_ts,
+                            p.gen_time,
+                            temporal_compression=p.temporal_compression,
                             profile=profile,
                         )
                     )
 
                 if session.perceptual_frame_count % 60 == 0:
-                    logger.info(f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={gen_time:.1f}ms)")
+                    logger.info(
+                        f"[{client_host}] Sent frame {session.perceptual_frame_count} (gen={p.gen_time:.1f}ms)"
+                    )
 
-            _flush_pending.work = None
             _gen_was_paused = False
             next_frame_time = 0.0  # perf_counter target for frame pacing
 
@@ -1422,18 +1441,18 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         video_recorder.write_frames(cpu_frames)
 
                     # Stash this batch's CPU frames for deferred JPEG encoding
-                    _flush_pending.work = (
-                        cpu_frames,
-                        gen_time,
-                        temporal_compression,
-                        client_ts,
-                        t_infer_start,
-                        t_infer,
-                        t_sync,
+                    pending = PendingFlush(
+                        cpu_frames=cpu_frames,
+                        gen_time=gen_time,
+                        temporal_compression=temporal_compression,
+                        client_ts=client_ts,
+                        t_infer_start=t_infer_start,
+                        t_infer=t_infer,
+                        t_sync=t_sync,
                     )
 
                 except Exception as cuda_err:
-                    _flush_pending.work = None
+                    pending = None
 
                     error_msg = str(cuda_err)
                     is_cuda_error = any(
