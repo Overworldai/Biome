@@ -333,7 +333,7 @@ async def get_model_info(model_id: str):
                 blob_key = getattr(s, "blob_id", None) or s.rfilename
                 if blob_key not in seen_blobs:
                     seen_blobs.add(blob_key)
-                    size_bytes = (size_bytes or 0) + s.size
+                    size_bytes = (size_bytes or 0) + (s.size or 0)
         return {"id": model_id, "size_bytes": size_bytes, "exists": True, "error": None}
 
     try:
@@ -613,7 +613,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
             )
         )
         send_task = asyncio.create_task(run_sender(conn))
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             [recv_task, send_task],
             return_when=asyncio.FIRST_COMPLETED,
         )

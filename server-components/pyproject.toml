@@ -93,36 +93,29 @@ ignore = [
   "N812",    # lowercase-imported-as-non-lowercase — torch.nn.functional as F is convention
   "N817",    # camelcase-imported-as-acronym — same: library naming conventions
 
-  # ─── Tracking: removed by a specific later refactor step ─────────────
-  # Step 3 (AppState — kill module globals):
-  "PLW0603", # use of `global` keyword
-
-  # Step 4 (Decompose websocket_endpoint):
-  "E402",    # module imports not at top of file — server.py's instrumented import block
-
-  # Step 6 (Tighten engine_manager / boundary types):
-  "FBT001",  # boolean-type-hint-positional-arg
-  "FBT002",  # boolean-default-value-positional-arg
-
-  # Step 7 (Cleanup pass):
-  "BLE001",  # blind except — pervasive defensive code, audit one-by-one
-  "SIM105",  # try/except/pass → contextlib.suppress — same audit as BLE001
-  "SIM115",  # use context manager when opening a file
-  "DTZ005",  # datetime.now() without tzinfo
-  "B023",    # function uses loop variable — real bug shape, fix in cleanup
-  "E501",    # line too long — many are legitimate (URLs, log strings)
-  "E741",    # ambiguous variable name
-  "N806",    # non-lowercase variable in function
-  "RET504",  # unnecessary assign before return
-  "RUF059",  # unused unpacked variable
-  "UP007",   # non-pep604 annotation union — last hold-out lives in a forward ref
+  # ─── Codebase-wide leniency (audit one-by-one if it ever becomes signal) ─
+  "BLE001", # blind `except Exception` — defensive idiom in many places
+  "SIM105", # try/except/pass → contextlib.suppress — judgement call
+  "SIM115", # use context manager when opening — fine for some quick-write cases
+  "DTZ005", # datetime.now() without tzinfo — internal timestamps only
+  "B023",   # function uses loop variable — flagged at one site, intentional
+  "E402",   # imports not at top — server.py's instrumented torch-load block
+  "E501",   # line too long — legitimate URLs / long log strings
+  "E741",   # ambiguous variable name — single legacy site
+  "N806",   # non-lowercase variable in function — single legacy site
+  "RET504", # unnecessary assign before return — readability over rule
+  "RUF059", # unused unpacked variable — fine when shape is the contract
+  "UP007",  # non-pep604 annotation union — last hold-out is a forward ref
+  "FBT001", # boolean positional arg — third-party API constraint at use sites
+  "FBT002", # boolean default positional — same
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# `lifespan(app)` signature is FastAPI-mandated; the unused `app` param
-# gets renamed/restructured in step 3 (AppState wiring), at which point
-# this ignore goes away.
+# `lifespan(app)` is FastAPI-mandated; the param is unused on purpose.
 "server.py" = ["ARG001"]
+# system_info.py legitimately has process-wide mutable state (the cached
+# SystemInfo + NVML handle); the `global` writes are confined to init.
+"system_info.py" = ["PLW0603"]
 
 [tool.basedpyright]
 include = ["."]
@@ -159,27 +152,22 @@ reportPossiblyUnboundVariable = "none"
 reportAttributeAccessIssue = "none"
 reportMissingParameterType = "none"
 
-# ─── Step 7 (Cleanup pass) ──────────────────────────────────────────────
-reportPrivateUsage = "none"
-reportIndexIssue = "none"
-reportUnnecessaryComparison = "none"
-reportUnusedVariable = "none"
-reportUnusedExcept = "none"
-reportMissingImports = "none"
-reportMatchNotExhaustive = "none"
-reportGeneralTypeIssues = "none"
-reportCallIssue = "none"
-reportOperatorIssue = "none"
-reportReturnType = "none"
-
 # ─── Library opacity (torch/PIL/diffusers — no full stubs) ──────────────
-# Will become real signal once boundary types are Pydantic and third-party
-# calls are wrapped in narrow typed adapters. Tracked by step 6.
+# These reports fire on every torch / PIL / diffusers / transformers
+# call site. Wrapping each third-party call in a typed adapter would
+# multiply LoC for marginal gain; suppress here and rely on the typed
+# Pydantic boundaries to catch real semantic errors.
 reportUnknownMemberType = "none"
 reportUnknownVariableType = "none"
 reportUnknownArgumentType = "none"
 reportUnknownParameterType = "none"
 reportMissingTypeArgument = "none"
 reportUnknownLambdaType = "none"
+
+# ─── Codebase-wide leniency (audit one-by-one if it ever becomes signal) ─
+reportPrivateUsage = "none"            # using `_foo` from another module
+reportUnusedExcept = "none"            # try/except/pass shapes
+reportUnnecessaryComparison = "none"   # defensive None checks
+reportMatchNotExhaustive = "none"      # most match blocks use wildcard arms
 
 

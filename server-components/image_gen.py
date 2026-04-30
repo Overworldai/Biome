@@ -331,7 +331,7 @@ class ImageGenManager:
             )
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
-            raw_output = result["choices"][0]["message"]["content"] or ""
+            raw_output = result["choices"][0]["message"]["content"] or ""  # pyright: ignore[reportIndexIssue]  # llama_cpp returns a stream-or-dict union; we never use stream=True
             logger.info(f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}")
 
             # Strip thinking block — the model wraps reasoning in

@@ -271,7 +271,7 @@ class WorldEngineManager:
         self.engine_warmed_up = False
         self._free_cuda_memory_sync()
 
-    def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
+    def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor | None:
         """Synchronous helper to load a seed frame from a file path."""
         try:
             img = Image.open(file_path).convert("RGB")
@@ -292,11 +292,11 @@ class WorldEngineManager:
             logger.error(f"Failed to load seed from file {file_path}: {e}")
             return None
 
-    async def load_seed_from_file(self, file_path: str) -> torch.Tensor:
+    async def load_seed_from_file(self, file_path: str) -> torch.Tensor | None:
         """Load a seed frame from a file path (async wrapper)."""
         return await self._run_on_cuda_thread(lambda: self._load_seed_from_file_sync(file_path))
 
-    def _load_seed_from_base64_sync(self, base64_data: str) -> torch.Tensor:
+    def _load_seed_from_base64_sync(self, base64_data: str) -> torch.Tensor | None:
         """Synchronous helper to load a seed frame from base64 encoded data."""
         try:
             img_data = base64.b64decode(base64_data)
@@ -318,7 +318,7 @@ class WorldEngineManager:
             logger.error(f"Failed to load seed from base64: {e}")
             return None
 
-    async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor:
+    async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor | None:
         """Load a seed frame from base64 encoded data (async wrapper)."""
         return await self._run_on_cuda_thread(lambda: self._load_seed_from_base64_sync(base64_data))
 

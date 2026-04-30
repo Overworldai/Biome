@@ -100,7 +100,7 @@ class SafetyChecker:
         """Return True if the model should be unloaded after a check."""
         return not self._resident
 
-    def check_pil_image(self, image: Image.Image) -> dict[str, any]:
+    def check_pil_image(self, image: Image.Image) -> dict[str, object]:
         """
         Check a PIL image for NSFW content.
         Uses the resident device if loaded, otherwise CPU.
@@ -154,7 +154,7 @@ class SafetyChecker:
         idx_to_label = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
 
         # Prepare batch
-        inputs = torch.stack([self.processor(img) for img in img_batch]).to(device)
+        inputs = torch.stack([self.processor(img) for img in img_batch]).to(device)  # pyright: ignore[reportCallIssue]  # timm Compose typed as a tuple in its stubs but is callable at runtime
         output = []
 
         with torch.inference_mode():
