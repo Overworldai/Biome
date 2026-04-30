@@ -8,6 +8,20 @@ npm run lint         # Check formatting (Prettier) + type-check (tsc)
 npm run lint-fix     # Auto-fix formatting (Prettier) + type-check (tsc) — run after finishing work
 ```
 
+For the Python server in `server-components/`, run lint and type-check with:
+
+```bash
+cd server-components
+uvx ruff check .          # Lint
+uvx ruff format .         # Auto-format
+uvx basedpyright .        # Type-check (strict mode)
+```
+
+Both must pass before a commit lands. The configs in `server-components/pyproject.toml`
+use a tiered ignore policy — permanent ignores for things outside our control, and
+step-tracked ignores annotated with the refactor step that removes them — so each
+later commit's job is to delete ignore lines, not add to them.
+
 No test framework is configured.
 
 Run `npm run lint` after every major block of work to catch formatting and type errors early. Use `npm run lint-fix` to auto-fix formatting issues found by the linter.
