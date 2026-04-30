@@ -46,25 +46,70 @@ logger = logging.getLogger(__name__)
 DEFAULT_N_FRAMES = 4096
 DEVICE = "cuda"
 JPEG_QUALITY = 85
-
-# Model-specific runtime configuration.
-# temporal_compression is overridden from model_cfg.temporal_compression at load time;
-# the value here is only a fallback for models that don't expose it.
-MODEL_CFG = {
-    "waypoint-1": {
-        "label": "waypoint-1 (single-frame)",
-        "temporal_compression": 1,
-        "seed_target_size": (360, 640),
-        "has_prompt_conditioning": False,
-    },
-    "waypoint-1.5": {
-        "label": "waypoint-1.5 (multi-frame)",
-        "temporal_compression": 4,
-        "seed_target_size": (720, 1280),
-        "has_prompt_conditioning": False,
-    },
-}
 DEFAULT_INFERENCE_FPS = 60
+
+
+@dataclass(frozen=True)
+class ModelConfig:
+    """Runtime config resolved per loaded model. Single source of truth —
+    every engine-manager consumer reads from a `ModelConfig` instance rather
+    than from individual fields scattered across `WorldEngineManager`."""
+
+    label: str
+    temporal_compression: int
+    seed_target_size: tuple[int, int]
+    has_prompt_conditioning: bool
+    n_frames: int
+    inference_fps: int
+
+    @property
+    def is_multiframe(self) -> bool:
+        return self.temporal_compression > 1
+
+
+# Per-model defaults; overridden by attributes on the engine's `model_cfg`
+# at load time. Indexed by `model_cfg.model_type` (the only place we touch
+# the third-party world_engine config object's untyped attributes).
+_MODEL_DEFAULTS: dict[str, ModelConfig] = {
+    "waypoint-1": ModelConfig(
+        label="waypoint-1 (single-frame)",
+        temporal_compression=1,
+        seed_target_size=(360, 640),
+        has_prompt_conditioning=False,
+        n_frames=DEFAULT_N_FRAMES,
+        inference_fps=DEFAULT_INFERENCE_FPS,
+    ),
+    "waypoint-1.5": ModelConfig(
+        label="waypoint-1.5 (multi-frame)",
+        temporal_compression=4,
+        seed_target_size=(720, 1280),
+        has_prompt_conditioning=False,
+        n_frames=DEFAULT_N_FRAMES,
+        inference_fps=DEFAULT_INFERENCE_FPS,
+    ),
+}
+
+
+def model_config_from_engine_cfg(engine_model_cfg: object) -> ModelConfig:
+    """Resolve runtime config from per-model defaults overridden by the
+    engine's untyped `model_cfg` object. The `getattr` calls here are the
+    only place in the codebase that touches third-party world_engine
+    attributes defensively — every other consumer reads typed fields off
+    the returned `ModelConfig`."""
+    model_type = getattr(engine_model_cfg, "model_type", None)
+    if not isinstance(model_type, str) or model_type not in _MODEL_DEFAULTS:
+        raise RuntimeError(
+            f"Unsupported model_type '{model_type}'. Only 'waypoint-1' and 'waypoint-1.5' are supported."
+        )
+    base = _MODEL_DEFAULTS[model_type]
+    return ModelConfig(
+        label=base.label,
+        temporal_compression=int(getattr(engine_model_cfg, "temporal_compression", base.temporal_compression)),
+        seed_target_size=base.seed_target_size,
+        has_prompt_conditioning=getattr(engine_model_cfg, "prompt_conditioning", None) is not None,
+        n_frames=int(getattr(engine_model_cfg, "n_frames", base.n_frames)),
+        inference_fps=int(getattr(engine_model_cfg, "inference_fps", base.inference_fps)),
+    )
 
 BUTTON_CODES = {}
 # A-Z keys
@@ -113,19 +158,19 @@ class WorldEngineManager:
     """Manages WorldEngine state and operations."""
 
     def __init__(self):
+        # `engine` and `model_config` are populated together by `load_engine`;
+        # both being None unambiguously means "no model loaded yet". The
+        # convenience @property delegators below raise on access pre-load,
+        # so callers must either check `is_loaded` or be downstream of the
+        # AppState-level startup-complete gate.
         self.engine = None
+        self.model_config: ModelConfig | None = None
         self.seed_frame = None
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
         self.CtrlInput = None
-        self.model_uri = None
-        self.quant = None
+        self.model_uri: str | None = None
+        self.quant: str | None = None
         self.engine_warmed_up = False
-        self.cfg = MODEL_CFG["waypoint-1"].copy()
-        self.n_frames = DEFAULT_N_FRAMES
-        self.temporal_compression = self.cfg["temporal_compression"]
-        self.is_multiframe = self.temporal_compression > 1
-        self.seed_target_size = self.cfg["seed_target_size"]
-        self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._progress_callback = None
         self._progress_loop = None
         # Prevent concurrent model loads from overlapping across websocket sessions.
@@ -133,6 +178,39 @@ class WorldEngineManager:
         # Single-threaded executor for CUDA operations to maintain thread-local storage
         # This is critical for CUDA graphs which must run in the same thread they were compiled in
         self.cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
+
+    @property
+    def is_loaded(self) -> bool:
+        return self.engine is not None and self.model_config is not None
+
+    def _require_config(self) -> ModelConfig:
+        if self.model_config is None:
+            raise RuntimeError("WorldEngine config accessed before load_engine()")
+        return self.model_config
+
+    @property
+    def n_frames(self) -> int:
+        return self._require_config().n_frames
+
+    @property
+    def temporal_compression(self) -> int:
+        return self._require_config().temporal_compression
+
+    @property
+    def is_multiframe(self) -> bool:
+        return self._require_config().is_multiframe
+
+    @property
+    def seed_target_size(self) -> tuple[int, int]:
+        return self._require_config().seed_target_size
+
+    @property
+    def has_prompt_conditioning(self) -> bool:
+        return self._require_config().has_prompt_conditioning
+
+    @property
+    def inference_fps(self) -> int:
+        return self._require_config().inference_fps
 
     def set_progress_callback(self, callback, loop=None):
         """Set a progress callback and event loop for cross-thread reporting."""
@@ -161,29 +239,6 @@ class WorldEngineManager:
         except Exception:
             # Memory stats are best-effort diagnostics only.
             pass
-
-    def _resolve_runtime_cfg(self, model_cfg) -> dict:
-        """Resolve runtime config from defaults, overridden by model_cfg attributes."""
-        model_type = getattr(model_cfg, "model_type", None)
-        if model_type not in MODEL_CFG:
-            raise RuntimeError(
-                f"Unsupported model_type '{model_type}'. Only 'waypoint-1' and 'waypoint-1.5' are supported."
-            )
-
-        cfg_key = model_type
-        cfg = MODEL_CFG[cfg_key].copy()
-        cfg["has_prompt_conditioning"] = getattr(model_cfg, "prompt_conditioning", None) is not None
-
-        # Prefer temporal_compression from the model config over the hardcoded default
-        temporal_compression = getattr(model_cfg, "temporal_compression", None)
-        if temporal_compression is not None:
-            cfg["temporal_compression"] = int(temporal_compression)
-
-        cfg["n_frames"] = int(getattr(model_cfg, "n_frames", DEFAULT_N_FRAMES))
-
-        cfg["inference_fps"] = int(getattr(model_cfg, "inference_fps", DEFAULT_INFERENCE_FPS))
-
-        return cfg
 
     async def _run_on_cuda_thread(self, fn):
         """Run callable on the dedicated CUDA thread."""
@@ -218,16 +273,13 @@ class WorldEngineManager:
             pass
 
     def _unload_engine_sync(self):
-        """Drop current engine/tensors and aggressively free CUDA memory."""
+        """Drop current engine/tensors and aggressively free CUDA memory.
+        Resets model_config to None so accidental access on the unloaded
+        manager raises rather than returning stale per-model defaults."""
         self.engine = None
+        self.model_config = None
         self.seed_frame = None
         self.engine_warmed_up = False
-        self.cfg = MODEL_CFG["waypoint-1"].copy()
-        self.n_frames = DEFAULT_N_FRAMES
-        self.temporal_compression = self.cfg["temporal_compression"]
-        self.is_multiframe = self.temporal_compression > 1
-        self.seed_target_size = self.cfg["seed_target_size"]
-        self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
         self._free_cuda_memory_sync()
 
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor:
@@ -376,19 +428,15 @@ class WorldEngineManager:
             logger.info(f"[2/4] Loaded with dtype={selected_dtype}")
             self._log_cuda_memory("after load")
 
-            # Resolve runtime config from defaults overridden by model config.
-            self.cfg = self._resolve_runtime_cfg(self.engine.model_cfg)
-            self.n_frames = self.cfg["n_frames"]
-            self.temporal_compression = self.cfg["temporal_compression"]
-            self.is_multiframe = self.temporal_compression > 1
-            self.seed_target_size = self.cfg["seed_target_size"]
-            self.has_prompt_conditioning = self.cfg["has_prompt_conditioning"]
-            self.inference_fps = self.cfg.get("inference_fps", DEFAULT_INFERENCE_FPS)
-            logger.info(f"[2/4] Model type: {self.cfg['label']}")
-            logger.info(f"[2/4] Context length (n_frames): {self.n_frames}")
-            logger.info(f"[2/4] Temporal compression: {self.temporal_compression}")
-            logger.info(f"[2/4] Seed target size: {self.seed_target_size}")
-            logger.info(f"[2/4] Prompt conditioning: {self.has_prompt_conditioning}")
+            # Resolve typed runtime config from per-model defaults overridden
+            # by the engine's model_cfg attributes.
+            self.model_config = model_config_from_engine_cfg(self.engine.model_cfg)
+            cfg = self.model_config
+            logger.info(f"[2/4] Model type: {cfg.label}")
+            logger.info(f"[2/4] Context length (n_frames): {cfg.n_frames}")
+            logger.info(f"[2/4] Temporal compression: {cfg.temporal_compression}")
+            logger.info(f"[2/4] Seed target size: {cfg.seed_target_size}")
+            logger.info(f"[2/4] Prompt conditioning: {cfg.has_prompt_conditioning}")
 
             self._report_progress(SESSION_LOADING_DONE)
             self.model_uri = requested_model
