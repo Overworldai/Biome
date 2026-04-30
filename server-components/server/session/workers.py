@@ -17,12 +17,14 @@ rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import torch
 from fastapi import WebSocketDisconnect
 
 from engine.keymap import BUTTON_CODES
@@ -175,8 +177,6 @@ async def run_receiver(
                     elif conn.scene_edit_request is not None:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
                     else:
-                        import concurrent.futures
-
                         fut = concurrent.futures.Future()
                         conn.scene_edit_request = {"prompt": prompt, "future": fut}
                         try:
@@ -202,8 +202,6 @@ async def run_receiver(
                     elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
                     else:
-                        import concurrent.futures
-
                         fut = concurrent.futures.Future()
                         conn.generate_scene_request = {"prompt": prompt, "future": fut}
                         try:
@@ -292,8 +290,6 @@ def run_generator(
     futures at clean frame boundaries, applies frame pacing, and recovers
     from CUDA errors via WorldEngineManager.recover_from_cuda_error.
     """
-    import torch
-
     world_engine = engines.world_engine
     pending: _PendingFlush | None = None
 

@@ -21,6 +21,7 @@ import base64
 import logging
 from typing import TYPE_CHECKING
 
+from engine.manager import QuantUnsupportedError
 from recording.action_logger import ActionLogger
 from server.protocol import (
     CheckSeedSafetyRequest,
@@ -298,8 +299,6 @@ async def prepare_session(
     failure, surfaces the appropriate typed error + acks the deferred
     init RPC with the matching `MessageId`. The progress callback is
     wired only for the duration of this function."""
-    from engine.manager import QuantUnsupportedError
-
     world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
     try:
         if world_engine.seed_frame is None:

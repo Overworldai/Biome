@@ -13,6 +13,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
@@ -244,8 +245,6 @@ class WorldEngineManager:
         """Synchronous helper to load a seed frame from a file path."""
         try:
             img = Image.open(file_path).convert("RGB")
-            import numpy as np
-
             img_tensor = torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             frame = F.interpolate(
                 img_tensor,
@@ -270,8 +269,6 @@ class WorldEngineManager:
         try:
             img_data = base64.b64decode(base64_data)
             img = Image.open(io.BytesIO(img_data)).convert("RGB")
-            import numpy as np
-
             img_tensor = torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float()
             frame = F.interpolate(
                 img_tensor,

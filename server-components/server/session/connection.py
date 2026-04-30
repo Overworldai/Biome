@@ -42,6 +42,7 @@ from server.protocol import (
     StatusMessage,
     WarningMessage,
 )
+from util.server_logging import TeeStream
 
 if TYPE_CHECKING:
     from engine.manager import WorldEngineManager
@@ -342,8 +343,6 @@ class Connection:
         the engine progress callback, ends recorder segments, drops the
         TeeStream registration, and logs the disconnect summary. Safe to
         call from `finally` whether or not the session reached game-loop."""
-        from util.server_logging import TeeStream
-
         for task in tasks:
             if task is not None:
                 task.cancel()

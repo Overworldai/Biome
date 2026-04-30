@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from server.protocol import LogMessage
+
 if TYPE_CHECKING:
     from server.session.connection import Connection
 
@@ -195,8 +197,6 @@ async def stream_logs_to_client(conn: "Connection") -> None:
 
     Run as an asyncio task; cancel to stop. The TeeStream registration is
     lifted by `Connection.teardown` (so cancellation timing doesn't matter)."""
-    from server.protocol import LogMessage
-
     try:
         for line in read_log_tail_lines(LOG_TAIL_INITIAL_LINES):
             await conn.send_message(LogMessage(line=line))

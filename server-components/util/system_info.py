@@ -12,6 +12,9 @@ through to consumers (no module globals). The wire-typed `SystemInfo` and
 and consumes them directly.
 """
 
+import cpuinfo
+import psutil
+import pynvml
 import torch
 
 from server.protocol import ErrorSnapshot, SystemInfo
@@ -32,8 +35,6 @@ def _collect_system_info_and_nvml() -> tuple[SystemInfo, object]:
     nvml_handle: object | None = None
 
     try:
-        import cpuinfo
-
         cpu_name = cpuinfo.get_cpu_info().get("brand_raw") or None
     except Exception as e:
         logger.warning(f"Failed to query CPU info: {e}")
@@ -48,8 +49,6 @@ def _collect_system_info_and_nvml() -> tuple[SystemInfo, object]:
         logger.warning(f"Failed to query GPU info: {e}")
 
     try:
-        import pynvml
-
         pynvml.nvmlInit()
         nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device() if torch.cuda.is_available() else 0)
         try:
@@ -124,8 +123,6 @@ class SystemMonitor:
             pass
         if self._nvml_handle is not None:
             try:
-                import pynvml
-
                 return int(pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle).gpu)
             except Exception:
                 pass
@@ -163,8 +160,6 @@ class SystemMonitor:
         ram_total_bytes: int | None = None
 
         try:
-            import psutil
-
             process = psutil.Process()
             process_rss_bytes = process.memory_info().rss
             vm = psutil.virtual_memory()

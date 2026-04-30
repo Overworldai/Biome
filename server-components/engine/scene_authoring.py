@@ -27,7 +27,7 @@ import re
 import time
 from dataclasses import asdict, dataclass, field
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -292,6 +292,50 @@ def _pil_to_data_uri(image: Image.Image) -> str:
     return f"data:image/png;base64,{b64}"
 
 
+# ─── Lazy-imported model libraries ───────────────────────────────────
+
+
+@dataclass(frozen=True)
+class _SceneAuthoringLibs:
+    """The classes / functions pulled in lazily for scene-authoring model
+    loading. `Any` types are deliberate — properly typing these would
+    require importing the libs at the top of this module, which defeats
+    the lazy-load purpose."""
+
+    hf_hub_download: Any
+    Llama: Any
+    Qwen35ChatHandler: Any
+    Flux2KleinPipeline: Any
+    Flux2Transformer2DModel: Any
+    GGUFQuantizationConfig: Any
+    AutoModelForCausalLM: Any
+    BitsAndBytesConfig: Any
+
+
+def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
+    """Single home for the heavy imports needed by scene-authoring model
+    loading. Pulls diffusers / transformers / llama_cpp into the module
+    graph; called only when warmup runs (i.e. when a session has scene
+    authoring enabled), so disabled-by-default sessions never pay the
+    import cost."""
+    from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
+    from huggingface_hub import hf_hub_download
+    from llama_cpp import Llama
+    from llama_cpp.llama_chat_format import Qwen35ChatHandler
+    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+
+    return _SceneAuthoringLibs(
+        hf_hub_download=hf_hub_download,
+        Llama=Llama,
+        Qwen35ChatHandler=Qwen35ChatHandler,
+        Flux2KleinPipeline=Flux2KleinPipeline,
+        Flux2Transformer2DModel=Flux2Transformer2DModel,
+        GGUFQuantizationConfig=GGUFQuantizationConfig,
+        AutoModelForCausalLM=AutoModelForCausalLM,
+        BitsAndBytesConfig=BitsAndBytesConfig,
+    )
+
+
 # ─── SceneAuthoringManager ───────────────────────────────────────────
 
 
@@ -333,15 +377,19 @@ class SceneAuthoringManager:
     async def warmup(self) -> None:
         """Load both the VLM and the editing pipeline onto GPU. Each step runs
         on the world engine's CUDA thread so it serialises behind any
-        in-flight world-engine ops."""
+        in-flight world-engine ops. The heavy lib imports (diffusers,
+        transformers, llama_cpp) are funneled through
+        `_import_scene_authoring_libs` so it's obvious what gets pulled in."""
+        libs = await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(_import_scene_authoring_libs))
+
         logger.info(f"[SCENE_EDIT] Loading VLM {VLM_GGUF_REPO}/{VLM_GGUF_FILE}...")
         t0 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(self._load_vlm_sync))
+        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(lambda: self._load_vlm_sync(libs)))
         logger.info(f"[SCENE_EDIT] VLM loaded in {time.perf_counter() - t0:.1f}s")
 
         logger.info(f"[SCENE_EDIT] Loading editing model {EDIT_MODEL_ID}...")
         t1 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(self._load_edit_sync))
+        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(lambda: self._load_edit_sync(libs)))
         logger.info(f"[SCENE_EDIT] Editing model loaded in {time.perf_counter() - t1:.1f}s")
 
         self._loaded = True
@@ -357,22 +405,18 @@ class SceneAuthoringManager:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    def _load_vlm_sync(self) -> None:
+    def _load_vlm_sync(self, libs: _SceneAuthoringLibs) -> None:
         """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
-        from huggingface_hub import hf_hub_download
-        from llama_cpp import Llama
-        from llama_cpp.llama_chat_format import Qwen35ChatHandler
+        model_path = libs.hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
+        mmproj_path = libs.hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
 
-        model_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
-        mmproj_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
-
-        chat_handler = Qwen35ChatHandler(
+        chat_handler = libs.Qwen35ChatHandler(
             clip_model_path=mmproj_path,
             enable_thinking=True,
             add_vision_id=False,
             verbose=False,
         )
-        self.vlm = Llama(
+        self.vlm = libs.Llama(
             model_path=model_path,
             chat_handler=chat_handler,
             n_ctx=VLM_CTX_SIZE,
@@ -380,14 +424,11 @@ class SceneAuthoringManager:
             verbose=False,
         )
 
-    def _load_edit_sync(self) -> None:
+    def _load_edit_sync(self, libs: _SceneAuthoringLibs) -> None:
         """Load the FLUX.2 Klein editing pipeline (quantized transformer + text encoder)."""
-        from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
-        from transformers import AutoModelForCausalLM, BitsAndBytesConfig
-
         # Transformer: Q8 GGUF (~4.3GB)
-        gguf_config = GGUFQuantizationConfig(compute_dtype=torch.bfloat16)
-        transformer = Flux2Transformer2DModel.from_single_file(
+        gguf_config = libs.GGUFQuantizationConfig(compute_dtype=torch.bfloat16)
+        transformer = libs.Flux2Transformer2DModel.from_single_file(
             "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/blob/main/flux-2-klein-4b-Q8_0.gguf",
             config=EDIT_MODEL_ID,
             subfolder="transformer",
@@ -396,15 +437,15 @@ class SceneAuthoringManager:
         )
 
         # Text encoder: 4-bit quantized (~2GB instead of ~8GB)
-        bnb_config = BitsAndBytesConfig(load_in_4bit=True)
-        text_encoder = AutoModelForCausalLM.from_pretrained(
+        bnb_config = libs.BitsAndBytesConfig(load_in_4bit=True)
+        text_encoder = libs.AutoModelForCausalLM.from_pretrained(
             EDIT_MODEL_ID,
             subfolder="text_encoder",
             quantization_config=bnb_config,
             torch_dtype=torch.bfloat16,
         )
 
-        pipe = Flux2KleinPipeline.from_pretrained(
+        pipe = libs.Flux2KleinPipeline.from_pretrained(
             EDIT_MODEL_ID,
             transformer=transformer,
             text_encoder=text_encoder,
