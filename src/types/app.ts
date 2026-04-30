@@ -30,6 +30,5 @@ export type SetupStatus = 'saved' | 'error' | null
 
 export type LoadingStage = {
   id: string
-  label: string
   percent: number
 }

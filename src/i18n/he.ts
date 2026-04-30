@@ -415,7 +415,6 @@ const he = {
       session: {
         waiting_for_seed: 'מכין סצנה...',
         loading_model: {
-          import: 'מייבא מסגרת מודל...',
           load: 'טוען מודל...',
           instantiate: 'טוען מודל לזיכרון...',
           done: 'המודל נטען!'

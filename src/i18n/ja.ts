@@ -422,7 +422,6 @@ const ja = {
       session: {
         waiting_for_seed: 'シーンを準備しています...',
         loading_model: {
-          import: 'モデルフレームワークを読み込んでいます...',
           load: 'モデルを読み込んでいます...',
           instantiate: 'モデルをメモリに読み込んでいます...',
           done: 'モデルを読み込みました。'

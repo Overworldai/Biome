@@ -423,7 +423,6 @@ const goose = {
       session: {
         waiting_for_seed: 'Choosing a pond...',
         loading_model: {
-          import: 'Importing model framework...',
           load: 'Loading model...',
           instantiate: 'Loading model into memory...',
           done: 'The goose has landed!'

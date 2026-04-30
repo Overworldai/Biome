@@ -409,7 +409,6 @@ const zh = {
       session: {
         waiting_for_seed: '正在准备场景...',
         loading_model: {
-          import: '正在导入模型框架...',
           load: '正在加载模型...',
           instantiate: '正在将模型载入内存...',
           done: '模型已加载！'
