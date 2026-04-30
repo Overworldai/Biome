@@ -100,28 +100,6 @@ def model_config_from_engine_cfg(engine_model_cfg: object) -> ModelConfig:
     )
 
 
-BUTTON_CODES = {}
-# A-Z keys
-for i in range(65, 91):
-    BUTTON_CODES[chr(i)] = i
-# 0-9 keys
-for i in range(10):
-    BUTTON_CODES[str(i)] = ord(str(i))
-# Special keys
-BUTTON_CODES["UP"] = 0x26
-BUTTON_CODES["DOWN"] = 0x28
-BUTTON_CODES["LEFT"] = 0x25
-BUTTON_CODES["RIGHT"] = 0x27
-BUTTON_CODES["SHIFT"] = 0x10
-BUTTON_CODES["CTRL"] = 0x11
-BUTTON_CODES["SPACE"] = 0x20
-BUTTON_CODES["TAB"] = 0x09
-BUTTON_CODES["ENTER"] = 0x0D
-BUTTON_CODES["MOUSE_LEFT"] = 0x01
-BUTTON_CODES["MOUSE_RIGHT"] = 0x02
-BUTTON_CODES["MOUSE_MIDDLE"] = 0x04
-
-
 # ============================================================================
 # Session Management
 # ============================================================================

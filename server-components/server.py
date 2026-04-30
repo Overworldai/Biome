@@ -138,7 +138,8 @@ try:
     logger.info("FastAPI imported")
 
     logger.info("Importing Engine Manager module...")
-    from engine_manager import BUTTON_CODES, Session, WorldEngineManager
+    from engine_manager import Session, WorldEngineManager
+    from keymap import BUTTON_CODES
 
     logger.info("Engine Manager module imported")
 

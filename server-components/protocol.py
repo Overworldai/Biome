@@ -145,7 +145,7 @@ class ErrorSnapshot(BaseModel):
 class ControlNotif(BaseModel):
     """Per-frame input snapshot from the renderer. `buttons` carries
     the keycap names (e.g. "W", "MOUSE_LEFT"); the receiver resolves
-    each via `engine_manager.BUTTON_CODES` into the int codes the
+    each via `keymap.BUTTON_CODES` into the int codes the
     world engine consumes."""
 
     model_config = _FrozenStrict
