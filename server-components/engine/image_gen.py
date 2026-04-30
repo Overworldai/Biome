@@ -94,7 +94,7 @@ def parse_tool_calls(text: str) -> list[ToolCall]:
 @dataclass(frozen=True)
 class GeneratedSceneProperties:
     """Metadata embedded into every Scene Authoring generated JPEG — parallel to
-    RecordingProperties in video_recorder.py. Callers (server.py) construct this
+    RecordingProperties in `recording/video_recorder.py`. Callers construct this
     explicitly rather than passing a free-form dict, so the schema is fixed and
     searchable. Persisted in the JPEG's COM segment so each image is
     self-describing."""

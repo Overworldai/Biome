@@ -17,8 +17,8 @@ live in `protocol.py`; this module produces and consumes them directly.
 
 import torch
 
-from protocol import ErrorSnapshot, SystemInfo
-from server_logging import logger
+from server.protocol import ErrorSnapshot, SystemInfo
+from util.server_logging import logger
 
 # Module-level caches — populated by `initialize()` (called once from
 # main.py inside the heavy import block, so consumers downstream of

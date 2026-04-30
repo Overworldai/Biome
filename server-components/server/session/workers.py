@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING
 
 from fastapi import WebSocketDisconnect
 
-import system_info as system_info_module
-from keymap import BUTTON_CODES
-from protocol import (
+from engine.keymap import BUTTON_CODES
+from engine.scene_authoring import run_generate_scene, run_scene_edit
+from server.protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
     ClientMessageAdapter,
@@ -48,14 +48,14 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
-from scene_authoring import run_generate_scene, run_scene_edit
-from ws_handlers import build_init_response_data, handle_check_seed_safety, handle_init
-from ws_session import Connection, build_error_message
+from server.session.connection import Connection, build_error_message
+from server.session.handlers import build_init_response_data, handle_check_seed_safety, handle_init
+from util import system_info as system_info_module
 
 if TYPE_CHECKING:
-    from engine_manager import WorldEngineManager
-    from image_gen import ImageGenManager
-    from safety import SafetyChecker
+    from engine.image_gen import ImageGenManager
+    from engine.manager import WorldEngineManager
+    from engine.safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
 

@@ -11,13 +11,13 @@ lifecycle (accept, dispatch by phase, close, top-level error reporting)
 and delegates every internal concern to the module that owns it.
 Phases run top-to-bottom; each is one well-named call:
 
-  - log streaming           → `server_logging.stream_logs_to_client`
+  - log streaming           → `util.server_logging.stream_logs_to_client`
   - startup wait            → `AppState.replay_startup_to`
   - progress drain          → `Connection.run_progress_drain`
-  - pre-init handshake      → `ws_handlers.run_preinit_handshake`
-  - warmup + init + frame   → `ws_handlers.prepare_session`
+  - pre-init handshake      → `server.session.handlers.run_preinit_handshake`
+  - warmup + init + frame   → `server.session.handlers.prepare_session`
   - recorders               → `Connection.start_recording_segments`
-  - game loop               → `ws_runner.run_session`
+  - game loop               → `server.session.workers.run_session`
   - cleanup                 → `Connection.teardown`
 """
 
@@ -29,13 +29,13 @@ from fastapi.responses import JSONResponse
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 
-import system_info as system_info_module
 from app_state import AppState, get_app_state, get_app_state_ws
-from protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
-from server_logging import logger, stream_logs_to_client
-from ws_handlers import build_init_response_data, prepare_session, run_preinit_handshake
-from ws_runner import run_session
-from ws_session import Connection, build_error_message
+from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
+from server.session.connection import Connection, build_error_message
+from server.session.handlers import build_init_response_data, prepare_session, run_preinit_handshake
+from server.session.workers import run_session
+from util import system_info as system_info_module
+from util.server_logging import logger, stream_logs_to_client
 
 router = APIRouter()
 

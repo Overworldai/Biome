@@ -115,7 +115,7 @@ ignore = [
 "main.py" = ["ARG001"]
 # system_info.py legitimately has process-wide mutable state (the cached
 # SystemInfo + NVML handle); the `global` writes are confined to init.
-"system_info.py" = ["PLW0603"]
+"util/system_info.py" = ["PLW0603"]
 
 [tool.basedpyright]
 include = ["."]

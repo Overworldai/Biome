@@ -7,9 +7,9 @@ ImageGenManager via the AppState handle they're given, hand off the
 GPU-side mutation through the CUDA executor, and return typed Pydantic
 response data ready for `rpc_ok(...)`.
 
-The function-scoped `from image_gen import ...` is intentional — it
-keeps the diffusers/llama_cpp/transformers import graph out of this
-module's load-time so importing scene_authoring from `server.py` is light.
+The function-scoped `from engine.image_gen import ...` is intentional — it
+keeps the diffusers/llama_cpp/transformers import graph out of this module's
+load-time so importing this module from `server/session` workers is light.
 The heavy import waterfall lives in `main.py`.
 
 This module is strict-typed by construction — none of the legacy ignore
@@ -24,7 +24,7 @@ import time
 from PIL import Image
 
 from app_state import AppState
-from protocol import GenerateSceneResponseData, SceneEditResponseData
+from server.protocol import GenerateSceneResponseData, SceneEditResponseData
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def run_generate_scene(
     is updated so a subsequent reset returns to the generated scene,
     not the previous seed.
     """
-    from image_gen import (
+    from engine.image_gen import (
         EDIT_MODEL_ID,
         GENERATE_SCENE_SAFETY_MESSAGE_ID,
         GeneratedSceneProperties,
@@ -74,7 +74,7 @@ def run_generate_scene(
     # Encode the generated image as JPEG so the client can save it to disk.
     # Done before expanding to multiframe so we encode a single HxWx3 frame.
     # Metadata is embedded via a JPEG COM-marker JSON blob — parallel to how
-    # video_recorder.py stuffs RecordingProperties into the MP4 comment atom.
+    # `recording/video_recorder.py` stuffs RecordingProperties into the MP4 comment atom.
     properties = GeneratedSceneProperties(
         biome_version=biome_version or "unknown",
         image_model=EDIT_MODEL_ID,
@@ -128,13 +128,13 @@ def run_scene_edit(
     append_frame to the CUDA executor (required for CUDA graph
     compatibility), and returns preview data for the RPC response.
     """
-    from image_gen import (
+    from engine.image_gen import (
         EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT,
     )
-    from image_gen import (
+    from engine.image_gen import (
         EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET,
     )
-    from image_gen import (
+    from engine.image_gen import (
         SafetyRejectionError,
     )
 

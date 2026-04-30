@@ -31,8 +31,8 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 # ──────────────────────────────────────────────────────────────────────
 # Engine progress stages.
 #
-# Every stage that the server / engine manager / ws_session can report
-# is enumerated here. String values must stay in sync with the keys in
+# Every stage that the routes / engine / session can report is enumerated
+# here. String values must stay in sync with the keys in
 # `src/stages.json` on the renderer (which carries the labels and
 # percentages). `StageId` is a `StrEnum`, so a value can be passed
 # wherever a `str` is expected and consumers get autocomplete + rename

@@ -24,13 +24,13 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Request, WebSocket
 from pydantic import BaseModel, ConfigDict
 
-from protocol import StatusMessage
+from server.protocol import StatusMessage
 
 if TYPE_CHECKING:
-    from engine_manager import WorldEngineManager
-    from image_gen import ImageGenManager
-    from safety import SafetyChecker
-    from ws_session import Connection
+    from engine.image_gen import ImageGenManager
+    from engine.manager import WorldEngineManager
+    from engine.safety import SafetyChecker
+    from server.session.connection import Connection
 
 
 @dataclass(frozen=True)

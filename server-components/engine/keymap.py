@@ -7,9 +7,9 @@ int codes the world engine consumes. The numeric codes mirror Windows
 virtual-key codes for the alphanumeric and modifier keys; mouse buttons
 use the standard 0x01 / 0x02 / 0x04 layout.
 
-This is configuration / lookup data — kept in its own module so engine
-state (`engine_manager.py`) and WebSocket dispatch (`ws_session.py`)
-can both reference it without engine_manager owning unrelated input
+This is configuration / lookup data — kept in its own module so the
+engine (`engine/manager.py`) and WebSocket dispatch (`server/session/`)
+can both reference it without `engine.manager` owning unrelated input
 constants.
 """
 

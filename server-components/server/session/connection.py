@@ -14,8 +14,8 @@ and captures `asyncio.get_running_loop()`. Field-level immutability
 lives at the boundary types (Pydantic models elsewhere); Connection
 itself is mutable shared state by design.
 
-Handlers live in `ws_handlers.py`; the receiver / sender / generator
-workers live in `ws_runner.py`. This module owns connection state only.
+Handlers live in `handlers.py`; the receiver / sender / generator
+workers live in `workers.py`. This module owns connection state only.
 
 This module is strict-typed by construction — none of the legacy ignore
 rules in pyproject.toml fire on this code. Keep it that way.
@@ -33,19 +33,19 @@ from typing import TYPE_CHECKING
 from fastapi import WebSocket
 from pydantic import BaseModel
 
-from action_logger import ActionLogger
 from app_state import AppState
-from protocol import (
+from recording.action_logger import ActionLogger
+from recording.video_recorder import RecordingProperties, VideoRecorder
+from server.protocol import (
     ErrorMessage,
     MessageId,
     StageId,
     StatusMessage,
     WarningMessage,
 )
-from video_recorder import RecordingProperties, VideoRecorder
 
 if TYPE_CHECKING:
-    from engine_manager import WorldEngineManager
+    from engine.manager import WorldEngineManager
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,9 @@ def build_error_message(
     """Build an ErrorMessage with an attached snapshot of ephemeral state
     (RAM/VRAM/GPU util at error time).  Every outgoing `error` push should
     go through this so bug reports capture what the server was actually
-    doing at the failure point. Imports system_info lazily to keep ws_session
-    light at module-load time."""
-    import system_info as system_info_module
+    doing at the failure point. Imports system_info lazily to keep this
+    module light at module-load time."""
+    from util import system_info as system_info_module
 
     return ErrorMessage(
         message_id=message_id,
@@ -240,7 +240,7 @@ class Connection:
         """Sample dynamic GPU metrics into the cache. Called every few
         frames from the generator thread; reads back into binary frame
         headers via `build_frame_envelope`."""
-        import system_info as system_info_module
+        from util import system_info as system_info_module
 
         self.cached_vram_used_bytes = system_info_module.get_vram_used_bytes()
         self.cached_gpu_util_percent = system_info_module.get_gpu_util_percent()
@@ -327,7 +327,7 @@ class Connection:
         the engine progress callback, ends recorder segments, drops the
         TeeStream registration, and logs the disconnect summary. Safe to
         call from `finally` whether or not the session reached game-loop."""
-        from server_logging import TeeStream
+        from util.server_logging import TeeStream
 
         for task in tasks:
             if task is not None:

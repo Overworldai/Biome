@@ -3,14 +3,14 @@ Typed message handlers + session-phase orchestration for the WebSocket protocol.
 
 Each handler takes the values it needs explicitly (Connection + engine
 refs) and returns / produces typed Pydantic models. Stateless dispatchers
-— they read/write `conn.X` and call into engine_manager via the
-explicitly-passed handles, but own no per-handler state.
+— they read/write `conn.X` and call into the engine via the explicitly
+passed handles, but own no per-handler state.
 
-`run_receiver` (in ws_runner.py) dispatches inbound game-loop messages
+`run_receiver` (in `workers.py`) dispatches inbound game-loop messages
 to the per-message handlers. `run_preinit_handshake` dispatches the
 pre-init message loop directly. `prepare_session` runs the warmup +
-init phase between handshake and game loop. These let the WebSocket
-endpoint (`server.py`) stay a thin protocol shell.
+init phase between handshake and game loop. These let the route shell
+(`server/routes.py`) stay a thin protocol layer.
 
 This module is strict-typed by construction — none of the legacy ignore
 rules in pyproject.toml fire on this code. Keep it that way.
@@ -26,9 +26,9 @@ from typing import TYPE_CHECKING
 
 from PIL import Image
 
-from action_logger import ActionLogger
 from app_state import AppState, SafetyCacheEntry
-from protocol import (
+from recording.action_logger import ActionLogger
+from server.protocol import (
     CheckSeedSafetyRequest,
     CheckSeedSafetyResponseData,
     ClientMessage,
@@ -50,12 +50,12 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
-from ws_session import Connection, build_error_message
+from server.session.connection import Connection, build_error_message
 
 if TYPE_CHECKING:
-    from engine_manager import WorldEngineManager
-    from image_gen import ImageGenManager
-    from safety import SafetyChecker
+    from engine.image_gen import ImageGenManager
+    from engine.manager import WorldEngineManager
+    from engine.safety import SafetyChecker
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ async def handle_check_seed_safety(
     # want to drag it into the module graph at import-time. The heavy
     # try-block in main.py is the only place that should trigger the
     # torch / transformers import waterfall.
-    from safety import save_safety_cache
+    from engine.safety import save_safety_cache
 
     is_safe = safety_result.get("is_safe", False)
     cache[img_hash] = SafetyCacheEntry(
@@ -180,7 +180,7 @@ async def load_seed_from_data(
             return False
 
         # Function-level import: see comment in handle_check_seed_safety.
-        from safety import save_safety_cache
+        from engine.safety import save_safety_cache
 
         is_safe = safety_result.get("is_safe", False)
         cache[img_hash] = SafetyCacheEntry(
@@ -363,7 +363,7 @@ async def prepare_session(
     failure, surfaces the appropriate typed error + acks the deferred
     init RPC with the matching `MessageId`. The progress callback is
     wired only for the duration of this function."""
-    from engine_manager import QuantUnsupportedError
+    from engine.manager import QuantUnsupportedError
 
     world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
     try:

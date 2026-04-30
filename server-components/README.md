@@ -1,7 +1,9 @@
 # Remote Server Setup
 
 This directory contains the Python server used by Biome. The CLI entry
-point is `main.py`; the FastAPI app lives in `server.py`.
+point is `main.py`; the FastAPI router lives in `server/routes.py`, the
+WebSocket protocol in `server/protocol.py`, and the per-connection runtime
+in `server/session/`.
 
 Use these steps when you want to run the server on a different machine than the Biome desktop client.
 

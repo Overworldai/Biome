@@ -9,7 +9,7 @@ definitions live in `server.py`.
 
 import sys
 
-from server_logging import logger
+from util.server_logging import logger
 
 logger.info(f"Python {sys.version}")
 logger.info("Starting server...")
@@ -25,8 +25,8 @@ from app_state import (
     attach_startup_config,
     get_startup_config,
 )
-from hf_token import apply_resolved_token
-from protocol import StageId, StatusMessage
+from server.protocol import StageId, StatusMessage
+from util.hf_token import apply_resolved_token
 
 apply_resolved_token()
 
@@ -79,7 +79,7 @@ try:
 
     logger.info(f"torch {torch.__version__} imported")
 
-    import system_info as system_info_module
+    from util import system_info as system_info_module
 
     system_info_module.initialize()
 
@@ -95,12 +95,12 @@ try:
     logger.info("FastAPI imported")
 
     logger.info("Importing Engine Manager module...")
-    from engine_manager import WorldEngineManager
+    from engine.manager import WorldEngineManager
 
     logger.info("Engine Manager module imported")
 
     logger.info("Importing Safety module...")
-    from safety import SafetyChecker, load_safety_cache
+    from engine.safety import SafetyChecker, load_safety_cache
 
     logger.info("Safety module imported")
 
@@ -111,7 +111,7 @@ except Exception as e:
 
 # Endpoints register onto an APIRouter in `server.py`; importing it now
 # is safe because the heavy import waterfall above has already completed.
-from server import router
+from server.routes import router
 
 # ============================================================================
 # Startup broadcast helpers
@@ -155,7 +155,7 @@ async def _heavy_init(state: AppState) -> None:
         _broadcast_startup_stage(state, StageId.STARTUP_ENGINE_MANAGER)
         state.world_engine = WorldEngineManager()
 
-        from image_gen import ImageGenManager
+        from engine.image_gen import ImageGenManager
 
         state.image_gen = ImageGenManager(state.world_engine.cuda_executor)
 

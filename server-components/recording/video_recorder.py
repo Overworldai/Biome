@@ -22,7 +22,7 @@ import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from server_logging import logger
+from util.server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
 
@@ -36,7 +36,7 @@ FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
 class RecordingProperties:
     """Semantic session state captured into the MP4's metadata so each
     recording is self-describing. The field set is the wire format — callers
-    (server.py) construct this explicitly rather than passing a free-form
+    (the session layer) construct this explicitly rather than passing a free-form
     dict, so the schema is fixed and searchable."""
 
     biome_version: str = "unknown"
