@@ -56,7 +56,9 @@ from protocol import (
     ClientMessageAdapter,
     ControlNotif,
     GenerateSceneRequest,
+    GenerateSceneResponseData,
     InitRequest,
+    InitResponseData,
     MessageId,
     PauseNotif,
     PromptNotif,
@@ -65,6 +67,8 @@ from protocol import (
     RpcError,
     RpcSuccess,
     SceneEditRequest,
+    SceneEditResponseData,
+    SystemInfo,
     rpc_err,
     rpc_ok,
 )
@@ -1273,25 +1277,18 @@ async def websocket_endpoint(websocket: WebSocket):
             header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
             return struct.pack("<I", len(header)) + header + jpeg
 
-        def build_init_response_data() -> dict:
+        def build_init_response_data() -> InitResponseData:
             from engine_manager import DEFAULT_INFERENCE_FPS
 
-            return {
-                "model": getattr(world_engine, "model_uri", "") or "",
-                "inference_fps": getattr(world_engine, "inference_fps", DEFAULT_INFERENCE_FPS),
-                "system_info": dict(system_info_module.system_info),
-            }
+            return InitResponseData(
+                model=getattr(world_engine, "model_uri", "") or "",
+                inference_fps=getattr(world_engine, "inference_fps", DEFAULT_INFERENCE_FPS),
+                system_info=SystemInfo(**system_info_module.system_info),
+            )
 
         # Respond to init RPC with session metrics
         if init_req_id:
-            await send_json(
-                {
-                    "type": "response",
-                    "req_id": init_req_id,
-                    "success": True,
-                    "data": build_init_response_data(),
-                }
-            )
+            await send_json(rpc_ok(init_req_id, build_init_response_data()).model_dump(exclude_none=True))
             init_req_id = None
 
         async def receiver() -> None:
@@ -1299,89 +1296,73 @@ async def websocket_endpoint(websocket: WebSocket):
             while running:
                 try:
                     raw = await websocket.receive_text()
-                    msg = json.loads(raw)
-                    msg_type = msg.get("type", "control")
+                    try:
+                        parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
+                    except Exception as e:
+                        logger.info(f"[{client_host}] Ignoring invalid game-loop message: {e}")
+                        continue
 
-                    if "req_id" in msg:
-                        if msg_type == "init":
+                    match parsed:
+                        case InitRequest() as req:
                             # init RPC: apply deltas and respond with metrics.
-                            # Wrap legacy dict into typed InitRequest until commit
-                            # 3 of step 2 converts the whole receiver to typed.
-                            ready, new_seed = await handle_init(InitRequest.model_validate(msg), is_game_loop=True)
+                            ready, new_seed = await handle_init(req, is_game_loop=True)
                             if ready:
-                                queue_send(
-                                    {
-                                        "type": "response",
-                                        "req_id": msg["req_id"],
-                                        "success": True,
-                                        "data": build_init_response_data(),
-                                    }
-                                )
+                                response = rpc_ok(req.req_id, build_init_response_data())
                             else:
-                                queue_send(
-                                    {
-                                        "type": "response",
-                                        "req_id": msg["req_id"],
-                                        "success": False,
-                                        "error_id": "app.server.error.initFailed",
-                                    }
-                                )
+                                response = rpc_err(req.req_id, error_id=MessageId.INIT_FAILED)
+                            queue_send(response.model_dump(exclude_none=True))
                             if new_seed:
                                 reset_flag = True
-                        elif msg_type == "scene_edit":
+
+                        case SceneEditRequest() as req:
                             # scene_edit is handled by the generator thread at
                             # the next clean frame boundary — post a request and
                             # await the future.
+                            prompt = req.prompt.strip()
                             if action_logger is not None:
-                                action_logger.scene_edit(msg.get("prompt", "").strip())
-                            prompt = msg.get("prompt", "").strip()
+                                action_logger.scene_edit(prompt)
                             if not prompt:
-                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
+                                edit_response: RpcSuccess[SceneEditResponseData] | RpcError = rpc_err(
+                                    req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT
+                                )
                             elif image_gen is None or not image_gen.is_loaded:
-                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
+                                edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                             elif scene_edit_request is not None:
-                                result = {
-                                    "success": False,
-                                    "error_id": "app.server.error.sceneAuthoringAlreadyInProgress",
-                                }
+                                edit_response = rpc_err(
+                                    req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS
+                                )
                             else:
                                 import concurrent.futures
 
                                 fut = concurrent.futures.Future()
                                 scene_edit_request = {"prompt": prompt, "future": fut}
                                 try:
-                                    preview_data = await asyncio.wrap_future(fut)
-                                    result = {"success": True, "data": {**preview_data}}
+                                    preview = await asyncio.wrap_future(fut)
+                                    # Generator thread still resolves the future with a dict;
+                                    # step 5 (scene_authoring extraction) types it directly.
+                                    edit_response = rpc_ok(req.req_id, SceneEditResponseData(**preview))
                                 except Exception as e:
                                     error_id = getattr(e, "message_id", None)
-                                    if error_id:
-                                        result = {"success": False, "error_id": error_id}
+                                    if error_id is not None:
+                                        edit_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
-                                        result = {"success": False, "error": str(e)}
-                            req_id = msg["req_id"]
-                            if isinstance(result, BinaryResponse):
-                                header = json.dumps(
-                                    {"req_id": req_id, "success": True},
-                                    separators=(",", ":"),
-                                ).encode("utf-8")
-                                queue_send(struct.pack("<I", len(header)) + header + result.image_bytes)
-                            else:
-                                if "success" not in result:
-                                    result = {"success": True, "data": result}
-                                queue_send({"type": "response", "req_id": req_id, **result})
-                        elif msg_type == "generate_scene":
+                                        edit_response = rpc_err(req.req_id, error=str(e))
+                            queue_send(edit_response.model_dump(exclude_none=True))
+
+                        case GenerateSceneRequest() as req:
                             # generate_scene: like scene_edit but with a blank
                             # canvas — generates a new seed from a text prompt.
-                            prompt = msg.get("prompt", "").strip()
+                            prompt = req.prompt.strip()
                             if not prompt:
-                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
+                                gen_response: RpcSuccess[GenerateSceneResponseData] | RpcError = rpc_err(
+                                    req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT
+                                )
                             elif image_gen is None or not image_gen.is_loaded:
-                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
+                                gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
                             elif scene_edit_request is not None or generate_scene_request is not None:
-                                result = {
-                                    "success": False,
-                                    "error_id": "app.server.error.sceneAuthoringAlreadyInProgress",
-                                }
+                                gen_response = rpc_err(
+                                    req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS
+                                )
                             else:
                                 import concurrent.futures
 
@@ -1389,70 +1370,53 @@ async def websocket_endpoint(websocket: WebSocket):
                                 generate_scene_request = {"prompt": prompt, "future": fut}
                                 try:
                                     data = await asyncio.wrap_future(fut)
-                                    result = {"success": True, "data": data}
+                                    gen_response = rpc_ok(req.req_id, GenerateSceneResponseData(**data))
                                 except Exception as e:
                                     error_id = getattr(e, "message_id", None)
-                                    if error_id:
-                                        result = {"success": False, "error_id": error_id}
+                                    if error_id is not None:
+                                        gen_response = rpc_err(req.req_id, error_id=MessageId(error_id))
                                     else:
-                                        result = {"success": False, "error": str(e)}
-                            queue_send({"type": "response", "req_id": msg["req_id"], **result})
-                        else:
-                            result = await dispatch_request(msg, websocket)
-                            req_id = msg["req_id"]
-                            if isinstance(result, BinaryResponse):
-                                header = json.dumps(
-                                    {"req_id": req_id, "success": True},
-                                    separators=(",", ":"),
-                                ).encode("utf-8")
-                                queue_send(struct.pack("<I", len(header)) + header + result.image_bytes)
-                            else:
-                                if "success" not in result:
-                                    result = {"success": True, "data": result}
-                                queue_send({"type": "response", "req_id": req_id, **result})
-                        continue
+                                        gen_response = rpc_err(req.req_id, error=str(e))
+                            queue_send(gen_response.model_dump(exclude_none=True))
 
-                    match msg_type:
-                        case "reset":
+                        case CheckSeedSafetyRequest() as req:
+                            seed_response = await handle_check_seed_safety(req)
+                            queue_send(seed_response.model_dump(exclude_none=True))
+
+                        case ResetNotif():
                             logger.info(f"[{client_host}] Reset requested")
                             reset_flag = True
-                            continue
 
-                        case "pause":
+                        case PauseNotif():
                             paused = True
                             logger.info("[RECV] Paused")
-                            continue
 
-                        case "resume":
+                        case ResumeNotif():
                             paused = False
                             logger.info("[RECV] Resumed")
-                            continue
 
-                        case "prompt":
+                        case PromptNotif() as notif:
                             from engine_manager import DEFAULT_PROMPT
 
-                            new_prompt = msg.get("prompt", "").strip()
+                            new_prompt = notif.prompt.strip()
                             prompt_pending = new_prompt if new_prompt else DEFAULT_PROMPT
-                            continue
 
-                        case "control":
+                        case ControlNotif() as notif:
                             if paused:
                                 continue
-
-                            if "button_codes" in msg:
-                                buttons = set(msg.get("button_codes", []))
+                            if notif.button_codes is not None:
+                                buttons = set(notif.button_codes)
                             else:
                                 buttons = {
-                                    BUTTON_CODES[b.upper()] for b in msg.get("buttons", []) if b.upper() in BUTTON_CODES
+                                    BUTTON_CODES[b.upper()] for b in (notif.buttons or []) if b.upper() in BUTTON_CODES
                                 }
-
                             with ctrl_lock:
                                 ctrl_state["buttons"] = buttons
-                                ctrl_state["mouse_dx"] += float(msg.get("mouse_dx", 0.0))
-                                ctrl_state["mouse_dy"] += float(msg.get("mouse_dy", 0.0))
-                                ctrl_state["client_ts"] = msg.get("ts", ctrl_state["client_ts"])
+                                ctrl_state["mouse_dx"] += notif.mouse_dx
+                                ctrl_state["mouse_dy"] += notif.mouse_dy
+                                if notif.ts is not None:
+                                    ctrl_state["client_ts"] = notif.ts
                                 ctrl_state["dirty"] = True
-                            continue
 
                 except WebSocketDisconnect:
                     logger.info(f"[{client_host}] Client disconnected")
