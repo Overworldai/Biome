@@ -142,20 +142,22 @@ typeCheckingMode = "strict"
 reportMissingTypeStubs = "none"      # third-party libs (timm, simplejpeg) ship no stubs
 reportPrivateImportUsage = "none"    # FastAPI/Pydantic re-export pattern
 
-# ─── Step 2 (Typed protocol module) ─────────────────────────────────────
-reportArgumentType = "none"          # boundary code passes raw dicts; protocol.py replaces them
-
 # ─── Step 4 (Decompose websocket_endpoint) ──────────────────────────────
 reportFunctionMemberAccess = "none"  # `_flush_pending.work` function-attribute hack
 
-# ─── Step 6 (Tighten engine_manager) ────────────────────────────────────
-# `engine: WorldEngine | None` and friends — remove with explicit state machine.
+# ─── Step 7 (final audit) ───────────────────────────────────────────────
+# Step 6 reduced engine_manager's contribution to these but didn't eliminate
+# them — the lingering sites are torch/PIL/diffusers untyped APIs in
+# image_gen.py, safety.py, and scene_authoring.py's CUDA closures, plus a
+# few residual `engine is None` access patterns. Step 7 wraps the third-
+# party calls in narrow typed adapters and removes these one-by-one.
+reportArgumentType = "none"
 reportOptionalMemberAccess = "none"
 reportOptionalCall = "none"
 reportOptionalSubscript = "none"
 reportPossiblyUnboundVariable = "none"
 reportAttributeAccessIssue = "none"
-reportMissingParameterType = "none"  # untyped server.py fn params
+reportMissingParameterType = "none"
 
 # ─── Step 7 (Cleanup pass) ──────────────────────────────────────────────
 reportPrivateUsage = "none"
