@@ -23,6 +23,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from queue import Queue
+from typing import TYPE_CHECKING
 
 from fastapi import WebSocket
 from pydantic import BaseModel
@@ -31,7 +32,10 @@ from action_logger import ActionLogger
 from app_state import AppState
 from progress_stages import Stage
 from protocol import MessageId, StatusMessage, WarningMessage
-from video_recorder import VideoRecorder
+from video_recorder import RecordingProperties, VideoRecorder
+
+if TYPE_CHECKING:
+    from engine_manager import WorldEngineManager
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +152,49 @@ class Connection:
             self.progress_queue.put_nowait(StatusMessage(stage=stage.id))
         except asyncio.QueueFull:
             pass
+
+    # ─── Recorder lifecycle ────────────────────────────────────────
+    def start_action_log_segment(self, world_engine: "WorldEngineManager") -> None:
+        """Open a new action-log segment if action logging is active."""
+        if self.action_logger is None:
+            return
+        self.action_logger.new_segment(
+            model=world_engine.model_uri,
+            seed=self.current_seed_filename,
+            temporal_compression=world_engine.temporal_compression,
+            seed_target_size=world_engine.seed_target_size,
+            has_prompt_conditioning=world_engine.has_prompt_conditioning,
+        )
+
+    def end_action_log_segment(self) -> None:
+        """Close any active action-log segment."""
+        if self.action_logger is not None:
+            self.action_logger.end_segment()
+
+    def start_video_segment(self, world_engine: "WorldEngineManager") -> None:
+        """Open a new video-recording segment if recording is requested.
+        Lazily constructs the VideoRecorder the first time this is called."""
+        if not self.video_recording_requested:
+            return
+        if self.video_recorder is None:
+            self.video_recorder = VideoRecorder(self.client_host, output_dir=self.video_output_dir)
+        self.video_recorder.new_segment(
+            width=world_engine.seed_target_size[1],
+            height=world_engine.seed_target_size[0],
+            fps=int(world_engine.inference_fps),
+            properties=RecordingProperties(
+                biome_version=self.biome_version or "unknown",
+                model=world_engine.model_uri,
+                quant=world_engine.quant or "none",
+                seed=self.current_seed_filename,
+                scene_authoring_enabled=self.scene_authoring_requested,
+            ),
+        )
+
+    def end_video_segment(self) -> None:
+        """Close any active video-recording segment."""
+        if self.video_recorder is not None:
+            self.video_recorder.end_segment()
 
     # ─── Threadsafe enqueue helper (any thread) ────────────────────
     def queue_send(self, payload: BaseModel | bytes) -> None:

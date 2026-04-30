@@ -88,7 +88,6 @@ from protocol import (
     rpc_ok,
 )
 from scene_authoring import run_generate_scene, run_scene_edit
-from video_recorder import RecordingProperties, VideoRecorder
 from ws_session import Connection, run_sender
 
 apply_resolved_token()
@@ -731,7 +730,7 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 logger.info(f"[{client_host}] Action logging disabled")
 
             if conn.video_recording_requested and conn.video_recorder is None:
-                _video_recorder_new_segment()
+                conn.start_video_segment(world_engine)
                 logger.info(f"[{client_host}] Video recording enabled")
             elif not conn.video_recording_requested and conn.video_recorder is not None:
                 conn.video_recorder.end_segment()
@@ -882,46 +881,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
         conn.action_logger = ActionLogger(client_host) if conn.action_logging_requested else None
 
-        def _video_recorder_new_segment() -> None:
-            """Ensure the video recorder exists when recording is requested,
-            then start a new segment with the current session's metadata."""
-            if not conn.video_recording_requested:
-                return
-            if conn.video_recorder is None:
-                conn.video_recorder = VideoRecorder(client_host, output_dir=conn.video_output_dir)
-            conn.video_recorder.new_segment(
-                width=world_engine.seed_target_size[1],
-                height=world_engine.seed_target_size[0],
-                fps=int(world_engine.inference_fps),
-                properties=RecordingProperties(
-                    biome_version=conn.biome_version or "unknown",
-                    model=world_engine.model_uri,
-                    quant=world_engine.quant or "none",
-                    seed=conn.current_seed_filename,
-                    scene_authoring_enabled=conn.scene_authoring_requested,
-                ),
-            )
-
-        def _video_recorder_end_segment() -> None:
-            if conn.video_recorder is not None:
-                conn.video_recorder.end_segment()
-
-        def _action_logger_new_segment() -> None:
-            if conn.action_logger is not None:
-                conn.action_logger.new_segment(
-                    model=world_engine.model_uri,
-                    seed=conn.current_seed_filename,
-                    temporal_compression=world_engine.temporal_compression,
-                    seed_target_size=world_engine.seed_target_size,
-                    has_prompt_conditioning=world_engine.has_prompt_conditioning,
-                )
-
-        def _action_logger_end_segment() -> None:
-            if conn.action_logger is not None:
-                conn.action_logger.end_segment()
-
-        _action_logger_new_segment()
-        _video_recorder_new_segment()
+        conn.start_action_log_segment(world_engine)
+        conn.start_video_segment(world_engine)
 
         # Game-loop state and scene-authoring handoff are tracked on Connection.
         # Receiver posts {"prompt": str, "future": Future} into
@@ -1172,8 +1133,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                 if conn.paused:
                     _flush_pending()
                     if not _gen_was_paused:
-                        _action_logger_end_segment()
-                        _video_recorder_end_segment()
+                        conn.end_action_log_segment()
+                        conn.end_video_segment()
                         _gen_was_paused = True
 
                     # Handle generate_scene while paused (it's triggered from
@@ -1202,8 +1163,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
 
                 if _gen_was_paused:
                     _gen_was_paused = False
-                    _action_logger_new_segment()
-                    _video_recorder_new_segment()
+                    conn.start_action_log_segment(world_engine)
+                    conn.start_video_segment(world_engine)
 
                 try:
                     # Start frame timer before pacing sleep so gen_time
@@ -1221,8 +1182,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                         _flush_pending()
                         conn.prompt_pending = None
                         run_coro(reset_engine())
-                        _action_logger_new_segment()
-                        _video_recorder_new_segment()
+                        conn.start_action_log_segment(world_engine)
+                        conn.start_video_segment(world_engine)
                         next_frame_time = 0.0
 
                     # Auto-reset at context length limit (single-frame models only;
@@ -1237,8 +1198,8 @@ async def websocket_endpoint(websocket: WebSocket, state: AppState = Depends(get
                             logger.info(f"[{client_host}] Auto-reset at frame limit")
                         run_coro(reset_engine())
                         conn.reset_flag = False
-                        _action_logger_new_segment()
-                        _video_recorder_new_segment()
+                        conn.start_action_log_segment(world_engine)
+                        conn.start_video_segment(world_engine)
                         next_frame_time = 0.0
 
                     # Handle pending scene edit — runs inpainting on the last
