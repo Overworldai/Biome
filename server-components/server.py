@@ -59,16 +59,9 @@ from protocol import (
     rpc_err,
     rpc_ok,
 )
-from ws_session import (
-    Connection,
-    build_error_message,
-    build_init_response_data,
-    handle_check_seed_safety,
-    handle_init,
-    run_generator,
-    run_receiver,
-    run_sender,
-)
+from ws_handlers import build_init_response_data, handle_check_seed_safety, handle_init
+from ws_runner import run_generator, run_receiver, run_sender
+from ws_session import Connection, build_error_message
 
 apply_resolved_token()
 
