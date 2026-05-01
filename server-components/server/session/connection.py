@@ -18,11 +18,13 @@ workers live in `workers.py`. This module owns connection state only.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import struct
 import threading
 from dataclasses import dataclass, field
+from queue import Full as QueueFull
 from queue import Queue
 from typing import TYPE_CHECKING
 
@@ -183,10 +185,8 @@ class Connection:
         """Sync callback for `WorldEngineManager.set_progress_callback` —
         safe to call from any thread; enqueues onto `progress_queue` for
         the asyncio drain task to ferry over the websocket."""
-        try:
+        with contextlib.suppress(asyncio.QueueFull):
             self.progress_queue.put_nowait(StatusMessage(stage=stage))
-        except asyncio.QueueFull:
-            pass
 
     # ─── Recorder lifecycle ────────────────────────────────────────
     def start_action_log_segment(self, world_engine: "WorldEngineManager") -> None:
@@ -287,11 +287,9 @@ class Connection:
         """Enqueue a payload for the asyncio sender to dispatch.
         Safe to call from the generator thread; wakes the sender via
         a `call_soon_threadsafe(frame_ready.set)`."""
-        try:
+        with contextlib.suppress(QueueFull, RuntimeError):
             self.frame_queue.put_nowait(payload)
             self.main_loop.call_soon_threadsafe(self.frame_ready.set)
-        except Exception:
-            pass
 
     # ─── Lifecycle helpers (asyncio thread; awaited) ───────────────
     async def run_progress_drain(self) -> None:
@@ -303,7 +301,7 @@ class Connection:
                 msg = await self.progress_queue.get()
                 try:
                     await self.send_message(msg)
-                except Exception:
+                except Exception:  # noqa: BLE001  -- websocket can fail with a wide variety of errors mid-stream; bail out and let teardown handle it
                     break
         except asyncio.CancelledError:
             pass

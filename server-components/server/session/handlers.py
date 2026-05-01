@@ -15,8 +15,11 @@ init phase between handshake and game loop. These let the route shell
 
 import asyncio
 import base64
+import binascii
 import logging
 from typing import TYPE_CHECKING
+
+from pydantic import ValidationError
 
 from engine.manager import QuantUnsupportedError
 from recording.action_logger import ActionLogger
@@ -72,13 +75,13 @@ async def handle_check_seed_safety(
 
     try:
         image_bytes = base64.b64decode(req.image_data)
-    except Exception as e:
+    except (binascii.Error, ValueError) as e:
         return rpc_err(req.req_id, error=f"Invalid base64 data: {e}")
 
     try:
         result = await asyncio.to_thread(safety_checker.check_image_bytes, image_bytes)
     except Exception as e:
-        logger.error(f"Safety check failed: {e}")
+        logger.exception("Safety check failed")
         return rpc_err(req.req_id, error=f"Safety check failed: {e}")
 
     return rpc_ok(req.req_id, CheckSeedSafetyResponseData(is_safe=result.is_safe, hash=result.image_hash))
@@ -103,7 +106,7 @@ async def load_seed_from_data(
 
     try:
         image_bytes = base64.b64decode(image_data_b64)
-    except Exception as e:
+    except (binascii.Error, ValueError) as e:
         logger.warning(f"[{conn.client_host}] Invalid base64 seed data: {e}")
         await conn.send_warning(MessageId.SEED_INVALID_DATA)
         return False
@@ -112,7 +115,7 @@ async def load_seed_from_data(
     # is a fast cache hit, so we don't pre-screen against `current_seed_hash`).
     try:
         result = await asyncio.to_thread(safety_checker.check_image_bytes, image_bytes)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- classifier path can raise PIL/torch/runtime errors; downgrade to a soft warning
         logger.warning(f"[{conn.client_host}] Safety check failed: {e}")
         await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
         return False
@@ -251,13 +254,13 @@ async def run_preinit_handshake(
         try:
             raw = await asyncio.wait_for(conn.websocket.receive_text(), timeout=60.0)
         except TimeoutError:
-            logger.error(f"[{conn.client_host}] Timeout waiting for init")
+            logger.error(f"[{conn.client_host}] Timeout waiting for init")  # noqa: TRY400  -- timeout status, no traceback to log
             await conn.send_error(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED)
             return False
 
         try:
             parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
-        except Exception as e:
+        except (ValidationError, ValueError) as e:
             logger.info(f"[{conn.client_host}] Ignoring invalid message during pre-init: {e}")
             continue
 
@@ -312,7 +315,9 @@ async def prepare_session(
         # needs. Loading happens BEFORE WorldEngine warmup so the compiled
         # device graphs see the model's memory already allocated.
         try:
-            loaded = await scene_authoring.configure_for_session(conn.scene_authoring_requested)
+            loaded = await scene_authoring.configure_for_session(
+                scene_authoring_requested=conn.scene_authoring_requested
+            )
         except Exception as e:
             logger.error(f"[{conn.client_host}] Scene authoring warmup failed: {e}", exc_info=True)
             await conn.send_error(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))

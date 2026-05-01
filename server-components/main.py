@@ -7,21 +7,19 @@ the FastAPI `app` instance + middleware, and the uvicorn boot. Endpoint
 definitions live in `server/routes.py`.
 """
 
-import sys
-
-from util.server_logging import logger
-
-logger.info(f"Python {sys.version}")
-logger.info("Starting server...")
-
 import argparse
 import asyncio
 import os
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from server.protocol import StageId
 from util.hf_token import apply_resolved_token
+from util.server_logging import logger
+
+logger.info(f"Python {sys.version}")
+logger.info("Starting server...")
 
 apply_resolved_token()
 
@@ -115,15 +113,17 @@ try:
 
     logger.info("Safety module imported")
 
-except Exception as e:
+except Exception as e:  # noqa: BLE001  -- top-level startup guard; any import failure should land in the log and exit cleanly
     logger.fatal(f"Import failed: {e}", exc_info=True)
     sys.exit(1)
 
 
 # Endpoints register onto an APIRouter in `server/routes.py`; importing it
 # now is safe because the heavy import waterfall above has already completed.
-from server.routes import router
-from server.startup import ServerStartup
+# Importing earlier would pull the whole stack in via `server.routes`'s
+# transitive deps and break the instrumented load above.
+from server.routes import router  # noqa: E402
+from server.startup import ServerStartup  # noqa: E402
 
 # ============================================================================
 # Application lifecycle
@@ -164,7 +164,7 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
 
         startup.mark_done()
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  -- top-level lifespan guard; any heavy-init failure must be reported, not propagated
         logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
         startup.mark_failed(str(exc))
 

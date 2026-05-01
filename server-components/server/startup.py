@@ -13,6 +13,7 @@ to release every waiter together.
 """
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from server.protocol import StageId, StatusMessage
@@ -36,19 +37,15 @@ class ServerStartup:
         msg = StatusMessage(stage=stage)
         self.stages.append(msg)
         for q in self._waiters:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
 
     def mark_done(self) -> None:
         """Flip `complete` and wake every waiter so its replay loop exits."""
         self.complete = True
         for q in self._waiters:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(None)
-            except asyncio.QueueFull:
-                pass
 
     def mark_failed(self, error: str) -> None:
         """Record a startup error and signal completion (so clients can surface

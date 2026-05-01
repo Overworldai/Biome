@@ -63,6 +63,36 @@ class SafetyRejectionError(RuntimeError):
         super().__init__(message_id)
 
 
+class NoToolCallsError(ValueError):
+    """Raised when `parse_tool_calls` finds no tool-call blocks in the VLM
+    output. Carries the raw text so callers/log lines can show what was
+    parsed."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__(f"No valid tool calls found in output: {text!r}")
+
+
+class MissingEditInstructionError(ValueError):
+    """Raised when VLM output contains tool calls but none of them are a
+    `submit_edit_instruction` with a non-empty `instruction` argument."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__(f"No submit_edit_instruction tool call with an instruction found in: {text!r}")
+
+
+class VlmToolCallRetryError(RuntimeError):
+    """Raised when the VLM fails to produce a valid tool call within
+    `VLM_MAX_RETRIES` attempts. Carries the last underlying parse error so
+    diagnostics keep the chain intact."""
+
+    def __init__(self, attempts: int, last_error: BaseException | None) -> None:
+        self.attempts = attempts
+        self.last_error = last_error
+        super().__init__(f"VLM failed to produce a valid tool call after {attempts} attempts: {last_error}")
+
+
 # ─── JPEG metadata for generated scenes ──────────────────────────────
 
 
@@ -117,7 +147,7 @@ def parse_tool_calls(text: str) -> list[ToolCall]:
         results.append(ToolCall(name=name, arguments=args))
 
     if not results:
-        raise ValueError(f"No valid tool calls found in output: {text!r}")
+        raise NoToolCallsError(text)
 
     return results
 
@@ -335,7 +365,7 @@ class SceneAuthoringManager:
 
     # ─── Lifecycle ────────────────────────────────────────────────
 
-    async def configure_for_session(self, scene_authoring_requested: bool) -> bool:
+    async def configure_for_session(self, *, scene_authoring_requested: bool) -> bool:
         """Bring the model state into line with what this session needs.
         Loads if requested-but-unloaded; unloads if loaded-but-unwanted.
         Returns True iff a fresh load happened (so the caller can emit the
@@ -443,7 +473,7 @@ class SceneAuthoringManager:
                 instruction = call.arguments.get("instruction", "")
                 if instruction:
                     return instruction
-        raise ValueError(f"No submit_edit_instruction tool call with an instruction found in: {text!r}")
+        raise MissingEditInstructionError(text)
 
     def _run_vlm(
         self,
@@ -475,13 +505,14 @@ class SceneAuthoringManager:
 
             try:
                 prompt = self._parse_edit_instruction(raw_output, safety_message_id)
-                logger.info(f"[{log_prefix}] Prompt: {prompt}")
-                return prompt
             except ValueError as exc:
                 last_error = exc
                 logger.warning(f"[{log_prefix}] Tool call parse failed (attempt {attempt}/{VLM_MAX_RETRIES}): {exc}")
+            else:
+                logger.info(f"[{log_prefix}] Prompt: {prompt}")
+                return prompt
 
-        raise RuntimeError(f"VLM failed to produce a valid tool call after {VLM_MAX_RETRIES} attempts: {last_error}")
+        raise VlmToolCallRetryError(VLM_MAX_RETRIES, last_error)
 
     def _build_edit_prompt(self, frame_pil: Image.Image, user_request: str) -> str:
         """Ask the VLM for a Klein edit instruction given a reference frame."""

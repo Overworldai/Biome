@@ -10,6 +10,7 @@ Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
 preset, yuv420p output, +faststart, no audio.
 """
 
+import contextlib
 import datetime
 import json
 import subprocess
@@ -25,6 +26,11 @@ from PIL import Image, ImageDraw, ImageFont
 from util.server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
+
+# Recordings shorter than this are almost always accidental (paused right
+# after starting, quick model reload, etc.) and get cleaned up rather than
+# cluttering the recordings list.
+MIN_DURATION_S = 3
 
 # Prebuilt ffmpeg binary shipped with imageio-ffmpeg — cross-platform, bundled
 # into the venv by `uv sync`, so we don't depend on a system ffmpeg install.
@@ -116,7 +122,7 @@ class VideoRecorder:
         encoded into MP4 metadata atoms internally so callers don't have to
         know how MP4 structures its metadata."""
         self.end_segment()
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
         path = self._output_dir / f"{ts}.mp4"
         self._path = path
         self._frame_count = 0
@@ -188,7 +194,7 @@ class VideoRecorder:
         try:
             font_size = max(14, int(frame_h * 0.05))
             font = ImageFont.truetype(str(FONT_PATH), font_size)
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"[{self._client_host}] Could not load overlay font: {e}")
             self._overlay_text = None
             return
@@ -288,22 +294,17 @@ class VideoRecorder:
             if self._proc.returncode != 0:
                 stderr = stderr_bytes.decode(errors="replace") if stderr_bytes else ""
                 logger.warning(f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  -- ffmpeg shutdown can raise OSError/TimeoutExpired/ValueError; we want to log+kill regardless
             logger.warning(f"[{self._client_host}] Error closing video recorder: {e}")
-            try:
+            with contextlib.suppress(Exception):
                 self._proc.kill()
-            except Exception:
-                pass
         finally:
             self._proc = None
             self._path = None
             self._frame_count = 0
             self._fps = 0
 
-        # Clean up recordings shorter than MIN_DURATION_S — segments this short
-        # are almost always accidental (paused right after starting, quick model
-        # reload, etc.) and just clutter the recordings list.
-        MIN_DURATION_S = 3
+        # Clean up recordings shorter than MIN_DURATION_S.
         if path is not None:
             duration_s = frame_count / fps if fps > 0 else 0.0
             if frame_count == 0 or duration_s < MIN_DURATION_S:
@@ -312,5 +313,5 @@ class VideoRecorder:
                     logger.info(
                         f"[{self._client_host}] Removed short video ({frame_count} frames, {duration_s:.1f}s): {path}"
                     )
-                except Exception:
+                except OSError:
                     pass

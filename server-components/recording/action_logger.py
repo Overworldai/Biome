@@ -102,10 +102,10 @@ class ActionLogger:
 
     def _open_file(self) -> None:
         """Open a fresh file, resetting the frame counter."""
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
         path = ACTION_LOG_DIR / f"action_stream_{ts}.ndjson"
         self._path = path
-        self._f = open(path, "w")
+        self._f = open(path, "w")  # noqa: SIM115  -- handle owned by the segment, closed in `end_segment`
         self._frame_id = 0
         logger.info(f"[{self._client_host}] Action stream -> {path}")
 
@@ -121,7 +121,7 @@ class ActionLogger:
                 try:
                     path.unlink(missing_ok=True)
                     logger.info(f"[{self._client_host}] Removed empty action stream: {path}")
-                except Exception:
+                except OSError:
                     pass
 
     # -- writing ----------------------------------------------------------

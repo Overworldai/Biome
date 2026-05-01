@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812  -- canonical alias used throughout the PyTorch ecosystem
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from timm.data import resolve_data_config
@@ -139,8 +139,8 @@ class SafetyChecker:
             return {}
         try:
             return _cache_adapter.validate_json(self._cache_path.read_bytes())
-        except Exception as e:
-            logger.error(f"Failed to load safety cache: {e}")
+        except Exception:
+            logger.exception("Failed to load safety cache")
             return {}
 
     @property
@@ -152,8 +152,8 @@ class SafetyChecker:
         try:
             self._cache_path.parent.mkdir(parents=True, exist_ok=True)
             self._cache_path.write_bytes(_cache_adapter.dump_json(self._cache, indent=2))
-        except Exception as e:
-            logger.error(f"Failed to save safety cache: {e}")
+        except Exception:
+            logger.exception("Failed to save safety cache")
 
     def _record(self, image_hash: str, verdict: SafetyVerdict) -> None:
         """Record a fresh classification + persist. Internal — only called
@@ -202,8 +202,8 @@ class SafetyChecker:
                 img = image if image.mode == "RGB" else image.convert("RGB")
                 scores = self._predict_batch_values([img])[0]
                 return SafetyVerdict(is_safe=scores["low"] < 0.5, scores=scores)
-            except Exception as e:
-                logger.error(f"Failed to check PIL image: {e}")
+            except Exception:
+                logger.exception("Failed to check PIL image")
                 return _FAILURE_VERDICT
 
     def _predict_batch_values(self, img_batch: list[Image.Image]) -> list[NSFWScores]:

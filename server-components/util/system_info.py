@@ -30,7 +30,7 @@ def _collect_system_info() -> tuple[SystemInfo, devices.NvmlHandle | None]:
 
     try:
         cpu_name = cpuinfo.get_cpu_info().get("brand_raw") or None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- py-cpuinfo can raise OSError/RuntimeError/etc. depending on platform; soft-fail and keep going
         logger.warning(f"Failed to query CPU info: {e}")
 
     try:
@@ -38,7 +38,7 @@ def _collect_system_info() -> tuple[SystemInfo, devices.NvmlHandle | None]:
         gpu_name = devices.device_name(0)
         vram_total_bytes = devices.total_memory(0)
         runtime_version = devices.runtime_version()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- torch/device wrappers can raise a grab-bag depending on backend; soft-fail and keep going
         logger.warning(f"Failed to query device info: {e}")
         gpu_count = 0
         gpu_name = None
@@ -138,7 +138,7 @@ class SystemMonitor:
             vm = psutil.virtual_memory()
             ram_used_bytes = vm.total - vm.available
             ram_total_bytes = vm.total
-        except Exception:
+        except (OSError, psutil.Error):
             pass
 
         vram_used = self.vram_used_bytes()

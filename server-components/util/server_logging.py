@@ -8,6 +8,7 @@ gets timestamps and is captured.
 """
 
 import asyncio
+import contextlib
 import faulthandler
 import logging
 import os
@@ -16,7 +17,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from server.protocol import LogMessage
 
@@ -34,8 +35,8 @@ _log_file_lock = threading.Lock()
 class TeeStream:
     """Mirror stdout/stderr to a file while broadcasting complete lines to WebSocket clients."""
 
-    _client_queues: list[tuple[asyncio.Queue, asyncio.AbstractEventLoop]] = []
-    _client_queues_lock = threading.Lock()
+    _client_queues: ClassVar[list[tuple[asyncio.Queue, asyncio.AbstractEventLoop]]] = []
+    _client_queues_lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod
     def register_client(cls, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop) -> None:
@@ -45,7 +46,7 @@ class TeeStream:
     @classmethod
     def unregister_client(cls, queue: asyncio.Queue) -> None:
         with cls._client_queues_lock:
-            cls._client_queues = [(q, l) for q, l in cls._client_queues if q is not queue]
+            cls._client_queues = [(q, ev_loop) for q, ev_loop in cls._client_queues if q is not queue]
 
     def __init__(self, stream, log_fp):
         self._stream = stream
@@ -80,10 +81,8 @@ class TeeStream:
                 line = TeeStream._ensure_timestamp(line)
                 with TeeStream._client_queues_lock:
                     for queue, loop in TeeStream._client_queues:
-                        try:
+                        with contextlib.suppress(asyncio.QueueFull, RuntimeError):
                             loop.call_soon_threadsafe(queue.put_nowait, line)
-                        except (asyncio.QueueFull, RuntimeError):
-                            pass
 
     def flush(self):
         self._stream.flush()
@@ -106,7 +105,7 @@ class TeeStream:
 # ---------------------------------------------------------------------------
 
 SERVER_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-_hosted_log_fp = open(SERVER_LOG_FILE, "w", encoding="utf-8", buffering=1)
+_hosted_log_fp = open(SERVER_LOG_FILE, "w", encoding="utf-8", buffering=1)  # noqa: SIM115  -- handle owned by the TeeStream pair below; closed at process exit
 sys.stdout = TeeStream(sys.stdout, _hosted_log_fp)
 sys.stderr = TeeStream(sys.stderr, _hosted_log_fp)
 
@@ -137,14 +136,14 @@ def _install_crash_logging_hooks() -> None:
     """Force uncaught exceptions and fatal interpreter crashes into server.log."""
     try:
         faulthandler.enable(file=_hosted_log_fp, all_threads=True)
-    except Exception as e:
-        logger.error(f"Failed to enable faulthandler: {e}")
+    except Exception:
+        logger.exception("Failed to enable faulthandler")
 
     try:
         if hasattr(signal, "SIGTERM") and hasattr(faulthandler, "register"):
             faulthandler.register(signal.SIGTERM, file=_hosted_log_fp, all_threads=True, chain=True)
-    except Exception as e:
-        logger.error(f"Failed to register SIGTERM faulthandler hook: {e}")
+    except Exception:
+        logger.exception("Failed to register SIGTERM faulthandler hook")
 
     def _log_uncaught_exception(exc_type, exc_value, exc_tb):
         logger.error("Uncaught exception:", exc_info=(exc_type, exc_value, exc_tb))
@@ -187,7 +186,7 @@ def read_log_tail_lines(max_lines: int) -> list[str]:
         with open(SERVER_LOG_FILE, encoding="utf-8", errors="replace") as fp:
             lines = [line.rstrip("\r\n") for line in fp if line.strip()]
         return lines[-max_lines:]
-    except Exception:
+    except OSError:
         return []
 
 
@@ -207,6 +206,6 @@ async def stream_logs_to_client(conn: "Connection") -> None:
             await conn.send_message(LogMessage(line=line))
     except asyncio.CancelledError:
         pass
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- websocket send/queue can fail with a wide variety of errors; we just want to stop cleanly without recursing through logger
         # Avoid recursion — don't use logger here.
         print(f"[{conn.client_host}] Log stream stopped: {e}", flush=True)

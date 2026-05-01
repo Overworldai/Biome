@@ -78,7 +78,7 @@ def memory_allocated() -> int:
     if is_available():
         try:
             return torch.cuda.memory_allocated()
-        except Exception:
+        except Exception:  # noqa: BLE001  -- best-effort sampler; torch surfaces a wide grab-bag of RuntimeError subclasses here
             pass
     return -1
 
@@ -88,7 +88,7 @@ def memory_reserved() -> int:
     if is_available():
         try:
             return torch.cuda.memory_reserved()
-        except Exception:
+        except Exception:  # noqa: BLE001  -- best-effort sampler; torch surfaces a wide grab-bag of RuntimeError subclasses here
             pass
     return -1
 
@@ -98,7 +98,7 @@ def utilization_via_torch() -> int:
     try:
         u = torch.cuda.utilization()
         return int(u) if u >= 0 else -1
-    except Exception:
+    except Exception:  # noqa: BLE001  -- best-effort sampler; torch surfaces a wide grab-bag of RuntimeError subclasses here
         return -1
 
 
@@ -165,7 +165,7 @@ def open_nvml_handle() -> NvmlHandle | None:
     try:
         pynvml.nvmlInit()
         return pynvml.nvmlDeviceGetHandleByIndex(current_device_index())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- pynvml lacks typed stubs; raises NVMLError subclasses, not a single base we can name
         logger.warning(f"Failed to initialize NVML: {e}")
         return None
 
@@ -176,7 +176,7 @@ def driver_version_via_nvml() -> str | None:
     try:
         raw = pynvml.nvmlSystemGetDriverVersion()
         return raw.decode("utf-8") if isinstance(raw, bytes) else raw
-    except Exception:
+    except Exception:  # noqa: BLE001  -- pynvml lacks typed stubs; raises NVMLError subclasses, not a single base we can name
         return None
 
 
@@ -186,5 +186,5 @@ def utilization_via_nvml(handle: NvmlHandle) -> int:
     than torch."""
     try:
         return int(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
-    except Exception:
+    except Exception:  # noqa: BLE001  -- pynvml lacks typed stubs; raises NVMLError subclasses, not a single base we can name
         return -1

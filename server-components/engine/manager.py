@@ -5,6 +5,7 @@ device-side state machine that drives frame streaming.
 
 import asyncio
 import base64
+import contextlib
 import gc
 import io
 import logging
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812  -- canonical alias used throughout the PyTorch ecosystem
 from PIL import Image
 from world_engine import CtrlInput, WorldEngine
 
@@ -44,6 +45,41 @@ class QuantUnsupportedError(RuntimeError):
     this device (raised on `compute capability` / `scaled_mm` torch errors).
     Carries no payload — callers map it to `MessageId.QUANT_UNSUPPORTED_GPU`
     with the engine's `quant` field as a param."""
+
+
+class EngineNotLoadedError(RuntimeError):
+    """Raised when an operation requires the WorldEngine but no model is
+    currently loaded. Use `WorldEngineManager.is_loaded` to gate calls."""
+
+    def __init__(self) -> None:
+        super().__init__("WorldEngine is not loaded")
+
+
+class SeedFrameNotSetError(RuntimeError):
+    """Raised when an operation requires `WorldEngineManager.seed_frame` to
+    be populated but it is None."""
+
+    def __init__(self) -> None:
+        super().__init__("Seed frame is not set")
+
+
+class ModelUriRequiredError(ValueError):
+    """Raised when `load_engine` is called without a non-empty model URI —
+    the client is required to specify a model."""
+
+    def __init__(self) -> None:
+        super().__init__("model_uri is required — the client must specify a model")
+
+
+class UnsupportedModelTypeError(RuntimeError):
+    """Raised when the loaded engine's `model_cfg.model_type` is missing or
+    not in `_MODEL_DEFAULTS`. Carries the offending value and the supported
+    keys so callers can produce a useful error."""
+
+    def __init__(self, model_type: object, supported: list[str]) -> None:
+        self.model_type = model_type
+        self.supported = supported
+        super().__init__(f"Unsupported model_type {model_type!r}; supported: {', '.join(supported)}")
 
 
 @dataclass(frozen=True)
@@ -95,9 +131,7 @@ def model_config_from_engine_cfg(engine_model_cfg: object) -> ModelConfig:
     the returned `ModelConfig`."""
     model_type = getattr(engine_model_cfg, "model_type", None)
     if not isinstance(model_type, str) or model_type not in _MODEL_DEFAULTS:
-        raise RuntimeError(
-            f"Unsupported model_type '{model_type}'. Only 'waypoint-1' and 'waypoint-1.5' are supported."
-        )
+        raise UnsupportedModelTypeError(model_type, sorted(_MODEL_DEFAULTS))
     base = _MODEL_DEFAULTS[model_type]
     return ModelConfig(
         label=base.label,
@@ -145,7 +179,7 @@ class WorldEngineManager:
 
     def _require_config(self) -> ModelConfig:
         if self.model_config is None:
-            raise RuntimeError("WorldEngine config accessed before load_engine()")
+            raise EngineNotLoadedError
         return self.model_config
 
     @property
@@ -196,8 +230,7 @@ class WorldEngineManager:
             allocated = devices.memory_allocated() / (1024**3)
             reserved = devices.memory_reserved() / (1024**3)
             logger.info(f"[DEVICE] {stage}: allocated={allocated:.2f} GiB reserved={reserved:.2f} GiB")
-        except Exception:
-            # Memory stats are best-effort diagnostics only.
+        except Exception:  # noqa: BLE001  -- best-effort diagnostics; never let a logging failure break the caller
             pass
 
     async def _run_on_device_thread(self, fn):
@@ -211,26 +244,18 @@ class WorldEngineManager:
         if not devices.is_available():
             return
 
-        try:
+        with contextlib.suppress(Exception):
             devices.synchronize()
-        except Exception:
-            pass
 
-        try:
-            # Clear compiled function/graph caches that can retain private pools.
+        # Clear compiled function/graph caches that can retain private pools.
+        with contextlib.suppress(Exception):
             devices.reset_compiled_graphs()
-        except Exception:
-            pass
 
-        try:
+        with contextlib.suppress(Exception):
             devices.empty_cache()
-        except Exception:
-            pass
 
-        try:
+        with contextlib.suppress(Exception):
             devices.ipc_collect()
-        except Exception:
-            pass
 
     def _unload_engine_sync(self):
         """Drop current engine/tensors and aggressively free device memory.
@@ -256,10 +281,11 @@ class WorldEngineManager:
             frame = frame.to(dtype=torch.uint8, device=WORLD_ENGINE_DEVICE).permute(1, 2, 0).contiguous()
             if self.is_multiframe:
                 frame = frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
-            return frame
-        except Exception as e:
-            logger.error(f"Failed to load seed from file {file_path}: {e}")
+        except Exception:
+            logger.exception(f"Failed to load seed from file {file_path}")
             return None
+        else:
+            return frame
 
     async def load_seed_from_file(self, file_path: str) -> torch.Tensor | None:
         """Load a seed frame from a file path (async wrapper)."""
@@ -280,10 +306,11 @@ class WorldEngineManager:
             frame = frame.to(dtype=torch.uint8, device=WORLD_ENGINE_DEVICE).permute(1, 2, 0).contiguous()
             if self.is_multiframe:
                 frame = frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
-            return frame
-        except Exception as e:
-            logger.error(f"Failed to load seed from base64: {e}")
+        except Exception:
+            logger.exception("Failed to load seed from base64")
             return None
+        else:
+            return frame
 
     async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor | None:
         """Load a seed frame from base64 encoded data (async wrapper)."""
@@ -296,7 +323,7 @@ class WorldEngineManager:
         The client must always specify which model to load.
         """
         if not model_uri or not model_uri.strip():
-            raise ValueError("model_uri is required — the client must specify a model")
+            raise ModelUriRequiredError
         async with self._model_load_lock:
             requested_model = model_uri.strip()
             requested_quant = quant or None  # Normalize empty string to None
@@ -341,7 +368,7 @@ class WorldEngineManager:
                 try:
                     logger.info(f"[1/3] Attempting load with dtype={dtype}")
 
-                    def _create_engine():
+                    def _create_engine(dtype=dtype):
                         return WorldEngine(
                             requested_model,
                             device=WORLD_ENGINE_DEVICE,
@@ -355,11 +382,11 @@ class WorldEngineManager:
                 except devices.OutOfMemoryError as e:
                     last_error = e
                     logger.warning(
-                        f"[1/3] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
+                        f"[1/3] OOM loading {requested_model} dtype={dtype}; retrying with lower memory settings"
                     )
                     await self._run_on_device_thread(self._unload_engine_sync)
                     self._log_device_memory("after OOM cleanup")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001  -- WorldEngine init can raise from torch / HF / world_engine; we capture and re-raise below
                     last_error = e
                     # Clear partially-allocated model state after failed initialization.
                     await self._run_on_device_thread(self._unload_engine_sync)
@@ -462,7 +489,7 @@ class WorldEngineManager:
         subsequent reset returns to this frame (used by generate_scene, where
         the new frame is the new starting world)."""
         if self._engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
+            raise EngineNotLoadedError
         frame = self._maybe_expand_to_multiframe(frame)
         self.seed_frame = frame
         if set_as_original:
@@ -479,7 +506,7 @@ class WorldEngineManager:
         edit in the KV cache without resetting). Frame is auto-expanded for
         multiframe models. Synchronous — runs on the device thread."""
         if self._engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
+            raise EngineNotLoadedError
         frame = self._maybe_expand_to_multiframe(frame)
 
         def _append():
@@ -493,9 +520,9 @@ class WorldEngineManager:
         and waits. Safe to call from the generator thread (the only caller).
         Asyncio callers wanting to yield should `await asyncio.to_thread(...)`."""
         if self._engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
+            raise EngineNotLoadedError
         if self.seed_frame is None:
-            raise RuntimeError("Seed frame is not set")
+            raise SeedFrameNotSetError
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
@@ -512,9 +539,9 @@ class WorldEngineManager:
         Synchronous — runs on the device thread via submit().result(). Asyncio
         callers should use `await asyncio.to_thread(world_engine.init_session)`."""
         if self._engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
+            raise EngineNotLoadedError
         if self.seed_frame is None:
-            raise RuntimeError("Seed frame is not set")
+            raise SeedFrameNotSetError
 
         self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
@@ -549,11 +576,12 @@ class WorldEngineManager:
         try:
             self._device_executor.submit(clear_device).result()
             self.reset_state()
-            logger.info("[DEVICE RECOVERY] Recovery complete - engine ready")
-            return True
         except Exception as e:
             logger.error(f"[DEVICE RECOVERY] Failed to recover: {e}", exc_info=True)
             return False
+        else:
+            logger.info("[DEVICE RECOVERY] Recovery complete - engine ready")
+            return True
 
     async def warmup(self):
         """Perform initial warmup to compile device-side graphs.
@@ -563,9 +591,9 @@ class WorldEngineManager:
         callers translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`.
         Other runtime errors propagate as-is."""
         if self._engine is None:
-            raise RuntimeError("WorldEngine is not loaded")
+            raise EngineNotLoadedError
         if self.seed_frame is None:
-            raise RuntimeError("Seed frame is not set")
+            raise SeedFrameNotSetError
 
         def do_warmup():
             warmup_start = time.perf_counter()
@@ -598,7 +626,7 @@ class WorldEngineManager:
             warmup_time = await self._run_on_device_thread(do_warmup)
         except RuntimeError as e:
             if devices.is_quant_unsupported_error(e):
-                logger.error(f"Quantization mode unsupported on this device: {e}")
+                logger.error(f"Quantization mode unsupported on this device: {e}")  # noqa: TRY400  -- not logging the traceback; we re-raise
                 raise QuantUnsupportedError() from e
             raise
 

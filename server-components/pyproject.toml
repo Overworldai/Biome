@@ -82,37 +82,7 @@ select = [
   "PLW",  # pylint warnings
   "PERF", # perflint
 ]
-ignore = [
-  # ─── Permanent ignores ───────────────────────────────────────────────
-  "TRY003",  # long error messages — MessageId enum is the structured replacement
-  "TRY300",  # consider else block — often hurts readability
-  "TRY400",  # use logger.exception over logger.error — too noisy
-  "PLW2901", # loop variable overwrites iter — sometimes intentional
-  "B008",    # function call in default arg — FastAPI Depends pattern
-  "RUF012",  # mutable class attrs require ClassVar — TypedDict subclasses trip this
-  "N812",    # lowercase-imported-as-non-lowercase — torch.nn.functional as F is convention
-  "N817",    # camelcase-imported-as-acronym — same: library naming conventions
-
-  # ─── Codebase-wide leniency (audit one-by-one if it ever becomes signal) ─
-  "BLE001", # blind `except Exception` — defensive idiom in many places
-  "SIM105", # try/except/pass → contextlib.suppress — judgement call
-  "SIM115", # use context manager when opening — fine for some quick-write cases
-  "DTZ005", # datetime.now() without tzinfo — internal timestamps only
-  "B023",   # function uses loop variable — flagged at one site, intentional
-  "E402",   # imports not at top — main.py's instrumented torch-load block
-  "E501",   # line too long — legitimate URLs / long log strings
-  "E741",   # ambiguous variable name — single legacy site
-  "N806",   # non-lowercase variable in function — single legacy site
-  "RET504", # unnecessary assign before return — readability over rule
-  "RUF059", # unused unpacked variable — fine when shape is the contract
-  "UP007",  # non-pep604 annotation union — last hold-out is a forward ref
-  "FBT001", # boolean positional arg — third-party API constraint at use sites
-  "FBT002", # boolean default positional — same
-]
-
-[tool.ruff.lint.per-file-ignores]
-# `lifespan(app)` is FastAPI-mandated; the param is unused on purpose.
-"main.py" = ["ARG001"]
+ignore = []
 
 [tool.basedpyright]
 include = ["."]
@@ -122,10 +92,10 @@ venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 
-# Permanent suppressions for things outside our control. Re-evaluate any
-# entry that becomes signal rather than noise; the typed Pydantic boundaries
-# (`server/protocol.py`) and `Connection` invariants are what we rely on
-# to catch real semantic errors.
+# TODO: audit these — temporarily restored verbatim from before the lint
+# cleanup pass. Several were narrowed by the ruff cleanup and may no
+# longer be needed; the rest deserve a per-rule decision (per-site vs.
+# global) rather than a single bulk re-enable.
 
 # ─── Third-party stubs ─────────────────────────────────────────────────
 reportMissingTypeStubs = "none"      # third-party libs (timm, simplejpeg) ship no stubs
@@ -161,5 +131,3 @@ reportPrivateUsage = "none"            # using `_foo` from another module
 reportUnusedExcept = "none"            # try/except/pass shapes
 reportUnnecessaryComparison = "none"   # defensive None checks
 reportMatchNotExhaustive = "none"      # most match blocks use wildcard arms
-
-

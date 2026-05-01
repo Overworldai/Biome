@@ -15,6 +15,7 @@ control state, scene-authoring handoff fields, and the `running` /
 
 import asyncio
 import concurrent.futures
+import contextlib
 import logging
 import threading
 import time
@@ -22,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from fastapi import WebSocketDisconnect
+from pydantic import ValidationError
 from world_engine import CtrlInput
 
 from engine import devices
@@ -144,7 +146,7 @@ async def run_receiver(
             raw = await conn.websocket.receive_text()
             try:
                 parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
-            except Exception as e:
+            except (ValidationError, ValueError) as e:
                 logger.info(f"[{conn.client_host}] Ignoring invalid game-loop message: {e}")
                 continue
 
@@ -180,7 +182,7 @@ async def run_receiver(
                         try:
                             preview = await asyncio.wrap_future(fut)
                             edit_response = rpc_ok(req.req_id, preview)
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001  -- scene-edit future resolves with any worker-side exception; we map message_id-bearing ones and forward the rest verbatim
                             error_id = getattr(e, "message_id", None)
                             if error_id is not None:
                                 edit_response = rpc_err(req.req_id, error_id=MessageId(error_id))
@@ -205,7 +207,7 @@ async def run_receiver(
                         try:
                             data = await asyncio.wrap_future(fut)
                             gen_response = rpc_ok(req.req_id, data)
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001  -- generate-scene future resolves with any worker-side exception; we map message_id-bearing ones and forward the rest verbatim
                             error_id = getattr(e, "message_id", None)
                             if error_id is not None:
                                 gen_response = rpc_err(req.req_id, error_id=MessageId(error_id))
@@ -521,10 +523,10 @@ def run_generator(
             pending = None
 
             if devices.is_recoverable_device_error(device_err):
-                logger.error(f"[{conn.client_host}] Device error detected: {device_err}")
+                logger.error(f"[{conn.client_host}] Device error detected: {device_err}")  # noqa: TRY400  -- recovery path follows; recovery handler logs its own traceback if needed
                 try:
                     recovery_success = world_engine.recover_from_device_error()
-                except Exception:
+                except Exception:  # noqa: BLE001  -- recovery is itself best-effort; failure here means we treat the session as terminal
                     recovery_success = False
 
                 if recovery_success:
@@ -537,7 +539,7 @@ def run_generator(
                     logger.info(f"[{conn.client_host}] Successfully recovered from device error")
                 else:
                     conn.queue_error(message_id=MessageId.DEVICE_RECOVERY_FAILED)
-                    logger.error(f"[{conn.client_host}] Failed to recover from device error")
+                    logger.error(f"[{conn.client_host}] Failed to recover from device error")  # noqa: TRY400  -- final status; recovery handler already logged the traceback
                     conn.running = False
                     break
             else:
@@ -547,7 +549,5 @@ def run_generator(
                 break
 
     # Flush the last batch before the thread exits
-    try:
+    with contextlib.suppress(Exception):
         _flush_pending()
-    except Exception:
-        pass

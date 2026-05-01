@@ -27,8 +27,9 @@ take only what they need rather than reaching through a god object.
 """
 
 import asyncio
+import contextlib
 import os
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from huggingface_hub import model_info as hf_model_info
@@ -120,7 +121,7 @@ def get_system_monitor_ws(websocket: WebSocket) -> SystemMonitor:
 
 
 @router.get("/health")
-async def health(request: Request, startup: ServerStartup = Depends(get_startup)) -> HealthResponse:
+async def health(request: Request, startup: Annotated[ServerStartup, Depends(get_startup)]) -> HealthResponse:
     """Health check for Biome backend. Reads through to `app.state` directly
     for engine handles since they may not be populated yet during startup."""
     engines: Engines | None = getattr(request.app.state, "engines", None)
@@ -166,7 +167,7 @@ async def get_model_info(model_id: str) -> ModelInfoResponse:
         return ModelInfoResponse(id=model_id, size_bytes=None, exists=False, error="Model not found")
     except GatedRepoError:
         return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Private or gated model")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- HF client raises a wide grab-bag (HTTPError/RequestException/HfHubHTTPError); fold them all into a soft response
         logger.warning(f"model-info error for {model_id}: {e}")
         return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Could not check model")
 
@@ -179,8 +180,8 @@ async def get_model_info(model_id: str) -> ModelInfoResponse:
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    startup: ServerStartup = Depends(get_startup_ws),
-    system_monitor: SystemMonitor = Depends(get_system_monitor_ws),
+    startup: Annotated[ServerStartup, Depends(get_startup_ws)],
+    system_monitor: Annotated[SystemMonitor, Depends(get_system_monitor_ws)],
 ):
     """Per-connection lifecycle. Reads top-to-bottom as one phase per call.
 
@@ -248,7 +249,7 @@ async def websocket_endpoint(
 
     except WebSocketDisconnect:
         logger.info(f"[{client_host}] WebSocket disconnected")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  -- top-level WebSocket guard; anything past this raises out of FastAPI's route
         # Uvicorn may surface client close as ClientDisconnected instead
         # of WebSocketDisconnect — treat both as normal disconnects to
         # avoid noisy tracebacks during intentional reconnects.
@@ -256,10 +257,8 @@ async def websocket_endpoint(
             logger.info(f"[{client_host}] Client disconnected")
         else:
             logger.error(f"[{client_host}] Error: {e}", exc_info=True)
-            try:
+            with contextlib.suppress(Exception):
                 await conn.send_error(message=str(e))
-            except Exception:
-                pass
     finally:
         world_engine_for_teardown = engines.world_engine if engines is not None else None
         conn.teardown(world_engine_for_teardown, log_task, progress_task)
