@@ -4,9 +4,9 @@ The three concurrency workers that drive a WebSocket session.
 `run_receiver` (asyncio task) drains inbound messages and dispatches them
 to typed handlers. `run_sender` (asyncio task) ferries the frame queue
 out over the WebSocket. `run_generator` (dedicated thread, runs sync)
-owns the per-frame inference loop, batches GPU output for deferred
+owns the per-frame inference loop, batches device output for deferred
 JPEG encoding, drains scene-authoring futures at clean frame boundaries,
-and recovers from CUDA errors.
+and recovers from device errors.
 
 The three communicate exclusively through `Connection` — its frame queue,
 control state, scene-authoring handoff fields, and the `running` /
@@ -24,10 +24,10 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import torch
 from fastapi import WebSocketDisconnect
 from world_engine import CtrlInput
 
+from engine import devices
 from engine.keymap import BUTTON_CODES
 from engine.scene_authoring import run_generate_scene, run_scene_edit
 from server.protocol import (
@@ -101,7 +101,7 @@ def reset_engine(
     world_engine: "WorldEngineManager",
 ) -> None:
     """Restore the original seed and reset the engine session. Synchronous —
-    runs CUDA work via the executor. Called from the generator thread when
+    runs device work via the executor. Called from the generator thread when
     `reset_flag` flips, `prompt_pending` arrives, or an auto-reset triggers
     at the perceptual frame limit."""
     if world_engine.original_seed_frame is not None:
@@ -286,10 +286,10 @@ def run_generator(
 ) -> None:
     """The per-session inference loop, run on a dedicated thread.
 
-    Submits gen_frame to the cuda_executor, overlaps JPEG encoding of the
-    previous batch with the next GPU pass, drains scene-edit / generate-scene
-    futures at clean frame boundaries, applies frame pacing, and recovers
-    from CUDA errors via WorldEngineManager.recover_from_cuda_error.
+    Submits gen_frame to the device thread, overlaps JPEG encoding of the
+    previous batch with the next device pass, drains scene-edit / generate-
+    scene futures at clean frame boundaries, applies frame pacing, and
+    recovers from device errors via WorldEngineManager.recover_from_device_error.
     """
     world_engine = engines.world_engine
     pending: _PendingFlush | None = None
@@ -478,27 +478,26 @@ def run_generator(
                     else:
                         next_frame_time = max(t_infer_start, next_frame_time) + frame_interval
 
-            # Submit inference to CUDA thread (non-blocking) so we can
-            # overlap JPEG encoding of the previous batch with GPU work.
-            gpu_future = world_engine.submit_gen_frame(ctrl)
+            # Submit inference to the device thread (non-blocking) so we can
+            # overlap JPEG encoding of the previous batch with device work.
+            device_future = world_engine.submit_gen_frame(ctrl)
 
-            # Encode + send previous batch while GPU is busy
+            # Encode + send previous batch while the device is busy
             _flush_pending()
 
-            # Wait for GPU result
-            result = gpu_future.result()
+            # Wait for device result
+            result = device_future.result()
             t_infer = time.perf_counter()
 
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+            devices.synchronize()
             t_sync = time.perf_counter()
 
             gen_time = (t_sync - t0) * 1000
             temporal_compression = world_engine.temporal_compression
 
-            # Transfer result tensors to CPU numpy arrays immediately
-            # while the data is still valid (gen_frame may reuse GPU
-            # buffers on the next call).
+            # Transfer result tensors to CPU numpy arrays immediately while
+            # the data is still valid (gen_frame may reuse device buffers
+            # on the next call).
             if temporal_compression > 1:
                 cpu_frames = [world_engine.tensor_to_numpy(result[i]) for i in range(result.shape[0])]
             else:
@@ -521,18 +520,13 @@ def run_generator(
                 t_sync=t_sync,
             )
 
-        except Exception as cuda_err:
+        except Exception as device_err:
             pending = None
 
-            error_msg = str(cuda_err)
-            is_cuda_error = any(
-                keyword in error_msg.lower() for keyword in ["cuda", "cublas", "graph capture", "offset increment"]
-            )
-
-            if is_cuda_error:
-                logger.error(f"[{conn.client_host}] CUDA error detected: {cuda_err}")
+            if devices.is_recoverable_device_error(device_err):
+                logger.error(f"[{conn.client_host}] Device error detected: {device_err}")
                 try:
-                    recovery_success = world_engine.recover_from_cuda_error()
+                    recovery_success = world_engine.recover_from_device_error()
                 except Exception:
                     recovery_success = False
 
@@ -540,18 +534,18 @@ def run_generator(
                     conn.queue_send(
                         StatusMessage(
                             stage=StageId.SESSION_RESET,
-                            message="Recovered from CUDA error - engine reset",
+                            message="Recovered from device error - engine reset",
                         )
                     )
-                    logger.info(f"[{conn.client_host}] Successfully recovered from CUDA error")
+                    logger.info(f"[{conn.client_host}] Successfully recovered from device error")
                 else:
-                    conn.queue_error(message_id=MessageId.CUDA_RECOVERY_FAILED)
-                    logger.error(f"[{conn.client_host}] Failed to recover from CUDA error")
+                    conn.queue_error(message_id=MessageId.DEVICE_RECOVERY_FAILED)
+                    logger.error(f"[{conn.client_host}] Failed to recover from device error")
                     conn.running = False
                     break
             else:
-                logger.error(f"[{conn.client_host}] Generation error: {cuda_err}", exc_info=True)
-                conn.queue_error(message=str(cuda_err))
+                logger.error(f"[{conn.client_host}] Generation error: {device_err}", exc_info=True)
+                conn.queue_error(message=str(device_err))
                 conn.running = False
                 break
 

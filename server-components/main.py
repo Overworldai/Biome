@@ -25,9 +25,6 @@ from util.hf_token import apply_resolved_token
 
 apply_resolved_token()
 
-# Reduce CUDA allocator fragmentation during repeated model loads/switches.
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-
 logger.info("Basic imports done")
 
 
@@ -83,6 +80,13 @@ try:
     import torch
 
     logger.info(f"torch {torch.__version__} imported")
+
+    # Importing `devices` configures the torch allocator before any device
+    # context is initialised. All other device-specific call sites go
+    # through it too.
+    from engine import devices
+
+    logger.info(f"Device available: {devices.is_available()}")
 
     from util.system_info import SystemMonitor
 
@@ -143,7 +147,7 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
 
         logger.info("Initializing Safety Checker...")
         startup.mark_stage(StageId.STARTUP_SAFETY_CHECKER)
-        safety_checker = await asyncio.to_thread(SafetyChecker, "cuda")
+        safety_checker = await asyncio.to_thread(SafetyChecker)
         startup.mark_stage(StageId.STARTUP_SAFETY_READY)
 
         app.state.engines = Engines(

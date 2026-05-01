@@ -386,7 +386,7 @@ const en = {
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
-          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
+          deviceRecoveryFailed: 'GPU error — recovery failed. Please reconnect.'
         },
         warning: {
           missingSeedData: 'Missing seed image data',

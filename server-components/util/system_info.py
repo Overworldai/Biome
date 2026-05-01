@@ -9,30 +9,24 @@ constructing `error` push messages.
 One instance per process — constructed at startup in `main.py` and threaded
 through to consumers (no module globals). The wire-typed `SystemInfo` and
 `ErrorSnapshot` Pydantic models live in `protocol.py`; this module produces
-and consumes them directly.
+and consumes them directly. Anything device-specific routes through
+`engine.devices` so the rest of the codebase stays backend-agnostic.
 """
 
 import cpuinfo
 import psutil
-import pynvml
 import torch
 
+from engine import devices
 from server.protocol import ErrorSnapshot, SystemInfo
 from util.server_logging import logger
 
 
-def _collect_system_info_and_nvml() -> tuple[SystemInfo, object]:
-    """Query CPU / GPU / NVML once at startup. Returns the static info plus
-    the opaque NVML handle (or `None` if NVML init failed). Each subsystem
-    is wrapped so a failure in one doesn't prevent the others from
-    populating."""
+def _collect_system_info() -> tuple[SystemInfo, devices.NvmlHandle | None]:
+    """Query CPU / device / NVML once at startup. Returns the static info plus
+    the opaque NVML handle (or `None` if NVML init failed). Each subsystem is
+    wrapped so a failure in one doesn't prevent the others from populating."""
     cpu_name: str | None = None
-    gpu_name: str | None = None
-    vram_total_bytes: int | None = None
-    cuda_version: str | None = None
-    driver_version: str | None = None
-    gpu_count = 0
-    nvml_handle: object | None = None
 
     try:
         cpu_name = cpuinfo.get_cpu_info().get("brand_raw") or None
@@ -40,30 +34,25 @@ def _collect_system_info_and_nvml() -> tuple[SystemInfo, object]:
         logger.warning(f"Failed to query CPU info: {e}")
 
     try:
-        if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            gpu_name = torch.cuda.get_device_name(0) or None
-            vram_total_bytes = torch.cuda.get_device_properties(0).total_memory
-            cuda_version = torch.version.cuda
+        gpu_count = devices.device_count()
+        gpu_name = devices.device_name(0)
+        vram_total_bytes = devices.total_memory(0)
+        runtime_version = devices.runtime_version()
     except Exception as e:
-        logger.warning(f"Failed to query GPU info: {e}")
+        logger.warning(f"Failed to query device info: {e}")
+        gpu_count = 0
+        gpu_name = None
+        vram_total_bytes = None
+        runtime_version = None
 
-    try:
-        pynvml.nvmlInit()
-        nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device() if torch.cuda.is_available() else 0)
-        try:
-            raw = pynvml.nvmlSystemGetDriverVersion()
-            driver_version = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        except Exception:
-            pass
-    except Exception as e:
-        logger.warning(f"Failed to initialize NVML: {e}")
+    nvml_handle = devices.open_nvml_handle()
+    driver_version = devices.driver_version_via_nvml() if nvml_handle is not None else None
 
     info = SystemInfo(
         cpu_name=cpu_name,
         gpu_name=gpu_name,
         vram_total_bytes=vram_total_bytes,
-        cuda_version=cuda_version,
+        runtime_version=runtime_version,
         driver_version=driver_version,
         torch_version=torch.__version__,
         gpu_count=gpu_count,
@@ -79,11 +68,11 @@ def _log_system_info(info: SystemInfo) -> None:
     gpu_summary = f"{gpu_name} (x{gpu_count})" if gpu_count > 1 else gpu_name
     vram_str = f", {info.vram_total_bytes // (1024 * 1024)} MB VRAM" if info.vram_total_bytes else ""
     logger.info("System info:")
-    logger.info(f"  CPU:    {info.cpu_name or '[unknown]'}")
-    logger.info(f"  GPU:    {gpu_summary}{vram_str}")
-    logger.info(f"  CUDA:   {info.cuda_version or '[unavailable]'}")
-    logger.info(f"  Driver: {info.driver_version or '[unknown]'}")
-    logger.info(f"  Torch:  {info.torch_version}")
+    logger.info(f"  CPU:     {info.cpu_name or '[unknown]'}")
+    logger.info(f"  GPU:     {gpu_summary}{vram_str}")
+    logger.info(f"  Runtime: {info.runtime_version or '[unavailable]'}")
+    logger.info(f"  Driver:  {info.driver_version or '[unknown]'}")
+    logger.info(f"  Torch:   {info.torch_version}")
 
 
 class SystemMonitor:
@@ -96,7 +85,7 @@ class SystemMonitor:
 
     info: SystemInfo
 
-    def __init__(self, info: SystemInfo, nvml_handle: object) -> None:
+    def __init__(self, info: SystemInfo, nvml_handle: devices.NvmlHandle | None) -> None:
         self.info = info
         self._nvml_handle = nvml_handle
 
@@ -105,7 +94,7 @@ class SystemMonitor:
         """Query the host once and log the result. Call exactly once at
         process startup; the returned instance is the canonical handle for
         the rest of the process."""
-        info, nvml_handle = _collect_system_info_and_nvml()
+        info, nvml_handle = _collect_system_info()
         _log_system_info(info)
         return cls(info=info, nvml_handle=nvml_handle)
 
@@ -113,39 +102,23 @@ class SystemMonitor:
 
     def gpu_util_percent(self) -> int:
         """Current GPU utilization (0-100), or -1 if unavailable. Prefers
-        `torch.cuda.utilization()` (fast path); falls back to NVML which
-        talks to the same driver as nvidia-smi."""
-        try:
-            util = torch.cuda.utilization()
-            if util >= 0:
-                return int(util)
-        except Exception:
-            pass
+        torch's fast path; falls back to NVML which talks to the same driver
+        as nvidia-smi."""
+        u = devices.utilization_via_torch()
+        if u >= 0:
+            return u
         if self._nvml_handle is not None:
-            try:
-                return int(pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle).gpu)
-            except Exception:
-                pass
+            return devices.utilization_via_nvml(self._nvml_handle)
         return -1
 
     def vram_used_bytes(self) -> int:
         """VRAM allocated by torch on device 0, in bytes. -1 if unavailable."""
-        try:
-            if torch.cuda.is_available():
-                return torch.cuda.memory_allocated()
-        except Exception:
-            pass
-        return -1
+        return devices.memory_allocated()
 
     def vram_reserved_bytes(self) -> int:
         """VRAM held by torch's allocator (allocated + cached), in bytes.
         -1 if unavailable."""
-        try:
-            if torch.cuda.is_available():
-                return torch.cuda.memory_reserved()
-        except Exception:
-            pass
-        return -1
+        return devices.memory_reserved()
 
     # ─── Error snapshot ──────────────────────────────────────────────
 

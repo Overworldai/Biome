@@ -40,7 +40,7 @@ export type ServerSystemInfo = {
   gpu_name?: string | null
   gpu_count?: number
   vram_total_bytes?: number | null
-  cuda_version?: string | null
+  runtime_version?: string | null
   driver_version?: string | null
   torch_version?: string
 }

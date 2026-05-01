@@ -24,6 +24,8 @@ try:
 except ImportError:
     simplejpeg = None
 
+from engine import devices
+from engine.devices import WORLD_ENGINE_DEVICE
 from server.protocol import StageId
 
 logger = logging.getLogger(__name__)
@@ -34,14 +36,13 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_N_FRAMES = 4096
-DEVICE = "cuda"
 JPEG_QUALITY = 85
 DEFAULT_INFERENCE_FPS = 60
 
 
 class QuantUnsupportedError(RuntimeError):
     """Warmup detected that the active quantization mode is unsupported on
-    this GPU (raised on `compute capability` / `scaled_mm` torch errors).
+    this device (raised on `compute capability` / `scaled_mm` torch errors).
     Carries no payload — callers map it to `MessageId.QUANT_UNSUPPORTED_GPU`
     with the engine's `quant` field as a param."""
 
@@ -134,9 +135,10 @@ class WorldEngineManager:
         self._progress_loop = None
         # Prevent concurrent model loads from overlapping across websocket sessions.
         self._model_load_lock = asyncio.Lock()
-        # Single-threaded executor for CUDA operations to maintain thread-local storage
-        # This is critical for CUDA graphs which must run in the same thread they were compiled in
-        self._cuda_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cuda-thread")
+        # Single-threaded executor for device operations to maintain thread-local
+        # storage — critical for compiled graphs that must run on the same
+        # thread they were compiled in.
+        self._device_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-thread")
 
     @property
     def is_loaded(self) -> bool:
@@ -177,7 +179,7 @@ class WorldEngineManager:
         self._progress_loop = loop
 
     def _report_progress(self, stage: StageId):
-        """Report progress from any thread (including CUDA thread)."""
+        """Report progress from any thread (including the device thread)."""
         cb = self._progress_callback
         loop = self._progress_loop
         if cb is None:
@@ -187,59 +189,59 @@ class WorldEngineManager:
         else:
             cb(stage)
 
-    def _log_cuda_memory(self, stage: str):
-        """Log CUDA memory usage for model-switch diagnostics."""
-        if not torch.cuda.is_available():
+    def _log_device_memory(self, stage: str):
+        """Log device memory usage for model-switch diagnostics."""
+        if not devices.is_available():
             return
         try:
-            allocated = torch.cuda.memory_allocated() / (1024**3)
-            reserved = torch.cuda.memory_reserved() / (1024**3)
-            logger.info(f"[CUDA] {stage}: allocated={allocated:.2f} GiB reserved={reserved:.2f} GiB")
+            allocated = devices.memory_allocated() / (1024**3)
+            reserved = devices.memory_reserved() / (1024**3)
+            logger.info(f"[DEVICE] {stage}: allocated={allocated:.2f} GiB reserved={reserved:.2f} GiB")
         except Exception:
             # Memory stats are best-effort diagnostics only.
             pass
 
-    async def _run_on_cuda_thread(self, fn):
-        """Run callable on the dedicated CUDA thread."""
+    async def _run_on_device_thread(self, fn):
+        """Run callable on the dedicated device thread."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self._cuda_executor, fn)
+        return await loop.run_in_executor(self._device_executor, fn)
 
-    def _free_cuda_memory_sync(self):
-        """Best-effort cleanup of CUDA allocations and compiled graph caches."""
+    def _free_device_memory_sync(self):
+        """Best-effort cleanup of device allocations and compiled graph caches."""
         gc.collect()
-        if not torch.cuda.is_available():
+        if not devices.is_available():
             return
 
         try:
-            torch.cuda.synchronize()
+            devices.synchronize()
         except Exception:
             pass
 
         try:
             # Clear compiled function/graph caches that can retain private pools.
-            torch._dynamo.reset()
+            devices.reset_compiled_graphs()
         except Exception:
             pass
 
         try:
-            torch.cuda.empty_cache()
+            devices.empty_cache()
         except Exception:
             pass
 
         try:
-            torch.cuda.ipc_collect()
+            devices.ipc_collect()
         except Exception:
             pass
 
     def _unload_engine_sync(self):
-        """Drop current engine/tensors and aggressively free CUDA memory.
+        """Drop current engine/tensors and aggressively free device memory.
         Resets model_config to None so accidental access on the unloaded
         manager raises rather than returning stale per-model defaults."""
         self._engine = None
         self.model_config = None
         self.seed_frame = None
         self.engine_warmed_up = False
-        self._free_cuda_memory_sync()
+        self._free_device_memory_sync()
 
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor | None:
         """Synchronous helper to load a seed frame from a file path."""
@@ -252,7 +254,7 @@ class WorldEngineManager:
                 mode="bilinear",
                 align_corners=False,
             )[0]
-            frame = frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
+            frame = frame.to(dtype=torch.uint8, device=WORLD_ENGINE_DEVICE).permute(1, 2, 0).contiguous()
             if self.is_multiframe:
                 frame = frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
             return frame
@@ -262,7 +264,7 @@ class WorldEngineManager:
 
     async def load_seed_from_file(self, file_path: str) -> torch.Tensor | None:
         """Load a seed frame from a file path (async wrapper)."""
-        return await self._run_on_cuda_thread(lambda: self._load_seed_from_file_sync(file_path))
+        return await self._run_on_device_thread(lambda: self._load_seed_from_file_sync(file_path))
 
     def _load_seed_from_base64_sync(self, base64_data: str) -> torch.Tensor | None:
         """Synchronous helper to load a seed frame from base64 encoded data."""
@@ -276,7 +278,7 @@ class WorldEngineManager:
                 mode="bilinear",
                 align_corners=False,
             )[0]
-            frame = frame.to(dtype=torch.uint8, device=DEVICE).permute(1, 2, 0).contiguous()
+            frame = frame.to(dtype=torch.uint8, device=WORLD_ENGINE_DEVICE).permute(1, 2, 0).contiguous()
             if self.is_multiframe:
                 frame = frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
             return frame
@@ -286,7 +288,7 @@ class WorldEngineManager:
 
     async def load_seed_from_base64(self, base64_data: str) -> torch.Tensor | None:
         """Load a seed frame from base64 encoded data (async wrapper)."""
-        return await self._run_on_cuda_thread(lambda: self._load_seed_from_base64_sync(base64_data))
+        return await self._run_on_device_thread(lambda: self._load_seed_from_base64_sync(base64_data))
 
     async def load_engine(self, model_uri: str, quant: str | None = None):
         """Initialize or switch the WorldEngine model.
@@ -312,15 +314,15 @@ class WorldEngineManager:
                     logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
                 if not quant_unchanged:
                     logger.info(f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}")
-                self._log_cuda_memory("before unload")
-                await self._run_on_cuda_thread(self._unload_engine_sync)
-                self._log_cuda_memory("after unload")
+                self._log_device_memory("before unload")
+                await self._run_on_device_thread(self._unload_engine_sync)
+                self._log_device_memory("after unload")
 
             # Always run a pre-load cleanup pass. This helps release residual allocations
             # from previous failed loads and reduces allocator fragmentation.
-            self._log_cuda_memory("before pre-load cleanup")
-            await self._run_on_cuda_thread(self._free_cuda_memory_sync)
-            self._log_cuda_memory("after pre-load cleanup")
+            self._log_device_memory("before pre-load cleanup")
+            await self._run_on_device_thread(self._free_device_memory_sync)
+            self._log_device_memory("after pre-load cleanup")
 
             logger.info("=" * 60)
             logger.info("BIOME ENGINE STARTUP")
@@ -328,7 +330,7 @@ class WorldEngineManager:
             self._report_progress(StageId.SESSION_LOADING_MODEL)
             logger.info(f"[1/3] Loading model: {requested_model}")
             logger.info(f"      Quantization: {requested_quant}")
-            logger.info(f"      Device: {DEVICE}")
+            logger.info(f"      Device: {WORLD_ENGINE_DEVICE}")
 
             model_start = time.perf_counter()
             dtype_attempts = [torch.bfloat16, torch.float16]
@@ -343,26 +345,26 @@ class WorldEngineManager:
                     def _create_engine():
                         return WorldEngine(
                             requested_model,
-                            device=DEVICE,
+                            device=WORLD_ENGINE_DEVICE,
                             quant=requested_quant,
                             dtype=dtype,
                         )
 
-                    new_engine = await self._run_on_cuda_thread(_create_engine)
+                    new_engine = await self._run_on_device_thread(_create_engine)
                     selected_dtype = dtype
                     break
-                except torch.OutOfMemoryError as e:
+                except devices.OutOfMemoryError as e:
                     last_error = e
                     logger.warning(
                         f"[1/3] OOM while loading {requested_model} with dtype={dtype}; retrying with lower memory settings"
                     )
-                    await self._run_on_cuda_thread(self._unload_engine_sync)
-                    self._log_cuda_memory("after OOM cleanup")
+                    await self._run_on_device_thread(self._unload_engine_sync)
+                    self._log_device_memory("after OOM cleanup")
                 except Exception as e:
                     last_error = e
                     # Clear partially-allocated model state after failed initialization.
-                    await self._run_on_cuda_thread(self._unload_engine_sync)
-                    self._log_cuda_memory("after failed load cleanup")
+                    await self._run_on_device_thread(self._unload_engine_sync)
+                    self._log_device_memory("after failed load cleanup")
                     break
 
             if new_engine is None:
@@ -372,7 +374,7 @@ class WorldEngineManager:
             self._engine = new_engine
             logger.info(f"[1/3] Model loaded in {time.perf_counter() - model_start:.2f}s")
             logger.info(f"[1/3] Loaded with dtype={selected_dtype}")
-            self._log_cuda_memory("after load")
+            self._log_device_memory("after load")
 
             # Resolve typed runtime config from per-model defaults overridden
             # by the engine's model_cfg attributes.
@@ -438,24 +440,24 @@ class WorldEngineManager:
             return frame.unsqueeze(0).expand(self.temporal_compression, -1, -1, -1).contiguous()
         return frame
 
-    def submit_to_cuda_thread(self, fn):
-        """Submit a callable to the dedicated CUDA thread; returns the Future
+    def submit_to_device_thread(self, fn):
+        """Submit a callable to the dedicated device thread; returns the Future
         so callers can `.result()` (block) or `asyncio.wrap_future(...)` (await).
         Use the more specific helpers (`submit_gen_frame`, `set_seed_and_reset`,
         `append_frame_repeatedly`) where they fit; this is the escape hatch."""
-        return self._cuda_executor.submit(fn)
+        return self._device_executor.submit(fn)
 
     def submit_gen_frame(self, ctrl):
-        """Submit a `gen_frame` call to the CUDA thread; returns the Future so
-        the generator loop can overlap GPU work with CPU encoding of the
+        """Submit a `gen_frame` call to the device thread; returns the Future
+        so the generator loop can overlap device work with CPU encoding of the
         previous batch."""
-        return self._cuda_executor.submit(lambda c=ctrl: self._engine.gen_frame(ctrl=c))
+        return self._device_executor.submit(lambda c=ctrl: self._engine.gen_frame(ctrl=c))
 
     def set_seed_and_reset(self, frame: torch.Tensor, *, set_as_original: bool = False) -> None:
         """Replace the seed and reset the engine to use it. The frame is
         auto-expanded to full temporal_compression for multiframe models, so
         callers can pass a single 3-D HxWxC tensor regardless of model shape.
-        Synchronous — runs on the CUDA thread.
+        Synchronous — runs on the device thread.
 
         `set_as_original=True` also overwrites `original_seed_frame` so a
         subsequent reset returns to this frame (used by generate_scene, where
@@ -471,12 +473,12 @@ class WorldEngineManager:
             self._engine.reset()
             self._engine.append_frame(frame)
 
-        self._cuda_executor.submit(_reset_with_frame).result()
+        self._device_executor.submit(_reset_with_frame).result()
 
     def append_frame_repeatedly(self, frame: torch.Tensor, count: int) -> None:
         """Append `frame` to the engine `count` times (used to strengthen an
         edit in the KV cache without resetting). Frame is auto-expanded for
-        multiframe models. Synchronous — runs on the CUDA thread."""
+        multiframe models. Synchronous — runs on the device thread."""
         if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         frame = self._maybe_expand_to_multiframe(frame)
@@ -485,10 +487,10 @@ class WorldEngineManager:
             for _ in range(count):
                 self._engine.append_frame(frame)
 
-        self._cuda_executor.submit(_append).result()
+        self._device_executor.submit(_append).result()
 
     def reset_state(self) -> None:
-        """Reset engine state. Synchronous — submits work to the cuda_executor
+        """Reset engine state. Synchronous — submits work to the device thread
         and waits. Safe to call from the generator thread (the only caller).
         Asyncio callers wanting to yield should `await asyncio.to_thread(...)`."""
         if self._engine is None:
@@ -498,17 +500,17 @@ class WorldEngineManager:
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
-        self._cuda_executor.submit(self._engine.reset).result()
+        self._device_executor.submit(self._engine.reset).result()
         logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.append_frame()...")
-        self._cuda_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
+        self._device_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
     def init_session(self) -> None:
         """Reset engine, load seed, render initial frame and report progress.
-        Synchronous — runs on cuda_executor via submit().result(). Asyncio
+        Synchronous — runs on the device thread via submit().result(). Asyncio
         callers should use `await asyncio.to_thread(world_engine.init_session)`."""
         if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
@@ -518,49 +520,49 @@ class WorldEngineManager:
         self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
-        self._cuda_executor.submit(self._engine.reset).result()
+        self._device_executor.submit(self._engine.reset).result()
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
-        self._cuda_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
+        self._device_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_FRAME)
 
-    def recover_from_cuda_error(self) -> bool:
-        """Recover from a CUDA error by clearing caches, resetting dynamo,
-        and re-seeding the engine. Synchronous — called from the generator
-        thread when `gen_frame` raises a CUDA-flavoured exception. The whole
-        recovery runs on the cuda_executor thread so the generator thread
+    def recover_from_device_error(self) -> bool:
+        """Recover from a device error by clearing caches, resetting compiled
+        graphs, and re-seeding the engine. Synchronous — called from the
+        generator thread when `gen_frame` raises a device-flavoured exception.
+        The whole recovery runs on the device thread so the generator thread
         blocks for the duration but doesn't bounce through the asyncio loop."""
-        logger.warning("[CUDA RECOVERY] Attempting to recover from CUDA error...")
+        logger.warning("[DEVICE RECOVERY] Attempting to recover from device error...")
 
-        def clear_cuda():
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
-            # Clear compiled functions cache (this clears corrupted CUDA graphs)
-            torch._dynamo.reset()
-            logger.info("[CUDA RECOVERY] CUDA caches cleared and dynamo reset")
+        def clear_device():
+            if devices.is_available():
+                devices.synchronize()
+                devices.empty_cache()
+            # Clear compiled functions cache (this clears corrupted graphs).
+            devices.reset_compiled_graphs()
+            logger.info("[DEVICE RECOVERY] Device caches cleared and compiled graphs reset")
 
         try:
-            self._cuda_executor.submit(clear_cuda).result()
+            self._device_executor.submit(clear_device).result()
             self.reset_state()
-            logger.info("[CUDA RECOVERY] Recovery complete - engine ready")
+            logger.info("[DEVICE RECOVERY] Recovery complete - engine ready")
             return True
         except Exception as e:
-            logger.error(f"[CUDA RECOVERY] Failed to recover: {e}", exc_info=True)
+            logger.error(f"[DEVICE RECOVERY] Failed to recover: {e}", exc_info=True)
             return False
 
     async def warmup(self):
-        """Perform initial warmup to compile CUDA graphs.
+        """Perform initial warmup to compile device-side graphs.
 
         Raises `QuantUnsupportedError` if the active quantization mode is
-        unsupported on this GPU (detected via the torch error's text); callers
-        translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`. Other
-        runtime errors propagate as-is."""
+        unsupported on this device (detected via the torch error's text);
+        callers translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`.
+        Other runtime errors propagate as-is."""
         if self._engine is None:
             raise RuntimeError("WorldEngine is not loaded")
         if self.seed_frame is None:
@@ -582,7 +584,7 @@ class WorldEngineManager:
             logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
-            logger.info("[5/5] Step 4: Generating first frame (compiling CUDA graphs)...")
+            logger.info("[5/5] Step 4: Generating first frame (compiling device graphs)...")
             gen_start = time.perf_counter()
             _ = self._engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
             logger.info(f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s")
@@ -590,15 +592,14 @@ class WorldEngineManager:
             return time.perf_counter() - warmup_start
 
         logger.info("=" * 60)
-        logger.info("[5/5] WARMUP - First client connected, initializing CUDA graphs...")
+        logger.info("[5/5] WARMUP - First client connected, compiling device graphs...")
         logger.info("=" * 60)
 
         try:
-            warmup_time = await self._run_on_cuda_thread(do_warmup)
+            warmup_time = await self._run_on_device_thread(do_warmup)
         except RuntimeError as e:
-            err_str = str(e)
-            if "compute capability" in err_str or "scaled_mm" in err_str:
-                logger.error(f"Quantization mode unsupported on this GPU: {err_str}")
+            if devices.is_quant_unsupported_error(e):
+                logger.error(f"Quantization mode unsupported on this device: {e}")
                 raise QuantUnsupportedError() from e
             raise
 

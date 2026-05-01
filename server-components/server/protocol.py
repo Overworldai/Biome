@@ -67,7 +67,7 @@ class StageId(StrEnum):
     SESSION_INIT_SEED = "session.init.seed"
     SESSION_INIT_FRAME = "session.init.frame"
 
-    SESSION_RESET = "session.reset"  # CUDA-error recovery
+    SESSION_RESET = "session.reset"  # device-error recovery
 
     SESSION_READY = "session.ready"
 
@@ -90,7 +90,7 @@ class MessageId(StrEnum):
     SCENE_AUTHORING_ALREADY_IN_PROGRESS = "app.server.error.sceneAuthoringAlreadyInProgress"
     SCENE_EDIT_SAFETY_REJECTED = "app.server.error.sceneEditSafetyRejected"
     GENERATE_SCENE_SAFETY_REJECTED = "app.server.error.generateSceneSafetyRejected"
-    CUDA_RECOVERY_FAILED = "app.server.error.cudaRecoveryFailed"
+    DEVICE_RECOVERY_FAILED = "app.server.error.deviceRecoveryFailed"
 
     # ── Warnings ──────────────────────────────────────────────────────
     SEED_MISSING_DATA = "app.server.warning.missingSeedData"
@@ -117,7 +117,7 @@ class SystemInfo(BaseModel):
     cpu_name: str | None = None
     gpu_name: str | None = None
     vram_total_bytes: int | None = None
-    cuda_version: str | None = None
+    runtime_version: str | None = None
     driver_version: str | None = None
     torch_version: str
     gpu_count: int = 0
@@ -271,7 +271,7 @@ class SystemInfoMessage(BaseModel):
     cpu_name: str | None = None
     gpu_name: str | None = None
     vram_total_bytes: int | None = None
-    cuda_version: str | None = None
+    runtime_version: str | None = None
     driver_version: str | None = None
     torch_version: str
     gpu_count: int = 0

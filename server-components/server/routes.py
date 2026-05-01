@@ -213,7 +213,7 @@ async def websocket_endpoint(
         world_engine = engines.world_engine
 
         # Phase 2: hardware identity goes out immediately so the client has
-        # it even if init crashes (e.g. CUDA graph compilation failure).
+        # it even if init crashes (e.g. device-graph compilation failure).
         # Reset the seed so this session must perform an explicit handshake.
         await conn.send_message(SystemInfoMessage(**system_monitor.info.model_dump()))
         world_engine.seed_frame = None

@@ -32,6 +32,8 @@ from timm.data.transforms_factory import create_transform
 from timm.models import get_pretrained_cfg
 from transformers import AutoModelForImageClassification
 
+from engine.devices import SAFETY_DEVICE
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,25 +112,23 @@ class SafetyChecker:
     non-caching path used for images without a stable input hash (e.g. freshly
     generated scenes)."""
 
-    def __init__(self, device: str = "cuda", cache_path: Path | None = None) -> None:
+    def __init__(self, cache_path: Path | None = None) -> None:
         self._lock = threading.Lock()  # serialises model access
         self._cache_lock = threading.Lock()  # serialises cache writes
         self._cache_path = cache_path or _DEFAULT_CACHE_FILE
         self._cache: dict[str, SafetyCacheEntry] = self._load_cache_from_disk()
-        self._device = device
-        logger.info(f"Loading NSFW detection model on {device} ({len(self._cache)} cache entries)...")
+        self._device = SAFETY_DEVICE
+        logger.info(f"Loading NSFW detection model on {SAFETY_DEVICE} ({len(self._cache)} cache entries)...")
 
-        # Use float32 for CPU (better compatibility), bfloat16 for GPU
-        # (better performance).
-        dtype = torch.float32 if device == "cpu" else torch.bfloat16
+        # Use bfloat16 — only the GPU backend is supported.
         self.model = AutoModelForImageClassification.from_pretrained(
-            "Freepik/nsfw_image_detector", torch_dtype=dtype
-        ).to(device)
+            "Freepik/nsfw_image_detector", torch_dtype=torch.bfloat16
+        ).to(SAFETY_DEVICE)
 
         cfg = get_pretrained_cfg("eva02_base_patch14_448.mim_in22k_ft_in22k_in1k")
         self.processor = create_transform(**resolve_data_config(cfg.__dict__))
 
-        logger.info(f"NSFW detection model loaded on {device}")
+        logger.info(f"NSFW detection model loaded on {SAFETY_DEVICE}")
 
     # ─── Cache lifecycle ──────────────────────────────────────────────
 

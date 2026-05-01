@@ -373,7 +373,7 @@ const zh = {
           sceneAuthoringAlreadyInProgress: '场景创作已在进行中',
           contentFilterLoadFailed: '内容过滤器加载失败',
           quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
-          cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
+          deviceRecoveryFailed: 'GPU 错误 - 恢复失败。请重新连接。'
         },
         warning: {
           missingSeedData: '缺少种子图片数据',

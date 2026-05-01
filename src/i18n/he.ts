@@ -379,7 +379,7 @@ const he = {
           sceneAuthoringAlreadyInProgress: 'יצירת סצנה כבר מתבצעת',
           contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
           quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
-          cudaRecoveryFailed: 'שגיאת CUDA — השחזור נכשל. נא להתחבר מחדש.'
+          deviceRecoveryFailed: 'שגיאת GPU — השחזור נכשל. נא להתחבר מחדש.'
         },
         warning: {
           missingSeedData: 'חסרים נתוני seed',

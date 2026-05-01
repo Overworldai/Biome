@@ -11,10 +11,10 @@ Two flows ride on top:
 Both go through the same modular building blocks: a VLM call to write the
 Klein prompt, a Klein run, a resize-and-tensorise, and (for the orchestration
 free-functions) a safety check + a swap into the world engine. Nothing here
-reaches into `WorldEngineManager.engine` or `._cuda_executor` — those are
+reaches into `WorldEngineManager.engine` or `._device_executor` — those are
 private; we go through the public API on the manager (`set_seed_and_reset`,
-`append_frame_repeatedly`, `submit_to_cuda_thread`, `tensor_to_numpy`,
-`numpy_to_jpeg`).
+`append_frame_repeatedly`, `submit_to_device_thread`, `tensor_to_numpy`,
+`numpy_to_jpeg`). Device placement goes through `engine.devices.SCENE_AUTHORING_DEVICE`.
 """
 
 import asyncio
@@ -33,6 +33,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from engine import devices
+from engine.devices import SCENE_AUTHORING_DEVICE
 from server.protocol import GenerateSceneResponseData, SceneEditResponseData
 
 if TYPE_CHECKING:
@@ -342,11 +344,12 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
 class SceneAuthoringManager:
     """FLUX.2 Klein (image editor) + Qwen3.5 (VLM that writes Klein prompts).
 
-    Goes through `WorldEngineManager.submit_to_cuda_thread` for model loading
-    so all CUDA setup serialises behind in-flight world-engine work — no
-    direct cuda_executor access. The flows themselves (`_inpaint`,
-    `_generate`) run on whatever thread calls them; the diffusers pipeline
-    isn't CUDA-graph-bound, so it doesn't need the cuda thread."""
+    Goes through `WorldEngineManager.submit_to_device_thread` for model
+    loading so all device setup serialises behind in-flight world-engine
+    work — no direct device-executor access. The flows themselves
+    (`_inpaint`, `_generate`) run on whatever thread calls them; the
+    diffusers pipeline isn't bound to a compiled-graph thread, so it
+    doesn't need the device thread."""
 
     def __init__(self, world_engine: "WorldEngineManager") -> None:
         self._world_engine = world_engine
@@ -375,35 +378,34 @@ class SceneAuthoringManager:
         return False
 
     async def warmup(self) -> None:
-        """Load both the VLM and the editing pipeline onto GPU. Each step runs
-        on the world engine's CUDA thread so it serialises behind any
-        in-flight world-engine ops. The heavy lib imports (diffusers,
+        """Load both the VLM and the editing pipeline onto the device. Each
+        step runs on the world engine's device thread so it serialises behind
+        any in-flight world-engine ops. The heavy lib imports (diffusers,
         transformers, llama_cpp) are funneled through
         `_import_scene_authoring_libs` so it's obvious what gets pulled in."""
-        libs = await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(_import_scene_authoring_libs))
+        libs = await asyncio.wrap_future(self._world_engine.submit_to_device_thread(_import_scene_authoring_libs))
 
         logger.info(f"[SCENE_EDIT] Loading VLM {VLM_GGUF_REPO}/{VLM_GGUF_FILE}...")
         t0 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(lambda: self._load_vlm_sync(libs)))
+        await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_vlm_sync(libs)))
         logger.info(f"[SCENE_EDIT] VLM loaded in {time.perf_counter() - t0:.1f}s")
 
         logger.info(f"[SCENE_EDIT] Loading editing model {EDIT_MODEL_ID}...")
         t1 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_cuda_thread(lambda: self._load_edit_sync(libs)))
+        await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_edit_sync(libs)))
         logger.info(f"[SCENE_EDIT] Editing model loaded in {time.perf_counter() - t1:.1f}s")
 
         self._loaded = True
 
     def unload(self) -> None:
-        """Free GPU memory used by both models."""
+        """Free device memory used by both models."""
         if self.vlm is not None:
             self.vlm.close()
         self.pipeline = None
         self.vlm = None
         self._loaded = False
         gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        devices.empty_cache()
 
     def _load_vlm_sync(self, libs: _SceneAuthoringLibs) -> None:
         """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
@@ -450,7 +452,7 @@ class SceneAuthoringManager:
             transformer=transformer,
             text_encoder=text_encoder,
             torch_dtype=torch.bfloat16,
-        ).to("cuda")
+        ).to(SCENE_AUTHORING_DEVICE)
         pipe.set_progress_bar_config(disable=True)
         self.pipeline = pipe
 
@@ -582,10 +584,10 @@ class SceneAuthoringManager:
     @staticmethod
     def _to_seed_tensor(image: Image.Image, seed_target_size: tuple[int, int]) -> torch.Tensor:
         """Resize a PIL image to the world engine's seed target size and
-        convert to a uint8 CUDA tensor (HxWx3) ready for the engine."""
+        convert to a uint8 device tensor (HxWx3) ready for the engine."""
         h, w = seed_target_size
         image = image.resize((w, h), Image.LANCZOS)
-        return torch.from_numpy(np.array(image)).to(dtype=torch.uint8, device="cuda").contiguous()
+        return torch.from_numpy(np.array(image)).to(dtype=torch.uint8, device=SCENE_AUTHORING_DEVICE).contiguous()
 
     # ─── Flows: edit + generate ──────────────────────────────────
 
@@ -597,7 +599,7 @@ class SceneAuthoringManager:
     ) -> tuple[torch.Tensor, str]:
         """Edit a reference frame: VLM writes the prompt, Klein generates,
         result is resized to the engine's seed target size. Returns the
-        edited frame as a uint8 CUDA tensor + the VLM-authored prompt."""
+        edited frame as a uint8 device tensor + the VLM-authored prompt."""
         h_orig, w_orig = frame_numpy.shape[:2]
         frame_pil = Image.fromarray(frame_numpy)
 
@@ -617,7 +619,7 @@ class SceneAuthoringManager:
         """Generate a fresh scene: VLM writes the prompt (no reference image),
         Klein generates over a blank canvas, result is resized to the
         engine's seed target size. Returns the generated frame as a uint8
-        CUDA tensor + the VLM-authored prompt."""
+        device tensor + the VLM-authored prompt."""
         h, w = seed_target_size
         target_h, target_w = self._aligned_size(h, w)
         blank = Image.new("RGB", (target_w, target_h), (255, 255, 255))

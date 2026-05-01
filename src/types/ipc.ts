@@ -86,7 +86,7 @@ export type DiagnosticsClient = {
   cpu_cores: number
   /** Rendering GPU device name from Chromium (e.g. "NVIDIA GeForce RTX 5090").
    *  This is the GPU used for compositing the Electron window — it may differ
-   *  from the CUDA GPU in multi-GPU setups.  null if unavailable. */
+   *  from the inference GPU in multi-GPU setups.  null if unavailable. */
   gpu: string | null
   /** Total physical RAM in bytes. */
   ram_total_bytes: number
@@ -97,28 +97,30 @@ export type DiagnosticsClient = {
   uptime_seconds: number
   /** Chromium GPU compositing feature flags (e.g. webgl, vulkan, rasterization).
    *  Indicates whether the Electron renderer is using hardware acceleration;
-   *  software fallback here can cause UI rendering issues unrelated to CUDA. */
+   *  software fallback here can cause UI rendering issues unrelated to the
+   *  inference path. */
   gpu_compositing: Record<string, string>
 }
 
-/** The machine running the World Engine server (Python / CUDA).
- *  Same physical machine as the client in standalone mode; a remote host
- *  in server mode.  null in the payload if the server was never reached
- *  (e.g. engine install failure, server didn't start). */
+/** The machine running the World Engine server.  Same physical machine as
+ *  the client in standalone mode; a remote host in server mode.  null in
+ *  the payload if the server was never reached (e.g. engine install
+ *  failure, server didn't start). */
 export type DiagnosticsServer = {
   /** CPU model string reported by py-cpuinfo on the server host. */
   cpu: string | null
-  /** CUDA GPU device name (e.g. "NVIDIA GeForce RTX 5090"). */
+  /** Inference GPU device name (e.g. "NVIDIA GeForce RTX 5090"). */
   gpu: string | null
-  /** Number of CUDA-visible GPU devices.  0 if unknown (server never reached). */
+  /** Number of GPU devices visible to the inference backend.  0 if
+   *  unknown (server never reached). */
   gpu_count: number
   /** Total VRAM on device 0 in bytes. */
   vram_total_bytes: number | null
-  /** CUDA toolkit version (e.g. "12.8"). */
-  cuda: string | null
-  /** NVIDIA driver version (e.g. "580.142"). */
+  /** Backend runtime version (e.g. "12.8" for the toolkit on NVIDIA). */
+  runtime: string | null
+  /** GPU driver version (e.g. "580.142" on NVIDIA). */
   driver: string | null
-  /** PyTorch version including CUDA suffix (e.g. "2.10.0+cu128"). */
+  /** PyTorch version (e.g. "2.10.0+cu128"). */
   torch: string | null
 }
 

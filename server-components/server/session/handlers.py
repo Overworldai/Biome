@@ -312,8 +312,8 @@ async def prepare_session(
             return False
 
         # Bring the scene-authoring model state in line with what this session
-        # needs. Loading happens BEFORE WorldEngine warmup so the CUDA graphs
-        # see the model's memory already allocated.
+        # needs. Loading happens BEFORE WorldEngine warmup so the compiled
+        # device graphs see the model's memory already allocated.
         try:
             loaded = await scene_authoring.configure_for_session(conn.scene_authoring_requested)
         except Exception as e:

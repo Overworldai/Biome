@@ -300,7 +300,7 @@ class Connection:
     # ─── Lifecycle helpers (asyncio thread; awaited) ───────────────
     async def run_progress_drain(self) -> None:
         """Forward `progress_queue` entries (enqueued by the engine's
-        sync progress_callback from the CUDA thread) onto the websocket.
+        sync progress_callback from the device thread) onto the websocket.
         Run as an asyncio task; cancel to stop."""
         try:
             while True:
