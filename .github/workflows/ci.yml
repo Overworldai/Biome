@@ -7,7 +7,12 @@ on:
     branches: ['**']
 
 jobs:
-  lint:
+  # ──────────────────────────────────────────────────────────────────
+  # Frontend: Electron / renderer / main process (TypeScript + React).
+  # Source under `src/`, `electron/`, top-level config files.
+  # ──────────────────────────────────────────────────────────────────
+  lint-frontend:
+    name: Lint frontend (Prettier + tsc)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +27,45 @@ jobs:
 
       - name: Run lint checks
         run: npm run lint
+
+  # ──────────────────────────────────────────────────────────────────
+  # Backend: Python WorldEngine server under `server-components/`.
+  # Three checks, matching the local trio in CONTRIBUTING.md:
+  #   uvx ruff check .          # lint
+  #   uvx ruff format --check . # formatter audit (no rewrites in CI)
+  #   uvx basedpyright .        # strict type-check
+  # basedpyright needs the project venv to resolve torch / world_engine
+  # / etc., so we run `uv sync` first. The lockfile is intentionally
+  # untracked, so the cache is keyed on `pyproject.toml`; uv resolves
+  # fresh on each pyproject change but cached wheel downloads stay warm
+  # in between.
+  # ──────────────────────────────────────────────────────────────────
+  lint-backend:
+    name: Lint backend (ruff + basedpyright)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: server-components
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: server-components/pyproject.toml
+
+      - name: Run ruff lint
+        run: uvx ruff check .
+
+      - name: Run ruff format check
+        run: uvx ruff format --check .
+
+      - name: Sync project dependencies
+        run: uv sync
+
+      - name: Run basedpyright
+        run: uvx basedpyright .
 
   build:
     strategy:

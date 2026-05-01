@@ -8,6 +8,7 @@ dependencies = [
   "torchvision==0.25.0",
   "pillow==12.2.0",
   "fastapi==0.135.3",
+  "pydantic==2.13.1",
   "uvicorn==0.44.0",
   "websockets==16.0",
   "hf-xet==1.4.3",
@@ -49,3 +50,44 @@ llama-cpp-python = [
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+  "F",    # pyflakes
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "I",    # isort
+  "N",    # pep8-naming
+  "UP",   # pyupgrade
+  "B",    # flake8-bugbear
+  "A",    # flake8-builtins
+  "C4",   # flake8-comprehensions
+  "SIM",  # flake8-simplify
+  "RET",  # flake8-return
+  "PIE",  # flake8-pie
+  "TC",   # flake8-type-checking
+  "ICN",  # flake8-import-conventions
+  "ARG",  # flake8-unused-arguments
+  "FBT",  # flake8-boolean-trap (Rust-style: keyword-only bools)
+  "BLE",  # flake8-blind-except
+  "DTZ",  # flake8-datetimez
+  "ASYNC",# flake8-async
+  "TRY",  # tryceratops (exception handling patterns)
+  "RUF",  # ruff-specific
+  "PLE",  # pylint errors
+  "PLW",  # pylint warnings
+  "PERF", # perflint
+]
+ignore = []
+
+[tool.basedpyright]
+include = ["."]
+exclude = [".venv", "__pycache__", "build", "dist"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "strict"

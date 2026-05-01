@@ -386,7 +386,7 @@ const en = {
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
-          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
+          deviceRecoveryFailed: 'GPU error — recovery failed. Please reconnect.'
         },
         warning: {
           missingSeedData: 'Missing seed image data',
@@ -422,7 +422,6 @@ const en = {
       session: {
         waiting_for_seed: 'Preparing scene...',
         loading_model: {
-          import: 'Importing model framework...',
           load: 'Loading model...',
           instantiate: 'Loading model into memory...',
           done: 'Model loaded!'

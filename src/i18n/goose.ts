@@ -387,7 +387,7 @@ const goose = {
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
-          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
+          deviceRecoveryFailed: 'Goose-honking GPU error — recovery failed. Please reconnect.'
         },
         warning: {
           missingSeedData: 'Missing seed image data',
@@ -423,7 +423,6 @@ const goose = {
       session: {
         waiting_for_seed: 'Choosing a pond...',
         loading_model: {
-          import: 'Importing model framework...',
           load: 'Loading model...',
           instantiate: 'Loading model into memory...',
           done: 'The goose has landed!'

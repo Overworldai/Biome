@@ -373,7 +373,7 @@ const zh = {
           sceneAuthoringAlreadyInProgress: '场景创作已在进行中',
           contentFilterLoadFailed: '内容过滤器加载失败',
           quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
-          cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
+          deviceRecoveryFailed: 'GPU 错误 - 恢复失败。请重新连接。'
         },
         warning: {
           missingSeedData: '缺少种子图片数据',
@@ -409,7 +409,6 @@ const zh = {
       session: {
         waiting_for_seed: '正在准备场景...',
         loading_model: {
-          import: '正在导入模型框架...',
           load: '正在加载模型...',
           instantiate: '正在将模型载入内存...',
           done: '模型已加载！'

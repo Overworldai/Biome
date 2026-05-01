@@ -386,7 +386,7 @@ const ja = {
           sceneAuthoringAlreadyInProgress: 'シーンオーサリングが既に進行中です',
           contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
-          cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
+          deviceRecoveryFailed: 'GPU エラー — 回復に失敗しました。再接続してください。'
         },
         warning: {
           missingSeedData: 'シード画像データがありません',
@@ -422,7 +422,6 @@ const ja = {
       session: {
         waiting_for_seed: 'シーンを準備しています...',
         loading_model: {
-          import: 'モデルフレームワークを読み込んでいます...',
           load: 'モデルを読み込んでいます...',
           instantiate: 'モデルをメモリに読み込んでいます...',
           done: 'モデルを読み込みました。'

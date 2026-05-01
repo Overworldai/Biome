@@ -10,6 +10,9 @@ Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
 preset, yuv420p output, +faststart, no audio.
 """
 
+# pyright: reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+
+import contextlib
 import datetime
 import json
 import subprocess
@@ -17,15 +20,19 @@ import tempfile
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from server_logging import logger
+from util.server_logging import logger
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
+
+# Recordings shorter than this are almost always accidental (paused right
+# after starting, quick model reload, etc.) and get cleaned up rather than
+# cluttering the recordings list.
+MIN_DURATION_S = 3
 
 # Prebuilt ffmpeg binary shipped with imageio-ffmpeg — cross-platform, bundled
 # into the venv by `uv sync`, so we don't depend on a system ffmpeg install.
@@ -37,13 +44,13 @@ FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
 class RecordingProperties:
     """Semantic session state captured into the MP4's metadata so each
     recording is self-describing. The field set is the wire format — callers
-    (server.py) construct this explicitly rather than passing a free-form
+    (the session layer) construct this explicitly rather than passing a free-form
     dict, so the schema is fixed and searchable."""
 
     biome_version: str = "unknown"
-    model: Optional[str] = None
+    model: str | None = None
     quant: str = "none"
-    seed: Optional[str] = None
+    seed: str | None = None
     scene_authoring_enabled: bool = False
 
 
@@ -60,6 +67,7 @@ def _properties_to_mp4_metadata(properties: RecordingProperties) -> dict[str, st
         "artist": f"Biome{version_suffix}",
         "comment": json.dumps(asdict(properties), separators=(",", ":")),
     }
+
 
 # Scene-edit overlay — a "Edit: {prompt}" caption baked into the recorded video
 # after each successful scene edit. Total visible duration, with the last
@@ -109,14 +117,14 @@ class VideoRecorder:
         width: int,
         height: int,
         fps: int,
-        properties: Optional[RecordingProperties] = None,
+        properties: RecordingProperties | None = None,
     ) -> None:
         """End any active segment and start a new video file. `properties`
         captures the semantic session state (model, quant, seed, …) and is
         encoded into MP4 metadata atoms internally so callers don't have to
         know how MP4 structures its metadata."""
         self.end_segment()
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
         path = self._output_dir / f"{ts}.mp4"
         self._path = path
         self._frame_count = 0
@@ -127,22 +135,32 @@ class VideoRecorder:
         cmd = [
             FFMPEG_EXE,
             "-y",
-            "-f", "rawvideo",
-            "-pix_fmt", "rgb24",
-            "-s", f"{width}x{height}",
-            "-r", str(fps),
-            "-i", "pipe:0",
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "20",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "pipe:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             "-an",
         ]
         # Output-scoped -metadata flags must come before the output path.
         if properties:
             for key, value in _properties_to_mp4_metadata(properties).items():
-                if value is None or value == "":
+                if value == "":
                     continue
                 cmd.extend(["-metadata", f"{key}={value}"])
         cmd.append(str(path))
@@ -156,9 +174,7 @@ class VideoRecorder:
             )
             logger.info(f"[{self._client_host}] Video recording -> {path}")
         except FileNotFoundError:
-            logger.warning(
-                f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled"
-            )
+            logger.warning(f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled")
             self._proc = None
 
     def note_edit(self, prompt: str) -> None:
@@ -180,7 +196,7 @@ class VideoRecorder:
         try:
             font_size = max(14, int(frame_h * 0.05))
             font = ImageFont.truetype(str(FONT_PATH), font_size)
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"[{self._client_host}] Could not load overlay font: {e}")
             self._overlay_text = None
             return
@@ -203,20 +219,16 @@ class VideoRecorder:
         x = pad - bbox[0]
         y = frame_h - pad - text_h - bbox[1] - margin
         # Drop-shadow for contrast over light scenes.
-        draw.text(
-            (x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200)
-        )
+        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=(0, 0, 0, 200))
         draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
         # Crop with `margin` buffer on all sides of the ink + shadow so the
         # saved texture includes any antialiasing bleed.
-        region_x = max(0, x + bbox[0] - margin)
-        region_y = max(0, y + bbox[1] - margin)
-        region_w = min(frame_w - region_x, text_w + shadow_offset + margin * 2)
-        region_h = min(frame_h - region_y, text_h + shadow_offset + margin * 2)
-        cropped = canvas.crop(
-            (region_x, region_y, region_x + region_w, region_y + region_h)
-        )
+        region_x = int(max(0, x + bbox[0] - margin))
+        region_y = int(max(0, y + bbox[1] - margin))
+        region_w = int(min(frame_w - region_x, text_w + shadow_offset + margin * 2))
+        region_h = int(min(frame_h - region_y, text_h + shadow_offset + margin * 2))
+        cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
         self._overlay_bitmap = np.array(cropped)
         self._overlay_offset = (region_x, region_y)
 
@@ -239,9 +251,7 @@ class VideoRecorder:
         fade_start = SCENE_EDIT_OVERLAY_S - SCENE_EDIT_OVERLAY_FADE_S
         alpha_mul = 1.0
         if elapsed_s > fade_start:
-            alpha_mul = max(
-                0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S
-            )
+            alpha_mul = max(0.0, 1.0 - (elapsed_s - fade_start) / SCENE_EDIT_OVERLAY_FADE_S)
         if alpha_mul <= 0.0:
             return frame
 
@@ -285,33 +295,25 @@ class VideoRecorder:
             self._proc.wait(timeout=30)
             if self._proc.returncode != 0:
                 stderr = stderr_bytes.decode(errors="replace") if stderr_bytes else ""
-                logger.warning(
-                    f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}"
-                )
-        except Exception as e:
+                logger.warning(f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}")
+        except Exception as e:  # noqa: BLE001  -- ffmpeg shutdown can raise OSError/TimeoutExpired/ValueError; we want to log+kill regardless
             logger.warning(f"[{self._client_host}] Error closing video recorder: {e}")
-            try:
+            with contextlib.suppress(Exception):
                 self._proc.kill()
-            except Exception:
-                pass
         finally:
             self._proc = None
             self._path = None
             self._frame_count = 0
             self._fps = 0
 
-        # Clean up recordings shorter than MIN_DURATION_S — segments this short
-        # are almost always accidental (paused right after starting, quick model
-        # reload, etc.) and just clutter the recordings list.
-        MIN_DURATION_S = 3
+        # Clean up recordings shorter than MIN_DURATION_S.
         if path is not None:
             duration_s = frame_count / fps if fps > 0 else 0.0
             if frame_count == 0 or duration_s < MIN_DURATION_S:
                 try:
                     path.unlink(missing_ok=True)
                     logger.info(
-                        f"[{self._client_host}] Removed short video "
-                        f"({frame_count} frames, {duration_s:.1f}s): {path}"
+                        f"[{self._client_host}] Removed short video ({frame_count} frames, {duration_s:.1f}s): {path}"
                     )
-                except Exception:
+                except OSError:
                     pass

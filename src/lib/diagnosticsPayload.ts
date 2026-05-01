@@ -88,7 +88,7 @@ function buildServer(connection: ServerConnection): DiagnosticsServer | null {
     gpu: si.gpu_name ?? null,
     gpu_count: si.gpu_count ?? 0,
     vram_total_bytes: si.vram_total_bytes ?? null,
-    cuda: si.cuda_version ?? null,
+    runtime: si.runtime_version ?? null,
     driver: si.driver_version ?? null,
     torch: si.torch_version ?? null
   }

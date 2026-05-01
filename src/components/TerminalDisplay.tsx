@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '../bridge'
+import type { TranslationKey } from '../i18n'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { resolveStage } from '../stages'
 import { useStreaming } from '../context/streamingContextValue'
@@ -58,10 +59,10 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
     if (errorDetail) return t('app.loading.error')
-    if (currentStage?.label) return t(`stage.${currentStage.id}`, { defaultValue: currentStage.label })
+    if (currentStage) return t(`stage.${currentStage.id}` as TranslationKey)
     if (connectionState === 'connecting') return t('app.loading.connecting')
     return t('app.loading.starting')
-  }, [connectionState, currentStage?.id, currentStage?.label, errorDetail, t])
+  }, [connectionState, currentStage, errorDetail, t])
 
   const handleExportDiagnostics = async () => {
     if (isExportingDiagnostics) return

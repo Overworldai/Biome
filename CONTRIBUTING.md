@@ -8,6 +8,38 @@ npm run lint         # Check formatting (Prettier) + type-check (tsc)
 npm run lint-fix     # Auto-fix formatting (Prettier) + type-check (tsc) — run after finishing work
 ```
 
+For the Python server in `server-components/`, run lint and type-check with:
+
+```bash
+cd server-components
+uvx ruff check .          # Lint
+uvx ruff format .         # Auto-format (also: --check to verify without rewriting)
+uvx ruff check --fix .    # Auto-fix lint issues where ruff has a safe rewrite
+uvx basedpyright .        # Type-check (strict mode)
+```
+
+All must pass before a commit lands. The typed Pydantic boundaries in `server/protocol.py` and the `Connection` invariants in `server/session/` are what we rely on to catch real semantic errors.
+
+### Suppressions strategy
+
+`pyproject.toml` carries **zero project-wide ruff or basedpyright suppressions** — every silenced lint/type report is scoped to the line or file that triggers it, so a new violation in pure-Python code surfaces under strict mode. Three layers, in order of preference:
+
+1. **Fix the underlying issue.** Narrow `except Exception` to the actual raisers (`OSError`, `pydantic.ValidationError`, `binascii.Error`, etc.); add a `_require_X()` helper instead of repeating `if self._x is None: raise` (see `WorldEngineManager._require_engine`); hoist module-level loops into a function so cleanup vars don't leak; replace `try/except/pass` with `contextlib.suppress(...)`.
+2. **Per-line ignore.** `# noqa: BLE001  -- <reason>` for ruff, `# pyright: ignore[reportXxx]  -- <reason>` for basedpyright. The trailing `-- <reason>` is required — ruff and pyright both ignore everything after the rule, but future readers shouldn't have to guess. Stack both on one line if needed: `# noqa: BLE001  # pyright: ignore[reportUnusedExcept]  -- ...`.
+3. **Per-file pragma.** `# pyright: reportUnknownMemberType=none, ...` at the top of the module (after the docstring). Only for files that touch torch / `world_engine` / diffusers / transformers / `llama_cpp` / pynvml / `py-cpuinfo` — third-party libs whose stubs are partial or absent. Add a rule to the pragma only if it fires on third-party type leakage; never to silence a real local issue. Ruff has no equivalent — use per-line `# noqa` everywhere.
+
+### Concrete exception classes
+
+Ruff's `TRY003` flags long messages passed to bare `RuntimeError` / `ValueError`. Define a typed subclass in the same module instead — see `EngineNotLoadedError`, `ModelUriRequiredError`, `UnsupportedModelTypeError`, `VlmNotLoadedError`, `KleinPipelineNotLoadedError`, `NoToolCallsError`, `VlmToolCallRetryError`. The class owns the message and (where useful) carries structured payload fields the catch site can inspect.
+
+### Logging exceptions
+
+Prefer `logger.exception("...")` over `logger.error("...", exc_info=True)` — ruff's `TRY400` enforces this so the traceback always logs. The exception is a status notice where the traceback is noise: timeouts, recovery success/failure messages, an `error()` immediately followed by `raise CustomError() from e`. Suppress per-line with `# noqa: TRY400  -- <reason>` and keep `.error(...)`.
+
+### FastAPI dependencies
+
+Use `Annotated[T, Depends(fn)]` rather than `T = Depends(fn)` for route parameters — the latter trips `B008` (function call in default arg). See `server/routes.py` for the pattern.
+
 No test framework is configured.
 
 Run `npm run lint` after every major block of work to catch formatting and type errors early. Use `npm run lint-fix` to auto-fix formatting issues found by the linter.
@@ -199,10 +231,10 @@ Biome supports two engine modes (`engine_mode` in settings, type `EngineMode`), 
 
 **Standalone** (`'standalone'`): Biome manages a local Python server process. Setup and launch are handled by the Electron main process (`electron/ipc/engine.ts` and `electron/ipc/server.ts`):
 
-1. **Unpack server components**: Bundled Python files (`pyproject.toml`, `server.py`, etc.) are copied from the app's `server-components` resource into a `world_engine/` directory next to the executable.
+1. **Unpack server components**: Bundled Python files (`pyproject.toml`, `main.py`, the `server/`, `engine/`, `recording/`, and `util/` packages, etc.) are copied from the app's `server-components` resource into a `world_engine/` directory next to the executable.
 2. **Install UV**: The [uv](https://github.com/astral-sh/uv) package manager binary is downloaded from GitHub releases into `.uv/bin/`. All UV state (cache, Python installs, tool dirs) is kept under `.uv/` via env vars (`UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, etc.) so nothing touches the system Python.
 3. **Sync dependencies**: `uv sync` is run in `world_engine/`, which reads `pyproject.toml`, downloads a managed Python interpreter, creates an isolated `.venv`, and installs all packages.
-4. **Start server**: The server is spawned via `uv run python -u server.py --port {port}` in the `world_engine/` directory. It auto-assigns a port starting from 7987, polls `/health` until the server responds, then connects via `ws://localhost:{port}/ws`.
+4. **Start server**: The server is spawned via `uv run python -u main.py --port {port}` in the `world_engine/` directory. It auto-assigns a port starting from 7987, polls `/health` until the server responds, then connects via `ws://localhost:{port}/ws`.
 
 Process lifecycle is managed by `electron/lib/serverState.ts`. The UI shows engine health status and a "Reinstall" button (`WorldEngineSection`).
 

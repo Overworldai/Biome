@@ -286,7 +286,7 @@ export const useWebSocket = (): WebSocketHook => {
             case 'system_info': {
               // Early push from server at connect time — arrives before init so
               // the hardware identity is available even if the session crashes
-              // during model load / CUDA warmup.
+              // during model load / device warmup.
               const { type: _, ...info } = msg
               setConnection((prev) => ({ ...prev, systemInfo: info as unknown as ServerSystemInfo }))
               break
@@ -377,7 +377,7 @@ export const useWebSocket = (): WebSocketHook => {
   }, [])
 
   const sendInit = useCallback((params: Omit<InitMessage, 'type' | 'req_id'>): Promise<InitResponse> => {
-    // No timeout — init can take minutes (model download, warmup, CUDA compilation).
+    // No timeout — init can take minutes (model download, warmup, graph compilation).
     // The WebSocket close event will reject the promise if the connection drops.
     return rpcRef.current.request<InitResponse>('init', params, 0)
   }, [])
