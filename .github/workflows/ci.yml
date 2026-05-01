@@ -35,8 +35,10 @@ jobs:
   #   uvx ruff format --check . # formatter audit (no rewrites in CI)
   #   uvx basedpyright .        # strict type-check
   # basedpyright needs the project venv to resolve torch / world_engine
-  # / etc., so we run `uv sync --frozen` first; the venv is cached
-  # against `uv.lock` so steady-state runs skip the ~2 GB torch fetch.
+  # / etc., so we run `uv sync` first. The lockfile is intentionally
+  # untracked, so the cache is keyed on `pyproject.toml`; uv resolves
+  # fresh on each pyproject change but cached wheel downloads stay warm
+  # in between.
   # ──────────────────────────────────────────────────────────────────
   lint-backend:
     name: Lint backend (ruff + basedpyright)
@@ -51,7 +53,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: server-components/uv.lock
+          cache-dependency-glob: server-components/pyproject.toml
 
       - name: Run ruff lint
         run: uvx ruff check .
@@ -60,7 +62,7 @@ jobs:
         run: uvx ruff format --check .
 
       - name: Sync project dependencies
-        run: uv sync --frozen
+        run: uv sync
 
       - name: Run basedpyright
         run: uvx basedpyright .
