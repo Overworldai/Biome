@@ -1,7 +1,7 @@
 """
 Scene authoring: text-to-image generation + reference-based editing.
 
-`SceneAuthoringManager` owns the FLUX.2 Klein image pipeline and the Qwen3.5
+`SceneAuthoringManager` owns the FLUX.2 Klein image pipeline and the Gemma 4
 vision-language model used to write Klein prompts from the user's request.
 Two flows ride on top:
 
@@ -87,10 +87,13 @@ def properties_to_jpeg_comment(properties: GeneratedSceneProperties) -> bytes:
     return json.dumps(asdict(properties), separators=(",", ":")).encode("utf-8")
 
 
-# ─── Qwen3 tool-call parser ──────────────────────────────────────────
-# Extracts <tool_call><function=NAME><parameter=K>V</parameter>...</tool_call>
-# from VLM output. Tolerates truncated tags (model hit max_new_tokens) by
-# falling back to a partial-final-param regex.
+# ─── Gemma 4 tool-call parser ────────────────────────────────────────
+# Gemma 4 emits tool calls as:
+#   <|tool_call>call:function_name{arg_name:<|"|>value<|"|>, ...}<tool_call|>
+# Empty-arg calls render as `<|tool_call>call:function_name{}<tool_call|>`.
+# String values are wrapped in the `<|"|>` special token. Reasoning produced
+# by the model lands in a separate `<|channel>thought...<channel|>` block
+# before the tool call and is ignored by this parser.
 
 
 @dataclass
@@ -101,48 +104,17 @@ class ToolCall:
     arguments: dict[str, str] = field(default_factory=dict)
 
 
-# Matches a <tool_call> block, with or without a closing </tool_call> tag
-_TOOL_CALL_RE = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.DOTALL)
-# Matches <function=name> or <function name="name">
-_FUNCTION_RE = re.compile(r'<function(?:=|\s+name=")([^">]+)"?>')
-# Matches <parameter=name>value</close_tag> — tolerates missing "=" (e.g.
-# <parameter>name>) and wrong closing tags (e.g. </instruction>).
-_PARAMETER_RE = re.compile(r"<parameter[>=]([^>]+)>(.*?)</[^>]+>", re.DOTALL)
-# Matches a truncated final parameter: <parameter=name>value (no closing tag)
-_TRUNCATED_PARAM_RE = re.compile(r"<parameter[>=]([^>]+)>([^<]+)$", re.DOTALL)
+_TOOL_CALL_RE = re.compile(r"<\|tool_call>call:(\w+)\{(.*?)\}<tool_call\|>", re.DOTALL)
+_ARG_RE = re.compile(r'(\w+)\s*:\s*<\|"\|>(.*?)<\|"\|>', re.DOTALL)
 
 
 def parse_tool_calls(text: str) -> list[ToolCall]:
-    """Parse all tool calls from VLM output text. Tolerates truncated output
-    where closing tags may be missing due to token limits. Raises ValueError
-    if no valid tool calls are found."""
+    """Parse all tool calls from VLM output. Raises ValueError if none found."""
     results: list[ToolCall] = []
-
-    for block_match in _TOOL_CALL_RE.finditer(text):
-        block = block_match.group(1)
-
-        func_match = _FUNCTION_RE.search(block)
-        if not func_match:
-            continue
-
-        name = func_match.group(1).strip()
-        arguments: dict[str, str] = {}
-
-        for param_match in _PARAMETER_RE.finditer(block):
-            param_name = param_match.group(1).strip()
-            param_value = param_match.group(2).strip()
-            arguments[param_name] = param_value
-
-        # Check for a truncated final parameter (no closing </parameter>)
-        if not arguments or block.rstrip().endswith("</parameter>") is False:
-            trunc_match = _TRUNCATED_PARAM_RE.search(block)
-            if trunc_match:
-                param_name = trunc_match.group(1).strip()
-                param_value = trunc_match.group(2).strip()
-                if param_name not in arguments and param_value:
-                    arguments[param_name] = param_value
-
-        results.append(ToolCall(name=name, arguments=arguments))
+    for m in _TOOL_CALL_RE.finditer(text):
+        name = m.group(1)
+        args = {am.group(1): am.group(2) for am in _ARG_RE.finditer(m.group(2))}
+        results.append(ToolCall(name=name, arguments=args))
 
     if not results:
         raise ValueError(f"No valid tool calls found in output: {text!r}")
@@ -159,15 +131,15 @@ EDIT_RESET_WITH_FRAME = True  # Reset engine with edited frame as new seed (vs a
 
 # ─── VLM configuration ────────────────────────────────────────────────
 
-VLM_GGUF_REPO = "unsloth/Qwen3.5-4B-GGUF"
-VLM_GGUF_FILE = "Qwen3.5-4B-UD-Q5_K_XL.gguf"
+VLM_GGUF_REPO = "unsloth/gemma-4-E4B-it-GGUF"
+VLM_GGUF_FILE = "gemma-4-E4B-it-UD-Q4_K_XL.gguf"
 VLM_MMPROJ_FILE = "mmproj-F16.gguf"
 VLM_CTX_SIZE = 4096
 VLM_MAX_TOKENS = 1024  # Enough for thinking + tool call, prevents overthinking
 VLM_MAX_RETRIES = 3  # Retry tool-call parsing up to this many times
 VLM_IMAGE_MAX_SIZE = 384  # Downscale frame to this max dimension before sending to VLM
 
-# Tool schemas passed via `tools=` to create_chat_completion. The Qwen35
+# Tool schemas passed via `tools=` to create_chat_completion. The Gemma 4
 # chat template renders these into a system block that documents the wire
 # format the model is trained on — putting tool definitions here (rather
 # than as literal <tool_call> text in the system prompt) avoids special-
@@ -306,7 +278,7 @@ class _SceneAuthoringLibs:
 
     hf_hub_download: Any
     Llama: Any
-    Qwen35ChatHandler: Any
+    Gemma4ChatHandler: Any
     Flux2KleinPipeline: Any
     Flux2Transformer2DModel: Any
     GGUFQuantizationConfig: Any
@@ -323,13 +295,13 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
     from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
     from huggingface_hub import hf_hub_download
     from llama_cpp import Llama
-    from llama_cpp.llama_chat_format import Qwen35ChatHandler
+    from llama_cpp.llama_chat_format import Gemma4ChatHandler
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
     return _SceneAuthoringLibs(
         hf_hub_download=hf_hub_download,
         Llama=Llama,
-        Qwen35ChatHandler=Qwen35ChatHandler,
+        Gemma4ChatHandler=Gemma4ChatHandler,
         Flux2KleinPipeline=Flux2KleinPipeline,
         Flux2Transformer2DModel=Flux2Transformer2DModel,
         GGUFQuantizationConfig=GGUFQuantizationConfig,
@@ -342,7 +314,7 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
 
 
 class SceneAuthoringManager:
-    """FLUX.2 Klein (image editor) + Qwen3.5 (VLM that writes Klein prompts).
+    """FLUX.2 Klein (image editor) + Gemma 4 E4B (VLM that writes Klein prompts).
 
     Goes through `WorldEngineManager.submit_to_device_thread` for model
     loading so all device setup serialises behind in-flight world-engine
@@ -408,14 +380,12 @@ class SceneAuthoringManager:
         devices.empty_cache()
 
     def _load_vlm_sync(self, libs: _SceneAuthoringLibs) -> None:
-        """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
+        """Load the Gemma 4 vision-language model via llama.cpp (GGUF)."""
         model_path = libs.hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
         mmproj_path = libs.hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
 
-        chat_handler = libs.Qwen35ChatHandler(
+        chat_handler = libs.Gemma4ChatHandler(
             clip_model_path=mmproj_path,
-            enable_thinking=True,
-            add_vision_id=False,
             verbose=False,
         )
         self.vlm = libs.Llama(
@@ -495,20 +465,13 @@ class SceneAuthoringManager:
                 max_tokens=VLM_MAX_TOKENS,
                 temperature=1.0,
                 top_p=0.95,
-                top_k=20,
+                top_k=64,
                 min_p=0.0,
-                present_penalty=1.5,
-                repeat_penalty=1.0,
             )
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
             raw_output = result["choices"][0]["message"]["content"] or ""  # pyright: ignore[reportIndexIssue]  # llama_cpp returns a stream-or-dict union; we never use stream=True
             logger.info(f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}")
-
-            # Strip thinking block — the model wraps reasoning in
-            # <think>...</think> which confuses the tool call parser.
-            if "</think>" in raw_output:
-                raw_output = raw_output.split("</think>", 1)[1]
 
             try:
                 prompt = self._parse_edit_instruction(raw_output, safety_message_id)
