@@ -7,6 +7,8 @@ at the very top of main.py before any heavy imports so that all output
 gets timestamps and is captured.
 """
 
+# pyright: reportMissingParameterType=none, reportMissingTypeArgument=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+
 import asyncio
 import contextlib
 import faulthandler

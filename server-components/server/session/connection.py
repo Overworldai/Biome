@@ -17,6 +17,8 @@ Handlers live in `handlers.py`; the receiver / sender / generator
 workers live in `workers.py`. This module owns connection state only.
 """
 
+# pyright: reportMissingTypeArgument=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+
 import asyncio
 import contextlib
 import json

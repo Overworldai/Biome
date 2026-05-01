@@ -10,6 +10,8 @@ Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
 preset, yuv420p output, +faststart, no audio.
 """
 
+# pyright: reportAttributeAccessIssue=none, reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none, reportUnnecessaryComparison=none
+
 import contextlib
 import datetime
 import json

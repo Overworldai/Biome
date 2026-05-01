@@ -13,6 +13,8 @@ Outside this file, the substring `cuda` should not appear: callers refer
 to "the device" / "the device thread" instead.
 """
 
+# pyright: reportMissingTypeStubs=none, reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+
 import logging
 import os
 

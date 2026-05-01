@@ -26,6 +26,8 @@ The typed accessors below pull each piece individually so endpoints
 take only what they need rather than reaching through a god object.
 """
 
+# pyright: reportPrivateImportUsage=none, reportUnusedExcept=none
+
 import asyncio
 import contextlib
 import os

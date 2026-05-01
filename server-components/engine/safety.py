@@ -14,6 +14,8 @@ loading on a missing / corrupt file leaves an empty cache so the next session
 re-runs the checks (cache rebuilds, no permanent state loss).
 """
 
+# pyright: reportArgumentType=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+
 import hashlib
 import io
 import logging

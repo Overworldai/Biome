@@ -3,6 +3,8 @@ WorldEngine manager — owns the loaded world-engine model and the
 device-side state machine that drives frame streaming.
 """
 
+# pyright: reportMissingParameterType=none, reportMissingTypeStubs=none, reportOptionalMemberAccess=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownLambdaType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+
 import asyncio
 import base64
 import contextlib

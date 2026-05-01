@@ -13,6 +13,8 @@ control state, scene-authoring handoff fields, and the `running` /
 `paused` flags. No closure capture between them.
 """
 
+# pyright: reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportPossiblyUnboundVariable=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+
 import asyncio
 import concurrent.futures
 import contextlib

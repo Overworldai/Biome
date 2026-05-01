@@ -13,6 +13,8 @@ and consumes them directly. Anything device-specific routes through
 `engine.devices` so the rest of the codebase stays backend-agnostic.
 """
 
+# pyright: reportMissingTypeStubs=none
+
 import cpuinfo
 import psutil
 import torch

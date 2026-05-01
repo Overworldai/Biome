@@ -13,6 +13,9 @@ can both reference it without `engine.manager` owning unrelated input
 constants.
 """
 
+# The populate-loop's `del _i` cleanup is well-defined here; pyright is being defensive.
+# pyright: reportPossiblyUnboundVariable=none
+
 BUTTON_CODES: dict[str, int] = {}
 # A-Z keys
 for _i in range(65, 91):

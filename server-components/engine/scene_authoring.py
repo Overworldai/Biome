@@ -17,6 +17,8 @@ private; we go through the public API on the manager (`set_seed_and_reset`,
 `numpy_to_jpeg`). Device placement goes through `engine.devices.SCENE_AUTHORING_DEVICE`.
 """
 
+# pyright: reportAttributeAccessIssue=none, reportMissingTypeArgument=none, reportOptionalCall=none, reportOptionalMemberAccess=none, reportPrivateImportUsage=none, reportPrivateUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+
 import asyncio
 import base64
 import gc

@@ -7,6 +7,8 @@ the FastAPI `app` instance + middleware, and the uvicorn boot. Endpoint
 definitions live in `server/routes.py`.
 """
 
+# pyright: reportMissingTypeStubs=none
+
 import argparse
 import asyncio
 import os

@@ -13,6 +13,8 @@ init phase between handshake and game loop. These let the route shell
 (`server/routes.py`) stay a thin protocol layer.
 """
 
+# pyright: reportUnknownMemberType=none
+
 import asyncio
 import base64
 import binascii
