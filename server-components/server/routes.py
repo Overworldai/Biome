@@ -26,7 +26,7 @@ The typed accessors below pull each piece individually so endpoints
 take only what they need rather than reaching through a god object.
 """
 
-# pyright: reportPrivateImportUsage=none, reportUnusedExcept=none
+# pyright: reportPrivateImportUsage=none
 
 import asyncio
 import contextlib
@@ -165,11 +165,11 @@ async def get_model_info(model_id: str) -> ModelInfoResponse:
 
     try:
         return await asyncio.to_thread(_fetch)
-    except RepositoryNotFoundError:
-        return ModelInfoResponse(id=model_id, size_bytes=None, exists=False, error="Model not found")
     except GatedRepoError:
         return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Private or gated model")
-    except Exception as e:  # noqa: BLE001  -- HF client raises a wide grab-bag (HTTPError/RequestException/HfHubHTTPError); fold them all into a soft response
+    except RepositoryNotFoundError:
+        return ModelInfoResponse(id=model_id, size_bytes=None, exists=False, error="Model not found")
+    except Exception as e:  # noqa: BLE001  # pyright: ignore[reportUnusedExcept]  -- HF client raises a wide grab-bag (HTTPError/RequestException/HfHubHTTPError) that pyright's stubs don't model; fold them all into a soft response
         logger.warning(f"model-info error for {model_id}: {e}")
         return ModelInfoResponse(id=model_id, size_bytes=None, exists=True, error="Could not check model")
 

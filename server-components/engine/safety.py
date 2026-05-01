@@ -14,7 +14,7 @@ loading on a missing / corrupt file leaves an empty cache so the next session
 re-runs the checks (cache rebuilds, no permanent state loss).
 """
 
-# pyright: reportArgumentType=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+# pyright: reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
 
 import hashlib
 import io
@@ -215,7 +215,7 @@ class SafetyChecker:
         idx_to_label: dict[int, NSFWCategory] = {0: "neutral", 1: "low", 2: "medium", 3: "high"}
 
         # Prepare batch
-        inputs = torch.stack([self.processor(img) for img in img_batch]).to(self._device)  # pyright: ignore[reportCallIssue]  # timm Compose typed as a tuple in its stubs but is callable at runtime
+        inputs = torch.stack([self.processor(img) for img in img_batch]).to(self._device)  # pyright: ignore[reportCallIssue, reportArgumentType]  -- timm Compose typed as a tuple in its stubs but is callable at runtime; processor return is Unknown
         output: list[NSFWScores] = []
 
         with torch.inference_mode():

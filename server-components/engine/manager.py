@@ -3,7 +3,7 @@ WorldEngine manager — owns the loaded world-engine model and the
 device-side state machine that drives frame streaming.
 """
 
-# pyright: reportMissingParameterType=none, reportMissingTypeStubs=none, reportOptionalMemberAccess=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownLambdaType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+# pyright: reportMissingParameterType=none, reportMissingTypeStubs=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownLambdaType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
 
 import asyncio
 import base64
@@ -183,6 +183,11 @@ class WorldEngineManager:
         if self.model_config is None:
             raise EngineNotLoadedError
         return self.model_config
+
+    def _require_engine(self) -> WorldEngine:
+        if self._engine is None:
+            raise EngineNotLoadedError
+        return self._engine
 
     @property
     def n_frames(self) -> int:
@@ -479,7 +484,8 @@ class WorldEngineManager:
         """Submit a `gen_frame` call to the device thread; returns the Future
         so the generator loop can overlap device work with CPU encoding of the
         previous batch."""
-        return self._device_executor.submit(lambda c=ctrl: self._engine.gen_frame(ctrl=c))
+        engine = self._require_engine()
+        return self._device_executor.submit(lambda c=ctrl: engine.gen_frame(ctrl=c))
 
     def set_seed_and_reset(self, frame: torch.Tensor, *, set_as_original: bool = False) -> None:
         """Replace the seed and reset the engine to use it. The frame is
@@ -490,16 +496,15 @@ class WorldEngineManager:
         `set_as_original=True` also overwrites `original_seed_frame` so a
         subsequent reset returns to this frame (used by generate_scene, where
         the new frame is the new starting world)."""
-        if self._engine is None:
-            raise EngineNotLoadedError
+        engine = self._require_engine()
         frame = self._maybe_expand_to_multiframe(frame)
         self.seed_frame = frame
         if set_as_original:
             self.original_seed_frame = frame
 
         def _reset_with_frame():
-            self._engine.reset()
-            self._engine.append_frame(frame)
+            engine.reset()
+            engine.append_frame(frame)
 
         self._device_executor.submit(_reset_with_frame).result()
 
@@ -507,13 +512,12 @@ class WorldEngineManager:
         """Append `frame` to the engine `count` times (used to strengthen an
         edit in the KV cache without resetting). Frame is auto-expanded for
         multiframe models. Synchronous — runs on the device thread."""
-        if self._engine is None:
-            raise EngineNotLoadedError
+        engine = self._require_engine()
         frame = self._maybe_expand_to_multiframe(frame)
 
         def _append():
             for _ in range(count):
-                self._engine.append_frame(frame)
+                engine.append_frame(frame)
 
         self._device_executor.submit(_append).result()
 
@@ -521,40 +525,40 @@ class WorldEngineManager:
         """Reset engine state. Synchronous — submits work to the device thread
         and waits. Safe to call from the generator thread (the only caller).
         Asyncio callers wanting to yield should `await asyncio.to_thread(...)`."""
-        if self._engine is None:
-            raise EngineNotLoadedError
+        engine = self._require_engine()
         if self.seed_frame is None:
             raise SeedFrameNotSetError
+        seed = self.seed_frame
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.reset()...")
-        self._device_executor.submit(self._engine.reset).result()
+        self._device_executor.submit(engine.reset).result()
         logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         t0 = time.perf_counter()
         logger.info("[RESET] Starting engine.append_frame()...")
-        self._device_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
+        self._device_executor.submit(lambda: engine.append_frame(seed)).result()
         logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
     def init_session(self) -> None:
         """Reset engine, load seed, render initial frame and report progress.
         Synchronous — runs on the device thread via submit().result(). Asyncio
         callers should use `await asyncio.to_thread(world_engine.init_session)`."""
-        if self._engine is None:
-            raise EngineNotLoadedError
+        engine = self._require_engine()
         if self.seed_frame is None:
             raise SeedFrameNotSetError
+        seed = self.seed_frame
 
         self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.reset()...")
-        self._device_executor.submit(self._engine.reset).result()
+        self._device_executor.submit(engine.reset).result()
         logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_SEED)
         t0 = time.perf_counter()
         logger.info("[INIT] Starting engine.append_frame()...")
-        self._device_executor.submit(lambda: self._engine.append_frame(self.seed_frame)).result()
+        self._device_executor.submit(lambda: engine.append_frame(seed)).result()
         logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
 
         self._report_progress(StageId.SESSION_INIT_FRAME)
@@ -592,10 +596,10 @@ class WorldEngineManager:
         unsupported on this device (detected via the torch error's text);
         callers translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`.
         Other runtime errors propagate as-is."""
-        if self._engine is None:
-            raise EngineNotLoadedError
+        engine = self._require_engine()
         if self.seed_frame is None:
             raise SeedFrameNotSetError
+        seed = self.seed_frame
 
         def do_warmup():
             warmup_start = time.perf_counter()
@@ -603,19 +607,19 @@ class WorldEngineManager:
             self._report_progress(StageId.SESSION_WARMUP_RESET)
             logger.info("[1/3] Resetting engine state...")
             reset_start = time.perf_counter()
-            self._engine.reset()
+            engine.reset()
             logger.info(f"[1/3] Reset complete in {time.perf_counter() - reset_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_SEED)
             logger.info("[2/3] Appending seed frame...")
             append_start = time.perf_counter()
-            self._engine.append_frame(self.seed_frame)
+            engine.append_frame(seed)
             logger.info(f"[2/3] Seed frame appended in {time.perf_counter() - append_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
             logger.info("[3/3] Generating first frame (compiling device graphs)...")
             gen_start = time.perf_counter()
-            _ = self._engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
+            _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
             logger.info(f"[3/3] First frame generated in {time.perf_counter() - gen_start:.2f}s")
 
             return time.perf_counter() - warmup_start

@@ -13,7 +13,7 @@ control state, scene-authoring handoff fields, and the `running` /
 `paused` flags. No closure capture between them.
 """
 
-# pyright: reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportPossiblyUnboundVariable=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+# pyright: reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownVariableType=none
 
 import asyncio
 import concurrent.futures
@@ -437,10 +437,12 @@ def run_generator(
                     logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                     req["future"].set_exception(e)
 
+            buttons: set[int] | None = None
+            mouse_dx = 0.0
+            mouse_dy = 0.0
+            client_ts = 0.0
             with conn.ctrl_lock:
-                if not conn.ctrl.dirty:
-                    buttons = None
-                else:
+                if conn.ctrl.dirty:
                     buttons = set(conn.ctrl.buttons)
                     mouse_dx = float(conn.ctrl.mouse_dx)
                     mouse_dy = float(conn.ctrl.mouse_dy)

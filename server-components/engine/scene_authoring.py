@@ -17,7 +17,7 @@ private; we go through the public API on the manager (`set_seed_and_reset`,
 `numpy_to_jpeg`). Device placement goes through `engine.devices.SCENE_AUTHORING_DEVICE`.
 """
 
-# pyright: reportAttributeAccessIssue=none, reportMissingTypeArgument=none, reportOptionalCall=none, reportOptionalMemberAccess=none, reportPrivateImportUsage=none, reportPrivateUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
+# pyright: reportMissingTypeArgument=none, reportPrivateImportUsage=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
 
 import asyncio
 import base64
@@ -82,6 +82,22 @@ class MissingEditInstructionError(ValueError):
     def __init__(self, text: str) -> None:
         self.text = text
         super().__init__(f"No submit_edit_instruction tool call with an instruction found in: {text!r}")
+
+
+class VlmNotLoadedError(RuntimeError):
+    """Raised when an operation requires the scene-authoring VLM but it
+    isn't loaded yet. Use `SceneAuthoringManager.is_loaded` to gate calls."""
+
+    def __init__(self) -> None:
+        super().__init__("VLM is not loaded")
+
+
+class KleinPipelineNotLoadedError(RuntimeError):
+    """Raised when an operation requires the FLUX.2 Klein pipeline but it
+    isn't loaded yet. Use `SceneAuthoringManager.is_loaded` to gate calls."""
+
+    def __init__(self) -> None:
+        super().__init__("Klein pipeline is not loaded")
 
 
 class VlmToolCallRetryError(RuntimeError):
@@ -327,7 +343,9 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
     from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
     from huggingface_hub import hf_hub_download
     from llama_cpp import Llama
-    from llama_cpp.llama_chat_format import Gemma4ChatHandler
+    from llama_cpp.llama_chat_format import (
+        Gemma4ChatHandler,  # pyright: ignore[reportAttributeAccessIssue]  -- llama_cpp.llama_chat_format stubs lag the runtime API
+    )
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
     return _SceneAuthoringLibs(
@@ -351,7 +369,7 @@ class SceneAuthoringManager:
     Goes through `WorldEngineManager.submit_to_device_thread` for model
     loading so all device setup serialises behind in-flight world-engine
     work — no direct device-executor access. The flows themselves
-    (`_inpaint`, `_generate`) run on whatever thread calls them; the
+    (`inpaint`, `generate`) run on whatever thread calls them; the
     diffusers pipeline isn't bound to a compiled-graph thread, so it
     doesn't need the device thread."""
 
@@ -488,10 +506,13 @@ class SceneAuthoringManager:
         Raises SafetyRejectionError if the VLM calls reject_request.
         Raises RuntimeError after VLM_MAX_RETRIES failed attempts.
         """
+        if self.vlm is None:
+            raise VlmNotLoadedError
+        vlm = self.vlm
         last_error = None
         for attempt in range(1, VLM_MAX_RETRIES + 1):
             t0 = time.perf_counter()
-            result = self.vlm.create_chat_completion(
+            result = vlm.create_chat_completion(
                 messages=messages,
                 tools=VLM_TOOLS,
                 max_tokens=VLM_MAX_TOKENS,
@@ -520,7 +541,7 @@ class SceneAuthoringManager:
         """Ask the VLM for a Klein edit instruction given a reference frame."""
         # Downscale frame to reduce vision token count and speed up inference
         vlm_frame = frame_pil.copy()
-        vlm_frame.thumbnail((VLM_IMAGE_MAX_SIZE, VLM_IMAGE_MAX_SIZE), Image.LANCZOS)
+        vlm_frame.thumbnail((VLM_IMAGE_MAX_SIZE, VLM_IMAGE_MAX_SIZE), Image.Resampling.LANCZOS)
         image_uri = _pil_to_data_uri(vlm_frame)
         messages = [
             {"role": "system", "content": VLM_SYSTEM_PROMPT},
@@ -566,6 +587,8 @@ class SceneAuthoringManager:
 
     def _run_klein(self, image: Image.Image, prompt: str, target_h: int, target_w: int) -> Image.Image:
         """Run a single FLUX.2 Klein pass on `image` with `prompt`."""
+        if self.pipeline is None:
+            raise KleinPipelineNotLoadedError
         t0 = time.perf_counter()
         result = self.pipeline(
             image=image,
@@ -582,12 +605,12 @@ class SceneAuthoringManager:
         """Resize a PIL image to the world engine's seed target size and
         convert to a uint8 device tensor (HxWx3) ready for the engine."""
         h, w = seed_target_size
-        image = image.resize((w, h), Image.LANCZOS)
+        image = image.resize((w, h), Image.Resampling.LANCZOS)
         return torch.from_numpy(np.array(image)).to(dtype=torch.uint8, device=SCENE_AUTHORING_DEVICE).contiguous()
 
     # ─── Flows: edit + generate ──────────────────────────────────
 
-    def _inpaint(
+    def inpaint(
         self,
         frame_numpy: np.ndarray,
         user_request: str,
@@ -607,7 +630,7 @@ class SceneAuthoringManager:
 
         return self._to_seed_tensor(result, seed_target_size), edit_prompt
 
-    def _generate(
+    def generate(
         self,
         user_request: str,
         seed_target_size: tuple[int, int],
@@ -650,7 +673,7 @@ def run_scene_edit(
     original_jpeg = world_engine.numpy_to_jpeg(last_frame_np)
     original_b64 = base64.b64encode(original_jpeg).decode("ascii")
 
-    inpainted, edit_prompt = scene_authoring._inpaint(last_frame_np, user_request, world_engine.seed_target_size)
+    inpainted, edit_prompt = scene_authoring.inpaint(last_frame_np, user_request, world_engine.seed_target_size)
 
     # Encode inpainted for client-side preview
     inpainted_np = world_engine.tensor_to_numpy(inpainted)
@@ -693,7 +716,7 @@ def run_generate_scene(
 
     t0 = time.perf_counter()
 
-    generated, sanitized_prompt = scene_authoring._generate(user_request, world_engine.seed_target_size)
+    generated, sanitized_prompt = scene_authoring.generate(user_request, world_engine.seed_target_size)
 
     # Safety check on the generated image
     generated_np = world_engine.tensor_to_numpy(generated)

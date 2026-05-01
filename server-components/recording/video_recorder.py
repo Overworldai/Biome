@@ -10,7 +10,7 @@ Encoding settings match worldengine-model-comparison: H.264, CRF 20, medium
 preset, yuv420p output, +faststart, no audio.
 """
 
-# pyright: reportAttributeAccessIssue=none, reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none, reportUnnecessaryComparison=none
+# pyright: reportMissingTypeArgument=none, reportMissingTypeStubs=none, reportUnknownArgumentType=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
 
 import contextlib
 import datetime
@@ -160,7 +160,7 @@ class VideoRecorder:
         # Output-scoped -metadata flags must come before the output path.
         if properties:
             for key, value in _properties_to_mp4_metadata(properties).items():
-                if value is None or value == "":
+                if value == "":
                     continue
                 cmd.extend(["-metadata", f"{key}={value}"])
         cmd.append(str(path))
@@ -224,10 +224,10 @@ class VideoRecorder:
 
         # Crop with `margin` buffer on all sides of the ink + shadow so the
         # saved texture includes any antialiasing bleed.
-        region_x = max(0, x + bbox[0] - margin)
-        region_y = max(0, y + bbox[1] - margin)
-        region_w = min(frame_w - region_x, text_w + shadow_offset + margin * 2)
-        region_h = min(frame_h - region_y, text_h + shadow_offset + margin * 2)
+        region_x = int(max(0, x + bbox[0] - margin))
+        region_y = int(max(0, y + bbox[1] - margin))
+        region_w = int(min(frame_w - region_x, text_w + shadow_offset + margin * 2))
+        region_h = int(min(frame_h - region_y, text_h + shadow_offset + margin * 2))
         cropped = canvas.crop((region_x, region_y, region_x + region_w, region_y + region_h))
         self._overlay_bitmap = np.array(cropped)
         self._overlay_offset = (region_x, region_y)

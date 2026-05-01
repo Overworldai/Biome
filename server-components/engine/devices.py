@@ -13,7 +13,7 @@ Outside this file, the substring `cuda` should not appear: callers refer
 to "the device" / "the device thread" instead.
 """
 
-# pyright: reportMissingTypeStubs=none, reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none
+# pyright: reportMissingTypeStubs=none, reportUnknownMemberType=none, reportUnknownVariableType=none
 
 import logging
 import os
@@ -125,7 +125,7 @@ def ipc_collect() -> None:
 def reset_compiled_graphs() -> None:
     """Clear torch's compiled-function/graph caches. Used during model
     unload + post-error recovery to drop possibly-corrupted CUDA graphs."""
-    torch._dynamo.reset()
+    torch._dynamo.reset()  # pyright: ignore[reportPrivateUsage]  -- documented torch API; the leading underscore is a naming choice
 
 
 # ─── Error classification ────────────────────────────────────────────
