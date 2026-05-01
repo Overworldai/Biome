@@ -18,9 +18,10 @@ uvx basedpyright .        # Type-check (strict mode)
 ```
 
 Both must pass before a commit lands. The configs in `server-components/pyproject.toml`
-use a tiered ignore policy — permanent ignores for things outside our control, and
-step-tracked ignores annotated with the refactor step that removes them — so each
-later commit's job is to delete ignore lines, not add to them.
+suppress only what's outside our control (third-party libs without stubs, opaque torch
+/ PIL / diffusers surfaces); the typed Pydantic boundaries in `server/protocol.py` and
+the `Connection` invariants in `server/session/` are what we rely on to catch real
+semantic errors.
 
 No test framework is configured.
 

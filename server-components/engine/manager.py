@@ -1,7 +1,6 @@
 """
-WorldEngine module - Handles AI world generation and frame streaming.
-
-Extracted from monolithic server.py to provide clean separation of concerns.
+WorldEngine manager — owns the loaded world-engine model and the
+device-side state machine that drives frame streaming.
 """
 
 import asyncio
@@ -572,27 +571,27 @@ class WorldEngineManager:
             warmup_start = time.perf_counter()
 
             self._report_progress(StageId.SESSION_WARMUP_RESET)
-            logger.info("[5/5] Step 1: Resetting engine state...")
+            logger.info("[1/3] Resetting engine state...")
             reset_start = time.perf_counter()
             self._engine.reset()
-            logger.info(f"[5/5] Step 1: Reset complete in {time.perf_counter() - reset_start:.2f}s")
+            logger.info(f"[1/3] Reset complete in {time.perf_counter() - reset_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_SEED)
-            logger.info("[5/5] Step 2: Appending seed frame...")
+            logger.info("[2/3] Appending seed frame...")
             append_start = time.perf_counter()
             self._engine.append_frame(self.seed_frame)
-            logger.info(f"[5/5] Step 2: Seed frame appended in {time.perf_counter() - append_start:.2f}s")
+            logger.info(f"[2/3] Seed frame appended in {time.perf_counter() - append_start:.2f}s")
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
-            logger.info("[5/5] Step 4: Generating first frame (compiling device graphs)...")
+            logger.info("[3/3] Generating first frame (compiling device graphs)...")
             gen_start = time.perf_counter()
             _ = self._engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
-            logger.info(f"[5/5] Step 4: First frame generated in {time.perf_counter() - gen_start:.2f}s")
+            logger.info(f"[3/3] First frame generated in {time.perf_counter() - gen_start:.2f}s")
 
             return time.perf_counter() - warmup_start
 
         logger.info("=" * 60)
-        logger.info("[5/5] WARMUP - First client connected, compiling device graphs...")
+        logger.info("[WARMUP] First client connected, compiling device graphs...")
         logger.info("=" * 60)
 
         try:
@@ -604,7 +603,7 @@ class WorldEngineManager:
             raise
 
         logger.info("=" * 60)
-        logger.info(f"[5/5] WARMUP COMPLETE - Total time: {warmup_time:.2f}s")
+        logger.info(f"[WARMUP] Complete in {warmup_time:.2f}s")
         logger.info("=" * 60)
 
         self.engine_warmed_up = True

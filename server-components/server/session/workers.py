@@ -11,9 +11,6 @@ and recovers from device errors.
 The three communicate exclusively through `Connection` — its frame queue,
 control state, scene-authoring handoff fields, and the `running` /
 `paused` flags. No closure capture between them.
-
-This module is strict-typed by construction — none of the legacy ignore
-rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import asyncio

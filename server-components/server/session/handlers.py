@@ -11,9 +11,6 @@ to the per-message handlers. `run_preinit_handshake` dispatches the
 pre-init message loop directly. `prepare_session` runs the warmup +
 init phase between handshake and game loop. These let the route shell
 (`server/routes.py`) stay a thin protocol layer.
-
-This module is strict-typed by construction — none of the legacy ignore
-rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import asyncio

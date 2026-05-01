@@ -1,12 +1,11 @@
 """
 Per-WebSocket-connection state container.
 
-`Connection` bundles the per-connection state that used to live as
-nonlocals across the closures inside `websocket_endpoint`: init flags,
-recorder instances, seed metadata, game-loop state, scene-authoring
-RPC handoff, control input, and the inter-thread channels.  Created
-once per connection (must be inside an asyncio loop, since several
-fields are loop-bound), mutated in place by every helper.
+`Connection` bundles the per-connection state shared across the helpers
+that drive a session: init flags, recorder instances, seed metadata,
+game-loop state, scene-authoring RPC handoff, control input, and the
+inter-thread channels. One instance per connection, mutated in place by
+every helper.
 
 `Connection` must be constructed *inside* the running event loop —
 `__post_init__` initialises the asyncio.Event / asyncio.Queue fields
@@ -16,9 +15,6 @@ itself is mutable shared state by design.
 
 Handlers live in `handlers.py`; the receiver / sender / generator
 workers live in `workers.py`. This module owns connection state only.
-
-This module is strict-typed by construction — none of the legacy ignore
-rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import asyncio

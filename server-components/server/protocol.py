@@ -16,9 +16,6 @@ or `msg["type"]` access anywhere below this module.
 Naming convention: requests/notifications inbound from the client are
 suffixed `Request` / `Notif`; outbound server pushes are suffixed
 `Message`.  The discriminator field is always `type: Literal["..."]`.
-
-This module is strict-typed by construction — none of the legacy ignore
-rules in pyproject.toml fire on this code.  Keep it that way.
 """
 
 from __future__ import annotations

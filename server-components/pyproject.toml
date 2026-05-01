@@ -122,25 +122,22 @@ venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 
-# Same tiered-suppression policy as the ruff config: permanent ignores for
-# things outside our control, step-tracked ignores removed by specific later
-# refactor commits. New code we add (protocol.py, app_state.py, etc.) is
-# written strictly and won't trigger these — the suppressions only allow the
-# existing legacy code to pass while we incrementally tighten it.
+# Permanent suppressions for things outside our control. Re-evaluate any
+# entry that becomes signal rather than noise; the typed Pydantic boundaries
+# (`server/protocol.py`) and `Connection` invariants are what we rely on
+# to catch real semantic errors.
 
-# ─── Permanent ──────────────────────────────────────────────────────────
+# ─── Third-party stubs ─────────────────────────────────────────────────
 reportMissingTypeStubs = "none"      # third-party libs (timm, simplejpeg) ship no stubs
 reportPrivateImportUsage = "none"    # FastAPI/Pydantic re-export pattern
 
 # ─── Third-party untyped surfaces ──────────────────────────────────────
-# image_gen.py / safety.py / scene_authoring.py all touch torch / PIL /
-# diffusers / transformers, none of which have complete stubs. The
-# Optional* / Argument* reports fire on every `world_engine.engine.X`
-# access (engine is opaque) and on the chained pipeline calls in
-# image_gen. Wrapping each third-party call in a typed adapter would
-# multiply LoC for marginal gain; suppress here and rely on the typed
-# Pydantic boundaries (`protocol.py`) and ws_session/Connection invariants
-# to catch real semantic errors.
+# `engine/manager.py`, `engine/safety.py`, `engine/scene_authoring.py`
+# all touch torch / PIL / diffusers / transformers, none of which have
+# complete stubs. The Optional* / Argument* reports fire on every
+# `world_engine.engine.X` access (the engine handle is opaque) and on
+# the chained pipeline calls in scene authoring. Wrapping each call in
+# a typed adapter would multiply LoC for marginal gain.
 reportArgumentType = "none"
 reportOptionalMemberAccess = "none"
 reportOptionalCall = "none"
@@ -151,9 +148,7 @@ reportMissingParameterType = "none"
 
 # ─── Library opacity (torch/PIL/diffusers — no full stubs) ──────────────
 # These reports fire on every torch / PIL / diffusers / transformers
-# call site. Wrapping each third-party call in a typed adapter would
-# multiply LoC for marginal gain; suppress here and rely on the typed
-# Pydantic boundaries to catch real semantic errors.
+# call site.
 reportUnknownMemberType = "none"
 reportUnknownVariableType = "none"
 reportUnknownArgumentType = "none"
@@ -161,7 +156,7 @@ reportUnknownParameterType = "none"
 reportMissingTypeArgument = "none"
 reportUnknownLambdaType = "none"
 
-# ─── Codebase-wide leniency (audit one-by-one if it ever becomes signal) ─
+# ─── Codebase-wide leniency ─────────────────────────────────────────────
 reportPrivateUsage = "none"            # using `_foo` from another module
 reportUnusedExcept = "none"            # try/except/pass shapes
 reportUnnecessaryComparison = "none"   # defensive None checks

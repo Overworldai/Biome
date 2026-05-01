@@ -9,9 +9,6 @@ same token regardless of `HF_HOME` overrides.
 
 Call `apply_resolved_token()` once at startup, before any module that
 reads `HF_TOKEN` is imported.
-
-This module is strict-typed by construction — none of the legacy ignore
-rules in pyproject.toml fire on this code. Keep it that way.
 """
 
 import logging
