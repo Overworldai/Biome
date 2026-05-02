@@ -66,7 +66,7 @@ llama-cpp-python = [
 # manual eager loop, weight pinning, sync=False commit overlap). Bump
 # the rev to update; not heading to quark main yet so the branch ref
 # would drift under us if we tracked the head.
-quark = { git = "https://github.com/Overworldai/quark.git", rev = "27bd402" }
+quark = { git = "https://github.com/Overworldai/quark.git", rev = "d69ddab" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
