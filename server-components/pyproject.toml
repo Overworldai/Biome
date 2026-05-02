@@ -23,7 +23,14 @@ dependencies = [
   "bitsandbytes==0.49.2; sys_platform != 'darwin'",
   "llama-cpp-python==0.3.33; sys_platform != 'darwin'",
   "gguf==0.18.0; sys_platform != 'darwin'",
-  "mlx>=0.31.0; sys_platform == 'darwin'",
+  # Apple Silicon inference backend. Replaces the legacy MLX path —
+  # ``quark.Engine`` is a drop-in for ``world_engine.MLXWorldEngine``
+  # on the same hardware, runs the DiT on Metal-cpp directly + the
+  # TAEHV VAE on the Apple Neural Engine, and matches the bench's
+  # measured wall-step (~63 ms / call at 360p). The ``[engine]``
+  # extra brings in torch / Pillow / PyYAML / einops — already
+  # transitively present in Biome's deps, no new top-level surface.
+  "quark[engine] ; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]
@@ -52,7 +59,14 @@ llama-cpp-python = [
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-linux-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
   { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.33-cu128-Basic-win-20260315/llama_cpp_python-0.3.33%2Bcu128.basic-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
-mlx = { url = "https://github.com/ml-explore/mlx/archive/435f0b6cdb8ecdce952d8abe69ca05e441dd1b4f.zip" }
+# Pin to the experimental Apple Silicon integration branch on quark —
+# combines the native-Metal driver (``remove-mlx`` PR #21) with the
+# standalone Engine API (``carson/standalone`` PR #22) plus the
+# Apple-Silicon-specific tweaks for ``Engine`` (taehv VAE on the ANE,
+# manual eager loop, weight pinning, sync=False commit overlap). Bump
+# the rev to update; not heading to quark main yet so the branch ref
+# would drift under us if we tracked the head.
+quark = { git = "https://github.com/Overworldai/quark.git", rev = "64cd8b1" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

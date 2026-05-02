@@ -382,18 +382,26 @@ class WorldEngineManager:
             logger.info("[1/4] Importing WorldEngine...")
             self._report_progress(SESSION_LOADING_IMPORT)
             import_start = time.perf_counter()
-            from world_engine import CtrlInput as CI
 
             if self.platform == "mlx":
-                from world_engine import MLXWorldEngine
-                logger.info(f"[1/4] Using MLXWorldEngine (Apple Silicon, platform={self.platform})")
+                # Apple Silicon path: ``quark.Engine`` is the WE-shaped
+                # drop-in for the legacy ``MLXWorldEngine`` — Metal-cpp
+                # DiT + ANE TAEHV decode, no MLX dependency. ``CtrlInput``
+                # comes from quark too so the dataclass + field defaults
+                # match the engine's expectations.
+                from quark import CtrlInput as CI
+                from quark import Engine as QuarkEngine
+                logger.info(
+                    f"[1/4] Using quark.Engine (Apple Silicon, platform={self.platform})"
+                )
             else:
+                from world_engine import CtrlInput as CI
                 from world_engine import WorldEngine
                 logger.info(f"[1/4] Using WorldEngine (platform={self.platform})")
 
             self.CtrlInput = CI
             logger.info(
-                f"[1/4] WorldEngine imported in {time.perf_counter() - import_start:.2f}s"
+                f"[1/4] Engine module imported in {time.perf_counter() - import_start:.2f}s"
             )
 
             self._report_progress(SESSION_LOADING_MODEL)
@@ -408,22 +416,22 @@ class WorldEngineManager:
             selected_dtype = None
 
             if self.platform == "mlx":
-                # MLX always uses int8 "speed" profile regardless of client quant setting.
+                # quark.Engine on Apple Silicon: bf16 end-to-end. Metal
+                # has no native fp8 (no e4m3 in MSL) and no int8 KV
+                # path in quark today, so the client-supplied
+                # ``requested_quant`` is ignored — ``available_quants()``
+                # only offers ``"none"`` on this platform anyway.
                 try:
-                    logger.info(f"[2/4] Loading MLXWorldEngine (int8_profile='speed')")
+                    logger.info("[2/4] Loading quark.Engine (quant='bf16')")
 
-                    def _create_mlx_engine():
-                        return MLXWorldEngine(
-                            requested_model,
-                            int8_profile="speed",
-                            ane_vae=True,
-                        )
+                    def _create_quark_engine():
+                        return QuarkEngine(requested_model, quant="bf16")
 
-                    new_engine = await self._run_on_engine_thread(_create_mlx_engine)
-                    selected_dtype = "float16 (MLX)"
+                    new_engine = await self._run_on_engine_thread(_create_quark_engine)
+                    selected_dtype = "bfloat16 (quark Metal + ANE)"
                 except Exception as e:
                     last_error = e
-                    logger.error(f"[2/4] MLXWorldEngine load failed: {e}", exc_info=True)
+                    logger.error(f"[2/4] quark.Engine load failed: {e}", exc_info=True)
                     await self._run_on_engine_thread(self._unload_engine_sync)
             else:
                 # CUDA/CPU engine with dtype fallback
@@ -554,12 +562,19 @@ class WorldEngineManager:
             f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s"
         )
 
-        t0 = time.perf_counter()
-        logger.info("[RESET] Starting engine.set_prompt()...")
-        await self._run_on_engine_thread(
-            lambda: self.engine.set_prompt(self.current_prompt)
-        )
-        logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+        if self.has_prompt_conditioning:
+            t0 = time.perf_counter()
+            logger.info("[RESET] Starting engine.set_prompt()...")
+            await self._run_on_engine_thread(
+                lambda: self.engine.set_prompt(self.current_prompt)
+            )
+            logger.info(f"[RESET] engine.set_prompt() took {time.perf_counter() - t0:.2f}s")
+        else:
+            # The Apple Silicon path uses ``quark.Engine``, which raises
+            # ``NotImplementedError`` from ``set_prompt`` (cross-attn
+            # not ported). Match the ``init_session`` gate — only call
+            # when the model actually conditions on prompts.
+            logger.info("[RESET] No prompt conditioning enabled, skipping engine.set_prompt()")
 
     async def init_session(self):
         """Reset engine, load seed, render initial frame and report progress."""

@@ -17,13 +17,18 @@ Quant = Literal["none", "fp8w8a8", "intw8a8"]
 
 
 def _detect_platform() -> Platform:
-    """Detect the compute platform: 'mlx' (Apple Silicon), 'cuda', or 'cpu'."""
+    """Detect the compute platform: 'mlx' (Apple Silicon, now via
+    ``quark.Engine`` — label retained so existing branches keep
+    triggering), 'cuda', or 'cpu'.
+
+    The ``"mlx"`` literal is a misnomer post-``quark[engine]``: there's
+    no MLX runtime involved, the DiT runs on the native Metal-cpp
+    driver in ``quark`` and the VAE on the ANE via ``quark.taehv``.
+    Renaming to ``"metal"`` is a follow-up touching every branch on
+    this constant — left as separate cleanup.
+    """
     if sys.platform == "darwin" and _platform_mod.machine() == "arm64":
-        try:
-            import mlx.core  # noqa: F401
-            return "mlx"
-        except ImportError:
-            pass
+        return "mlx"
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
@@ -68,7 +73,11 @@ def safety_device() -> Platform:
 def available_quants() -> list[Quant]:
     """Quantization options the server can offer for the current platform."""
     if PLATFORM == "mlx":
-        return ["intw8a8"]
+        # ``quark.Engine`` on Apple Silicon is bf16 end-to-end. Metal
+        # has no native fp8 (no e4m3 in MSL) and no int8 KV path in
+        # quark today. The ``"none"`` quant maps to the engine's
+        # ``QuantConfig.all_bf16()`` profile.
+        return ["none"]
     elif PLATFORM == "cuda":
         return ["none", "fp8w8a8", "intw8a8"]
     else:
