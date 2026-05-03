@@ -1,75 +1,98 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useStreaming } from '../context/StreamingContext'
+import { useStreaming } from '../context/streamingContextValue'
 import MenuSettingsView from './MenuSettingsView'
 import PauseMainView from './PauseMainView'
-import PauseScenesView from './PauseScenesView'
 import { PAUSE_VIEW, type PauseViewKey } from '../constants'
 import { viewFadeVariants } from '../transitions'
 import { useSeedManager } from '../hooks/useSeedManager'
-import { usePinnedScenes } from '../hooks/usePinnedScenes'
+import { useSceneOrder } from '../hooks/useSceneOrder'
 import { usePointerLockFeedback } from '../hooks/usePointerLockFeedback'
 import { useSceneActions } from '../hooks/useSceneActions'
+import { useSceneGeneration } from '../hooks/useSceneGeneration'
+import type { SeedRecord } from '../types/app'
+import { useSettings } from '../hooks/settingsContextValue'
+import { FocusScope } from '../context/FocusScopeContext'
 
-const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
-  const { requestPointerLock, reset, wsRequest } = useStreaming()
+const PauseOverlayContent = () => {
+  const { requestPointerLock, wsRequest, selectSeed } = useStreaming()
+  const { settings } = useSettings()
+  const pauseMenuCode = settings.keybindings.pauseMenu
   const [view, setView] = useState<PauseViewKey>(PAUSE_VIEW.MAIN)
-  const { showUnlockHint, showPauseLockoutTimer, pauseLockoutSecondsText, selectCooldown } =
-    usePointerLockFeedback(isActive)
-
-  const { pinnedSceneIds, togglePinnedScene, removePinnedScene } = usePinnedScenes()
+  const { selectCooldown } = usePointerLockFeedback(true)
+  /** Filename of the most recently-added scene (via prompt OR upload/paste/drop).
+   *  Drives auto-scroll and the "unpause to play" hint in PauseMainView. */
+  const [lastAddedFilename, setLastAddedFilename] = useState<string | null>(null)
 
   const {
     seeds,
+    seedsLoaded,
     thumbnails,
     uploadingImage,
     uploadError,
-    removeScene,
+    removeScene: removeSceneFile,
+    refreshSeeds,
     handleImageUpload,
     handleImageDrop,
     handleClipboardUpload
   } = useSeedManager({
     wsRequest,
-    isActive,
-    onPinnedSceneRemoved: removePinnedScene
+    isActive: true,
+    onPinnedSceneRemoved: (filename: string) => removeScene(filename),
+    // Upload / drop / paste: set the CTA first so it's visible even if things
+    // go wrong. If exactly one image was added, mirror `pasteScene` — tell the
+    // engine to switch to it, then attempt to re-lock the pointer (the file
+    // picker / drop / paste gesture is usually still valid). For multi-file
+    // drops we leave the user on the pause screen with the CTA.
+    onScenesAdded: (filenames: string[]) => {
+      const last = filenames[filenames.length - 1]
+      setLastAddedFilename(last)
+      if (filenames.length === 1) {
+        void selectSeed(last).then(() => requestPointerLock())
+      }
+    }
   })
 
-  const pinnedScenes = useMemo(() => seeds.filter((s) => pinnedSceneIds.includes(s.filename)), [seeds, pinnedSceneIds])
+  const { sceneIds, removeScene, moveScene } = useSceneOrder({
+    seeds,
+    isLoaded: seedsLoaded
+  })
 
-  const { selectScene, pasteScene } = useSceneActions(handleClipboardUpload, isActive && view !== PAUSE_VIEW.SETTINGS)
+  const scenes = useMemo(() => {
+    const byFilename = new Map(seeds.map((s) => [s.filename, s]))
+    return sceneIds.map((id) => byFilename.get(id)).filter((s): s is SeedRecord => s !== undefined)
+  }, [seeds, sceneIds])
+
+  const { selectScene } = useSceneActions(handleClipboardUpload, view !== PAUSE_VIEW.SETTINGS)
+
+  const { generateError, isGenerating, generate } = useSceneGeneration({
+    refreshSeeds,
+    isActive: true,
+    setLastAddedFilename
+  })
 
   useEffect(() => {
-    if (!isActive) {
-      setView(PAUSE_VIEW.MAIN)
-      return
-    }
-
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Escape is always a safety-escape; the user's configured pauseMenu key also re-locks.
+      if (e.key !== 'Escape' && e.code !== pauseMenuCode) return
       // Settings view handles its own Escape (to save draft settings before navigating)
       if (view === PAUSE_VIEW.SETTINGS) return
-      if (view === PAUSE_VIEW.SCENES) {
-        setView(PAUSE_VIEW.MAIN)
-      } else {
-        requestPointerLock()
-      }
+      if (isGenerating) return
+      requestPointerLock()
     }
 
     window.addEventListener('keyup', handleKeyUp)
     return () => window.removeEventListener('keyup', handleKeyUp)
-  }, [isActive, view, requestPointerLock])
-
-  const handleResetAndResume = () => {
-    reset()
-    requestPointerLock()
-  }
+  }, [view, isGenerating, requestPointerLock, pauseMenuCode])
 
   return (
-    <div
-      className={`absolute inset-0 z-45 transition-opacity duration-[240ms] ease-in-out bg-black/[0.34] backdrop-blur-[1.94cqh] ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      id="pause-overlay"
+    <FocusScope
+      active={view !== PAUSE_VIEW.SETTINGS}
+      autoFocus
+      onCancel={requestPointerLock}
+      className="pointer-events-auto absolute inset-0 z-45 bg-black/34 backdrop-blur-[1.94cqh]"
     >
-      <div className="overlay-darken absolute inset-0 pointer-events-none" />
+      <div className="overlay-darken pointer-events-none absolute inset-0" />
       <AnimatePresence mode="wait">
         {view === PAUSE_VIEW.SETTINGS ? (
           <motion.div
@@ -80,9 +103,9 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             animate="animate"
             exit="exit"
           >
-            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} wide />
+            <MenuSettingsView onBack={() => setView(PAUSE_VIEW.MAIN)} />
           </motion.div>
-        ) : view === PAUSE_VIEW.MAIN ? (
+        ) : (
           <motion.div
             key={PAUSE_VIEW.MAIN}
             className="absolute inset-0"
@@ -92,48 +115,53 @@ const PauseOverlay = ({ isActive }: { isActive: boolean }) => {
             exit="exit"
           >
             <PauseMainView
-              pinnedScenes={pinnedScenes}
+              scenes={scenes}
               thumbnails={thumbnails}
-              selectCooldown={selectCooldown}
-              onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
-              onResetAndResume={handleResetAndResume}
-              onNavigate={(v) => setView(v === 'scenes' ? PAUSE_VIEW.SCENES : PAUSE_VIEW.SETTINGS)}
-              requestPointerLock={requestPointerLock}
-              showPauseLockoutTimer={showPauseLockoutTimer}
-              pauseLockoutSecondsText={pauseLockoutSecondsText}
-              showUnlockHint={showUnlockHint}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key={PAUSE_VIEW.SCENES}
-            className="absolute inset-0"
-            variants={viewFadeVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-          >
-            <PauseScenesView
-              seeds={seeds}
-              thumbnails={thumbnails}
-              pinnedSceneIds={pinnedSceneIds}
               selectCooldown={selectCooldown}
               uploadingImage={uploadingImage}
               uploadError={uploadError}
               onSceneSelect={selectScene}
-              onTogglePin={togglePinnedScene}
-              onRemoveScene={removeScene}
+              onRemoveScene={removeSceneFile}
+              onMoveScene={moveScene}
+              onNavigateSettings={() => setView(PAUSE_VIEW.SETTINGS)}
               onImageUpload={handleImageUpload}
               onImageDrop={handleImageDrop}
-              onClipboardUpload={pasteScene}
-              onBack={() => setView(PAUSE_VIEW.MAIN)}
+              requestPointerLock={requestPointerLock}
+              isGenerating={isGenerating}
+              generateError={generateError}
+              lastAddedFilename={lastAddedFilename}
+              onGenerateScene={generate}
             />
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </FocusScope>
+  )
+}
+
+/** The pause menu: shown whenever the user is paused mid-stream. Doubles as
+ *  the first-entry screen (right after LOADING→STREAMING). Self-mounts via
+ *  AnimatePresence so App.tsx just drops `<PauseOverlay />` in and the overlay
+ *  never lingers in the DOM while inactive. */
+const PauseOverlay = () => {
+  const { isPaused, sceneEditState } = useStreaming()
+  const visible = isPaused && sceneEditState.phase === 'inactive'
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="pause-overlay"
+          className="absolute inset-0 z-45"
+          variants={viewFadeVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+        >
+          <PauseOverlayContent />
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

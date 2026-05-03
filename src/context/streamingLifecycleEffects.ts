@@ -82,7 +82,9 @@ export const createStreamingLifecycleEffectHandlers = ({
         if ('key' in info) {
           setEngineError(new TranslatableError(info.key))
         } else {
-          setEngineError(new TranslatableError('app.server.fallbackError', { message: info.transportError }))
+          // transportError is already a TranslatableError — pass it through
+          // without re-wrapping (would add a duplicate "Server error:" prefix).
+          setEngineError(info.transportError)
         }
       }
     },

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { useAudio } from '../context/AudioContext'
-import { usePortal } from '../context/PortalContext'
-import { useStreaming } from '../context/StreamingContext'
+import { useAudio } from '../context/audioContextValue'
+import { usePortal } from '../context/portalContextValue'
+import { useStreaming } from '../context/streamingContextValue'
 
 /** Duration in seconds for music crossfades. */
 const MUSIC_FADE_S = 0.5

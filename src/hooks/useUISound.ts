@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
-import { useAudio } from '../context/AudioContext'
+import { useAudio } from '../context/audioContextValue'
 import { isGooseMode } from '../i18n'
-import { useSettings } from './useSettings'
+import { useSettings } from './settingsContextValue'
 import type { SoundId } from '../lib/audio'
 
 /** Suppress hover sounds for this many ms after a click. */

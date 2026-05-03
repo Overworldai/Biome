@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAudio } from '../context/AudioContext'
-import { useStreaming } from '../context/StreamingContext'
+import { useAudio } from '../context/audioContextValue'
+import { useStreaming } from '../context/streamingContextValue'
 
 /**
  * Centralizes pointer-lock cooldown feedback: plays an error sound and

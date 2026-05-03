@@ -1,26 +1,50 @@
 """
 Image generation module - Uses FLUX.2 Klein 4B for reference-based image editing
-and text-to-image generation, with Qwen3.5 vision (via llama.cpp) for prompt
+and text-to-image generation, with Gemma 4 E4B vision (via llama.cpp) for prompt
 construction and content sanitisation.
 """
 
 import asyncio
 import base64
 import gc
+import json
 import logging
 import time
+from dataclasses import asdict, dataclass
 from io import BytesIO
 
 import numpy as np
 import torch
 from PIL import Image
 
-from qwen_tool_parser import parse_tool_calls
+from gemma4_tool_parser import parse_tool_calls
 
 logger = logging.getLogger(__name__)
 
 SCENE_EDIT_SAFETY_MESSAGE_ID = "app.server.error.sceneEditSafetyRejected"
 GENERATE_SCENE_SAFETY_MESSAGE_ID = "app.server.error.generateSceneSafetyRejected"
+
+
+@dataclass(frozen=True)
+class GeneratedSceneProperties:
+    """Metadata embedded into every Scene Authoring generated JPEG — parallel to
+    RecordingProperties in video_recorder.py. Callers (server.py) construct this
+    explicitly rather than passing a free-form dict, so the schema is fixed and
+    searchable. Persisted in the JPEG's COM segment so each image is
+    self-describing."""
+
+    biome_version: str = "unknown"
+    image_model: str = ""
+    user_prompt: str = ""
+    sanitized_prompt: str = ""
+    generated_at: float = 0.0
+
+
+def properties_to_jpeg_comment(properties: GeneratedSceneProperties) -> bytes:
+    """Encode GeneratedSceneProperties as a compact JSON blob for the JPEG COM
+    marker — same shape as video_recorder's `comment` atom, so tooling that
+    reads one can trivially read the other."""
+    return json.dumps(asdict(properties), separators=(",", ":")).encode("utf-8")
 
 
 class SafetyRejectionError(RuntimeError):
@@ -39,28 +63,46 @@ EDIT_APPEND_COUNT = 32  # How many times to append the edited frame to strengthe
 EDIT_RESET_WITH_FRAME = True  # Reset engine with edited frame as new seed (vs append)
 
 # ── Vision-language model configuration ─────────────────────────────
-VLM_GGUF_REPO = "unsloth/Qwen3.5-4B-GGUF"
-VLM_GGUF_FILE = "Qwen3.5-4B-UD-Q5_K_XL.gguf"
+VLM_GGUF_REPO = "unsloth/gemma-4-E4B-it-GGUF"
+VLM_GGUF_FILE = "gemma-4-E4B-it-UD-Q4_K_XL.gguf"
 VLM_MMPROJ_FILE = "mmproj-F16.gguf"
 VLM_CTX_SIZE = 4096
 VLM_MAX_TOKENS = 1024  # Enough for thinking + tool call, prevents overthinking
 VLM_MAX_RETRIES = 3  # Retry tool-call parsing up to this many times
 VLM_IMAGE_MAX_SIZE = 384  # Downscale frame to this max dimension before sending to VLM
 
-VLM_TOOL_CALL_SUFFIX = (
-    "You MUST call one of these tools:\n\n"
-    "To submit an edit instruction:\n"
-    "<tool_call>\n"
-    "<function=submit_edit_instruction>\n"
-    "<parameter=instruction>YOUR INSTRUCTION HERE</parameter>\n"
-    "</function>\n"
-    "</tool_call>\n\n"
-    "To reject an unsafe request:\n"
-    "<tool_call>\n"
-    "<function=reject_request>\n"
-    "</function>\n"
-    "</tool_call>"
-)
+# Tool schemas passed via `tools=` to create_chat_completion. The Gemma 4
+# chat template renders these into a system block that documents the
+# wire format the model is trained on. Putting the tool definitions
+# here (rather than as literal <tool_call> text in the system prompt)
+# avoids special-token tokenisation pitfalls in user content.
+VLM_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_edit_instruction",
+            "description": "Submit the final edit/generation instruction for the image model.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {
+                        "type": "string",
+                        "description": "The instruction to send to the image model.",
+                    },
+                },
+                "required": ["instruction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reject_request",
+            "description": "Reject a request that is entirely unsafe with no salvageable intent.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+]
 
 VLM_CONTENT_POLICY = (
     "CONTENT POLICY: You MUST sanitize the user's request before "
@@ -110,8 +152,9 @@ VLM_SYSTEM_PROMPT = (
     'shooter. Keep everything else unchanged."\n\n'
     "Always end with 'Keep everything else unchanged.'\n\n"
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
-    "immediately submit your instruction. Do not deliberate at length.\n\n"
-    + VLM_TOOL_CALL_SUFFIX
+    "immediately submit your instruction via the submit_edit_instruction "
+    "tool. Do not deliberate at length. If the request is entirely unsafe "
+    "with no salvageable intent, call reject_request instead."
 )
 
 VLM_GENERATE_SYSTEM_PROMPT = (
@@ -141,8 +184,9 @@ VLM_GENERATE_SYSTEM_PROMPT = (
     "planet. Emergency lights cast a warm amber glow. The corridor "
     'stretches ahead with sealed bulkhead doors."\n\n'
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
-    "immediately submit your instruction. Do not deliberate at length.\n\n"
-    + VLM_TOOL_CALL_SUFFIX
+    "immediately submit your prompt via the submit_edit_instruction tool. "
+    "Do not deliberate at length. If the request is entirely unsafe with "
+    "no salvageable intent, call reject_request instead."
 )
 
 
@@ -155,7 +199,7 @@ def _pil_to_data_uri(image: Image.Image) -> str:
 
 
 class ImageGenManager:
-    """Manages FLUX.2 Klein (editing) + Qwen3.5 (vision-language) for scene editing."""
+    """Manages FLUX.2 Klein (editing) + Gemma 4 E4B (vision-language) for scene editing."""
 
     def __init__(self, engine_executor):
         self.engine_executor = engine_executor
@@ -187,18 +231,16 @@ class ImageGenManager:
         self._loaded = True
 
     def _load_vlm_sync(self):
-        """Load the Qwen3.5 vision-language model via llama.cpp (GGUF)."""
+        """Load the Gemma 4 vision-language model via llama.cpp (GGUF)."""
         from huggingface_hub import hf_hub_download
         from llama_cpp import Llama
-        from llama_cpp.llama_chat_format import Qwen35ChatHandler
+        from llama_cpp.llama_chat_format import Gemma4ChatHandler
 
         model_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_GGUF_FILE)
         mmproj_path = hf_hub_download(repo_id=VLM_GGUF_REPO, filename=VLM_MMPROJ_FILE)
 
-        chat_handler = Qwen35ChatHandler(
+        chat_handler = Gemma4ChatHandler(
             clip_model_path=mmproj_path,
-            enable_thinking=True,
-            add_vision_id=False,
             verbose=False,
         )
         self.vlm = Llama(
@@ -277,13 +319,12 @@ class ImageGenManager:
             t0 = time.perf_counter()
             result = self.vlm.create_chat_completion(
                 messages=messages,
+                tools=VLM_TOOLS,
                 max_tokens=VLM_MAX_TOKENS,
                 temperature=1.0,
                 top_p=0.95,
-                top_k=20,
+                top_k=64,
                 min_p=0.0,
-                present_penalty=1.5,
-                repeat_penalty=1.0,
             )
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
@@ -291,11 +332,6 @@ class ImageGenManager:
             logger.info(
                 f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}"
             )
-
-            # Strip thinking block — the model wraps reasoning in
-            # <think>...</think> which confuses the tool call parser.
-            if "</think>" in raw_output:
-                raw_output = raw_output.split("</think>", 1)[1]
 
             try:
                 prompt = self._parse_edit_instruction(raw_output, safety_message_id)
@@ -426,13 +462,13 @@ class ImageGenManager:
         self,
         prompt: str,
         seed_target_size: tuple[int, int],
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, str]:
         """Generate a new scene from a text prompt using a blank canvas as the
         reference image.  The VLM sanitises / refines the prompt (text-only,
         no image input), then Klein produces the image.
 
         Returns:
-            Generated frame as a uint8 CUDA tensor (HxWx3).
+            (generated frame as uint8 CUDA tensor HxWx3, sanitised prompt string).
         """
         h, w = seed_target_size
 
@@ -464,7 +500,7 @@ class ImageGenManager:
             .to(dtype=torch.uint8, device="cuda")
             .contiguous()
         )
-        return result_tensor
+        return result_tensor, generation_prompt
 
     def unload(self):
         """Free GPU memory used by both models."""

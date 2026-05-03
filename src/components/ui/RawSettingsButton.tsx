@@ -11,7 +11,10 @@ type RawSettingsButtonProps = {
 const RawSettingsButton = ({ className = '', ...rest }: RawSettingsButtonProps) => (
   <RawButton
     autoShrinkLabel
-    className={`min-h-[4.6cqh] leading-[1.15] p-[0.55cqh_1.42cqh] text-[2.67cqh] ${className}`}
+    className={`
+      min-h-[4.6cqh] p-[0.55cqh_1.42cqh] text-[2.67cqh] leading-[1.15]
+      ${className}
+    `}
     {...rest}
   />
 )

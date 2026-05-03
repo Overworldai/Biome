@@ -1,113 +1,226 @@
-import { useMemo } from 'react'
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { SeedRecord } from '../types/app'
 import SceneGrid from './SceneGrid'
+import SceneCardAddButton from './SceneCardAddButton'
+import SceneAuthoringPrompt from './SceneAuthoringPrompt'
 import SocialCtaRow from './SocialCtaRow'
-import ViewLabel from './ui/ViewLabel'
 import MenuButton from './ui/MenuButton'
+import Slider from './ui/Slider'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
+import { useSettings } from '../hooks/settingsContextValue'
 
 interface PauseMainViewProps {
-  pinnedScenes: SeedRecord[]
+  scenes: SeedRecord[]
   thumbnails: Record<string, string>
   selectCooldown: boolean
+  uploadingImage: boolean
+  uploadError: string | null
   onSceneSelect: (filename: string) => void
-  onTogglePin: (filename: string) => void
   onRemoveScene: (seed: SeedRecord) => void
-  onResetAndResume: () => void
-  onNavigate: (view: 'scenes' | 'settings') => void
+  onMoveScene: (filename: string, targetIdx: number) => void
+  onNavigateSettings: () => void
+  onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void
+  onImageDrop: (files: File[]) => void
   requestPointerLock: () => void
-  showPauseLockoutTimer: boolean
-  pauseLockoutSecondsText: string
-  showUnlockHint: boolean
+  isGenerating: boolean
+  generateError: string | null
+  lastAddedFilename: string | null
+  onGenerateScene: (prompt: string) => void
 }
 
 const PauseMainView = ({
-  pinnedScenes,
+  scenes,
   thumbnails,
   selectCooldown,
+  uploadingImage,
+  uploadError,
   onSceneSelect,
-  onTogglePin,
   onRemoveScene,
-  onResetAndResume,
-  onNavigate,
+  onMoveScene,
+  onNavigateSettings,
+  onImageUpload,
+  onImageDrop,
   requestPointerLock,
-  showPauseLockoutTimer,
-  pauseLockoutSecondsText,
-  showUnlockHint
+  isGenerating,
+  generateError,
+  lastAddedFilename,
+  onGenerateScene
 }: PauseMainViewProps) => {
   const { t } = useTranslation()
-  const suffix = ALLOW_USER_SCENES ? t('app.pause.pinnedScenes.uploadSuffix') : t('app.pause.pinnedScenes.pinSuffix')
-  const pinnedSceneIds = useMemo(() => pinnedScenes.map((s) => s.filename), [pinnedScenes])
+  const { settings, saveSettings } = useSettings()
+  const sceneAuthoringEnabled = settings.scene_authoring_enabled ?? false
+  const sceneGridColumns = settings.scene_grid_columns
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dragDepthRef = useRef(0)
+  const [isDragActive, setIsDragActive] = useState(false)
+
+  const hasImagePayload = (event: DragEvent<HTMLDivElement>): boolean => {
+    const dt = event.dataTransfer
+    if (!dt) return false
+
+    // During dragenter/dragover, Chromium/Electron may expose only "Files"
+    // in types and leave files[] empty until drop.
+    const types = Array.from(dt.types || [])
+    if (types.includes('Files')) return true
+
+    if (dt.items && dt.items.length > 0) {
+      return Array.from(dt.items).some((item) => item.kind === 'file')
+    }
+
+    if (dt.files && dt.files.length > 0) {
+      return Array.from(dt.files).some((file) => file.type.startsWith('image/'))
+    }
+
+    return false
+  }
+
+  const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasImagePayload(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current += 1
+    setIsDragActive(true)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasImagePayload(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!isDragActive) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) {
+      setIsDragActive(false)
+    }
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current = 0
+    setIsDragActive(false)
+    const files = Array.from(event.dataTransfer.files || [])
+    if (files.length === 0) return
+    onImageDrop(files)
+  }
 
   return (
-    <div className="absolute inset-0 p-[3.8%_4%]">
+    <div
+      className="absolute inset-0 p-[3.8%_4%]"
+      {...(ALLOW_USER_SCENES
+        ? {
+            onDragEnter: handleDragEnter,
+            onDragOver: handleDragOver,
+            onDragLeave: handleDragLeave,
+            onDrop: handleDrop
+          }
+        : {})}
+    >
       <SocialCtaRow />
 
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[77%] flex flex-col">
-        <h2 className={VIEW_HEADING}>{t('app.pause.pinnedScenes.title')}</h2>
-        <p className={VIEW_DESCRIPTION}>{t('app.pause.pinnedScenes.description', { suffix })}</p>
+      {ALLOW_USER_SCENES && isDragActive && (
+        <div
+          className="
+            pointer-events-none absolute inset-[2.4cqh] z-20 grid place-items-center border
+            border-[rgba(245,249,255,0.86)] bg-[rgba(248,248,245,0.12)]
+          "
+          aria-hidden="true"
+        >
+          <span className="font-serif text-[3.11cqh] text-[rgba(245,249,255,0.95)]">
+            {t('app.pause.scenes.dropImagesToAddScenes')}
+          </span>
+        </div>
+      )}
+
+      <section
+        className={`
+          absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) flex flex-col
+          ${isGenerating ? 'pointer-events-none opacity-60' : ''}
+        `}
+      >
+        <div className="flex items-end justify-between gap-[2cqh]">
+          <div className="min-w-0 flex-1">
+            <h2 className={VIEW_HEADING}>{t('app.pause.scenes.title')}</h2>
+            <p
+              className={`
+                ${VIEW_DESCRIPTION}
+                max-w-full
+              `}
+            >
+              {t(ALLOW_USER_SCENES ? 'app.pause.scenes.sceneSubtitleWithUserScenes' : 'app.pause.scenes.sceneSubtitle')}
+            </p>
+          </div>
+          <div className="w-[30cqh] shrink-0">
+            <Slider
+              variant="discrete"
+              min={3}
+              max={7}
+              value={sceneGridColumns}
+              onChange={(value) => void saveSettings({ ...settings, scene_grid_columns: value })}
+              label="app.pause.scenes.scenesPerRow"
+              suffix={String(sceneGridColumns)}
+            />
+          </div>
+        </div>
+        {uploadError && <p className="m-0 mt-[0.6cqh] font-serif text-caption text-error-bright">{uploadError}</p>}
+        {ALLOW_USER_SCENES && (
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageUpload} style={{ display: 'none' }} />
+        )}
         <SceneGrid
-          seeds={pinnedScenes}
+          scenes={scenes}
           thumbnails={thumbnails}
-          pinnedSceneIds={pinnedSceneIds}
-          pinVariant="pinned-only"
           selectCooldown={selectCooldown}
           onSelect={onSceneSelect}
-          onTogglePin={onTogglePin}
           onRemove={onRemoveScene}
-          emptyState={
-            <div
-              className="w-full aspect-video rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-btn-secondary)] p-0 cursor-default overflow-hidden relative grid place-items-center"
-              aria-hidden="true"
-            >
-              <svg
-                className="w-[36%] h-[36%] text-[rgba(245,249,255,0.5)]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.4" />
-                <polyline points="21,15 16,10 5,21" />
-              </svg>
-            </div>
+          onMoveScene={onMoveScene}
+          autoScrollTo={lastAddedFilename}
+          columns={sceneGridColumns}
+          before={
+            ALLOW_USER_SCENES && (
+              <SceneCardAddButton
+                onClick={() => fileInputRef.current?.click()}
+                title={t('app.buttons.browseForImageFile')}
+                disabled={uploadingImage}
+              />
+            )
           }
         />
+        {sceneAuthoringEnabled && (
+          <SceneAuthoringPrompt
+            isGenerating={isGenerating}
+            generateError={generateError}
+            onGenerate={onGenerateScene}
+          />
+        )}
       </section>
 
-      <ViewLabel>
-        <span className="inline-flex items-end gap-[1.42cqh]">
-          <span>{t('app.pause.title')}</span>
-          <span
-            className={`self-end font-serif text-[2.13cqh] leading-[1.0] tracking-[0.03em] text-[rgba(245,249,255,0.62)] transition-opacity duration-120 ${
-              showPauseLockoutTimer
-                ? 'opacity-100 [animation:pauseUnlockHintPulse_1200ms_ease-out_forwards]'
-                : 'opacity-0'
-            }`}
-          >
-            {showPauseLockoutTimer ? t('app.pause.unlockIn', { seconds: pauseLockoutSecondsText }) : ''}
-          </span>
-        </span>
-      </ViewLabel>
+      {lastAddedFilename && (
+        <p
+          className="
+            pointer-events-none absolute bottom-(--edge-bottom) left-(--edge-left) m-0 flex h-[5.2cqh] items-center
+            font-serif text-body text-text-primary
+          "
+        >
+          {t('app.pause.unpauseToPlay')}
+        </p>
+      )}
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] w-btn-w flex flex-col gap-[1.1cqh]">
-        <MenuButton variant="secondary" label="app.buttons.reset" className="w-full px-0" onClick={onResetAndResume} />
-        <MenuButton
-          variant="secondary"
-          label="app.buttons.scenes"
-          className="w-full px-0"
-          onClick={() => onNavigate('scenes')}
-        />
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) flex gap-[1.1cqh]">
         <MenuButton
           variant="secondary"
           label="app.buttons.settings"
-          className="w-full px-0"
-          onClick={() => onNavigate('settings')}
+          onClick={onNavigateSettings}
+          disabled={isGenerating}
         />
-        <MenuButton variant="primary" label="app.buttons.resume" className="w-full px-0" onClick={requestPointerLock} />
+        <MenuButton variant="primary" label="app.buttons.resume" onClick={requestPointerLock} disabled={isGenerating} />
       </div>
     </div>
   )

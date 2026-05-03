@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import i18n, { resolveLocale } from '../i18n'
 
 const I18nSync = () => {

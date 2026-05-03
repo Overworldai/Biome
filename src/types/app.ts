@@ -1,7 +1,12 @@
+/** Where a seed file lives on disk. Distinguishes bundled defaults from user
+ *  uploads and Scene Authoring output — used to address the right directory
+ *  when deleting, since filenames can collide across sources. */
+export type SeedSource = 'default' | 'uploaded' | 'generated'
+
 /** Seed file record returned by the Electron main process (IPC) */
 export type SeedFileRecord = {
   filename: string
-  is_default: boolean
+  source: SeedSource
   modifiedAt: number
 }
 
@@ -9,7 +14,7 @@ export type SeedFileRecord = {
 export type SeedRecord = {
   filename: string
   is_safe: boolean | null // null = not yet checked
-  is_default: boolean
+  source: SeedSource
 }
 
 export type EngineStatus = {

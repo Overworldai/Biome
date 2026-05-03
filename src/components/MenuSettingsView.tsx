@@ -1,443 +1,120 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../i18n'
-import { invoke } from '../bridge'
-import { SETTINGS_MUTED_TEXT, VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
-import { useSettings } from '../hooks/useSettings'
-import { ENGINE_MODES, QUANT_OPTIONS, type AppLocale, type Keybindings, type QuantOption } from '../types/settings'
-import { useStreaming } from '../context/StreamingContext'
+import type { TranslationKey } from '../i18n'
+import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
+import { useSettings } from '../hooks/settingsContextValue'
+import { useStreaming } from '../context/streamingContextValue'
+import { ENGINE_MODES } from '../types/settings'
 import { useVolumeControls } from '../hooks/useVolumeControls'
 import MenuButton from './ui/MenuButton'
-import SettingsSection from './ui/SettingsSection'
 import SettingsToggle from './ui/SettingsToggle'
-import SettingsSelect from './ui/SettingsSelect'
-import SettingsTextInput from './ui/SettingsTextInput'
-import SettingsSlider from './ui/SettingsSlider'
-import SettingsCheckbox from './ui/SettingsCheckbox'
-import SettingsKeybind, { fixedControlDisplay, fixedControlLabel } from './ui/SettingsKeybind'
-import SettingsRow from './ui/SettingsRow'
-import { FIXED_CONTROLS, getKeybindConflict } from '../hooks/useGameInput'
+import { useGamepadConnected } from '../hooks/useGameInput'
+import { FocusScope } from '../context/FocusScopeContext'
 import Modal from './ui/Modal'
 import ConfirmModal from './ui/ConfirmModal'
 import Button from './ui/Button'
-import WorldEngineSection from './WorldEngineSection'
-import EngineInstallModal from './EngineInstallModal'
 import attributionText from '../../assets/audio/ATTRIBUTION.md?raw'
-import { normalizeServerUrl, toHealthUrl } from '../utils/serverUrl'
-
-type MenuModelOption = {
-  id: string
-  isLocal: boolean | null
-  sizeBytes: number | null
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-type KeybindRowProps =
-  | { label: string; value: string; onChange: (code: string) => void; warning?: string | null; fixedLabel?: never }
-  | { label: string; fixedLabel: string; value?: never; onChange?: never; warning?: never }
-
-const KeybindRow = (props: KeybindRowProps) => {
-  return (
-    <SettingsRow label={props.label} hint={props.warning}>
-      {props.fixedLabel !== undefined ? (
-        <SettingsKeybind value={props.fixedLabel} disabled />
-      ) : (
-        <SettingsKeybind value={props.value} onChange={props.onChange} />
-      )}
-    </SettingsRow>
-  )
-}
+import GeneralTab from './settings/GeneralTab'
+import EngineTab, { type EngineTabHandle } from './settings/EngineTab'
+import KeyboardTab, { type KeyboardTabHandle } from './settings/KeyboardTab'
+import GamepadTab, { type GamepadTabHandle } from './settings/GamepadTab'
+import DebugTab, { type DebugTabHandle } from './settings/DebugTab'
 
 type MenuSettingsViewProps = {
   onBack: () => void
-  wide?: boolean
 }
 
-const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
+type SettingsTab = 'general' | 'engine' | 'keyboard' | 'gamepad' | 'debug'
+
+const SETTINGS_TAB_OPTIONS: { value: SettingsTab; label: TranslationKey }[] = [
+  { value: 'general', label: 'app.settings.tabs.general' },
+  { value: 'engine', label: 'app.settings.tabs.engine' },
+  { value: 'keyboard', label: 'app.settings.tabs.keyboard' },
+  { value: 'gamepad', label: 'app.settings.tabs.gamepad' },
+  { value: 'debug', label: 'app.settings.tabs.debug' }
+]
+
+const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
   const { t } = useTranslation()
   const { settings, saveSettings } = useSettings()
-  const {
-    engineStatus,
-    checkEngineStatus,
-    setupEngine,
-    nukeAndReinstallEngine,
-    isStreaming,
-    mouseSensitivity,
-    setMouseSensitivity,
-    serverAvailableQuants,
-    setServerAvailableQuants
-  } = useStreaming()
+  const gamepadConnected = useGamepadConnected()
+  const { isStreaming, mouseSensitivity, setMouseSensitivity, gamepadSensitivity, setGamepadSensitivity } =
+    useStreaming()
   const volume = useVolumeControls()
 
-  /** Use server-reported quants when available; fall back to client-side platform detection. */
-  const effectiveQuantOptions = useMemo(() => {
-    if (serverAvailableQuants) {
-      return QUANT_OPTIONS.filter((q) => serverAvailableQuants.includes(q))
-    }
-    const isMac = navigator.platform.startsWith('Mac')
-    return isMac ? QUANT_OPTIONS.filter((q) => q === 'intw8a8') : [...QUANT_OPTIONS]
-  }, [serverAvailableQuants])
-
-  const streamingToMenu = (v: number) => Math.round(10 + ((v - 0.1) * 90) / 2.9)
-
-  const configEngineMode = settings.engine_mode
-  const configWorldModel = settings.engine_model
-
-  const [menuLocale, setMenuLocale] = useState<AppLocale>(settings.locale)
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+  const [menuSceneAuthoringEnabled, setMenuSceneAuthoringEnabled] = useState(
+    () => settings.scene_authoring_enabled ?? false
+  )
+  const [menuOfflineMode, setMenuOfflineMode] = useState(() => settings.offline_mode ?? false)
   const [menuEngineMode, setMenuEngineMode] = useState<'server' | 'standalone'>(() =>
-    configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
+    settings.engine_mode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
   )
-  const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
-  const [menuMouseSensitivity, setMenuMouseSensitivity] = useState(() =>
-    streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity)
-  )
-  const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
-    { id: configWorldModel, isLocal: false, sizeBytes: null }
-  ])
-  const [menuModelsLoading, setMenuModelsLoading] = useState(false)
-  const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
-  const [showFixModal, setShowFixModal] = useState(false)
-  const [showNukeModal, setShowNukeModal] = useState(false)
+  const [hasKeybindConflict, setHasKeybindConflict] = useState(false)
   const [showModeSwitchModal, setShowModeSwitchModal] = useState(false)
-  const [showLocalInstallLog, setShowLocalInstallLog] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
 
-  const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
+  const engineRef = useRef<EngineTabHandle>(null)
+  const keyboardRef = useRef<KeyboardTabHandle>(null)
+  const gamepadRef = useRef<GamepadTabHandle>(null)
+  const debugRef = useRef<DebugTabHandle>(null)
 
-  // Clamp selected quant if the server no longer supports it (e.g. switched from CUDA to MLX server)
-  useEffect(() => {
-    if (effectiveQuantOptions.length > 0 && !effectiveQuantOptions.includes(menuQuant)) {
-      setMenuQuant(effectiveQuantOptions[0] as QuantOption)
-    }
-  }, [effectiveQuantOptions, menuQuant])
-
-  const [menuCapInferenceFps, setMenuCapInferenceFps] = useState(() => settings.cap_inference_fps ?? true)
-  const [menuKeybindings, setMenuKeybindings] = useState<Keybindings>(() => ({ ...settings.keybindings }))
-  const [menuSceneEditEnabled, setMenuSceneEditEnabled] = useState(
-    () => settings.experimental?.scene_edit_enabled ?? false
-  )
-  const [menuPerformanceStats, setMenuPerformanceStats] = useState(() => settings.debug_overlays.performance_stats)
-  const [menuInputOverlay, setMenuInputOverlay] = useState(() => settings.debug_overlays.input)
-  const [menuFrameTimeline, setMenuFrameTimeline] = useState(() => settings.debug_overlays.frame_timeline)
-  const [menuActionLogging, setMenuActionLogging] = useState(() => settings.debug_overlays.action_logging)
-
-  const configServerUrl = settings.server_url
-  const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
-
-  const [serverUrlStatus, setServerUrlStatus] = useState<'idle' | 'loading' | 'valid' | 'error'>('idle')
-  const [lastValidatedServerUrl, setLastValidatedServerUrl] = useState('')
-  const [showServerErrorModal, setShowServerErrorModal] = useState(false)
-
-  const serverUrlUsesSecureTransport = /^\s*wss?:\/\//i.test(menuServerUrl)
-    ? /^\s*wss:\/\//i.test(menuServerUrl)
-    : /^\s*https:\/\//i.test(menuServerUrl)
-
-  const [customModelStatus, setCustomModelStatus] = useState<{
-    state: 'idle' | 'loading' | 'error'
-    error: string | null
-  }>({ state: 'idle', error: null })
-
-  const engineReady = engineStatus
-    ? engineStatus.uv_installed && engineStatus.repo_cloned && engineStatus.dependencies_synced
-    : null
-
-  useEffect(() => {
-    if (menuEngineMode === 'standalone') {
-      checkEngineStatus().catch(() => null)
-    }
-  }, [menuEngineMode, checkEngineStatus])
-
-  const serverUrlStatusRef = useRef(serverUrlStatus)
-  serverUrlStatusRef.current = serverUrlStatus
-  useEffect(() => {
-    if (menuEngineMode !== 'server') return
-    if (!menuServerUrl.trim()) return
-    if (serverUrlStatusRef.current !== 'idle') return
-
-    let cancelled = false
-    const validate = async () => {
-      setServerUrlStatus('loading')
-      try {
-        const normalizedUrl = normalizeServerUrl(menuServerUrl)
-        const healthUrl = toHealthUrl(normalizedUrl)
-        const result = await invoke('probe-server-health', healthUrl, 5000)
-        if (cancelled) return
-        if (result.ok) {
-          setServerUrlStatus('valid')
-          setLastValidatedServerUrl(normalizedUrl)
-          setServerAvailableQuants(result.available_quants ?? null)
-        } else {
-          setServerUrlStatus('error')
-        }
-      } catch {
-        if (!cancelled) setServerUrlStatus('error')
-      }
-    }
-    void validate()
-    return () => {
-      cancelled = true
-    }
-  }, [menuEngineMode, menuServerUrl])
-
-  const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
-  const savedCustomModels = settings.custom_models ?? []
-  useEffect(() => {
-    if (menuEngineMode === 'server' && serverUrlStatus !== 'valid') {
-      setMenuModelOptions([{ id: menuWorldModel, isLocal: false, sizeBytes: null }])
-      setMenuModelsLoading(false)
-      return
-    }
-
-    let cancelled = false
-
-    const loadMenuModels = async () => {
-      setMenuModelsLoading(true)
-      setMenuModelsError(null)
-      try {
-        const remoteModels = await invoke('list-waypoint-models')
-        if (cancelled) return
-
-        const ids = [
-          ...new Set([menuWorldModel, ...(Array.isArray(remoteModels) ? remoteModels : []), ...savedCustomModels])
-        ]
-          .map((id) => id.trim())
-          .filter((id) => id.length > 0)
-
-        const [availability, modelsInfo] = await Promise.all([
-          invoke('list-model-availability', ids),
-          invoke('get-models-info', ids, serverUrlForModels)
-        ])
-        if (cancelled) return
-
-        const availabilityMap = new Map((availability || []).map((entry) => [entry.id, !!entry.is_local]))
-        const infoMap = new Map((modelsInfo || []).map((entry) => [entry.id, entry]))
-        setMenuModelOptions(
-          ids.map((id) => ({
-            id,
-            isLocal: availabilityMap.get(id) ?? false,
-            sizeBytes: infoMap.get(id)?.size_bytes ?? null
-          }))
-        )
-      } catch {
-        if (cancelled) return
-        setMenuModelsError(t('app.settings.worldModel.couldNotLoadModelList'))
-      } finally {
-        if (!cancelled) {
-          setMenuModelsLoading(false)
-        }
-      }
-    }
-
-    void loadMenuModels()
-
-    return () => {
-      cancelled = true
-    }
-  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels, t])
-
-  useEffect(() => {
-    setMenuLocale(settings.locale)
-    setMenuEngineMode(configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
-    setMenuWorldModel(configWorldModel)
-    setMenuMouseSensitivity(streamingToMenu(settings.mouse_sensitivity ?? mouseSensitivity))
-    setMenuServerUrl(configServerUrl)
-    setMenuQuant(settings.engine_quant ?? 'none')
-    setMenuKeybindings({ ...settings.keybindings })
-    setMenuSceneEditEnabled(settings.experimental?.scene_edit_enabled ?? false)
-    setMenuPerformanceStats(settings.debug_overlays.performance_stats)
-    setMenuInputOverlay(settings.debug_overlays.input)
-    setMenuFrameTimeline(settings.debug_overlays.frame_timeline)
-    setMenuActionLogging(settings.debug_overlays.action_logging)
-  }, [
-    settings.locale,
-    configEngineMode,
-    configWorldModel,
-    settings.mouse_sensitivity,
-    mouseSensitivity,
-    configServerUrl,
-    settings.keybindings,
-    settings.debug_overlays.performance_stats,
-    settings.debug_overlays.input,
-    settings.debug_overlays.frame_timeline,
-    settings.debug_overlays.action_logging
-  ])
-
-  const handleServerUrlBlur = useCallback(async () => {
-    if (!menuServerUrl.trim()) {
-      setServerUrlStatus('idle')
-      return
-    }
-
-    let normalizedUrl: string
-    try {
-      normalizedUrl = normalizeServerUrl(menuServerUrl)
-    } catch {
-      setServerUrlStatus('error')
-      return
-    }
-
-    if (normalizedUrl === lastValidatedServerUrl && serverUrlStatus === 'valid') return
-
-    setServerUrlStatus('loading')
-    try {
-      const healthUrl = toHealthUrl(normalizedUrl)
-      const result = await invoke('probe-server-health', healthUrl, 5000)
-      if (result.ok) {
-        setServerUrlStatus('valid')
-        setLastValidatedServerUrl(normalizedUrl)
-        if (result.available_quants) setServerAvailableQuants(result.available_quants)
-      } else {
-        setServerUrlStatus('error')
-        setShowServerErrorModal(true)
-      }
-    } catch {
-      setServerUrlStatus('error')
-      setShowServerErrorModal(true)
-    }
-  }, [menuServerUrl, lastValidatedServerUrl, serverUrlStatus])
-
-  const handleEngineModeChange = (mode: 'server' | 'standalone') => {
-    setMenuEngineMode(mode)
-    setServerUrlStatus('idle')
-    setLastValidatedServerUrl('')
-    setServerAvailableQuants(null)
-  }
-
-  const handleWorldModelChange = (model: string) => {
-    setMenuWorldModel(model.trim())
-    setCustomModelStatus({ state: 'idle', error: null })
-  }
-
-  const handleCustomModelBlur = useCallback(
-    async (modelId: string) => {
-      if (menuModelOptions.some((m) => m.id === modelId)) return
-      setCustomModelStatus({ state: 'loading', error: null })
-      try {
-        const results = await invoke('get-models-info', [modelId], serverUrlForModels)
-        const info = results?.[0]
-        if (info && !info.exists) {
-          setCustomModelStatus({ state: 'error', error: info.error ?? t('app.settings.worldModel.modelNotFound') })
-        } else if (info?.error) {
-          setCustomModelStatus({ state: 'error', error: info.error })
-        } else {
-          setCustomModelStatus({ state: 'idle', error: null })
-          setMenuModelOptions((prev) => [...prev, { id: modelId, isLocal: null, sizeBytes: info?.size_bytes ?? null }])
-          if (!savedCustomModels.includes(modelId)) {
-            void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
-          }
-        }
-      } catch {
-        setCustomModelStatus({ state: 'error', error: t('app.settings.worldModel.couldNotCheckModel') })
-      }
-    },
-    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
-  )
-
-  const handleDeleteCustomModel = useCallback(
-    (modelId: string) => {
-      const updated = savedCustomModels.filter((m) => m !== modelId)
-      void saveSettings({ ...settings, custom_models: updated })
-      setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
-      if (menuWorldModel === modelId) {
-        const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
-        setMenuWorldModel(fallback)
-      }
-    },
-    [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
-  )
-
-  const handleLocaleChange = useCallback(
-    (locale: AppLocale) => {
-      setMenuLocale(locale)
-      void saveSettings({ ...settings, locale })
-    },
-    [settings, saveSettings]
-  )
+  const handleConflictChange = useCallback((hasConflict: boolean) => {
+    setHasKeybindConflict(hasConflict)
+  }, [])
 
   const applyDraftSettings = useCallback(async () => {
-    let nextServerUrl = menuServerUrl
-    if (nextServerUrl.trim()) {
-      try {
-        normalizeServerUrl(nextServerUrl)
-      } catch {
-        nextServerUrl = configServerUrl
-      }
-    }
-
-    const engineModeValue = menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE
-    const streamingValue = 0.1 + ((menuMouseSensitivity - 10) * 2.9) / 90
+    const engineDraft = engineRef.current?.collectDraft() ?? {}
+    const keyboardDraft = keyboardRef.current?.collectDraft() ?? {}
+    const gamepadDraft = gamepadRef.current?.collectDraft() ?? {}
+    const debugDraft = debugRef.current?.collectDraft() ?? {}
 
     await saveSettings({
       ...settings,
-      locale: menuLocale,
-      server_url: nextServerUrl,
-      engine_mode: engineModeValue,
-      engine_model: menuWorldModel,
-      engine_quant: menuQuant,
-      cap_inference_fps: menuCapInferenceFps,
-      mouse_sensitivity: streamingValue,
-      keybindings: menuKeybindings,
+      ...engineDraft,
+      ...keyboardDraft,
+      ...gamepadDraft,
+      ...debugDraft,
       audio: volume.getAudioSettings(),
-      experimental: {
-        scene_edit_enabled: menuSceneEditEnabled
-      },
-      debug_overlays: {
-        performance_stats: menuPerformanceStats,
-        input: menuInputOverlay,
-        frame_timeline: menuFrameTimeline,
-        action_logging: menuActionLogging
-      }
+      offline_mode: menuOfflineMode,
+      scene_authoring_enabled: menuSceneAuthoringEnabled
     })
-    setMouseSensitivity(streamingValue)
+    if (keyboardDraft.mouse_sensitivity !== undefined) {
+      setMouseSensitivity(keyboardDraft.mouse_sensitivity)
+    }
+    if (gamepadDraft.gamepad_sensitivity !== undefined) {
+      setGamepadSensitivity(gamepadDraft.gamepad_sensitivity)
+    }
   }, [
     settings,
-    menuLocale,
-    configServerUrl,
-    menuEngineMode,
-    menuMouseSensitivity,
-    menuServerUrl,
-    menuWorldModel,
-    menuQuant,
-    menuCapInferenceFps,
-    menuKeybindings,
-    menuSceneEditEnabled,
-    menuPerformanceStats,
-    menuInputOverlay,
-    menuFrameTimeline,
-    menuActionLogging,
-    volume.getAudioSettings,
     saveSettings,
-    setMouseSensitivity
+    volume,
+    menuSceneAuthoringEnabled,
+    menuOfflineMode,
+    setMouseSensitivity,
+    setGamepadSensitivity
   ])
 
-  const hasEngineModeChanged = menuEngineMode !== (configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone')
-  const hasWorldModelChanged = menuWorldModel !== configWorldModel
-  const hasQuantChanged = menuQuant !== (settings.engine_quant ?? 'none')
-
   const handleBackClick = useCallback(async () => {
-    if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
-      setShowServerErrorModal(true)
-      return
-    }
-    if (isStreaming && (hasEngineModeChanged || hasWorldModelChanged || hasQuantChanged)) {
+    if (hasKeybindConflict) return
+    if (engineRef.current && !engineRef.current.validateBeforeSave()) return
+    const offlineChanged =
+      settings.engine_mode === ENGINE_MODES.STANDALONE && menuOfflineMode !== (settings.offline_mode ?? false)
+    const sceneAuthoringChanged = menuSceneAuthoringEnabled !== (settings.scene_authoring_enabled ?? false)
+    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged || sceneAuthoringChanged)) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
   }, [
-    menuEngineMode,
-    menuServerUrl,
-    serverUrlStatus,
+    hasKeybindConflict,
     isStreaming,
-    hasEngineModeChanged,
-    hasWorldModelChanged,
     applyDraftSettings,
-    onBack
+    onBack,
+    settings,
+    menuOfflineMode,
+    menuSceneAuthoringEnabled
   ])
 
   useEffect(() => {
@@ -451,9 +128,12 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
   }, [handleBackClick])
 
   const handleConfirmEngineModeSwitch = async () => {
-    if (menuEngineMode === 'server' && (!menuServerUrl.trim() || serverUrlStatus !== 'valid')) {
+    if (hasKeybindConflict) {
       setShowModeSwitchModal(false)
-      setShowServerErrorModal(true)
+      return
+    }
+    if (engineRef.current && !engineRef.current.validateBeforeSave()) {
+      setShowModeSwitchModal(false)
       return
     }
     setShowModeSwitchModal(false)
@@ -461,319 +141,68 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
     onBack()
   }
 
-  const handleConfirmFixEngine = async () => {
-    setShowFixModal(false)
-    setShowLocalInstallLog(true)
-    try {
-      await setupEngine()
-      await checkEngineStatus()
-    } catch {
-      // Error is surfaced by engineSetupError and server logs.
-    }
-  }
-
-  const handleConfirmNukeEngine = async () => {
-    setShowNukeModal(false)
-    setShowLocalInstallLog(true)
-    try {
-      await nukeAndReinstallEngine()
-      await checkEngineStatus()
-    } catch {
-      // Error is surfaced by engineSetupError and server logs.
-    }
-  }
-
   return (
-    <div className="absolute inset-0 z-[9] pointer-events-auto">
-      <section className="absolute top-[var(--edge-top-xl)] left-[var(--edge-left)] w-[90%] z-[3] flex flex-col">
+    <FocusScope onCancel={() => void handleBackClick()} autoFocus className="pointer-events-auto absolute inset-0 z-9">
+      <section className="absolute top-(--edge-top) right-(--edge-right) bottom-[11cqh] left-(--edge-left) z-3 flex flex-col">
         <h2 className={VIEW_HEADING}>{t('app.settings.title')}</h2>
         <p className={VIEW_DESCRIPTION}>{t('app.settings.subtitle')}</p>
-        <div
-          className={`styled-scrollbar overflow-y-auto pr-[0.8cqh] pb-[1.0cqh] max-h-[62cqh] mt-[1.1cqh] relative z-[4] flex flex-col gap-[2.3cqh] ${wide ? 'w-[83%]' : 'w-[63%]'}`}
-        >
-          <SettingsSection title="app.settings.engineMode.title" description="app.settings.engineMode.description">
+        <div className="relative z-4 mt-[1.6cqh] flex min-h-0 flex-1 gap-[1.6cqh]">
+          <div className="w-[22cqh] shrink-0">
             <SettingsToggle
-              options={[
-                { value: 'standalone', label: 'app.settings.engineMode.standalone' },
-                { value: 'server', label: 'app.settings.engineMode.server' }
-              ]}
-              value={menuEngineMode}
-              onChange={(v) => handleEngineModeChange(v as 'server' | 'standalone')}
+              orientation="vertical"
+              options={SETTINGS_TAB_OPTIONS}
+              value={activeTab}
+              onChange={(v) => setActiveTab(v as SettingsTab)}
             />
-          </SettingsSection>
-
-          {menuEngineMode === 'server' && (
-            <SettingsSection
-              title="app.settings.serverUrl.title"
-              rawDescription={
-                <span className="inline-flex items-center gap-[0.71cqh] flex-wrap">
-                  {t('app.settings.serverUrl.descriptionPrefix')} ·{' '}
-                  <a
-                    className="underline cursor-pointer text-inherit"
-                    onClick={() =>
-                      window.open(
-                        'https://github.com/Overworldai/Biome/blob/main/server-components/README.md',
-                        '_blank',
-                        'noopener,noreferrer'
-                      )
-                    }
-                  >
-                    {t('app.settings.serverUrl.setupInstructions')}
-                  </a>
-                  {serverUrlStatus === 'loading' && ` · ${t('app.settings.serverUrl.checking')}`}
-                  {serverUrlStatus === 'valid' && (
-                    <>
-                      {` · ${t('app.settings.serverUrl.connected')}`}
-                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(100,220,100,0.95)] shadow-[0_0_5px_1px_rgba(100,220,100,0.4)]" />
-                    </>
-                  )}
-                  {serverUrlStatus === 'error' && (
-                    <>
-                      {` · ${t('app.settings.serverUrl.unreachable')}`}
-                      <span className="inline-block w-[0.98cqh] h-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)] shadow-[0_0_5px_1px_rgba(255,120,80,0.4)]" />
-                    </>
-                  )}
-                </span>
-              }
-            >
-              <SettingsTextInput
-                value={menuServerUrl}
-                onChange={setMenuServerUrl}
-                onBlur={() => void handleServerUrlBlur()}
-                placeholder="app.settings.serverUrl.placeholder"
-              />
-            </SettingsSection>
-          )}
-
-          {menuEngineMode === 'standalone' && (
-            <WorldEngineSection
-              engineReady={engineReady}
-              onFixInPlaceClick={() => setShowFixModal(true)}
-              onTotalReinstallClick={() => setShowNukeModal(true)}
+          </div>
+          <div className="styled-scrollbar min-h-0 flex-1 overflow-y-auto px-[2cqh] pb-[1.0cqh]">
+            <GeneralTab
+              active={activeTab === 'general'}
+              menuEngineMode={menuEngineMode}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              setMenuSceneAuthoringEnabled={setMenuSceneAuthoringEnabled}
+              menuOfflineMode={menuOfflineMode}
+              setMenuOfflineMode={setMenuOfflineMode}
             />
-          )}
-
-          <SettingsSection title="app.settings.worldModel.title" description="app.settings.worldModel.description">
-            <SettingsSelect
-              options={menuModelOptions.map((model) => ({
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === true
-                    ? t('app.settings.worldModel.local')
-                    : model.isLocal === false
-                      ? t('app.settings.worldModel.download')
-                      : null
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                deletable: savedCustomModels.includes(model.id)
-              }))}
-              value={menuWorldModel}
-              onChange={handleWorldModelChange}
-              onDelete={handleDeleteCustomModel}
-              disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
-              allowCustom
-              onCustomBlur={handleCustomModelBlur}
-              customLabel="app.settings.worldModel.custom"
-              deleteLabel="app.settings.worldModel.removeCustomModel"
-              rawCustomPrefix={
-                customModelStatus.state === 'loading'
-                  ? t('app.settings.worldModel.checking')
-                  : customModelStatus.state === 'error'
-                    ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
-                    : undefined
-              }
+            <EngineTab
+              ref={engineRef}
+              settings={settings}
+              active={activeTab === 'engine'}
+              menuEngineMode={menuEngineMode}
+              setMenuEngineMode={setMenuEngineMode}
             />
-            {menuModelsError && (
-              <p className={`${SETTINGS_MUTED_TEXT} text-left [margin:0.35cqh_0_0.8cqh]`}>{menuModelsError}</p>
-            )}
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.performance.title" description="app.settings.performance.description">
-            <div className="flex flex-col gap-[1cqh]">
-              <SettingsRow
-                label={t('app.settings.performance.quantization')}
-                hint={t('app.settings.performance.quantizationDescription')}
-              >
-                <SettingsSelect
-                  options={effectiveQuantOptions.map((q) => ({
-                    value: q,
-                    label: `app.settings.quantization.${q}` as const
-                  }))}
-                  value={menuQuant}
-                  onChange={(v) => setMenuQuant(v as QuantOption)}
-                />
-              </SettingsRow>
-              <SettingsCheckbox
-                label="app.settings.performance.capInferenceFps"
-                description="app.settings.performance.capInferenceFpsDescription"
-                checked={menuCapInferenceFps}
-                onChange={setMenuCapInferenceFps}
-              />
-            </div>
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.language.title" description="app.settings.language.description">
-            <SettingsSelect
-              options={[
-                { value: 'system', label: 'app.settings.language.system' },
-                ...SUPPORTED_LOCALES.map((locale) => ({
-                  value: locale,
-                  rawLabel: LOCALE_DISPLAY_NAMES[locale]
-                }))
-              ]}
-              value={menuLocale}
-              onChange={(value) => handleLocaleChange(value as AppLocale)}
+            <KeyboardTab
+              ref={keyboardRef}
+              settings={settings}
+              active={activeTab === 'keyboard'}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              initialMouseSensitivityFallback={mouseSensitivity}
+              onConflictChange={handleConflictChange}
             />
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.volume.title" description="app.settings.volume.description">
-            <div className="flex flex-col gap-[1.5cqh]">
-              <SettingsSlider
-                min={0}
-                max={100}
-                value={volume.master}
-                onChange={volume.setMaster}
-                label="app.settings.volume.master"
-                suffix={`${volume.master}%`}
-              />
-              <SettingsSlider
-                min={0}
-                max={100}
-                value={volume.sfx}
-                onChange={volume.setSfx}
-                label="app.settings.volume.soundEffects"
-                suffix={`${volume.sfx}%`}
-              />
-              <SettingsSlider
-                min={0}
-                max={100}
-                value={volume.music}
-                onChange={volume.setMusic}
-                label="app.settings.volume.music"
-                suffix={`${volume.music}%`}
-              />
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            title="app.settings.mouseSensitivity.title"
-            description="app.settings.mouseSensitivity.description"
-          >
-            <SettingsSlider
-              min={10}
-              max={100}
-              value={menuMouseSensitivity}
-              onChange={setMenuMouseSensitivity}
-              label="app.settings.mouseSensitivity.sensitivity"
-              suffix={`${menuMouseSensitivity}%`}
+            <GamepadTab
+              ref={gamepadRef}
+              settings={settings}
+              active={activeTab === 'gamepad'}
+              gamepadConnected={gamepadConnected}
+              menuSceneAuthoringEnabled={menuSceneAuthoringEnabled}
+              initialSensitivityFallback={gamepadSensitivity}
             />
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.keybindings.title" description="app.settings.keybindings.description">
-            <KeybindRow
-              label={t('app.settings.keybindings.resetScene')}
-              value={menuKeybindings.reset_scene}
-              onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, reset_scene: code }))}
-              warning={getKeybindConflict(menuKeybindings.reset_scene, [menuKeybindings.scene_edit])}
-            />
-            {menuSceneEditEnabled && (
-              <KeybindRow
-                label={t('app.settings.keybindings.sceneEdit')}
-                value={menuKeybindings.scene_edit}
-                onChange={(code) => setMenuKeybindings((prev) => ({ ...prev, scene_edit: code }))}
-                warning={getKeybindConflict(menuKeybindings.scene_edit, [menuKeybindings.reset_scene])}
-              />
-            )}
-          </SettingsSection>
-
-          <SettingsSection
-            title="app.settings.fixedControls.title"
-            description="app.settings.fixedControls.description"
-          >
-            {FIXED_CONTROLS.map((ctrl) => (
-              <KeybindRow key={ctrl.label} label={fixedControlLabel(ctrl)} fixedLabel={fixedControlDisplay(ctrl)} />
-            ))}
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.experimental.title" description="app.settings.experimental.description">
-            <SettingsCheckbox
-              label="app.settings.experimental.sceneEdit"
-              description="app.settings.experimental.sceneEditDescription"
-              checked={menuSceneEditEnabled}
-              onChange={setMenuSceneEditEnabled}
-            />
-          </SettingsSection>
-
-          <SettingsSection title="app.settings.debugMetrics.title" description="app.settings.debugMetrics.description">
-            <div className="flex flex-col gap-[1cqh]">
-              <SettingsCheckbox
-                label="app.settings.debugMetrics.performanceStats"
-                description="app.settings.debugMetrics.performanceStatsDescription"
-                checked={menuPerformanceStats}
-                onChange={setMenuPerformanceStats}
-              />
-              <SettingsCheckbox
-                label="app.settings.debugMetrics.inputOverlay"
-                description="app.settings.debugMetrics.inputOverlayDescription"
-                checked={menuInputOverlay}
-                onChange={setMenuInputOverlay}
-              />
-              <SettingsCheckbox
-                label="app.settings.debugMetrics.frameTimeline"
-                description="app.settings.debugMetrics.frameTimelineDescription"
-                checked={menuFrameTimeline}
-                onChange={setMenuFrameTimeline}
-              />
-              <SettingsCheckbox
-                label="app.settings.debugMetrics.actionLogging"
-                description="app.settings.debugMetrics.actionLoggingDescription"
-                checked={menuActionLogging}
-                onChange={setMenuActionLogging}
-              />
-            </div>
-          </SettingsSection>
+            <DebugTab ref={debugRef} settings={settings} active={activeTab === 'debug'} />
+          </div>
         </div>
       </section>
 
-      <div className="absolute right-[var(--edge-right)] bottom-[var(--edge-bottom)] z-[5] w-btn-w flex flex-col gap-[1.1cqh]">
-        <MenuButton
-          variant="secondary"
-          label="app.buttons.credits"
-          className="w-full px-0"
-          onClick={() => setShowCredits(true)}
-        />
+      <div className="absolute right-(--edge-right) bottom-(--edge-bottom) z-5 flex gap-[1.1cqh]">
+        <MenuButton variant="secondary" label="app.buttons.credits" onClick={() => setShowCredits(true)} />
         <MenuButton
           variant="primary"
           label="app.buttons.back"
-          className="w-full px-0"
+          disabled={hasKeybindConflict}
           onClick={() => {
             void handleBackClick()
           }}
         />
       </div>
-
-      {showFixModal && (
-        <ConfirmModal
-          title="app.dialogs.fixInPlace.title"
-          description="app.dialogs.fixInPlace.description"
-          onCancel={() => setShowFixModal(false)}
-          onConfirm={() => void handleConfirmFixEngine()}
-          confirmLabel="app.buttons.fix"
-        />
-      )}
-
-      {showNukeModal && (
-        <ConfirmModal
-          title="app.dialogs.totalReinstall.title"
-          description="app.dialogs.totalReinstall.description"
-          onCancel={() => setShowNukeModal(false)}
-          onConfirm={() => void handleConfirmNukeEngine()}
-          confirmLabel="app.buttons.reinstallEverything"
-        />
-      )}
 
       {showModeSwitchModal && (
         <ConfirmModal
@@ -788,36 +217,17 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
         />
       )}
 
-      {showServerErrorModal && (
-        <ConfirmModal
-          title="app.dialogs.serverUnreachable.title"
-          description={
-            !menuServerUrl.trim()
-              ? 'app.dialogs.serverUnreachable.noUrl'
-              : serverUrlUsesSecureTransport
-                ? 'app.dialogs.serverUnreachable.withUrlSecure'
-                : 'app.dialogs.serverUnreachable.withUrl'
-          }
-          descriptionParams={{ url: menuServerUrl }}
-          onConfirm={() => setShowServerErrorModal(false)}
-          onCancel={() => {
-            setShowServerErrorModal(false)
-            setMenuServerUrl(configServerUrl)
-            setServerUrlStatus('idle')
-          }}
-          confirmLabel="app.buttons.editUrl"
-          cancelLabel="app.buttons.revert"
-        />
-      )}
-
-      {showLocalInstallLog && <EngineInstallModal onClose={() => setShowLocalInstallLog(false)} />}
-
       {showCredits && (
         <Modal title="app.settings.credits.title" onBackdropClick={() => setShowCredits(false)}>
-          <pre className="m-0 mt-[0.8cqh] font-mono text-[1.8cqh] text-text-modal-muted whitespace-pre-wrap border border-border-subtle bg-white/5 p-[1.2cqh] rounded-[0.4cqh]">
+          <pre
+            className="
+              m-0 mt-[0.8cqh] rounded-[0.4cqh] border border-border-subtle bg-white/5 p-[1.2cqh] font-mono text-[1.8cqh]
+              whitespace-pre-wrap text-text-modal-muted
+            "
+          >
             {attributionText.trim()}
           </pre>
-          <div className="flex justify-end mt-[1.4cqh]">
+          <div className="mt-[1.4cqh] flex justify-end">
             <Button
               variant="primary"
               autoShrinkLabel
@@ -828,7 +238,7 @@ const MenuSettingsView = ({ onBack, wide }: MenuSettingsViewProps) => {
           </div>
         </Modal>
       )}
-    </div>
+    </FocusScope>
   )
 }
 

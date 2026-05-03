@@ -79,7 +79,12 @@ export const GooseFactTicker = () => {
   }, [activeTips])
 
   return (
-    <div className="w-full text-center font-serif text-[2.35cqh] leading-[1.2] text-[rgba(233,242,255,0.86)] [text-shadow:0_0.12cqh_0.42cqh_rgba(0,0,0,0.42)]">
+    <div
+      className="
+        w-full text-center font-serif text-[2.35cqh] leading-[1.2] text-[rgba(233,242,255,0.86)]
+        [text-shadow:0_0.12cqh_0.42cqh_rgba(0,0,0,0.42)]
+      "
+    >
       {activeTips[gooseFactIndex] ?? ''}
     </div>
   )

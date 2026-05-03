@@ -13,11 +13,15 @@ export function usePortalMediaMount(
 
   // Reset readiness synchronously when videoElement changes, before the render
   // completes. This prevents a flash of the portal at full size with the stale
-  // ready state from the previous video.
+  // ready state from the previous video — but only when the new element isn't
+  // already decoded, otherwise the opacity briefly drops to 0 and we get an
+  // equally bad 1-frame flash in the opposite direction.
   const [prevVideoElement, setPrevVideoElement] = useState(videoElement)
   if (prevVideoElement !== videoElement) {
     setPrevVideoElement(videoElement)
-    setIsPortalMediaReady(false)
+    if (!videoElement || videoElement.readyState < 2) {
+      setIsPortalMediaReady(false)
+    }
   }
 
   useEffect(() => {

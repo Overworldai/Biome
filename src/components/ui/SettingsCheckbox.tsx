@@ -19,7 +19,11 @@ const SettingsCheckbox = ({ label, description, checked, onChange }: SettingsChe
     <SettingsRow label={t(label)} hint={description && t(description)} align="start">
       <button
         type="button"
-        className={`w-[3.2cqh] h-[3.2cqh] shrink-0 flex items-center justify-center cursor-pointer ${SETTINGS_CONTROL_BASE} ${SETTINGS_OUTLINE_HOVER}`}
+        className={`
+          flex h-[3.2cqh] w-[3.2cqh] shrink-0 cursor-pointer items-center justify-center
+          ${SETTINGS_CONTROL_BASE}
+          ${SETTINGS_OUTLINE_HOVER}
+        `}
         onMouseEnter={playHover}
         onClick={() => {
           playClick()
@@ -27,7 +31,7 @@ const SettingsCheckbox = ({ label, description, checked, onChange }: SettingsChe
         }}
       >
         {checked && (
-          <svg viewBox="0 0 16 16" fill="none" className="w-[2cqh] h-[2cqh]">
+          <svg viewBox="0 0 16 16" fill="none" className="h-[2cqh] w-[2cqh]">
             <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" />
           </svg>
         )}

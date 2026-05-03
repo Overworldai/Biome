@@ -8,6 +8,7 @@ const ja = {
         later: '後で',
         quit: '終了',
         reconnect: '再接続',
+        returnToMainMenu: 'メインメニューに戻る',
         close: '閉じる',
         cancel: 'キャンセル',
         back: '戻る',
@@ -19,7 +20,6 @@ const ja = {
         editUrl: 'URLを編集',
         revert: '元に戻す',
         reset: 'リセット',
-        scenes: 'シーン',
         resume: '再開',
         copyReport: 'レポートをコピー',
         saveReport: 'レポートを保存',
@@ -29,8 +29,10 @@ const ja = {
         hideLogs: 'ログを隠す',
         abort: '中止',
         aborting: '中止中...',
-        pasteImageFromClipboard: 'クリップボードから画像を貼り付け',
-        browseForImageFile: '画像ファイルを選択'
+        copy: 'コピー',
+        open: '開く',
+        browseForImageFile: '画像ファイルを選択',
+        delete: '削除'
       },
       dialogs: {
         updateAvailable: {
@@ -69,6 +71,20 @@ const ja = {
           description:
             'エンジンモードまたはワールドモデルを変更すると、現在のセッションが中断され、保留中の設定がすべて適用されます。'
         },
+        deleteModelCache: {
+          title: 'モデルを削除しますか？',
+          description:
+            '<bold>{{modelId}}</bold> はこのデバイスにダウンロードされています。削除するとディスク容量が空きますが、再び使用するにはモデルを再ダウンロードする必要があります。'
+        },
+        recordings: {
+          title: '録画',
+          empty: 'まだ録画がありません。録画を有効にすると、次のセッションから保存されます。',
+          openFolder: 'フォルダを開く',
+          refresh: '更新',
+          confirmDeleteTitle: '録画を削除しますか？',
+          confirmDeleteDescription: '<bold>{{filename}}</bold> を削除しますか？この操作は取り消せません。',
+          openExternally: '開く'
+        },
         serverUnreachable: {
           title: 'サーバーに接続できません',
           withUrl:
@@ -106,9 +122,9 @@ const ja = {
           reproductionSteps: '再現手順',
           recentLogs: '最近のログ',
           fullDiagnostics: '完全な診断情報',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             '完全な診断 JSON はクリップボードにコピーされています。送信前に下へ貼り付けてください。',
-          fullDiagnosticsPaste: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
+          fullDiagnosticsCopyHint: 'アプリ内の「レポートをコピー」を押し、診断 JSON を下へ貼り付けてください。',
           pasteDiagnosticsJson: '<完全な診断 JSON をここに貼り付けてください>',
           saveDiagnosticsJson: '診断 JSON をファイルに保存',
           copying: 'コピー中...',
@@ -124,6 +140,13 @@ const ja = {
       settings: {
         title: '設定',
         subtitle: '世界を好みに合わせて調整します。',
+        tabs: {
+          general: '一般',
+          engine: 'エンジン',
+          keyboard: 'キーボード',
+          gamepad: 'ゲームパッド',
+          debug: 'デバッグ'
+        },
         language: {
           title: '言語',
           description: 'Biome で使用する言語はどれですか？',
@@ -178,7 +201,8 @@ const ja = {
           checking: '確認中...',
           modelNotFound: 'モデルが見つかりません',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
-          couldNotCheckModel: 'モデルを確認できませんでした'
+          couldNotCheckModel: 'モデルを確認できませんでした',
+          deleteLocalCache: 'モデルを削除'
         },
         volume: {
           title: '音量',
@@ -192,43 +216,81 @@ const ja = {
           description: 'マウス移動に対してカメラをどれだけ動かしますか？',
           sensitivity: '感度'
         },
+        gamepadSensitivity: {
+          title: '視点感度',
+          description: '右スティックの移動に対してカメラをどれだけ動かしますか？',
+          sensitivity: '感度'
+        },
         keybindings: {
           title: 'キー設定',
           description: 'どのキーを使いますか？',
-          resetScene: 'シーンをリセット',
-          sceneEdit: 'シーン編集'
+          conflictWith: '<key>「{{other}}」</key>と重複しています',
+          resetToDefaults: 'デフォルトに戻す'
         },
-        fixedControls: {
-          title: '固定コントロール',
-          description: '組み込みの操作は何ですか？',
+        gamepad: {
+          title: 'ゲームパッド',
+          description: 'ゲームパッドでどのように操作しますか？',
+          notDetectedHint: '（ゲームパッドが検出されません。いずれかのボタンを押してみてください！）',
+          labels: {
+            move: '移動',
+            look: '視点',
+            jump: 'ジャンプ',
+            crouch: 'しゃがむ',
+            interact: '操作',
+            sceneEdit: 'シーン編集',
+            sprint: 'ダッシュ',
+            primaryFire: 'メイン射撃',
+            secondaryFire: 'サブ射撃',
+            resetScene: 'シーンをリセット',
+            pauseMenu: 'ポーズメニュー'
+          }
+        },
+        controls: {
           labels: {
             moveForward: '前進',
             moveLeft: '左移動',
             moveBack: '後退',
             moveRight: '右移動',
             jump: 'ジャンプ',
+            crouch: 'しゃがむ',
             sprint: 'ダッシュ',
-            look: '視点移動',
             interact: '操作',
             primaryFire: 'メイン射撃',
             secondaryFire: 'サブ射撃',
-            pauseMenu: 'ポーズメニュー'
-          },
-          values: {
-            mouse: 'マウス',
-            leftClick: '左クリック',
-            rightClick: '右クリック'
+            pauseMenu: 'ポーズメニュー',
+            resetScene: 'シーンをリセット',
+            sceneEdit: 'シーン編集'
           }
         },
-        experimental: {
-          title: '実験的機能',
-          description: 'まだ荒削りで、変更や廃止の可能性があるアイデアを試してみませんか？',
-          sceneEdit: 'シーン編集',
-          sceneEditDescription:
-            'ゲームプレイ中にキーを押して、ローカル画像編集モデルでテキストプロンプトを使ってシーンを編集します。追加で8〜10GBのVRAMが必要です。'
+        offlineMode: {
+          title: 'オフラインモード',
+          description: 'インターネット接続なしでBiomeを使用しますか？',
+          enabled: 'オフラインで動作',
+          enabledDescription:
+            'すでにセットアップ済みのものはそのまま使用できますが、エンジンの再インストールやモデルのダウンロードは失敗します。'
+        },
+        sceneAuthoring: {
+          title: 'シーンオーサリング',
+          description: 'テキストプロンプトでシーンを作成・編集しませんか？',
+          enabled: 'シーンオーサリングを有効化',
+          enabledDescription:
+            'ローカル画像モデルを利用して、テキストプロンプトから新しいシーンを生成したり、現在のシーンを編集したりできます。追加で8〜10GBのVRAMが必要です。',
+          saveGenerated: '生成したシーンを保存',
+          saveGeneratedDescription: '生成したシーンをすべてシーン一覧に残し、後から再利用・削除できるようにします。'
+        },
+        recording: {
+          title: '動画録画',
+          description: 'プレイ内容を録画しますか？',
+          enabled: 'プレイを録画',
+          enabledDescription: 'モデル本来のフレームレートで滑らかな動画を保存します。',
+          outputFolder: '保存先フォルダ',
+          outputFolderHint: '空欄の場合はシステム既定の場所を使用します。',
+          browse: '参照...',
+          manage: '録画の管理',
+          manageDescription: '過去に録画した動画を表示または削除します。'
         },
         debugMetrics: {
-          title: 'デバッグメトリクス',
+          title: 'メトリクス',
           description: '内部で何が起きているか見ますか？',
           performanceStats: '性能統計',
           performanceStatsDescription: 'FPS、フレーム時間、GPU使用率、VRAM、レイテンシのスパークラインを表示します。',
@@ -238,7 +300,11 @@ const ja = {
           frameTimelineDescription: 'スロットごとのタイミングを含むフレーム補間パイプラインを表示します。',
           actionLogging: 'アクションログ',
           actionLoggingDescription:
-            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。'
+            'リプレイ用に全入力をサーバー上のファイルに記録します。OSの一時ディレクトリに書き込まれます。',
+          diagnostics: '診断情報',
+          diagnosticsDescription: 'バグ報告用の診断情報をクリップボードにコピーします。',
+          copiedToClipboard: 'クリップボードにコピーしました',
+          copyFailed: 'コピーに失敗しました'
         },
         credits: {
           title: 'クレジット'
@@ -246,25 +312,24 @@ const ja = {
       },
       pause: {
         title: '一時停止',
-        pinnedScenes: {
-          title: '固定シーン',
-          description: '固定したシーンです。シーンボタンを使って{{suffix}}さらにシーンを表示できます。',
-          uploadSuffix: '、固定、またはアップロードして',
-          pinSuffix: '固定して'
-        },
         unlockIn: '{{seconds}} 秒後に解除',
+        unpauseToPlay: '一時停止を解除してプレイ。',
         scenes: {
           title: 'シーン',
-          description_one: '全 {{count}} 個のシーンです。',
-          description_other: '全 {{count}} 個のシーンです。',
-          uploadHint: 'ボタンでシーンを追加するか、ドラッグまたは貼り付けで追加できます。',
-          dropImagesToAddScenes: '画像をドロップしてシーンを追加'
+          sceneSubtitle: 'シーンをクリックしてプレイ。ドラッグで並べ替え。',
+          sceneSubtitleWithUserScenes: 'シーンをクリックしてプレイ。ドラッグで並べ替え。ボタンまたは貼り付けで追加。',
+          dropImagesToAddScenes: '画像をドロップしてシーンを追加',
+          scenesPerRow: '1行あたりのシーン数'
         },
         sceneCard: {
           unsafe: '安全でない',
           unpinScene: '固定を外す',
           pinScene: '固定する',
           removeScene: 'シーンを削除'
+        },
+        generateScene: {
+          divider: 'またはシーンをプロンプトで生成',
+          placeholder: '何をプレイしたいですか？'
         }
       },
       scenes: {
@@ -305,18 +370,20 @@ const ja = {
         startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
+        networkUnreachable:
+          'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
-          serverStartupFailed: 'サーバーの起動に失敗しました',
+          serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
-          sceneEditModelLoadFailed: 'シーン編集モデルの読み込みに失敗しました',
+          sceneAuthoringModelLoadFailed: 'シーンオーサリングモデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
           generateSceneSafetyRejected:
             'シーン生成が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
-          sceneEditEmptyPrompt: 'プロンプトが空です',
-          sceneEditModelNotLoaded:
-            'シーン編集モデルが読み込まれていません。実験的機能の設定でシーン編集を有効にしてください。',
-          sceneEditAlreadyInProgress: 'シーン編集が既に進行中です',
+          sceneAuthoringEmptyPrompt: 'プロンプトが空です',
+          sceneAuthoringModelNotLoaded:
+            'シーンオーサリングモデルが読み込まれていません。設定でシーンオーサリングを有効にしてください。',
+          sceneAuthoringAlreadyInProgress: 'シーンオーサリングが既に進行中です',
           contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
           cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
@@ -361,8 +428,8 @@ const ja = {
           done: 'モデルを読み込みました。'
         },
         inpainting: {
-          load: 'シーン編集モデルを読み込んでいます...',
-          ready: 'シーン編集モデルの準備ができました。'
+          load: 'シーンオーサリングモデルを読み込んでいます...',
+          ready: 'シーンオーサリングモデルの準備ができました。'
         },
         safety: {
           load: 'コンテンツフィルターを読み込んでいます...',

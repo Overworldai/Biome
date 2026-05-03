@@ -1,0 +1,8 @@
+# Biome test container sway overrides.
+# Loaded from /etc/sway/config.d/ alongside the distro defaults.
+
+# Virtual output for headless mode (wayvnc attaches to this).
+output HEADLESS-1 resolution 1600x1000
+
+# Launch a terminal on startup so the user has something to type into.
+exec gnome-terminal

@@ -8,6 +8,7 @@ const en = {
         later: 'Later',
         quit: 'Quit',
         reconnect: 'Reconnect',
+        returnToMainMenu: 'Return to Main Menu',
         close: 'Close',
         cancel: 'Cancel',
         back: 'Back',
@@ -19,7 +20,6 @@ const en = {
         editUrl: 'Edit URL',
         revert: 'Revert',
         reset: 'Reset',
-        scenes: 'Scenes',
         resume: 'Resume',
         copyReport: 'Copy Report',
         saveReport: 'Save Report',
@@ -29,8 +29,10 @@ const en = {
         hideLogs: 'Hide Logs',
         abort: 'Abort',
         aborting: 'Aborting...',
-        pasteImageFromClipboard: 'Paste image from clipboard',
-        browseForImageFile: 'Browse for image file'
+        copy: 'Copy',
+        open: 'Open',
+        browseForImageFile: 'Browse for image file',
+        delete: 'Delete'
       },
       dialogs: {
         updateAvailable: {
@@ -68,6 +70,20 @@ const en = {
           title: 'Apply Engine Changes?',
           description:
             'Changing engine mode or world model will interrupt your current session and apply all pending settings.'
+        },
+        deleteModelCache: {
+          title: 'Delete Model?',
+          description:
+            '<bold>{{modelId}}</bold> is downloaded on this device. Deleting it will free up disk space, but the model will need to be re-downloaded before it can be used again.'
+        },
+        recordings: {
+          title: 'Recordings',
+          empty: "You haven't recorded anything yet. Turn on recording to capture your next session.",
+          openFolder: 'Open folder',
+          refresh: 'Refresh',
+          confirmDeleteTitle: 'Delete recording?',
+          confirmDeleteDescription: 'Delete <bold>{{filename}}</bold>? This cannot be undone.',
+          openExternally: 'Open'
         },
         serverUnreachable: {
           title: 'Server Unreachable',
@@ -107,9 +123,9 @@ const en = {
           reproductionSteps: 'Reproduction steps',
           recentLogs: 'Recent logs',
           fullDiagnostics: 'Full diagnostics',
-          fullDiagnosticsCopied:
+          fullDiagnosticsCopiedHint:
             'Full diagnostics JSON has been copied to clipboard. Paste it below before submitting.',
-          fullDiagnosticsPaste: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
+          fullDiagnosticsCopyHint: 'Click "Copy Report" in the app and paste the diagnostics JSON below.',
           pasteDiagnosticsJson: '<paste full diagnostics JSON here>',
           saveDiagnosticsJson: 'Save diagnostics JSON to file',
           copying: 'Copying...',
@@ -125,6 +141,13 @@ const en = {
       settings: {
         title: 'Settings',
         subtitle: 'Tweak your world to your liking.',
+        tabs: {
+          general: 'General',
+          engine: 'Engine',
+          keyboard: 'Keyboard',
+          gamepad: 'Gamepad',
+          debug: 'Debug'
+        },
         language: {
           title: 'Language',
           description: 'which language should Biome use?',
@@ -179,7 +202,8 @@ const en = {
           checking: 'checking...',
           modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
-          couldNotCheckModel: 'Could not check model'
+          couldNotCheckModel: 'Could not check model',
+          deleteLocalCache: 'Delete the model'
         },
         volume: {
           title: 'Volume',
@@ -193,43 +217,82 @@ const en = {
           description: 'how much should the camera move when you move your mouse?',
           sensitivity: 'sensitivity'
         },
+        gamepadSensitivity: {
+          title: 'Look Sensitivity',
+          description: 'how much should the camera move when you move the right stick?',
+          sensitivity: 'sensitivity'
+        },
         keybindings: {
           title: 'Keybindings',
           description: 'what keys do you want to use?',
-          resetScene: 'Reset Scene',
-          sceneEdit: 'Scene Edit'
+          conflictWith: 'Conflicts with <key>"{{other}}"</key>',
+          resetToDefaults: 'Reset to Defaults'
         },
-        fixedControls: {
-          title: 'Fixed Controls',
-          description: 'what are the built-in controls?',
+        gamepad: {
+          title: 'Gamepad',
+          description: 'how do you control the game with your gamepad?',
+          notDetectedHint: '(gamepad not detected; try pressing a button!)',
+          labels: {
+            move: 'Move',
+            look: 'Look',
+            jump: 'Jump',
+            crouch: 'Crouch',
+            interact: 'Interact',
+            sceneEdit: 'Scene Edit',
+            sprint: 'Sprint',
+            primaryFire: 'Primary Fire',
+            secondaryFire: 'Secondary Fire',
+            resetScene: 'Reset Scene',
+            pauseMenu: 'Pause Menu'
+          }
+        },
+        controls: {
           labels: {
             moveForward: 'Move Forward',
             moveLeft: 'Move Left',
             moveBack: 'Move Back',
             moveRight: 'Move Right',
             jump: 'Jump',
+            crouch: 'Crouch',
             sprint: 'Sprint',
-            look: 'Look',
             interact: 'Interact',
             primaryFire: 'Primary Fire',
             secondaryFire: 'Secondary Fire',
-            pauseMenu: 'Pause Menu'
-          },
-          values: {
-            mouse: 'Mouse',
-            leftClick: 'Left Click',
-            rightClick: 'Right Click'
+            pauseMenu: 'Pause Menu',
+            resetScene: 'Reset Scene',
+            sceneEdit: 'Scene Edit'
           }
         },
-        experimental: {
-          title: 'Experimental',
-          description: 'want to try some rough ideas that might change or disappear?',
-          sceneEdit: 'Scene Edit',
-          sceneEditDescription:
-            'Press a key during gameplay to edit the scene with a text prompt using a local image edit model. Requires 8-10 GB additional VRAM.'
+        offlineMode: {
+          title: 'Offline Mode',
+          description: 'want to use Biome without an internet connection?',
+          enabled: 'Work Offline',
+          enabledDescription:
+            "You can keep using what's already set up, but engine reinstalls and model downloads will fail."
+        },
+        sceneAuthoring: {
+          title: 'Scene Authoring',
+          description: 'want to compose and modify scenes with text prompts?',
+          enabled: 'Enable Scene Authoring',
+          enabledDescription:
+            'Generate new scenes or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
+          saveGenerated: 'Save Generated Scenes',
+          saveGeneratedDescription:
+            'Keep every generated scene in your Scenes list so you can revisit or delete it later.'
+        },
+        recording: {
+          title: 'Video Recording',
+          description: 'want to record your gameplay?',
+          enabled: 'Record Gameplay',
+          enabledDescription: "Saves smooth videos at the model's full framerate.",
+          outputFolder: 'Output folder',
+          outputFolderHint: 'Leave blank to use the system default.',
+          browse: 'Browse...',
+          manage: 'Manage Recordings',
+          manageDescription: 'View or delete previously recorded videos.'
         },
         debugMetrics: {
-          title: 'Debug Metrics',
+          title: 'Metrics',
           description: "want to see what's happening under the hood?",
           performanceStats: 'Performance Stats',
           performanceStatsDescription: 'Show FPS, frame time, GPU usage, VRAM, and latency sparklines.',
@@ -239,7 +302,11 @@ const en = {
           frameTimelineDescription: 'Show the frame interpolation pipeline with per-slot timing.',
           actionLogging: 'Action Logging',
           actionLoggingDescription:
-            "Record all inputs to a file on the server for replay. Written to the OS's temp directory."
+            "Record all inputs to a file on the server for replay. Written to the OS's temp directory.",
+          diagnostics: 'Diagnostics',
+          diagnosticsDescription: 'Copy diagnostic information to the clipboard for bug reports.',
+          copiedToClipboard: 'Copied to clipboard',
+          copyFailed: 'Failed to copy'
         },
         credits: {
           title: 'Credits'
@@ -247,25 +314,24 @@ const en = {
       },
       pause: {
         title: 'Paused',
-        pinnedScenes: {
-          title: 'Pinned Scenes',
-          description: 'Your pinned scenes. Use the Scenes button to view{{suffix}} more scenes.',
-          uploadSuffix: ', pin or upload',
-          pinSuffix: ' or pin'
-        },
         unlockIn: 'unlock in {{seconds}}s',
+        unpauseToPlay: 'Unpause to play.',
         scenes: {
           title: 'Scenes',
-          description_one: 'All of your {{count}} scene.',
-          description_other: 'All of your {{count}} scenes.',
-          uploadHint: 'Use the buttons to add more scenes, or drag/paste them in.',
-          dropImagesToAddScenes: 'Drop images to add scenes'
+          sceneSubtitle: 'Click a scene to play. Drag to reorder.',
+          sceneSubtitleWithUserScenes: 'Click a scene to play. Drag to reorder. Add with button or paste.',
+          dropImagesToAddScenes: 'Drop images to add scenes',
+          scenesPerRow: 'scenes per row'
         },
         sceneCard: {
           unsafe: 'Unsafe',
           unpinScene: 'Unpin scene',
           pinScene: 'Pin scene',
           removeScene: 'Remove scene'
+        },
+        generateScene: {
+          divider: 'or prompt a scene',
+          placeholder: 'What do you want to play?'
         }
       },
       scenes: {
@@ -306,15 +372,17 @@ const en = {
         startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
+        networkUnreachable:
+          "Couldn't reach the internet. If the engine and model you want are already downloaded, turn on Offline Mode in General Settings to use them without a network.\n\nDetails: {{message}}",
         error: {
-          serverStartupFailed: 'Server startup failed',
+          serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
-          sceneEditModelLoadFailed: 'Scene edit model failed to load',
+          sceneAuthoringModelLoadFailed: 'Scene authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
-          sceneEditEmptyPrompt: 'Empty prompt',
-          sceneEditModelNotLoaded: 'Scene edit model not loaded. Enable Scene Edit in Experimental settings.',
-          sceneEditAlreadyInProgress: 'Scene edit already in progress',
+          sceneAuthoringEmptyPrompt: 'Empty prompt',
+          sceneAuthoringModelNotLoaded: 'Scene authoring model not loaded. Enable Scene Authoring in settings.',
+          sceneAuthoringAlreadyInProgress: 'Scene authoring already in progress',
           contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
@@ -360,8 +428,8 @@ const en = {
           done: 'Model loaded!'
         },
         inpainting: {
-          load: 'Loading scene edit model...',
-          ready: 'Scene edit model ready.'
+          load: 'Loading scene authoring model...',
+          ready: 'Scene authoring model ready.'
         },
         safety: {
           load: 'Loading content filter...',

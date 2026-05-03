@@ -14,10 +14,11 @@
  *   new container dimensions)
  * - Pauses the rAF loop when no component owns the canvas or the tab is hidden
  */
-import { createContext, useContext, useRef, useEffect, useCallback, type ReactNode } from 'react'
-import { useSettings } from '../hooks/useSettings'
+import { useRef, useEffect, useCallback, type ReactNode } from 'react'
+import { useSettings } from '../hooks/settingsContextValue'
 import { isGooseMode } from '../i18n'
 import { VortexRenderer, VORTEX_PORTAL_COUNT, VORTEX_LOADING_COUNT } from '../lib/vortexRenderer'
+import { VortexContext } from './vortexContextValue'
 
 const GOOSE_SPRITESHEET_URL = new URL('../../assets/goose-spritesheet.png', import.meta.url).href
 
@@ -27,14 +28,6 @@ const PARTICLE_COUNTS: Record<VortexMode, number> = {
   portal: VORTEX_PORTAL_COUNT,
   loading: VORTEX_LOADING_COUNT
 }
-
-type VortexContextValue = {
-  claimCanvas: (container: HTMLElement, mode: VortexMode) => void
-  releaseCanvas: (container?: HTMLElement) => void
-  setErrorMode: (error: boolean) => void
-}
-
-const VortexContext = createContext<VortexContextValue | null>(null)
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
@@ -83,6 +76,8 @@ export function VortexProvider({ children }: { children: ReactNode }) {
       resizeObserverRef.current?.disconnect()
       renderer.dispose()
     }
+    // Mount-only: the raf loop re-schedules itself via its own closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const lastSizeRef = useRef({ w: 0, h: 0 })
@@ -111,17 +106,11 @@ export function VortexProvider({ children }: { children: ReactNode }) {
     const rawWarpX = Number.parseFloat(styles.getPropertyValue('--vortex-warp-x'))
     const rawWarpY = Number.parseFloat(styles.getPropertyValue('--vortex-warp-y'))
     const rawSpeedMult = Number.parseFloat(styles.getPropertyValue('--vortex-speed-mult'))
-    const rawProgress = Number.parseFloat(styles.getPropertyValue('--vortex-progress-percent'))
     const warpX = Number.isFinite(rawWarpX) ? rawWarpX : 1
     const warpY = Number.isFinite(rawWarpY) ? rawWarpY : 1
     const speedMult = Number.isFinite(rawSpeedMult) ? rawSpeedMult : 1
-    const progressPercent = clamp(Number.isFinite(rawProgress) ? rawProgress : 0, 0, 100)
-    const progressBoostX = 1 + (progressPercent / 100) * 0.2
-    const progressBoostY = 1 + (progressPercent / 100) * 0.08
-    const effectiveWarpY = Math.min(1.3, warpY * progressBoostY)
-    renderer.setViewWarp(warpX * progressBoostX, effectiveWarpY)
-    const progressSpeedBoost = 1 + (progressPercent / 100) * 0.6
-    renderer.setSpeedMultiplier(speedMult * progressSpeedBoost)
+    renderer.setViewWarp(warpX, warpY)
+    renderer.setSpeedMultiplier(speedMult)
   }, [])
 
   const frame = useCallback(
@@ -204,10 +193,4 @@ export function VortexProvider({ children }: { children: ReactNode }) {
   return (
     <VortexContext.Provider value={{ claimCanvas, releaseCanvas, setErrorMode }}>{children}</VortexContext.Provider>
   )
-}
-
-export function useVortex() {
-  const ctx = useContext(VortexContext)
-  if (!ctx) throw new Error('useVortex must be used within VortexProvider')
-  return ctx
 }

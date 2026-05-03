@@ -1,16 +1,6 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useReducer,
-  useMemo,
-  type ReactNode
-} from 'react'
-import { usePortal } from './PortalContext'
-import { runWarmConnectionFlow } from './streamingWarmConnection'
+import { useState, useEffect, useRef, useCallback, useReducer, useMemo, type ReactNode } from 'react'
+import { usePortal } from './portalContextValue'
+import { runWarmConnectionFlow, toTranslatableError } from './streamingWarmConnection'
 import { TranslatableError } from '../i18n'
 import type { StageId } from '../stages'
 import { buildStreamingLifecycleSyncPayload } from './streamingLifecyclePayload'
@@ -22,29 +12,20 @@ import {
 } from './streamingLifecycleMachine'
 import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
-import { useSettings } from '../hooks/useSettings'
+import { useSettings } from '../hooks/settingsContextValue'
 import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
 import type { StreamingContextValue } from './streamingContextTypes'
+import { StreamingContext } from './streamingContextValue'
 import { initialSceneEditState, sceneEditReducer } from './sceneEditMachine'
 
 const log = createLogger('Streaming')
 
 // Browsers require ~1s delay before pointer lock can be re-requested
 const UNLOCK_DELAY_MS = 1250
-
-export const StreamingContext = createContext<StreamingContextValue | null>(null)
-
-export const useStreaming = () => {
-  const context = useContext(StreamingContext)
-  if (!context) {
-    throw new Error('useStreaming must be used within a StreamingProvider')
-  }
-  return context
-}
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo, shutdown } = usePortal()
@@ -61,8 +42,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isReady: engineReady,
     checkStatus: checkEngineStatus,
     checkServerReady,
+    checkServerRunning,
     checkPortInUse,
     probeServerHealth,
+    getLastServerExitTail,
     serverLogPath,
     setupEngine,
     nukeAndReinstallEngine,
@@ -76,7 +59,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     statusStage,
     error,
     frame,
-    hasRealFrame,
     frameId,
     genTime,
     latentGenMs,
@@ -84,7 +66,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     frameGenMsRef,
     frameTemporalCompressionRef,
     frameIdRef,
-    serverMetrics,
+    connection,
     inputLatency,
     logs: wsLogs,
     allLogs: wsAllLogs,
@@ -93,7 +75,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendControl,
     sendPause,
     sendInit,
-    setInitMetrics,
+    applyInitResponse,
     setPlaceholderFrame,
     reset,
     request: wsRequest,
@@ -113,6 +95,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [sceneEditGrace, setSceneEditGrace] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [mouseSensitivity, setMouseSensitivity] = useState(() => settings.mouse_sensitivity ?? 1.0)
+  const [gamepadSensitivity, setGamepadSensitivity] = useState(() => settings.gamepad_sensitivity ?? 1.0)
   const [fps, setFps] = useState(0)
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
@@ -129,6 +112,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const prevEngineModeRef = useRef(engineMode)
+  const prevOfflineModeRef = useRef(settings.offline_mode ?? false)
   const frameCountRef = useRef(0)
   const lastFpsUpdateRef = useRef(performance.now())
   const inputLoopRef = useRef<number | null>(null)
@@ -182,28 +166,42 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isStandaloneMode, checkEngineStatus])
 
-  // Handle engine mode switching without app restart
+  // Restart whenever a spawn-time setting changes: engine_mode (local-vs-remote
+  // process) or offline_mode (env vars injected at spawn). The env only takes
+  // effect when the Python process starts, so a mid-stream toggle needs a full
+  // teardown-and-reconnect. Offline changes only matter in standalone mode.
   useEffect(() => {
     const prevMode = prevEngineModeRef.current
+    const prevOffline = prevOfflineModeRef.current
+    const nextOffline = settings.offline_mode ?? false
     prevEngineModeRef.current = engineMode
+    prevOfflineModeRef.current = nextOffline
 
-    // Skip if mode hasn't actually changed, or if we're in MAIN_MENU state (nothing to tear down)
-    if (prevMode === engineMode || !prevMode || state === states.MAIN_MENU) return
+    const engineModeChanged = !!prevMode && prevMode !== engineMode
+    const offlineChanged = prevOffline !== nextOffline && engineMode === ENGINE_MODES.STANDALONE
 
-    log.info(`Engine mode changed: ${prevMode} -> ${engineMode}, performing teardown-and-reconnect`)
+    if (!engineModeChanged && !offlineChanged) return
+    if (state === states.MAIN_MENU) return
 
-    // Disconnect existing WebSocket
+    log.info(`Respawn: engine_mode ${prevMode}->${engineMode}, offline ${prevOffline}->${nextOffline}`)
+
     disconnect()
-
-    // If the OLD mode was standalone and the server is running, stop it
-    if (prevMode === ENGINE_MODES.STANDALONE && isServerRunning) {
-      stopServer().catch((err) => log.error('Failed to stop server during mode switch:', err))
+    if (isServerRunning) {
+      stopServer().catch((err) => log.error('Failed to stop server during respawn:', err))
     }
-
-    // Clear any existing error and transition to LOADING to re-trigger connection
     setEngineError(null)
     transitionTo(states.LOADING)
-  }, [engineMode, state, states.MAIN_MENU, states.LOADING, disconnect, isServerRunning, stopServer, transitionTo])
+  }, [
+    engineMode,
+    settings.offline_mode,
+    state,
+    states.MAIN_MENU,
+    states.LOADING,
+    disconnect,
+    isServerRunning,
+    stopServer,
+    transitionTo
+  ])
 
   // Resolve local seeds dir path on mount (does not require server availability)
   useEffect(() => {
@@ -253,21 +251,37 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
           : savedQuant
 
       // Set lastAppliedModel before await to prevent the lifecycle machine from
-      // seeing a model mismatch during the re-render triggered by setInitMetrics.
-      lastAppliedModelRef.current = settings.experimental?.scene_edit_enabled
-        ? `${selectedModel}+scene_edit+${quant}`
+      // seeing a model mismatch during the re-render triggered by applyInitResponse.
+      lastAppliedModelRef.current = settings.scene_authoring_enabled
+        ? `${selectedModel}+scene_authoring+${quant}`
         : `${selectedModel}+${quant}`
+
+      // Recording is standalone-only: in server mode the server owns its own
+      // output directory, so we never send enable=true or a directory path.
+      const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+      const videoOutputDir = recordingEnabled
+        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
+        : undefined
+
+      // App version — embedded into recording metadata so MP4s carry a
+      // self-describing record of what Biome build produced them. Best-effort;
+      // a fetch failure just omits the field from the metadata.
+      const diag = await invoke('get-runtime-diagnostics-meta').catch(() => null)
+      const biomeVersion = diag?.app_version
 
       const metrics = await sendInit({
         model: selectedModel,
         seed_image_data: imageData,
         seed_filename: seedFilename,
-        scene_edit: settings.experimental?.scene_edit_enabled ?? false,
+        scene_authoring: settings.scene_authoring_enabled ?? false,
         action_logging: settings.debug_overlays?.action_logging ?? false,
+        video_recording: recordingEnabled,
+        video_output_dir: videoOutputDir,
+        biome_version: biomeVersion,
         quant: quant !== 'none' ? quant : null,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
-      setInitMetrics(metrics)
+      applyInitResponse(metrics)
     }
 
     bootstrap().catch((err) => log.error('Bootstrap failed:', err))
@@ -275,14 +289,17 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     state,
     states.LOADING,
     isConnected,
+    isStandaloneMode,
     settings?.engine_model,
     settings?.engine_quant,
     settings?.cap_inference_fps,
-    settings.experimental?.scene_edit_enabled,
+    settings.scene_authoring_enabled,
     settings.debug_overlays?.action_logging,
     serverAvailableQuants,
+    settings.recording?.enabled,
+    settings.recording?.output_dir,
     sendInit,
-    setInitMetrics,
+    applyInitResponse,
     setPlaceholderFrame
   ])
 
@@ -293,13 +310,30 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isConnected, setPlaceholderFrame])
 
-  // Live-toggle action logging during streaming without a full re-bootstrap
+  // Live-toggle action logging / video recording during streaming without a full re-bootstrap
   useEffect(() => {
     if (!isStreaming || !isConnected) return
-    sendInit({ action_logging: settings.debug_overlays?.action_logging ?? false }).catch((err) =>
-      log.error('Failed to toggle action logging:', err)
-    )
-  }, [isStreaming, isConnected, settings.debug_overlays?.action_logging, sendInit])
+    const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+    const run = async () => {
+      const videoOutputDir = recordingEnabled
+        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
+        : undefined
+      await sendInit({
+        action_logging: settings.debug_overlays?.action_logging ?? false,
+        video_recording: recordingEnabled,
+        video_output_dir: videoOutputDir
+      })
+    }
+    run().catch((err) => log.error('Failed to toggle action logging / video recording:', err))
+  }, [
+    isStreaming,
+    isConnected,
+    isStandaloneMode,
+    settings.debug_overlays?.action_logging,
+    settings.recording?.enabled,
+    settings.recording?.output_dir,
+    sendInit
+  ])
 
   // Live-toggle inference FPS cap during streaming without a full re-bootstrap
   useEffect(() => {
@@ -344,12 +378,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     dispatchSceneEdit({ type: 'OPEN' })
   }, [exitPointerLock])
 
-  const { pressedKeys, mouseButtons, getInputState, isPointerLocked } = useGameInput(
+  const { pressedKeys, mouseButtons, pressedGamepad, getInputState, isPointerLocked } = useGameInput(
     inputEnabled,
     containerRef,
     handleReset,
     settings.keybindings,
-    settings.experimental?.scene_edit_enabled ? handleSceneEdit : null
+    settings.scene_authoring_enabled ? handleSceneEdit : null,
+    exitPointerLock
   )
 
   useEffect(() => {
@@ -364,11 +399,15 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         engineError,
         hasReceivedFrame,
         socketReady: isReady,
+        // Init is considered complete once applyInitResponse has set model.
+        // Used to gate the LOADING → STREAMING transition so an error between
+        // session.ready and the init response doesn't leak us into streaming.
+        initCompleted: connection.model !== null,
         isPointerLocked,
         settingsOpen,
         isPaused,
         sceneEditActive: sceneEditGrace,
-        sceneEditEnabled: settings.experimental?.scene_edit_enabled,
+        sceneAuthoringEnabled: settings.scene_authoring_enabled,
         engineQuant: settings.engine_quant
       })
     })
@@ -378,10 +417,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     error,
     settings?.engine_model,
     settings?.engine_quant,
-    settings.experimental?.scene_edit_enabled,
+    settings.scene_authoring_enabled,
     engineError,
     hasReceivedFrame,
     isReady,
+    connection.model,
     isPointerLocked,
     settingsOpen,
     isPaused,
@@ -403,14 +443,19 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Clear WS logs before starting a new connection
     clearWsLogs()
 
+    const offlineMode = settings.offline_mode ?? false
+
     runWarmConnectionFlow({
       currentServerPort: serverPort,
       isStandaloneMode,
+      offlineMode,
       endpointUrl,
       serverUrl: settings.server_url,
       isServerRunning,
       checkServerReady,
       checkPortInUse,
+      checkServerRunning,
+      getLastServerExitTail,
       probeServerHealthViaMain: probeServerHealth,
       checkEngineStatus,
       startServer,
@@ -430,10 +475,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       log
     }).catch((err) => {
       if (warmFlowCancelledRef.current) return
-      const message = err instanceof Error ? err.message : String(err)
-      handleServerError(
-        err instanceof TranslatableError ? err : new TranslatableError('app.server.fallbackError', { message })
-      )
+      handleServerError(toTranslatableError(err, offlineMode))
     })
 
     return () => {
@@ -441,6 +483,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       setPreConnectionStage(null)
       setIsFreshInstall(false)
     }
+    // Only restart the warm-connection flow when a new job is requested; all other
+    // referenced values are read latest-at-call-time on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingConnectionJobSeq])
 
   useEffect(() => {
@@ -505,18 +550,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
 
     runStreamingLifecycleEffects({ effects, handlers })
-  }, [
-    lifecycleState,
-    transitionTo,
-    states.MAIN_MENU,
-    states.LOADING,
-    states.STREAMING,
-    disconnect,
-    settings?.engine_model,
-    exitPointerLock,
-    sendPause,
-    resume
-  ])
+  }, [lifecycleState, transitionTo, states, disconnect, settings, exitPointerLock, sendPause, resume])
 
   // Render frames to canvas using createImageBitmap for off-main-thread decoding.
   // Decoded bitmaps are queued with a target displayAt timestamp so multiframe
@@ -544,6 +578,20 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     const drawTick = () => {
       const now = performance.now()
+      // Defense-in-depth: if the queue has grown well beyond one batch worth
+      // of lead (e.g. rAF was paused while the window was backgrounded), drop
+      // the oldest bitmaps and snap the scheduling cursor back to now so new
+      // frames display live instead of replaying stale history.
+      const tc = frameTemporalCompressionRef.current
+      const maxQueue = Math.max(tc * 2, 8)
+      if (bitmapQueueRef.current.length > maxQueue) {
+        const keep = Math.max(tc, 4)
+        const dropCount = bitmapQueueRef.current.length - keep
+        for (let i = 0; i < dropCount; i++) {
+          bitmapQueueRef.current.shift()!.bitmap.close()
+        }
+        lastScheduledAtRef.current = 0
+      }
       const item = bitmapQueueRef.current[0]
       if (item && now >= item.displayAt) {
         bitmapQueueRef.current.shift()
@@ -568,7 +616,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       bitmapQueueRef.current = []
       lastScheduledAtRef.current = 0
     }
-  }, [canvasReady])
+  }, [canvasReady, frameTemporalCompressionRef])
 
   // Decode incoming frames off-thread and push to the draw queue.
   // displayAt is computed inside the .then() callback — i.e. once the bitmap is
@@ -595,7 +643,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         // batch), otherwise chain after the previously reserved slot.  The slot
         // reservation (lastScheduledAtRef) always advances by genMs so that
         // subsequent frames in the same batch are evenly spaced.
-        const displayAt = Math.max(lastScheduledAtRef.current, now)
+        //
+        // Cap the forward lead: if the server bursts frames faster than the
+        // reported genMs (warmup, model switch, backgrounded window) the cursor
+        // can drift far into the future and latency accumulates without bound
+        // (Overworldai/Biome#79).  Allow up to ~2 batches of lead, so intra-
+        // batch spacing still works, but snap back if we overshoot.
+        const batchMs = Math.max(temporalCompression * genMs, 16)
+        const maxLeadMs = Math.max(2 * batchMs, 100)
+        const cappedBase = Math.min(lastScheduledAtRef.current, now + maxLeadMs)
+        const displayAt = Math.max(cappedBase, now)
         lastScheduledAtRef.current = displayAt + genMs
 
         const batchIndex = capturedFrameId % temporalCompression
@@ -607,7 +664,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         bitmapQueueRef.current.push({ bitmap, displayAt, frameId: capturedFrameId, genMs })
       })
       .catch(() => {})
-  }, [frame, canvasReady])
+  }, [frame, canvasReady, frameGenMsRef, frameIdRef, frameTemporalCompressionRef])
 
   // Input loop synced to requestAnimationFrame for minimal jitter
   useEffect(() => {
@@ -620,7 +677,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const tick = () => {
-      const { buttons, mouseDx, mouseDy } = getInputState()
+      const { buttons, mouse, gamepad } = getInputState()
       const scrollUp = buttons.includes('SCROLL_UP')
       const scrollDown = buttons.includes('SCROLL_DOWN')
       if (scrollUp || scrollDown) {
@@ -628,7 +685,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
         scrollTimeoutRef.current = setTimeout(() => setScrollActive({ up: false, down: false }), 150)
       }
-      sendControl(buttons, Math.round(mouseDx * mouseSensitivity), Math.round(mouseDy * mouseSensitivity))
+      const dx = mouse.dx * mouseSensitivity + gamepad.dx * gamepadSensitivity
+      const dy = mouse.dy * mouseSensitivity + gamepad.dy * gamepadSensitivity
+      sendControl(buttons, Math.round(dx), Math.round(dy))
       inputLoopRef.current = requestAnimationFrame(tick)
     }
     inputLoopRef.current = requestAnimationFrame(tick)
@@ -643,7 +702,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         scrollTimeoutRef.current = null
       }
     }
-  }, [inputEnabled, getInputState, sendControl, mouseSensitivity])
+  }, [inputEnabled, getInputState, sendControl, mouseSensitivity, gamepadSensitivity])
 
   // Ref registration callbacks
   const registerContainerRef = useCallback((element: HTMLDivElement | null) => {
@@ -721,9 +780,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       if (!result) return
       lastSeedRef.current = { filename, imageData: result.base64 }
       const metrics = await sendInit({ seed_image_data: result.base64, seed_filename: filename })
-      setInitMetrics(metrics)
+      applyInitResponse(metrics)
     },
-    [sendInit, setInitMetrics]
+    [sendInit, applyInitResponse]
   )
 
   const value: StreamingContextValue = {
@@ -737,6 +796,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     isStreaming,
     isPaused,
+    isUIActive: !inputEnabled,
     pausedAt,
     canUnpause,
     unlockDelayMs: UNLOCK_DELAY_MS,
@@ -759,7 +819,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     },
     showStats,
     setShowStats,
-    serverMetrics,
+    connection,
     inputLatency,
     performanceStatsOverlay: settings.debug_overlays.performance_stats,
     inputOverlay: settings.debug_overlays.input,
@@ -803,10 +863,13 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // Settings
     mouseSensitivity,
     setMouseSensitivity,
+    gamepadSensitivity,
+    setGamepadSensitivity,
 
     // Input state
     pressedKeys,
     mouseButtons,
+    pressedGamepad,
     scrollActive,
     isPointerLocked,
     pointerLockBlockedSeq,
@@ -830,5 +893,3 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   return <StreamingContext.Provider value={value}>{children}</StreamingContext.Provider>
 }
-
-export default StreamingContext

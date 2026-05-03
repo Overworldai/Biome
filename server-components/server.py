@@ -20,6 +20,7 @@ logger.info("Starting server...")
 import asyncio
 import base64
 import hashlib
+import io
 import json
 import os
 import pickle
@@ -33,6 +34,7 @@ from queue import Empty, Queue
 from typing import Optional, TypedDict
 
 from action_logger import ActionLogger
+from video_recorder import RecordingProperties, VideoRecorder
 from progress_stages import (
     Stage,
     STARTUP_BEGIN,
@@ -151,6 +153,9 @@ try:
 
     logger.info(f"torch {torch.__version__} imported")
 
+    import system_info as system_info_module
+    system_info_module.initialize()
+
     logger.info("Importing torchvision...")
     import torchvision
 
@@ -181,6 +186,15 @@ try:
 except Exception as e:
     logger.fatal(f"Import failed: {e}", exc_info=True)
     sys.exit(1)
+
+
+def _error_payload(**fields) -> dict:
+    """Build an error push payload with an attached snapshot of ephemeral
+    state (RAM/VRAM/GPU util at error time).  Every outgoing `error` message
+    should go through this so bug reports capture what the server was
+    actually doing at the failure point."""
+    return {"type": "error", "snapshot": system_info_module.capture_error_snapshot(), **fields}
+
 
 # ============================================================================
 # Global Module Instances
@@ -416,7 +430,13 @@ async def get_model_info(model_id: str):
         info = hf_model_info(model_id, files_metadata=True)
         size_bytes = None
         if hasattr(info, "siblings") and info.siblings:
-            st_files = [s for s in info.siblings if s.rfilename.endswith(".safetensors") and s.size is not None]
+            excluded_basenames = {"diffusion_pytorch_model.safetensors"}
+            st_files = [
+                s for s in info.siblings
+                if s.rfilename.endswith(".safetensors")
+                and s.size is not None
+                and os.path.basename(s.rfilename) not in excluded_basenames
+            ]
             seen_blobs = set()
             for s in st_files:
                 blob_key = getattr(s, "blob_id", None) or s.rfilename
@@ -486,7 +506,6 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
         return {"success": True, "data": {"is_safe": cached["is_safe"], "hash": img_hash}}
 
     # Run safety check (decode + inference off the event loop)
-    import io
     try:
         def _check_safety():
             pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -508,9 +527,98 @@ async def _handle_check_seed_safety(msg: dict) -> dict:
 
 
 
+def _run_generate_scene_on_generator(prompt: str, biome_version: Optional[str]) -> dict:
+    """Generate a new scene from a text prompt and load it as the current seed.
+
+    Runs on the generator thread.  Uses the inpainting pipeline with a blank
+    canvas so the VLM can still sanitise the prompt.  Returns the generated
+    image (base64 JPEG) plus metadata (user prompt, sanitised prompt, model id)
+    so the client can persist it if Scene Authoring auto-save is enabled.
+
+    Image/image_gen imports are function-scoped to keep torch out of the
+    server module's import graph — the logged startup block in this file
+    imports torch once with progress reporting, and nothing at module level
+    should trigger a second uninstrumented load.
+    """
+    from PIL import Image
+    from image_gen import (
+        EDIT_MODEL_ID,
+        GENERATE_SCENE_SAFETY_MESSAGE_ID,
+        GeneratedSceneProperties,
+        SafetyRejectionError,
+        properties_to_jpeg_comment,
+    )
+
+    t0 = time.perf_counter()
+
+    generated, sanitized_prompt = image_gen._generate_scene_sync(
+        prompt, world_engine.seed_target_size
+    )
+
+    # Safety check on the generated image
+    generated_np = world_engine._tensor_to_numpy(generated)
+    generated_pil = Image.fromarray(generated_np)
+    safety_result = safety_checker.check_pil_image(generated_pil)
+    if not safety_result["is_safe"]:
+        logger.warning(
+            f"[GENERATE_SCENE] Safety checker rejected generated image: {safety_result['scores']}"
+        )
+        raise SafetyRejectionError(GENERATE_SCENE_SAFETY_MESSAGE_ID)
+
+    # Encode the generated image as JPEG so the client can save it to disk.
+    # Done before expanding to multiframe so we encode a single HxWx3 frame.
+    # Metadata is embedded via a JPEG COM-marker JSON blob — parallel to how
+    # video_recorder.py stuffs RecordingProperties into the MP4 comment atom.
+    properties = GeneratedSceneProperties(
+        biome_version=biome_version or "unknown",
+        image_model=EDIT_MODEL_ID,
+        user_prompt=prompt,
+        sanitized_prompt=sanitized_prompt,
+        generated_at=time.time(),
+    )
+    jpeg_buf = io.BytesIO()
+    generated_pil.save(
+        jpeg_buf,
+        format="JPEG",
+        quality=92,
+        comment=properties_to_jpeg_comment(properties),
+    )
+    image_b64 = base64.b64encode(jpeg_buf.getvalue()).decode("ascii")
+
+    # Expand to full temporal_compression for multiframe models
+    if world_engine.is_multiframe:
+        generated = (
+            generated.unsqueeze(0)
+            .expand(world_engine.temporal_compression, -1, -1, -1)
+            .contiguous()
+        )
+
+    # Reset engine with the generated frame as the new seed.
+    # Unlike scene_edit, this is a new world — update original_seed_frame
+    # so that "reset" returns to the generated scene, not the old seed.
+    world_engine.seed_frame = generated
+    world_engine.original_seed_frame = generated
+
+    def _reset_with_frame():
+        world_engine.engine.reset()
+        world_engine.engine.append_frame(generated)
+        if world_engine.has_prompt_conditioning:
+            world_engine.engine.set_prompt(world_engine.current_prompt)
+
+    world_engine.cuda_executor.submit(_reset_with_frame).result()
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    logger.info(f"[GENERATE_SCENE] Complete in {elapsed_ms:.0f}ms")
+    return {
+        "elapsed_ms": round(elapsed_ms),
+        "image_jpeg_base64": image_b64,
+        "user_prompt": prompt,
+        "sanitized_prompt": sanitized_prompt,
+        "image_model": EDIT_MODEL_ID,
+    }
+
+
 def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
-    from image_gen import EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT
-    from image_gen import EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET
     """Run inpainting on the generator thread, append via CUDA executor.
 
     Takes the last subframe from the most recent gen_frame output,
@@ -518,8 +626,12 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     to the CUDA executor (required for CUDA graph compatibility), and
     returns preview data for the RPC response.
     """
-    import base64
     from PIL import Image
+    from image_gen import (
+        EDIT_APPEND_COUNT as SCENE_EDIT_APPEND_COUNT,
+        EDIT_RESET_WITH_FRAME as SCENE_EDIT_RESET,
+        SafetyRejectionError,
+    )
 
     last_frame_np = cpu_frames[-1]
 
@@ -538,7 +650,6 @@ def _run_scene_edit_on_generator(prompt: str, cpu_frames: list) -> dict:
     preview_b64 = base64.b64encode(preview_jpeg).decode("ascii")
 
     # Safety check on the inpainted result
-    from image_gen import SafetyRejectionError
     inpainted_pil = Image.fromarray(inpainted_np)
     safety_result = safety_checker.check_pil_image(inpainted_pil)
     if not safety_result["is_safe"]:
@@ -605,7 +716,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         Client -> Server:
             {"type": "control", "buttons": [str], "mouse_dx": float, "mouse_dy": float, "ts": float}
-            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_edit": bool, "action_logging": bool, "quant": str|null}
+            {"type": "init", "req_id": "...", "model": str, "seed_image_data": str, "seed_filename": str, "scene_authoring": bool, "action_logging": bool, "quant": str|null}
             {"type": "reset"}
             {"type": "pause"}
             {"type": "resume"}
@@ -666,11 +777,18 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_startup_waiters.remove(startup_queue)
 
     if startup_error:
-        await websocket.send_text(json.dumps({"type": "error", "message_id": "app.server.error.serverStartupFailed", "message": str(startup_error)}))
+        await websocket.send_text(json.dumps(_error_payload(message_id="app.server.error.serverStartupFailed", message=str(startup_error))))
         log_tail_task.cancel()
         TeeStream.unregister_client(log_queue)
         await websocket.close()
         return
+
+    # Push system info immediately so the client has the hardware identity
+    # even if the session crashes during init (e.g. CUDA graph compilation).
+    await websocket.send_text(json.dumps({
+        "type": "system_info",
+        **system_info_module.system_info,
+    }))
 
     session = Session()
     # Each websocket session must perform an explicit model/seed handshake.
@@ -762,7 +880,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 return False
         else:
             # Run safety check (decode + inference off the event loop)
-            import io
             try:
                 def _check_safety():
                     pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -806,18 +923,27 @@ async def websocket_endpoint(websocket: WebSocket):
         """Handle unified init message — apply deltas for model, seed, flags.
         Returns (ready, seed_loaded): ready=session has a seed frame,
         seed_loaded=a new seed was loaded in this call."""
-        nonlocal scene_edit_requested, action_logging_requested, action_logger, cap_inference_fps
+        nonlocal scene_authoring_requested, action_logging_requested, video_recording_requested, video_output_dir, biome_version, action_logger, video_recorder, cap_inference_fps
 
         model_uri = (msg.get("model") or "").strip()
         seed_data = msg.get("seed_image_data")
         seed_filename = msg.get("seed_filename")
         quant = msg.get("quant")
 
-        # Update flags (scene edit is unavailable on MLX — inpainting deps are CUDA-only)
-        if "scene_edit" in msg:
-            scene_edit_requested = msg["scene_edit"] and not IS_MLX
+        # Update flags. scene_authoring (and the scene_edit/generate_scene
+        # per-message commands behind it) is gated implicitly on Apple Silicon
+        # via image_gen.is_loaded — the inpainting deps are CUDA-only and
+        # ImageGenManager refuses to load on darwin.
+        if "scene_authoring" in msg:
+            scene_authoring_requested = msg["scene_authoring"]
         if "action_logging" in msg:
             action_logging_requested = msg["action_logging"]
+        if "video_recording" in msg:
+            video_recording_requested = msg["video_recording"]
+        if "video_output_dir" in msg:
+            video_output_dir = msg["video_output_dir"]
+        if "biome_version" in msg:
+            biome_version = msg["biome_version"]
         if "cap_inference_fps" in msg:
             cap_inference_fps = msg["cap_inference_fps"]
 
@@ -837,6 +963,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger.end_segment()
                 action_logger = None
                 logger.info(f"[{client_host}] Action logging disabled")
+
+            if video_recording_requested and video_recorder is None:
+                _video_recorder_new_segment()
+                logger.info(f"[{client_host}] Video recording enabled")
+            elif not video_recording_requested and video_recorder is not None:
+                video_recorder.end_segment()
+                video_recorder = None
+                logger.info(f"[{client_host}] Video recording disabled")
 
         # Model delta — reload if model URI or quantization changed.
         # The engine must be loaded before the seed so that seed_target_size
@@ -865,10 +999,14 @@ async def websocket_endpoint(websocket: WebSocket):
         ready = seed_loaded or (world_engine.seed_frame is not None)
         return ready, seed_loaded
 
-    scene_edit_requested = False
+    scene_authoring_requested = False
     action_logging_requested = False
+    video_recording_requested = False
+    video_output_dir: str | None = None
+    biome_version: str | None = None
     cap_inference_fps = True
     action_logger: ActionLogger | None = None
+    video_recorder: VideoRecorder | None = None
     current_seed_hash: str | None = None
     current_seed_filename: str | None = None
 
@@ -913,9 +1051,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except asyncio.TimeoutError:
                 logger.error(f"[{client_host}] Timeout waiting for init")
-                await send_json(
-                    {"type": "error", "message_id": "app.server.error.timeoutWaitingForSeed"}
-                )
+                await send_json(_error_payload(message_id="app.server.error.timeoutWaitingForSeed"))
                 return
 
         # Wire progress callback so engine_manager reports granular stages
@@ -932,23 +1068,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.initFailed"})
             return
 
-        # Load or unload inpainting model based on scene_edit flag.
+        # Load or unload scene authoring model based on flag.
         # Loading happens BEFORE WorldEngine warmup so CUDA graphs
-        # are compiled with the inpainting model's memory already allocated.
-        if not scene_edit_requested and image_gen is not None and image_gen.is_loaded:
-            logger.info(f"[{client_host}] Scene edit disabled — unloading inpainting model")
+        # are compiled with the model's memory already allocated.
+        if not scene_authoring_requested and image_gen is not None and image_gen.is_loaded:
+            logger.info(f"[{client_host}] Scene authoring disabled — unloading model")
             await asyncio.to_thread(image_gen.unload)
 
-        if scene_edit_requested and image_gen is not None and not image_gen.is_loaded:
+        if scene_authoring_requested and image_gen is not None and not image_gen.is_loaded:
             await send_stage(SESSION_INPAINTING_LOAD)
             try:
                 await image_gen.warmup()
                 await send_stage(SESSION_INPAINTING_READY)
             except Exception as e:
-                logger.error(f"[{client_host}] Inpainting warmup failed: {e}", exc_info=True)
-                await send_json({"type": "error", "message_id": "app.server.error.sceneEditModelLoadFailed", "message": str(e)})
+                logger.error(f"[{client_host}] Scene authoring warmup failed: {e}", exc_info=True)
+                await send_json(_error_payload(message_id="app.server.error.sceneAuthoringModelLoadFailed", message=str(e)))
                 if init_req_id:
-                    await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.sceneEditModelLoadFailed"})
+                    await send_json({"type": "response", "req_id": init_req_id, "success": False, "error_id": "app.server.error.sceneAuthoringModelLoadFailed"})
                 return
 
         # Warmup on first connection AFTER seed is loaded
@@ -959,11 +1095,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 err_str = str(e)
                 if "compute capability" in err_str or "scaled_mm" in err_str:
                     logger.error(f"[{client_host}] Errors running selected model, most likely selected quantization mode is unsupported on this GPU. Error message: {err_str}")
-                    await send_json({
-                        "type": "error",
-                        "message_id": "app.server.error.quantUnsupportedGpu",
-                        "params": {"quant": world_engine.quant or "unknown"},
-                    })
+                    await send_json(_error_payload(
+                        message_id="app.server.error.quantUnsupportedGpu",
+                        params={"quant": world_engine.quant or "unknown"},
+                    ))
                     return
                 raise
 
@@ -989,6 +1124,31 @@ async def websocket_endpoint(websocket: WebSocket):
 
         action_logger = ActionLogger(client_host) if action_logging_requested else None
 
+        def _video_recorder_new_segment() -> None:
+            """Ensure the video recorder exists when recording is requested,
+            then start a new segment with the current session's metadata."""
+            nonlocal video_recorder
+            if not video_recording_requested:
+                return
+            if video_recorder is None:
+                video_recorder = VideoRecorder(client_host, output_dir=video_output_dir)
+            video_recorder.new_segment(
+                width=world_engine.seed_target_size[1],
+                height=world_engine.seed_target_size[0],
+                fps=int(world_engine.inference_fps),
+                properties=RecordingProperties(
+                    biome_version=biome_version or "unknown",
+                    model=getattr(world_engine, "model_uri", None),
+                    quant=getattr(world_engine, "quant", None) or "none",
+                    seed=current_seed_filename,
+                    scene_authoring_enabled=scene_authoring_requested,
+                ),
+            )
+
+        def _video_recorder_end_segment() -> None:
+            if video_recorder is not None:
+                video_recorder.end_segment()
+
         def _action_logger_new_segment() -> None:
             if action_logger is not None:
                 action_logger.new_segment(
@@ -1004,6 +1164,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 action_logger.end_segment()
 
         _action_logger_new_segment()
+        _video_recorder_new_segment()
 
         running = True
         paused = False
@@ -1013,6 +1174,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # after the current gen_frame, runs inpainting on the last subframe,
         # appends the result, and resolves the future with preview data.
         scene_edit_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
+        generate_scene_request: dict | None = None  # {"prompt": str, "future": concurrent.futures.Future}
         last_generated_cpu_frames = None  # Most recent CPU numpy frames for scene editing (list)
         ctrl_state = {
             "buttons": set(),
@@ -1026,25 +1188,6 @@ async def websocket_endpoint(websocket: WebSocket):
         frame_ready = asyncio.Event()
         main_loop = asyncio.get_running_loop()
 
-        # Cache device names — queried once per session (both can be slow)
-        try:
-            import cpuinfo
-            _metrics_cpu_name = cpuinfo.get_cpu_info().get("brand_raw") or None
-        except Exception:
-            _metrics_cpu_name = None
-        try:
-            if world_engine.platform == "mlx":
-                import subprocess
-                _metrics_gpu_name = subprocess.check_output(
-                    ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
-                ).strip() + " (Apple GPU)"
-            elif torch.cuda.is_available():
-                _metrics_gpu_name = torch.cuda.get_device_name(0)
-            else:
-                _metrics_gpu_name = None
-        except Exception:
-            _metrics_gpu_name = None
-
         def queue_send(payload: dict | bytes) -> None:
             try:
                 frame_queue.put_nowait(payload)
@@ -1052,69 +1195,21 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception:
                 pass
 
-        # Cached GPU metrics, updated each latent pass and embedded in frame headers
+        # Cached dynamic GPU metrics, updated each latent pass and embedded in
+        # frame headers.  Static identifiers (GPU/CPU name, VRAM total) live
+        # in system_info and are sent once via the init response.
         _cached_gpu_metrics = {
-            "vram_used_mb": -1.0,
-            "vram_total_mb": -1.0,
-            "vram_percent": -1.0,
-            "gpu_util_percent": -1.0,
+            "vram_used_bytes": -1,
+            "gpu_util_percent": -1,
         }
 
-        # One-time NVML init for GPU utilization queries (same backend as nvidia-smi)
-        _nvml_handle = None
-        if not IS_MLX and pynvml is not None:
-            try:
-                pynvml.nvmlInit()
-                _nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(
-                    torch.cuda.current_device() if torch.cuda.is_available() else 0
-                )
-            except Exception:
-                pass
-
-        def _update_mlx_metrics() -> None:
-            """Apple Silicon: unified memory — report process RSS as an approximation."""
-            import resource
-            rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)  # macOS returns bytes
-            _cached_gpu_metrics.update({
-                "vram_used_mb": round(rss_mb, 0),
-                "vram_total_mb": -1.0,
-                "vram_percent": -1.0,
-                "gpu_util_percent": -1.0,
-            })
-
-        def _update_cuda_metrics() -> None:
-            """CUDA: query torch and NVML for VRAM / utilization stats."""
-            if torch.cuda.is_available():
-                vram_used = torch.cuda.memory_allocated() / (1024 * 1024)
-                vram_total = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
-                vram_pct = (vram_used / vram_total * 100) if vram_total > 0 else 0
-            else:
-                vram_used = vram_total = vram_pct = -1
-            gpu_util = -1
-            try:
-                gpu_util = torch.cuda.utilization()
-            except Exception:
-                pass
-            if gpu_util < 0 and _nvml_handle is not None:
-                try:
-                    gpu_util = pynvml.nvmlDeviceGetUtilizationRates(_nvml_handle).gpu
-                except Exception:
-                    pass
-            _cached_gpu_metrics.update({
-                "vram_used_mb": round(vram_used, 0),
-                "vram_total_mb": round(vram_total, 0),
-                "vram_percent": round(vram_pct, 1),
-                "gpu_util_percent": gpu_util,
-            })
-
+        # GPU metrics — system_info_module returns -1 for both fields on Apple
+        # Silicon (no NVML, no torch.cuda). Acceptable for now; a darwin-aware
+        # implementation that reports unified-memory RSS as a proxy lives in
+        # the experimental/biome-base history if we want to reinstate it.
         def _update_gpu_metrics() -> None:
-            try:
-                if IS_MLX:
-                    _update_mlx_metrics()
-                else:
-                    _update_cuda_metrics()
-            except Exception:
-                pass  # metrics are best-effort
+            _cached_gpu_metrics["vram_used_bytes"] = system_info_module.get_vram_used_bytes()
+            _cached_gpu_metrics["gpu_util_percent"] = system_info_module.get_gpu_util_percent()
 
         def build_binary_frame(jpeg: bytes, frame_id: int, client_ts: float, gen_ms: float, temporal_compression: int = 1, profile: dict | None = None) -> bytes:
             header_data = {"frame_id": frame_id, "client_ts": client_ts, "gen_ms": gen_ms, "temporal_compression": temporal_compression}
@@ -1124,24 +1219,26 @@ async def websocket_endpoint(websocket: WebSocket):
             header = json.dumps(header_data, separators=(",", ":")).encode("utf-8")
             return struct.pack("<I", len(header)) + header + jpeg
 
+        def build_init_response_data() -> dict:
+            from engine_manager import DEFAULT_INFERENCE_FPS
+            return {
+                "model": getattr(world_engine, 'model_uri', "") or "",
+                "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
+                "system_info": dict(system_info_module.system_info),
+            }
+
         # Respond to init RPC with session metrics
         if init_req_id:
-            from engine_manager import DEFAULT_INFERENCE_FPS
             await send_json({
                 "type": "response",
                 "req_id": init_req_id,
                 "success": True,
-                "data": {
-                    "gpu_name": _metrics_gpu_name,
-                    "cpu_name": _metrics_cpu_name,
-                    "model": getattr(world_engine, 'model_uri', "") or "",
-                    "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
-                },
+                "data": build_init_response_data(),
             })
             init_req_id = None
 
         async def receiver() -> None:
-            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request
+            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request
             while running:
                 try:
                     raw = await websocket.receive_text()
@@ -1152,18 +1249,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         if msg_type == "init":
                             # init RPC: apply deltas and respond with metrics
                             ready, new_seed = await handle_init(msg, is_game_loop=True)
-                            from engine_manager import DEFAULT_INFERENCE_FPS
                             if ready:
                                 queue_send({
                                     "type": "response",
                                     "req_id": msg["req_id"],
                                     "success": True,
-                                    "data": {
-                                        "gpu_name": _metrics_gpu_name,
-                                        "cpu_name": _metrics_cpu_name,
-                                        "model": getattr(world_engine, 'model_uri', "") or "",
-                                        "inference_fps": getattr(world_engine, 'inference_fps', DEFAULT_INFERENCE_FPS),
-                                    },
+                                    "data": build_init_response_data(),
                                 })
                             else:
                                 queue_send({
@@ -1182,11 +1273,11 @@ async def websocket_endpoint(websocket: WebSocket):
                                 action_logger.scene_edit(msg.get("prompt", "").strip())
                             prompt = msg.get("prompt", "").strip()
                             if not prompt:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditEmptyPrompt"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
                             elif image_gen is None or not image_gen.is_loaded:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditModelNotLoaded"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
                             elif scene_edit_request is not None:
-                                result = {"success": False, "error_id": "app.server.error.sceneEditAlreadyInProgress"}
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringAlreadyInProgress"}
                             else:
                                 import concurrent.futures
                                 fut = concurrent.futures.Future()
@@ -1211,6 +1302,30 @@ async def websocket_endpoint(websocket: WebSocket):
                                 if "success" not in result:
                                     result = {"success": True, "data": result}
                                 queue_send({"type": "response", "req_id": req_id, **result})
+                        elif msg_type == "generate_scene":
+                            # generate_scene: like scene_edit but with a blank
+                            # canvas — generates a new seed from a text prompt.
+                            prompt = msg.get("prompt", "").strip()
+                            if not prompt:
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringEmptyPrompt"}
+                            elif image_gen is None or not image_gen.is_loaded:
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringModelNotLoaded"}
+                            elif scene_edit_request is not None or generate_scene_request is not None:
+                                result = {"success": False, "error_id": "app.server.error.sceneAuthoringAlreadyInProgress"}
+                            else:
+                                import concurrent.futures
+                                fut = concurrent.futures.Future()
+                                generate_scene_request = {"prompt": prompt, "future": fut}
+                                try:
+                                    data = await asyncio.wrap_future(fut)
+                                    result = {"success": True, "data": data}
+                                except Exception as e:
+                                    error_id = getattr(e, "message_id", None)
+                                    if error_id:
+                                        result = {"success": False, "error_id": error_id}
+                                    else:
+                                        result = {"success": False, "error": str(e)}
+                            queue_send({"type": "response", "req_id": msg["req_id"], **result})
                         else:
                             result = await dispatch_request(msg, websocket)
                             req_id = msg["req_id"]
@@ -1300,7 +1415,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     break
 
         def generator() -> None:
-            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, last_generated_cpu_frames
+            nonlocal running, paused, reset_flag, prompt_pending, scene_edit_request, generate_scene_request, last_generated_cpu_frames
 
             def run_coro(coro):
                 return asyncio.run_coroutine_threadsafe(coro, main_loop).result()
@@ -1346,7 +1461,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     _flush_pending()
                     if not _gen_was_paused:
                         _action_logger_end_segment()
+                        _video_recorder_end_segment()
                         _gen_was_paused = True
+
+                    # Handle generate_scene while paused (it's triggered from
+                    # the pause menu, so the generator must process it here).
+                    if generate_scene_request is not None:
+                        req = generate_scene_request
+                        generate_scene_request = None
+                        try:
+                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
+                            session.perceptual_frame_count = 0
+                            req["future"].set_result(data)
+                            # Send the generated seed as a single frame so the
+                            # pause overlay background updates to show the new scene.
+                            seed = world_engine.seed_frame
+                            if seed.dim() == 4:
+                                seed = seed[0]  # First subframe for multiframe models
+                            seed_jpeg = world_engine.frame_to_jpeg(seed)
+                            queue_send(build_binary_frame(seed_jpeg, session.perceptual_frame_count, 0.0, 0.0))
+                        except Exception as e:
+                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
+                            req["future"].set_exception(e)
+
                     time.sleep(0.01)
                     next_frame_time = 0.0
                     continue
@@ -1354,6 +1491,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if _gen_was_paused:
                     _gen_was_paused = False
                     _action_logger_new_segment()
+                    _video_recorder_new_segment()
 
                 try:
                     # Start frame timer before pacing sleep so gen_time
@@ -1373,6 +1511,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         prompt_pending = None
                         run_coro(reset_engine())
                         _action_logger_new_segment()
+                        _video_recorder_new_segment()
                         next_frame_time = 0.0
 
                     # Auto-reset at context length limit (single-frame models only;
@@ -1388,6 +1527,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         run_coro(reset_engine())
                         reset_flag = False
                         _action_logger_new_segment()
+                        _video_recorder_new_segment()
                         next_frame_time = 0.0
 
                     # Handle pending scene edit — runs inpainting on the last
@@ -1401,9 +1541,25 @@ async def websocket_endpoint(websocket: WebSocket):
                                 req["prompt"], last_generated_cpu_frames
                             )
                             session.perceptual_frame_count = 0
+                            if video_recorder is not None:
+                                video_recorder.note_edit(req["prompt"])
                             req["future"].set_result(preview)
                         except Exception as e:
                             logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
+                            req["future"].set_exception(e)
+
+                    # Handle pending generate_scene — creates a new seed from
+                    # a text prompt (blank canvas + inpainting pipeline).
+                    if generate_scene_request is not None:
+                        req = generate_scene_request
+                        generate_scene_request = None
+                        _flush_pending()
+                        try:
+                            data = _run_generate_scene_on_generator(req["prompt"], biome_version)
+                            session.perceptual_frame_count = 0
+                            req["future"].set_result(data)
+                        except Exception as e:
+                            logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
                             req["future"].set_exception(e)
 
                     with ctrl_lock:
@@ -1479,6 +1635,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Keep all subframes for scene editing (read by receiver thread)
                     last_generated_cpu_frames = cpu_frames
 
+                    if video_recorder is not None:
+                        video_recorder.write_frames(cpu_frames)
+
                     # Stash this batch's CPU frames for deferred JPEG encoding
                     _flush_pending.work = (cpu_frames, gen_time, temporal_compression, client_ts, t_infer_start, t_infer, t_sync)
 
@@ -1511,18 +1670,13 @@ async def websocket_endpoint(websocket: WebSocket):
                             )
                             logger.info(f"[{client_host}] Successfully recovered from GPU error")
                         else:
-                            queue_send(
-                                {
-                                    "type": "error",
-                                    "message_id": "app.server.error.cudaRecoveryFailed",
-                                }
-                            )
+                            queue_send(_error_payload(message_id="app.server.error.cudaRecoveryFailed"))
                             logger.error(f"[{client_host}] Failed to recover from GPU error")
                             running = False
                             break
                     else:
                         logger.error(f"[{client_host}] Generation error: {gpu_err}", exc_info=True)
-                        queue_send({"type": "error", "message": str(gpu_err)})
+                        queue_send(_error_payload(message=str(gpu_err)))
                         running = False
                         break
 
@@ -1558,7 +1712,7 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             logger.error(f"[{client_host}] Error: {e}", exc_info=True)
             try:
-                await send_json({"type": "error", "message": str(e)})
+                await send_json(_error_payload(message=str(e)))
             except Exception:
                 pass
     finally:
@@ -1568,6 +1722,8 @@ async def websocket_endpoint(websocket: WebSocket):
         world_engine.set_progress_callback(None)
         if action_logger is not None:
             action_logger.end_segment()
+        if video_recorder is not None:
+            video_recorder.end_segment()
         logger.info(f"[{client_host}] Disconnected (frames: {session.perceptual_frame_count})")
 
 

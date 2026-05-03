@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useAudio } from '../context/AudioContext'
+import { useAudio } from '../context/audioContextValue'
 
 /** UI-facing volume controls that read/write the audio engine directly, converting 0–1 ↔ 0–100. */
 export const useVolumeControls = () => {

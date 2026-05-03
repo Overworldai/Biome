@@ -45,6 +45,11 @@ export function getSeedsUploadsDir(): string {
   return path.join(getConfigDir(), 'seeds', 'uploads')
 }
 
+/** Get the generated seeds directory — images produced by Scene Authoring */
+export function getSeedsGeneratedDir(): string {
+  return path.join(getConfigDir(), 'seeds', 'generated')
+}
+
 /** Get the thumbnail cache directory — in user config dir */
 export function getSeedsThumbnailDir(): string {
   return path.join(getConfigDir(), 'seeds', 'thumbnails')
@@ -76,4 +81,15 @@ export function getResourcePath(resourceName: string): string {
   }
   // In dev, resources are at the project root
   return path.join(app.getAppPath(), resourceName)
+}
+
+/**
+ * Get the path to a bundled font file. In packaged builds, extraResource
+ * flattens fonts into the resources root; in dev, they live under `assets/`.
+ */
+export function getBundledFontPath(filename: string): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, filename)
+  }
+  return path.join(app.getAppPath(), 'assets', filename)
 }

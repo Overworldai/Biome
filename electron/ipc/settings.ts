@@ -2,7 +2,7 @@ import { ipcMain, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getConfigDir, getSeedsDefaultDir, getSeedsUploadsDir } from '../lib/paths.js'
-import { settingsSchema, DEFAULT_PINNED_SCENES } from '../../src/types/settings.js'
+import { settingsSchema, DEFAULT_SCENE_ORDER } from '../../src/types/settings.js'
 import type { Settings } from '../../src/types/settings.js'
 
 const SETTINGS_FILENAME = 'settings.json'
@@ -54,19 +54,53 @@ function migrateFromLegacyConfig(parsed: Record<string, unknown>): Partial<Setti
       migrated.mouse_sensitivity = features.mouse_sensitivity
     }
     if (Array.isArray(features.pinned_scenes)) {
-      migrated.pinned_scenes = features.pinned_scenes.filter((v) => typeof v === 'string')
+      migrated.scene_order = features.pinned_scenes.filter((v): v is string => typeof v === 'string')
     }
   }
 
   return migrated
 }
 
-function validateDefaultPinnedScenes(): void {
+/** Previous versions of the app stored scene order under `pinned_scenes` (and
+ *  later also `unpinned_scene_order`). Combine them into the new `scene_order`
+ *  field when present so upgrades don't reset a user's customised order. */
+function migrateLegacySceneFields(parsed: unknown): unknown {
+  if (typeof parsed !== 'object' || parsed === null) return parsed
+  const obj = parsed as Record<string, unknown>
+  if ('scene_order' in obj) return parsed
+
+  const pinned = Array.isArray(obj.pinned_scenes)
+    ? obj.pinned_scenes.filter((v): v is string => typeof v === 'string')
+    : []
+  const unpinned = Array.isArray(obj.unpinned_scene_order)
+    ? obj.unpinned_scene_order.filter((v): v is string => typeof v === 'string')
+    : []
+  if (pinned.length === 0 && unpinned.length === 0) return parsed
+
+  return { ...obj, scene_order: [...pinned, ...unpinned] }
+}
+
+/** The scene-edit toggle used to live under `experimental.scene_edit_enabled`;
+ *  promoting it out of experimental (and renaming to Scene Authoring) means we
+ *  need to lift any saved value onto the new top-level `scene_authoring_enabled`
+ *  key so upgrading users don't silently lose their toggle state. */
+function migrateSceneAuthoringField(parsed: unknown): unknown {
+  if (typeof parsed !== 'object' || parsed === null) return parsed
+  const obj = parsed as Record<string, unknown>
+  if ('scene_authoring_enabled' in obj) return parsed
+  const experimental = obj.experimental as Record<string, unknown> | undefined
+  if (experimental && typeof experimental.scene_edit_enabled === 'boolean') {
+    return { ...obj, scene_authoring_enabled: experimental.scene_edit_enabled }
+  }
+  return parsed
+}
+
+function validateDefaultScenes(): void {
   const defaultDir = getSeedsDefaultDir()
   const uploadsDir = getSeedsUploadsDir()
   const missing: string[] = []
 
-  for (const filename of DEFAULT_PINNED_SCENES) {
+  for (const filename of DEFAULT_SCENE_ORDER) {
     const inDefault = fs.existsSync(path.join(defaultDir, filename))
     const inUploads = fs.existsSync(path.join(uploadsDir, filename))
     if (!inDefault && !inUploads) {
@@ -76,17 +110,14 @@ function validateDefaultPinnedScenes(): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `Default pinned scene files are missing from seeds directories: ${missing.join(', ')}. ` +
+      `Default scene files are missing from seeds directories: ${missing.join(', ')}. ` +
         `Ensure these files exist in "${defaultDir}" or "${uploadsDir}".`
     )
   }
 }
 
-function readSettingsSync(): Settings {
-  const settingsPath = getSettingsPath()
-
+function loadSettings(settingsPath: string): { settings: Settings; dirty: boolean } {
   if (!fs.existsSync(settingsPath)) {
-    // Try one-time migration from config.json
     const legacyPath = getLegacyConfigPath()
     if (fs.existsSync(legacyPath)) {
       try {
@@ -94,20 +125,13 @@ function readSettingsSync(): Settings {
         const legacyParsed = JSON.parse(legacyContent) as Record<string, unknown>
         const migrated = migrateFromLegacyConfig(legacyParsed)
         const result = settingsSchema.parse(migrated)
-
-        // Write migrated settings
-        fs.writeFileSync(settingsPath, JSON.stringify(result, null, 2))
         console.log('[SETTINGS] Migrated from config.json to settings.json')
-        return result
+        return { settings: result, dirty: true }
       } catch (err) {
         console.warn('[SETTINGS] Failed to migrate config.json, using defaults:', err)
       }
     }
-
-    // No existing files — use defaults
-    const defaults = settingsSchema.parse({})
-    fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-    return defaults
+    return { settings: settingsSchema.parse({}), dirty: true }
   }
 
   const content = fs.readFileSync(settingsPath, 'utf-8')
@@ -116,26 +140,38 @@ function readSettingsSync(): Settings {
     parsed = JSON.parse(content)
   } catch {
     console.warn('[SETTINGS] Failed to parse settings.json, using defaults')
-    const defaults = settingsSchema.parse({})
-    fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-    return defaults
+    return { settings: settingsSchema.parse({}), dirty: true }
   }
 
-  const result = settingsSchema.safeParse(parsed)
+  const migrated = migrateSceneAuthoringField(migrateLegacySceneFields(parsed))
+  const result = settingsSchema.safeParse(migrated)
   if (result.success) {
-    return result.data
+    return { settings: result.data, dirty: migrated !== parsed }
   }
 
   console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
-  const defaults = settingsSchema.parse({})
-  fs.writeFileSync(settingsPath, JSON.stringify(defaults, null, 2))
-  return defaults
+  return { settings: settingsSchema.parse({}), dirty: true }
+}
+
+export function readSettingsSync(): Settings {
+  const settingsPath = getSettingsPath()
+  const { settings, dirty } = loadSettings(settingsPath)
+  if (dirty) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+  }
+  return settings
+}
+
+/** Env vars injected into any uv / python subprocess when offline mode is on.
+ *  Single source of truth — both engine setup and the server spawn consume this. */
+export function getOfflineEnv(): Record<string, string> {
+  return readSettingsSync().offline_mode ? { UV_OFFLINE: '1', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' } : {}
 }
 
 export function registerSettingsIpc(): void {
-  // Validate default pinned scenes exist at startup
+  // Validate default scene files exist at startup
   try {
-    validateDefaultPinnedScenes()
+    validateDefaultScenes()
   } catch (err) {
     console.error('[SETTINGS]', err instanceof Error ? err.message : err)
     throw err

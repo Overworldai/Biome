@@ -49,14 +49,31 @@ const SocialCtaRow = ({ rowClassName, buttonClassName = 'menu-cta-btn' }: Social
   } as const
 
   return (
-    <div className={rowClassName ? `${CTA_ROW_CLASS} ${rowClassName}` : CTA_ROW_CLASS}>
+    <div
+      className={
+        rowClassName
+          ? `
+            ${CTA_ROW_CLASS}
+            ${rowClassName}
+          `
+          : CTA_ROW_CLASS
+      }
+    >
       {SOCIAL_CTAS.map((cta) => (
         <a
           key={cta.href}
           href={cta.href}
           target="_blank"
           rel="noopener noreferrer"
-          className={`${buttonClassName} w-[4.62cqh] h-[4.62cqh] m-0 grid place-items-center box-border text-[rgba(238,248,255,0.88)] bg-[rgba(7,13,24,0.24)] border border-[rgba(236,247,255,0.34)] rounded-[0.8cqh] no-underline cursor-pointer outline-0 outline-white/60 transition-[transform,border-color,background-color,outline-width] duration-150 ease-in-out hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] hover:outline-2 [&>svg]:w-[62%] [&>svg]:h-[62%]`}
+          tabIndex={-1}
+          className={`
+            ${buttonClassName}
+            m-0 box-border grid h-[4.62cqh] w-[4.62cqh] cursor-pointer place-items-center rounded-[0.8cqh] border
+            border-[rgba(236,247,255,0.34)] bg-[rgba(7,13,24,0.24)] text-[rgba(238,248,255,0.88)] no-underline outline-0
+            outline-white/60 transition-[transform,border-color,background-color,outline-width] duration-150 ease-in-out
+            hover:-translate-y-px hover:border-white/60 hover:bg-[rgba(8,18,34,0.4)] hover:outline-2
+            [&>svg]:h-[62%] [&>svg]:w-[62%]
+          `}
           aria-label={ariaLabels[cta.href]}
           onMouseEnter={playHover}
           onMouseDown={playClick}

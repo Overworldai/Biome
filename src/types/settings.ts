@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { SUPPORTED_LOCALES } from '../i18n/locales'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
-export const LOCALE_OPTIONS = ['system', 'en', 'ja', 'zh', 'goose'] as const
+export const LOCALE_OPTIONS = ['system', ...SUPPORTED_LOCALES] as const
 export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
 export type QuantOption = (typeof QUANT_OPTIONS)[number]
 
@@ -18,7 +19,7 @@ export const localhostUrl = (port: number) => `http://localhost:${port}`
 /** The default standalone server URL. */
 export const DEFAULT_STANDALONE_URL = localhostUrl(STANDALONE_PORT)
 
-export const DEFAULT_PINNED_SCENES = [
+export const DEFAULT_SCENE_ORDER = [
   'default.jpg',
   'mountain_ruins_gun.jpg',
   'enchanted_swamp_torch.jpg',
@@ -27,9 +28,26 @@ export const DEFAULT_PINNED_SCENES = [
 ]
 
 export const DEFAULT_KEYBINDINGS = {
-  reset_scene: 'KeyU',
-  scene_edit: 'KeyQ'
+  moveForward: 'KeyW',
+  moveLeft: 'KeyA',
+  moveBack: 'KeyS',
+  moveRight: 'KeyD',
+  jump: 'Space',
+  crouch: 'ControlLeft',
+  sprint: 'ShiftLeft',
+  interact: 'KeyE',
+  primaryFire: 'MouseLeft',
+  secondaryFire: 'MouseRight',
+  pauseMenu: 'Escape',
+  resetScene: 'KeyU',
+  sceneEdit: 'KeyQ'
 } as const
+
+export type ControlBindKey = keyof typeof DEFAULT_KEYBINDINGS
+
+/** Shared schema for input sensitivities (mouse + gamepad). Raw value is the
+ *  multiplier applied to look deltas; the settings UI maps it to a 10–100% slider. */
+const sensitivitySchema = z.number().min(0.1).max(3.0).default(1.8)
 
 export const DEFAULT_AUDIO = {
   master_volume: 1.0,
@@ -44,13 +62,29 @@ export const settingsSchema = z.object({
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
+  offline_mode: z.boolean().default(false),
   custom_models: z.array(z.string()).default([]),
-  mouse_sensitivity: z.number().min(0.1).max(3.0).default(1.8),
-  pinned_scenes: z.array(z.string()).default(DEFAULT_PINNED_SCENES),
+  mouse_sensitivity: sensitivitySchema,
+  gamepad_sensitivity: sensitivitySchema,
+  // Ordered list of scene filenames as shown in the pause-menu grid. Users
+  // drag to reorder; whatever's at the top is most prominent.
+  scene_order: z.array(z.string()).default(DEFAULT_SCENE_ORDER),
+  scene_grid_columns: z.number().int().min(3).max(7).default(4),
   keybindings: z
     .object({
-      reset_scene: z.string().default('KeyU'),
-      scene_edit: z.string().default('KeyQ')
+      moveForward: z.string().default(DEFAULT_KEYBINDINGS.moveForward),
+      moveLeft: z.string().default(DEFAULT_KEYBINDINGS.moveLeft),
+      moveBack: z.string().default(DEFAULT_KEYBINDINGS.moveBack),
+      moveRight: z.string().default(DEFAULT_KEYBINDINGS.moveRight),
+      jump: z.string().default(DEFAULT_KEYBINDINGS.jump),
+      crouch: z.string().default(DEFAULT_KEYBINDINGS.crouch),
+      sprint: z.string().default(DEFAULT_KEYBINDINGS.sprint),
+      interact: z.string().default(DEFAULT_KEYBINDINGS.interact),
+      primaryFire: z.string().default(DEFAULT_KEYBINDINGS.primaryFire),
+      secondaryFire: z.string().default(DEFAULT_KEYBINDINGS.secondaryFire),
+      pauseMenu: z.string().default(DEFAULT_KEYBINDINGS.pauseMenu),
+      resetScene: z.string().default(DEFAULT_KEYBINDINGS.resetScene),
+      sceneEdit: z.string().default(DEFAULT_KEYBINDINGS.sceneEdit)
     })
     .default(DEFAULT_KEYBINDINGS),
   audio: z
@@ -60,11 +94,8 @@ export const settingsSchema = z.object({
       music_volume: z.number().min(0).max(1).default(DEFAULT_AUDIO.music_volume)
     })
     .default(DEFAULT_AUDIO),
-  experimental: z
-    .object({
-      scene_edit_enabled: z.boolean().default(false)
-    })
-    .default({ scene_edit_enabled: false }),
+  scene_authoring_enabled: z.boolean().default(false),
+  scene_authoring_save_generated: z.boolean().default(true),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),
@@ -72,7 +103,21 @@ export const settingsSchema = z.object({
       frame_timeline: z.boolean().default(false),
       action_logging: z.boolean().default(false)
     })
-    .default({ performance_stats: false, input: false, frame_timeline: false, action_logging: false })
+    .default({
+      performance_stats: false,
+      input: false,
+      frame_timeline: false,
+      action_logging: false
+    }),
+  // Video recording (standalone mode only). output_dir is user-configurable;
+  // the empty-string default means "use the OS video directory + /Biome",
+  // resolved at the Electron layer via resolve-video-dir.
+  recording: z
+    .object({
+      enabled: z.boolean().default(false),
+      output_dir: z.string().default('')
+    })
+    .default({ enabled: false, output_dir: '' })
 })
 
 export type Settings = z.infer<typeof settingsSchema>
