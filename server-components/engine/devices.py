@@ -15,7 +15,6 @@ to "the device" / "the device thread" instead.
 
 # pyright: reportMissingTypeStubs=none, reportUnknownMemberType=none, reportUnknownVariableType=none
 
-import logging
 import os
 
 # Set the allocator config BEFORE torch is touched downstream — torch reads
@@ -25,9 +24,10 @@ import os
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import pynvml
+import structlog
 import torch
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 # Device assignment per purpose. They all happen to be the same GPU today,
 # but split here so we can move pieces around — e.g. safety on CPU while

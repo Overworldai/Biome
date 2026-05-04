@@ -18,9 +18,9 @@ init phase between handshake and game loop. These let the route shell
 import asyncio
 import base64
 import binascii
-import logging
 from typing import TYPE_CHECKING
 
+import structlog
 from pydantic import ValidationError
 
 from engine.manager import QuantUnsupportedError
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from engine.safety import SafetyChecker
     from engine.scene_authoring import SceneAuthoringManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 def build_init_response_data(world_engine: "WorldEngineManager", system_info: SystemInfo) -> InitResponseData:
@@ -102,14 +102,14 @@ async def load_seed_from_data(
     Failure paths surface a typed warning over the websocket and return False.
     """
     if not image_data_b64:
-        logger.warning(f"[{conn.client_host}] Missing seed image data")
+        logger.warning("Missing seed image data")
         await conn.send_warning(MessageId.SEED_MISSING_DATA)
         return False
 
     try:
         image_bytes = base64.b64decode(image_data_b64)
     except (binascii.Error, ValueError) as e:
-        logger.warning(f"[{conn.client_host}] Invalid base64 seed data: {e}")
+        logger.warning(f"Invalid base64 seed data: {e}")
         await conn.send_warning(MessageId.SEED_INVALID_DATA)
         return False
 
@@ -118,7 +118,7 @@ async def load_seed_from_data(
     try:
         result = await asyncio.to_thread(safety_checker.check_image_bytes, image_bytes)
     except Exception as e:  # noqa: BLE001  -- classifier path can raise PIL/torch/runtime errors; downgrade to a soft warning
-        logger.warning(f"[{conn.client_host}] Safety check failed: {e}")
+        logger.warning(f"Safety check failed: {e}")
         await conn.send_warning(MessageId.SEED_SAFETY_CHECK_FAILED)
         return False
 
@@ -126,20 +126,20 @@ async def load_seed_from_data(
 
     # Same seed already loaded onto the engine? Skip the redundant reload.
     if img_hash == conn.current_seed_hash:
-        logger.info(f"[{conn.client_host}] Seed unchanged (hash match), skipping reload")
+        logger.info("Seed unchanged (hash match), skipping reload")
         return True
 
     if not result.is_safe:
-        logger.warning(f"[{conn.client_host}] Seed marked as unsafe")
+        logger.warning("Seed marked as unsafe")
         await conn.send_warning(MessageId.SEED_UNSAFE)
         return False
 
     # Load the seed onto the engine
     display_name = seed_filename or img_hash[:12]
-    logger.info(f"[{conn.client_host}] Loading seed '{display_name}'")
+    logger.info(f"Loading seed '{display_name}'")
     loaded_frame = await world_engine.load_seed_from_base64(image_data_b64)
     if loaded_frame is None:
-        logger.error(f"[{conn.client_host}] Failed to load seed")
+        logger.error("Failed to load seed")
         await conn.send_warning(MessageId.SEED_LOAD_FAILED)
         return False
 
@@ -147,7 +147,7 @@ async def load_seed_from_data(
     world_engine.original_seed_frame = loaded_frame
     conn.current_seed_hash = img_hash
     conn.current_seed_filename = seed_filename
-    logger.info(f"[{conn.client_host}] Seed loaded successfully")
+    logger.info("Seed loaded successfully")
     return True
 
 
@@ -194,19 +194,19 @@ async def handle_init(
         if conn.action_logging_requested and conn.action_logger is None:
             conn.action_logger = ActionLogger(conn.client_host)
             conn.start_action_log_segment(world_engine)
-            logger.info(f"[{conn.client_host}] Action logging enabled")
+            logger.info("Action logging enabled")
         elif not conn.action_logging_requested and conn.action_logger is not None:
             conn.action_logger.end_segment()
             conn.action_logger = None
-            logger.info(f"[{conn.client_host}] Action logging disabled")
+            logger.info("Action logging disabled")
 
         if conn.video_recording_requested and conn.video_recorder is None:
             conn.start_video_segment(world_engine)
-            logger.info(f"[{conn.client_host}] Video recording enabled")
+            logger.info("Video recording enabled")
         elif not conn.video_recording_requested and conn.video_recorder is not None:
             conn.video_recorder.end_segment()
             conn.video_recorder = None
-            logger.info(f"[{conn.client_host}] Video recording disabled")
+            logger.info("Video recording disabled")
 
     # Model delta — reload if model URI or quantization changed.
     # The engine must be loaded before the seed so that seed_target_size
@@ -215,7 +215,7 @@ async def handle_init(
     quant_changed = "quant" in present and quant != world_engine.quant
     if model_uri and (model_uri != world_engine.model_uri or quant_changed):
         verb = "Live model switch" if is_game_loop else "Requested model"
-        logger.info(f"[{conn.client_host}] {verb}: {model_uri} (quant={quant})")
+        logger.info(f"{verb}: {model_uri} (quant={quant})")
         world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
         await world_engine.load_engine(model_uri, quant=quant)
         world_engine.set_progress_callback(None)
@@ -223,7 +223,7 @@ async def handle_init(
         conn.perceptual_frame_count = 0
         conn.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
         model_changed = True
-        logger.info(f"[{conn.client_host}] Model loaded: {world_engine.model_uri}")
+        logger.info(f"Model loaded: {world_engine.model_uri}")
 
     # Seed delta
     seed_loaded = False
@@ -250,20 +250,20 @@ async def run_preinit_handshake(
     ignored. On timeout, surfaces `MessageId.TIMEOUT_WAITING_FOR_SEED`
     and returns False."""
     await conn.send_stage(StageId.SESSION_WAITING_FOR_SEED)
-    logger.info(f"[{conn.client_host}] Waiting for init message...")
+    logger.info("Waiting for init message...")
 
     while world_engine.seed_frame is None:
         try:
             raw = await asyncio.wait_for(conn.websocket.receive_text(), timeout=60.0)
         except TimeoutError:
-            logger.error(f"[{conn.client_host}] Timeout waiting for init")  # noqa: TRY400  -- timeout status, no traceback to log
+            logger.error("Timeout waiting for init")  # noqa: TRY400  -- timeout status, no traceback to log
             await conn.send_error(message_id=MessageId.TIMEOUT_WAITING_FOR_SEED)
             return False
 
         try:
             parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
         except (ValidationError, ValueError) as e:
-            logger.info(f"[{conn.client_host}] Ignoring invalid message during pre-init: {e}")
+            logger.info(f"Ignoring invalid message during pre-init: {e}")
             continue
 
         match parsed:
@@ -284,7 +284,7 @@ async def run_preinit_handshake(
                     rpc_err(parsed.req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
                 )
             case ControlNotif() | PauseNotif() | ResumeNotif() | ResetNotif() | PromptNotif():
-                logger.info(f"[{conn.client_host}] Ignoring notification '{parsed.type}' while waiting for init")
+                logger.info(f"Ignoring notification '{parsed.type}' while waiting for init")
 
     return True
 
@@ -306,8 +306,7 @@ async def prepare_session(
         if world_engine.seed_frame is None:
             # Race: client disconnected/reconnected mid-handshake; bail cleanly.
             logger.info(
-                f"[{conn.client_host}] Seed frame missing before initialization; "
-                "client likely disconnected/reconnected during model switch"
+                "Seed frame missing before initialization; client likely disconnected/reconnected during model switch"
             )
             if conn.init_req_id:
                 await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED))
@@ -321,7 +320,7 @@ async def prepare_session(
                 scene_authoring_requested=conn.scene_authoring_requested
             )
         except Exception as e:
-            logger.error(f"[{conn.client_host}] Scene authoring warmup failed: {e}", exc_info=True)
+            logger.error(f"Scene authoring warmup failed: {e}", exc_info=True)
             await conn.send_error(message_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED, message=str(e))
             if conn.init_req_id:
                 await conn.send_message(rpc_err(conn.init_req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_LOAD_FAILED))

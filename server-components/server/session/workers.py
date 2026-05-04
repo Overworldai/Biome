@@ -18,12 +18,13 @@ control state, scene-authoring handoff fields, and the `running` /
 import asyncio
 import concurrent.futures
 import contextlib
-import logging
+import contextvars
 import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import structlog
 from fastapi import WebSocketDisconnect
 from pydantic import ValidationError
 from world_engine import CtrlInput
@@ -58,7 +59,7 @@ if TYPE_CHECKING:
     from engine import Engines
     from engine.manager import WorldEngineManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 async def run_session(
@@ -69,9 +70,14 @@ async def run_session(
     the active session, then await disconnect or terminal error. The
     first-to-finish task signals shutdown; the surviving sibling and
     the gen thread are torn down together via `conn.running = False`."""
+    # Capture the calling task's contextvars (notably the `client_host`
+    # binding from the WS endpoint) and run the generator inside that
+    # context so its log lines stay attributed to the right connection.
+    # Without this, the gen thread would emit `client_host`-less logs.
+    gen_ctx = contextvars.copy_context()
     gen_thread = threading.Thread(
-        target=run_generator,
-        args=(conn, engines),
+        target=gen_ctx.run,
+        args=(run_generator, conn, engines),
         daemon=True,
         name=f"gen-{conn.client_host}",
     )
@@ -111,7 +117,7 @@ def reset_engine(
     world_engine.init_session()
     world_engine.set_progress_callback(None)
     conn.perceptual_frame_count = 0
-    logger.info(f"[{conn.client_host}] Engine Reset")
+    logger.info("Engine Reset")
 
 
 @dataclass
@@ -149,7 +155,7 @@ async def run_receiver(
             try:
                 parsed: ClientMessage = ClientMessageAdapter.validate_json(raw)
             except (ValidationError, ValueError) as e:
-                logger.info(f"[{conn.client_host}] Ignoring invalid game-loop message: {e}")
+                logger.info(f"Ignoring invalid game-loop message: {e}")
                 continue
 
             match parsed:
@@ -222,16 +228,16 @@ async def run_receiver(
                     conn.queue_send(seed_response)
 
                 case ResetNotif():
-                    logger.info(f"[{conn.client_host}] Reset requested")
+                    logger.info("Reset requested")
                     conn.reset_flag = True
 
                 case PauseNotif():
                     conn.paused = True
-                    logger.info("[RECV] Paused")
+                    logger.info("Paused")
 
                 case ResumeNotif():
                     conn.paused = False
-                    logger.info("[RECV] Resumed")
+                    logger.info("Resumed")
 
                 case PromptNotif() as notif:
                     conn.prompt_pending = notif.prompt.strip()
@@ -249,11 +255,11 @@ async def run_receiver(
                         conn.ctrl.dirty = True
 
         except WebSocketDisconnect:
-            logger.info(f"[{conn.client_host}] Client disconnected")
+            logger.info("Client disconnected")
             conn.running = False
             break
-        except Exception as e:
-            logger.error(f"[{conn.client_host}] Receiver error: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Receiver error")
             conn.running = False
             break
 
@@ -275,8 +281,8 @@ async def run_sender(conn: Connection) -> None:
                     await conn.websocket.send_bytes(payload)
                 else:
                     await conn.send_message(payload)
-        except Exception as e:
-            logger.error(f"[{conn.client_host}] Sender error: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Sender error")
             conn.running = False
             break
 
@@ -333,7 +339,7 @@ def run_generator(
             )
 
         if conn.perceptual_frame_count % 60 == 0:
-            logger.info(f"[{conn.client_host}] Sent frame {conn.perceptual_frame_count} (gen={p.gen_time:.1f}ms)")
+            logger.info("Sent frame", frame_id=conn.perceptual_frame_count, gen_ms=round(p.gen_time, 1))
 
     gen_was_paused = False
     next_frame_time = 0.0  # perf_counter target for frame pacing
@@ -362,7 +368,7 @@ def run_generator(
                     seed_jpeg = world_engine.frame_to_jpeg(seed)
                     conn.queue_send(conn.build_frame_envelope(seed_jpeg, conn.perceptual_frame_count, 0.0, 0.0))
                 except Exception as e:
-                    logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
+                    logger.exception("Generate scene failed", operation="generate_scene")
                     req["future"].set_exception(e)
 
             time.sleep(0.01)
@@ -400,7 +406,7 @@ def run_generator(
             if conn.reset_flag or auto_reset:
                 _flush_pending()
                 if auto_reset:
-                    logger.info(f"[{conn.client_host}] Auto-reset at frame limit")
+                    logger.info("Auto-reset at frame limit")
                 reset_engine(conn, world_engine)
                 conn.reset_flag = False
                 conn.start_action_log_segment(world_engine)
@@ -420,7 +426,7 @@ def run_generator(
                         conn.video_recorder.note_edit(req["prompt"])
                     req["future"].set_result(preview)
                 except Exception as e:
-                    logger.error(f"[SCENE_EDIT] Failed: {e}", exc_info=True)
+                    logger.exception("Scene edit failed", operation="scene_edit")
                     req["future"].set_exception(e)
 
             # Handle pending generate_scene — creates a new seed from
@@ -434,7 +440,7 @@ def run_generator(
                     conn.perceptual_frame_count = 0
                     req["future"].set_result(data)
                 except Exception as e:
-                    logger.error(f"[GENERATE_SCENE] Failed: {e}", exc_info=True)
+                    logger.exception("Generate scene failed", operation="generate_scene")
                     req["future"].set_exception(e)
 
             buttons: set[int] | None = None
@@ -527,7 +533,7 @@ def run_generator(
             pending = None
 
             if devices.is_recoverable_device_error(device_err):
-                logger.error(f"[{conn.client_host}] Device error detected: {device_err}")  # noqa: TRY400  -- recovery path follows; recovery handler logs its own traceback if needed
+                logger.error("Device error detected", error=str(device_err))  # noqa: TRY400  -- recovery path follows; the recovery handler logs traceback if it fails
                 try:
                     recovery_success = world_engine.recover_from_device_error()
                 except Exception:  # noqa: BLE001  -- recovery is itself best-effort; failure here means we treat the session as terminal
@@ -540,14 +546,14 @@ def run_generator(
                             message="Recovered from device error - engine reset",
                         )
                     )
-                    logger.info(f"[{conn.client_host}] Successfully recovered from device error")
+                    logger.info("Successfully recovered from device error")
                 else:
                     conn.queue_error(message_id=MessageId.DEVICE_RECOVERY_FAILED)
-                    logger.error(f"[{conn.client_host}] Failed to recover from device error")  # noqa: TRY400  -- final status; recovery handler already logged the traceback
+                    logger.error("Failed to recover from device error")  # noqa: TRY400  -- final status; the recovery handler already logged its own traceback
                     conn.running = False
                     break
             else:
-                logger.error(f"[{conn.client_host}] Generation error: {device_err}", exc_info=True)
+                logger.exception("Generation error")
                 conn.queue_error(message=str(device_err))
                 conn.running = False
                 break

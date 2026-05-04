@@ -30,14 +30,15 @@ take only what they need rather than reaching through a god object.
 
 import asyncio
 import contextlib
-import logging
 import os
 from typing import Annotated, Literal
 
+import structlog
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from huggingface_hub import model_info as hf_model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 from pydantic import BaseModel
+from structlog.contextvars import bound_contextvars
 
 from engine import Engines
 from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
@@ -48,7 +49,7 @@ from server.startup import ServerStartup
 from util.server_logging import stream_logs_to_client
 from util.system_info import SystemMonitor
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 router = APIRouter()
 
 
@@ -195,74 +196,80 @@ async def websocket_endpoint(
     module named after the phase — see this file's docstring for the map.
     """
     client_host = websocket.client.host if websocket.client else "unknown"
-    logger.info(f"Client connected: {client_host}")
-    conn = Connection(websocket=websocket, client_host=client_host, system_monitor=system_monitor)
-    await websocket.accept()
+    # Bind `client_host` as a contextvar so every log line emitted from any
+    # code reachable in this connection's asyncio task carries it
+    # automatically. The generator thread (spawned via ThreadPoolExecutor in
+    # `run_session`) is wired up separately — it copies the context at
+    # submit time so logs from device-thread code stay attributed.
+    with bound_contextvars(client_host=client_host):
+        logger.info("Client connected")
+        conn = Connection(websocket=websocket, client_host=client_host, system_monitor=system_monitor)
+        await websocket.accept()
 
-    log_task = asyncio.create_task(stream_logs_to_client(conn))
-    progress_task: asyncio.Task[None] | None = None
-    # Bound after the startup gate so `teardown`'s callback-clear can no-op
-    # safely when we tear down before the engines are ready.
-    engines: Engines | None = None
+        log_task = asyncio.create_task(stream_logs_to_client(conn))
+        progress_task: asyncio.Task[None] | None = None
+        # Bound after the startup gate so `teardown`'s callback-clear can no-op
+        # safely when we tear down before the engines are ready.
+        engines: Engines | None = None
 
-    try:
-        # Phase 1: wait for backend `_heavy_init` to finish (replay any
-        # accumulated stages, then stream live ones until done).
-        await startup.replay_to(conn)
-        if startup.error:
-            await conn.send_error(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(startup.error))
-            return
+        try:
+            # Phase 1: wait for backend `_heavy_init` to finish (replay any
+            # accumulated stages, then stream live ones until done).
+            await startup.replay_to(conn)
+            if startup.error:
+                await conn.send_error(message_id=MessageId.SERVER_STARTUP_FAILED, message=str(startup.error))
+                return
 
-        # Past the startup gate: engines are populated.
-        engines = get_engines_ws(websocket)
-        world_engine = engines.world_engine
+            # Past the startup gate: engines are populated.
+            engines = get_engines_ws(websocket)
+            world_engine = engines.world_engine
 
-        # Phase 2: hardware identity goes out immediately so the client has
-        # it even if init crashes (e.g. device-graph compilation failure).
-        # Reset the seed so this session must perform an explicit handshake.
-        await conn.send_message(SystemInfoMessage(**system_monitor.info.model_dump()))
-        world_engine.seed_frame = None
-        progress_task = asyncio.create_task(conn.run_progress_drain())
+            # Phase 2: hardware identity goes out immediately so the client has
+            # it even if init crashes (e.g. device-graph compilation failure).
+            # Reset the seed so this session must perform an explicit handshake.
+            await conn.send_message(SystemInfoMessage(**system_monitor.info.model_dump()))
+            world_engine.seed_frame = None
+            progress_task = asyncio.create_task(conn.run_progress_drain())
 
-        # Phase 3: pre-init message dispatch — wait for an InitRequest that
-        # loads a seed frame (or 60 s timeout).
-        if not await run_preinit_handshake(conn, world_engine, engines.safety_checker):
-            return
+            # Phase 3: pre-init message dispatch — wait for an InitRequest that
+            # loads a seed frame (or 60 s timeout).
+            if not await run_preinit_handshake(conn, world_engine, engines.safety_checker):
+                return
 
-        # Phase 4: scene-authoring + engine warmup, init session, send
-        # initial frame. Surfaces typed errors and acks the deferred init
-        # RPC on failure so the client always gets a definitive response.
-        if not await prepare_session(conn, world_engine, engines.scene_authoring):
-            return
+            # Phase 4: scene-authoring + engine warmup, init session, send
+            # initial frame. Surfaces typed errors and acks the deferred init
+            # RPC on failure so the client always gets a definitive response.
+            if not await prepare_session(conn, world_engine, engines.scene_authoring):
+                return
 
-        await conn.send_stage(StageId.SESSION_READY)
-        logger.info(f"[{client_host}] Ready for game loop")
+            await conn.send_stage(StageId.SESSION_READY)
+            logger.info("Ready for game loop")
 
-        # Phase 5: open recorder segments, ack the deferred init RPC.
-        conn.start_recording_segments(world_engine)
-        if conn.init_req_id:
-            await conn.send_message(
-                rpc_ok(conn.init_req_id, build_init_response_data(world_engine, system_monitor.info))
-            )
-            conn.init_req_id = None
+            # Phase 5: open recorder segments, ack the deferred init RPC.
+            conn.start_recording_segments(world_engine)
+            if conn.init_req_id:
+                await conn.send_message(
+                    rpc_ok(conn.init_req_id, build_init_response_data(world_engine, system_monitor.info))
+                )
+                conn.init_req_id = None
 
-        # Phase 6: the game loop. Spawns the gen thread + receiver/sender
-        # asyncio tasks; returns once any of them exits (which signals
-        # disconnect or terminal error).
-        await run_session(conn, engines)
+            # Phase 6: the game loop. Spawns the gen thread + receiver/sender
+            # asyncio tasks; returns once any of them exits (which signals
+            # disconnect or terminal error).
+            await run_session(conn, engines)
 
-    except WebSocketDisconnect:
-        logger.info(f"[{client_host}] WebSocket disconnected")
-    except Exception as e:
-        # Uvicorn may surface client close as ClientDisconnected instead
-        # of WebSocketDisconnect — treat both as normal disconnects to
-        # avoid noisy tracebacks during intentional reconnects.
-        if e.__class__.__name__ == "ClientDisconnected":
-            logger.info(f"[{client_host}] Client disconnected")
-        else:
-            logger.error(f"[{client_host}] Error: {e}", exc_info=True)
-            with contextlib.suppress(Exception):
-                await conn.send_error(message=str(e))
-    finally:
-        world_engine_for_teardown = engines.world_engine if engines is not None else None
-        conn.teardown(world_engine_for_teardown, log_task, progress_task)
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected")
+        except Exception as e:
+            # Uvicorn may surface client close as ClientDisconnected instead
+            # of WebSocketDisconnect — treat both as normal disconnects to
+            # avoid noisy tracebacks during intentional reconnects.
+            if e.__class__.__name__ == "ClientDisconnected":
+                logger.info("Client disconnected")
+            else:
+                logger.exception("WebSocket endpoint error")
+                with contextlib.suppress(Exception):
+                    await conn.send_error(message=str(e))
+        finally:
+            world_engine_for_teardown = engines.world_engine if engines is not None else None
+            conn.teardown(world_engine_for_teardown, log_task, progress_task)

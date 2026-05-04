@@ -24,7 +24,6 @@ import base64
 import gc
 import io
 import json
-import logging
 import re
 import time
 from dataclasses import asdict, dataclass, field
@@ -32,6 +31,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import structlog
 import torch
 from PIL import Image
 
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from engine import Engines
     from engine.manager import WorldEngineManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 SCENE_EDIT_SAFETY_MESSAGE_ID = "app.server.error.sceneEditSafetyRejected"
@@ -407,15 +407,15 @@ class SceneAuthoringManager:
         `_import_scene_authoring_libs` so it's obvious what gets pulled in."""
         libs = await asyncio.wrap_future(self._world_engine.submit_to_device_thread(_import_scene_authoring_libs))
 
-        logger.info(f"[SCENE_EDIT] Loading VLM {VLM_GGUF_REPO}/{VLM_GGUF_FILE}...")
+        logger.info("Loading VLM", repo=VLM_GGUF_REPO, file=VLM_GGUF_FILE)
         t0 = time.perf_counter()
         await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_vlm_sync(libs)))
-        logger.info(f"[SCENE_EDIT] VLM loaded in {time.perf_counter() - t0:.1f}s")
+        logger.info("VLM loaded", duration_s=round(time.perf_counter() - t0, 1))
 
-        logger.info(f"[SCENE_EDIT] Loading editing model {EDIT_MODEL_ID}...")
+        logger.info("Loading editing model", model=EDIT_MODEL_ID)
         t1 = time.perf_counter()
         await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_edit_sync(libs)))
-        logger.info(f"[SCENE_EDIT] Editing model loaded in {time.perf_counter() - t1:.1f}s")
+        logger.info("Editing model loaded", duration_s=round(time.perf_counter() - t1, 1))
 
         self._loaded = True
 
@@ -498,7 +498,7 @@ class SceneAuthoringManager:
     def _run_vlm(
         self,
         messages: list[dict],
-        log_prefix: str,
+        operation: str,
         safety_message_id: str = SCENE_EDIT_SAFETY_MESSAGE_ID,
     ) -> str:
         """Run the VLM with retries, parse a tool call, return the instruction.
@@ -509,6 +509,7 @@ class SceneAuthoringManager:
         if self.vlm is None:
             raise VlmNotLoadedError
         vlm = self.vlm
+        log = logger.bind(operation=operation)
         last_error = None
         for attempt in range(1, VLM_MAX_RETRIES + 1):
             t0 = time.perf_counter()
@@ -524,15 +525,21 @@ class SceneAuthoringManager:
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
             raw_output = result["choices"][0]["message"]["content"] or ""  # pyright: ignore[reportIndexIssue]  # llama_cpp returns a stream-or-dict union; we never use stream=True
-            logger.info(f"[{log_prefix}] VLM raw (attempt {attempt}, {elapsed_ms:.0f}ms): {raw_output}")
+            log.info(
+                "VLM raw output",
+                attempt=attempt,
+                total_attempts=VLM_MAX_RETRIES,
+                elapsed_ms=round(elapsed_ms),
+                raw_output=raw_output,
+            )
 
             try:
                 prompt = self._parse_edit_instruction(raw_output, safety_message_id)
             except ValueError as exc:
                 last_error = exc
-                logger.warning(f"[{log_prefix}] Tool call parse failed (attempt {attempt}/{VLM_MAX_RETRIES}): {exc}")
+                log.warning("Tool call parse failed", attempt=attempt, total_attempts=VLM_MAX_RETRIES, error=str(exc))
             else:
-                logger.info(f"[{log_prefix}] Prompt: {prompt}")
+                log.info("Prompt", prompt=prompt)
                 return prompt
 
         raise VlmToolCallRetryError(VLM_MAX_RETRIES, last_error)
@@ -560,7 +567,7 @@ class SceneAuthoringManager:
                 ],
             },
         ]
-        return self._run_vlm(messages, "SCENE_EDIT", SCENE_EDIT_SAFETY_MESSAGE_ID)
+        return self._run_vlm(messages, "scene_edit", SCENE_EDIT_SAFETY_MESSAGE_ID)
 
     def _build_generation_prompt(self, user_request: str) -> str:
         """Ask the VLM for a text-to-image prompt (no reference frame)."""
@@ -576,7 +583,7 @@ class SceneAuthoringManager:
                 ),
             },
         ]
-        return self._run_vlm(messages, "GENERATE_SCENE", GENERATE_SCENE_SAFETY_MESSAGE_ID)
+        return self._run_vlm(messages, "generate_scene", GENERATE_SCENE_SAFETY_MESSAGE_ID)
 
     # ─── Klein pipeline (shared building blocks) ─────────────────
 
@@ -597,7 +604,7 @@ class SceneAuthoringManager:
             height=target_h,
             width=target_w,
         ).images[0]
-        logger.info(f"[KLEIN] Generation took {(time.perf_counter() - t0) * 1000:.0f}ms")
+        logger.info("Klein generation complete", elapsed_ms=round((time.perf_counter() - t0) * 1000))
         return result
 
     @staticmethod
@@ -683,7 +690,7 @@ def run_scene_edit(
     inpainted_pil = Image.fromarray(inpainted_np)
     verdict = safety_checker.check_pil_image(inpainted_pil)
     if not verdict.is_safe:
-        logger.warning(f"[SCENE_EDIT] Safety checker rejected inpainted image: {verdict.scores}")
+        logger.warning("Safety checker rejected inpainted image", operation="scene_edit", scores=verdict.scores)
         raise SafetyRejectionError()
 
     if EDIT_RESET_WITH_FRAME:
@@ -723,7 +730,7 @@ def run_generate_scene(
     generated_pil = Image.fromarray(generated_np)
     verdict = safety_checker.check_pil_image(generated_pil)
     if not verdict.is_safe:
-        logger.warning(f"[GENERATE_SCENE] Safety checker rejected generated image: {verdict.scores}")
+        logger.warning("Safety checker rejected generated image", operation="generate_scene", scores=verdict.scores)
         raise SafetyRejectionError(GENERATE_SCENE_SAFETY_MESSAGE_ID)
 
     # Encode the generated image as JPEG for the client to persist. Done
@@ -749,7 +756,7 @@ def run_generate_scene(
     world_engine.set_seed_and_reset(generated, set_as_original=True)
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
-    logger.info(f"[GENERATE_SCENE] Complete in {elapsed_ms:.0f}ms")
+    logger.info("Generate scene complete", operation="generate_scene", elapsed_ms=round(elapsed_ms))
     return GenerateSceneResponseData(
         elapsed_ms=round(elapsed_ms),
         image_jpeg_base64=image_b64,

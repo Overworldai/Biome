@@ -18,13 +18,13 @@ re-runs the checks (cache rebuilds, no permanent state loss).
 
 import hashlib
 import io
-import logging
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import structlog
 import torch
 import torch.nn.functional as F  # noqa: N812  -- canonical alias used throughout the PyTorch ecosystem
 from PIL import Image
@@ -36,7 +36,7 @@ from transformers import AutoModelForImageClassification
 
 from engine.devices import SAFETY_DEVICE
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 _DEFAULT_CACHE_FILE = Path(__file__).parent.parent / "world_engine" / ".safety_cache.json"

@@ -11,19 +11,20 @@ definitions live in `server/routes.py`.
 
 import argparse
 import asyncio
-import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+import structlog
+
 import util.server_logging  # noqa: F401  # pyright: ignore[reportUnusedImport]  -- side-effect: install TeeStream + crash hooks before any logging happens
 from server.protocol import StageId
 from util.hf_token import apply_resolved_token
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
-logger.info(f"Python {sys.version}")
+logger.info("Python", version=sys.version)
 logger.info("Starting server...")
 
 apply_resolved_token()
@@ -60,7 +61,7 @@ class ParentWatchdog:
         try:
             os.kill(self.parent_pid, 0)
         except OSError:
-            logger.error(f"Parent process (PID {self.parent_pid}) is already gone, shutting down")  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
+            logger.error("Parent process is already gone, shutting down", parent_pid=self.parent_pid)  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
             os._exit(1)
 
     async def run(self) -> None:
@@ -70,7 +71,7 @@ class ParentWatchdog:
             try:
                 os.kill(self.parent_pid, 0)  # signal 0 = existence check
             except OSError:
-                logger.error(f"Parent process (PID {self.parent_pid}) is gone, shutting down")  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
+                logger.error("Parent process is gone, shutting down", parent_pid=self.parent_pid)  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
                 os._exit(1)
 
 
@@ -82,14 +83,14 @@ try:
     logger.info("Importing torch...")
     import torch
 
-    logger.info(f"torch {torch.__version__} imported")
+    logger.info("torch imported", version=torch.__version__)
 
     # Importing `devices` configures the torch allocator before any device
     # context is initialised. All other device-specific call sites go
     # through it too.
     from engine import devices
 
-    logger.info(f"Device available: {devices.is_available()}")
+    logger.info("Device check", available=devices.is_available())
 
     from util.system_info import SystemMonitor
 
@@ -98,7 +99,7 @@ try:
     logger.info("Importing torchvision...")
     import torchvision
 
-    logger.info(f"torchvision {torchvision.__version__} imported")
+    logger.info("torchvision imported", version=torchvision.__version__)
 
     logger.info("Importing FastAPI...")
     import uvicorn
@@ -118,8 +119,8 @@ try:
 
     logger.info("Safety module imported")
 
-except Exception as e:  # noqa: BLE001  -- top-level startup guard; any import failure should land in the log and exit cleanly
-    logger.fatal(f"Import failed: {e}", exc_info=True)
+except Exception:
+    logger.exception("Import failed")
     sys.exit(1)
 
 
@@ -127,6 +128,7 @@ except Exception as e:  # noqa: BLE001  -- top-level startup guard; any import f
 # now is safe because the heavy import waterfall above has already completed.
 # Importing earlier would pull the whole stack in via `server.routes`'s
 # transitive deps and break the instrumented load above.
+
 from server.routes import router  # noqa: E402
 from server.startup import ServerStartup  # noqa: E402
 
@@ -161,25 +163,23 @@ async def _heavy_init(app: FastAPI, startup: ServerStartup) -> None:
             safety_checker=safety_checker,
         )
 
-        logger.info("=" * 60)
-        logger.info("[SERVER] Ready - Safety loaded, WorldEngine will load on first client")
-        logger.info(f"[SERVER] {safety_checker.cache_size} safety cache entries")
-        logger.info("=" * 60)
+        logger.info(
+            "Ready: safety loaded, WorldEngine will load on first client",
+            safety_cache_entries=safety_checker.cache_size,
+        )
         startup.mark_stage(StageId.STARTUP_READY)
 
         startup.mark_done()
 
     except Exception as exc:
-        logger.error(f"[SERVER] Startup failed: {exc}", exc_info=True)
+        logger.exception("Startup failed")
         startup.mark_failed(str(exc))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
-    logger.info("=" * 60)
-    logger.info("BIOME SERVER STARTUP")
-    logger.info("=" * 60)
+    logger.info("Biome server startup")
 
     startup = ServerStartup()
     app.state.startup = startup
@@ -199,7 +199,7 @@ async def lifespan(app: FastAPI):
     if not init_task.done():
         init_task.cancel()
 
-    logger.info("[SERVER] Shutting down")
+    logger.info("Shutting down")
 
 
 app = FastAPI(title="Biome Server", lifespan=lifespan)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
 
     app.state.startup_config = StartupConfig(parent_pid=args.parent_pid)
     if args.parent_pid is not None:
-        logger.info(f"Monitoring parent process PID {args.parent_pid}")
+        logger.info("Monitoring parent process", parent_pid=args.parent_pid)
         ParentWatchdog(args.parent_pid).check_alive_or_exit()
 
     try:
@@ -241,5 +241,5 @@ if __name__ == "__main__":
             log_config=None,
         )
     except BaseException:
-        logger.fatal("Fatal exception at server entrypoint", exc_info=True)
+        logger.exception("Fatal exception at server entrypoint")
         raise

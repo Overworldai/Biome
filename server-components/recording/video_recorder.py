@@ -14,7 +14,6 @@ preset, yuv420p output, +faststart, no audio.
 
 import contextlib
 import datetime
-import logging
 import subprocess
 import tempfile
 import threading
@@ -22,10 +21,11 @@ from pathlib import Path
 
 import imageio_ffmpeg
 import numpy as np
+import structlog
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, ConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 DEFAULT_VIDEO_DIR = Path(tempfile.gettempdir())
 
@@ -93,8 +93,7 @@ class VideoRecorder:
             self._output_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             logger.warning(
-                f"[{client_host}] Could not create recordings dir {self._output_dir}: {e} "
-                f"— falling back to {DEFAULT_VIDEO_DIR}"
+                f"Could not create recordings dir {self._output_dir}: {e} — falling back to {DEFAULT_VIDEO_DIR}"
             )
             self._output_dir = DEFAULT_VIDEO_DIR
         self._proc: subprocess.Popen | None = None
@@ -175,9 +174,9 @@ class VideoRecorder:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            logger.info(f"[{self._client_host}] Video recording -> {path}")
+            logger.info(f"Video recording -> {path}")
         except FileNotFoundError:
-            logger.warning(f"[{self._client_host}] bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled")
+            logger.warning(f"bundled ffmpeg not found at {FFMPEG_EXE} — video recording disabled")
             self._proc = None
 
     def note_edit(self, prompt: str) -> None:
@@ -200,7 +199,7 @@ class VideoRecorder:
             font_size = max(14, int(frame_h * 0.05))
             font = ImageFont.truetype(str(FONT_PATH), font_size)
         except OSError as e:
-            logger.warning(f"[{self._client_host}] Could not load overlay font: {e}")
+            logger.warning(f"Could not load overlay font: {e}")
             self._overlay_text = None
             return
 
@@ -298,9 +297,9 @@ class VideoRecorder:
             self._proc.wait(timeout=30)
             if self._proc.returncode != 0:
                 stderr = stderr_bytes.decode(errors="replace") if stderr_bytes else ""
-                logger.warning(f"[{self._client_host}] FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}")
+                logger.warning(f"FFmpeg exited with rc={self._proc.returncode}: {stderr[:500]}")
         except Exception as e:  # noqa: BLE001  -- ffmpeg shutdown can raise OSError/TimeoutExpired/ValueError; we want to log+kill regardless
-            logger.warning(f"[{self._client_host}] Error closing video recorder: {e}")
+            logger.warning(f"Error closing video recorder: {e}")
             with contextlib.suppress(Exception):
                 self._proc.kill()
         finally:
@@ -315,8 +314,6 @@ class VideoRecorder:
             if frame_count == 0 or duration_s < MIN_DURATION_S:
                 try:
                     path.unlink(missing_ok=True)
-                    logger.info(
-                        f"[{self._client_host}] Removed short video ({frame_count} frames, {duration_s:.1f}s): {path}"
-                    )
+                    logger.info(f"Removed short video ({frame_count} frames, {duration_s:.1f}s): {path}")
                 except OSError:
                     pass

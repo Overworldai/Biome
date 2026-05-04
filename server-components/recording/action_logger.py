@@ -16,16 +16,16 @@ JSON without separators tweaks.
 """
 
 import datetime
-import logging
 import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import IO, Annotated, Literal
 
+import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 ACTION_LOG_DIR = Path(tempfile.gettempdir())
 
@@ -108,7 +108,7 @@ class ActionLogger:
         self._path = path
         self._f = open(path, "w")  # noqa: SIM115  -- handle owned by the segment, closed in `end_segment`
         self._frame_id = 0
-        logger.info(f"[{self._client_host}] Action stream -> {path}")
+        logger.info(f"Action stream -> {path}")
 
     def end_segment(self) -> None:
         """Write session_end and close the current file, if one is open."""
@@ -121,7 +121,7 @@ class ActionLogger:
             if frame_count == 0 and path is not None:
                 try:
                     path.unlink(missing_ok=True)
-                    logger.info(f"[{self._client_host}] Removed empty action stream: {path}")
+                    logger.info(f"Removed empty action stream: {path}")
                 except OSError:
                     pass
 

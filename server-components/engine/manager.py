@@ -10,7 +10,6 @@ import base64
 import contextlib
 import gc
 import io
-import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -26,11 +25,13 @@ try:
 except ImportError:
     simplejpeg = None
 
+import structlog
+
 from engine import devices
 from engine.devices import WORLD_ENGINE_DEVICE
 from server.protocol import StageId
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 # ============================================================================
@@ -40,6 +41,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_N_FRAMES = 4096
 JPEG_QUALITY = 85
 DEFAULT_INFERENCE_FPS = 60
+
+# Step counters surfaced as `current_step` / `total_steps` log fields. The
+# renderer and any future log-shipping pipeline get a structured progress
+# signal rather than a `[1/3]` substring buried in the message text.
+LOAD_ENGINE_TOTAL_STEPS = 3  # 1: load model, 2: seed frame, 3: ready
+WARMUP_TOTAL_STEPS = 3  # 1: reset, 2: append seed, 3: generate first frame
 
 
 class QuantUnsupportedError(RuntimeError):
@@ -236,7 +243,12 @@ class WorldEngineManager:
         try:
             allocated = devices.memory_allocated() / (1024**3)
             reserved = devices.memory_reserved() / (1024**3)
-            logger.info(f"[DEVICE] {stage}: allocated={allocated:.2f} GiB reserved={reserved:.2f} GiB")
+            logger.info(
+                "Device memory",
+                stage=stage,
+                allocated_gib=round(allocated, 2),
+                reserved_gib=round(reserved, 2),
+            )
         except Exception:  # noqa: BLE001  -- best-effort diagnostics; never let a logging failure break the caller
             pass
 
@@ -339,14 +351,14 @@ class WorldEngineManager:
             quant_unchanged = requested_quant == self.quant
 
             if self._engine is not None and model_unchanged and quant_unchanged:
-                logger.info(f"[ENGINE] Model already loaded: {requested_model} (quant={self.quant})")
+                logger.info("Model already loaded", model=requested_model, quant=self.quant)
                 return
 
             if self._engine is not None:
                 if not model_unchanged:
-                    logger.info(f"[ENGINE] Switching model: {self.model_uri} -> {requested_model}")
+                    logger.info("Switching model", from_model=self.model_uri, to_model=requested_model)
                 if not quant_unchanged:
-                    logger.info(f"[ENGINE] Switching quant: {self.quant} -> {requested_quant}")
+                    logger.info("Switching quant", from_quant=self.quant, to_quant=requested_quant)
                 self._log_device_memory("before unload")
                 await self._run_on_device_thread(self._unload_engine_sync)
                 self._log_device_memory("after unload")
@@ -357,13 +369,15 @@ class WorldEngineManager:
             await self._run_on_device_thread(self._free_device_memory_sync)
             self._log_device_memory("after pre-load cleanup")
 
-            logger.info("=" * 60)
-            logger.info("BIOME ENGINE STARTUP")
-            logger.info("=" * 60)
             self._report_progress(StageId.SESSION_LOADING_MODEL)
-            logger.info(f"[1/3] Loading model: {requested_model}")
-            logger.info(f"      Quantization: {requested_quant}")
-            logger.info(f"      Device: {WORLD_ENGINE_DEVICE}")
+            logger.info(
+                "Loading model",
+                current_step=1,
+                total_steps=LOAD_ENGINE_TOTAL_STEPS,
+                model=requested_model,
+                quant=requested_quant,
+                device=WORLD_ENGINE_DEVICE,
+            )
 
             model_start = time.perf_counter()
             dtype_attempts = [torch.bfloat16, torch.float16]
@@ -373,7 +387,7 @@ class WorldEngineManager:
 
             for dtype in dtype_attempts:
                 try:
-                    logger.info(f"[1/3] Attempting load with dtype={dtype}")
+                    logger.info("Attempting load", dtype=str(dtype))
 
                     def _create_engine(dtype=dtype):
                         return WorldEngine(
@@ -389,7 +403,9 @@ class WorldEngineManager:
                 except devices.OutOfMemoryError as e:
                     last_error = e
                     logger.warning(
-                        f"[1/3] OOM loading {requested_model} dtype={dtype}; retrying with lower memory settings"
+                        "OOM loading; retrying with lower memory settings",
+                        model=requested_model,
+                        dtype=str(dtype),
                     )
                     await self._run_on_device_thread(self._unload_engine_sync)
                     self._log_device_memory("after OOM cleanup")
@@ -405,19 +421,27 @@ class WorldEngineManager:
 
             self._report_progress(StageId.SESSION_LOADING_WEIGHTS)
             self._engine = new_engine
-            logger.info(f"[1/3] Model loaded in {time.perf_counter() - model_start:.2f}s")
-            logger.info(f"[1/3] Loaded with dtype={selected_dtype}")
+            logger.info(
+                "Model loaded",
+                current_step=1,
+                total_steps=LOAD_ENGINE_TOTAL_STEPS,
+                duration_s=round(time.perf_counter() - model_start, 2),
+                dtype=str(selected_dtype),
+            )
             self._log_device_memory("after load")
 
             # Resolve typed runtime config from per-model defaults overridden
             # by the engine's model_cfg attributes.
             self.model_config = model_config_from_engine_cfg(self._engine.model_cfg)
             cfg = self.model_config
-            logger.info(f"[1/3] Model type: {cfg.label}")
-            logger.info(f"[1/3] Context length (n_frames): {cfg.n_frames}")
-            logger.info(f"[1/3] Temporal compression: {cfg.temporal_compression}")
-            logger.info(f"[1/3] Seed target size: {cfg.seed_target_size}")
-            logger.info(f"[1/3] Prompt conditioning: {cfg.has_prompt_conditioning}")
+            logger.info(
+                "Model config",
+                model_type=cfg.label,
+                n_frames=cfg.n_frames,
+                temporal_compression=cfg.temporal_compression,
+                seed_target_size=cfg.seed_target_size,
+                has_prompt_conditioning=cfg.has_prompt_conditioning,
+            )
 
             self._report_progress(StageId.SESSION_LOADING_DONE)
             self.model_uri = requested_model
@@ -425,15 +449,13 @@ class WorldEngineManager:
 
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
             # seed_frame when a new seed is required after a model switch.
-            if self.seed_frame is None:
-                logger.info("[2/3] Seed frame: waiting for client to provide initial seed")
-            else:
-                logger.info("[2/3] Seed frame: preserved existing seed")
-
-            logger.info("[3/3] Engine initialization complete")
-            logger.info("=" * 60)
-            logger.info("SERVER READY - Waiting for WebSocket connections on /ws")
-            logger.info("=" * 60)
+            seed_state = "missing" if self.seed_frame is None else "preserved"
+            logger.info("Seed frame state", current_step=2, total_steps=LOAD_ENGINE_TOTAL_STEPS, seed_state=seed_state)
+            logger.info(
+                "Engine initialization complete",
+                current_step=3,
+                total_steps=LOAD_ENGINE_TOTAL_STEPS,
+            )
 
     @staticmethod
     def tensor_to_numpy(frame: torch.Tensor):
@@ -529,16 +551,17 @@ class WorldEngineManager:
         if self.seed_frame is None:
             raise SeedFrameNotSetError
         seed = self.seed_frame
+        log = logger.bind(operation="reset")
 
         t0 = time.perf_counter()
-        logger.info("[RESET] Starting engine.reset()...")
+        log.info("Engine reset starting")
         self._device_executor.submit(engine.reset).result()
-        logger.info(f"[RESET] engine.reset() took {time.perf_counter() - t0:.2f}s")
+        log.info("Engine reset complete", duration_s=round(time.perf_counter() - t0, 2))
 
         t0 = time.perf_counter()
-        logger.info("[RESET] Starting engine.append_frame()...")
+        log.info("Append seed starting")
         self._device_executor.submit(lambda: engine.append_frame(seed)).result()
-        logger.info(f"[RESET] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+        log.info("Append seed complete", duration_s=round(time.perf_counter() - t0, 2))
 
     def init_session(self) -> None:
         """Reset engine, load seed, render initial frame and report progress.
@@ -548,18 +571,19 @@ class WorldEngineManager:
         if self.seed_frame is None:
             raise SeedFrameNotSetError
         seed = self.seed_frame
+        log = logger.bind(operation="init_session")
 
         self._report_progress(StageId.SESSION_INIT_RESET)
         t0 = time.perf_counter()
-        logger.info("[INIT] Starting engine.reset()...")
+        log.info("Engine reset starting")
         self._device_executor.submit(engine.reset).result()
-        logger.info(f"[INIT] engine.reset() took {time.perf_counter() - t0:.2f}s")
+        log.info("Engine reset complete", duration_s=round(time.perf_counter() - t0, 2))
 
         self._report_progress(StageId.SESSION_INIT_SEED)
         t0 = time.perf_counter()
-        logger.info("[INIT] Starting engine.append_frame()...")
+        log.info("Append seed starting")
         self._device_executor.submit(lambda: engine.append_frame(seed)).result()
-        logger.info(f"[INIT] engine.append_frame() took {time.perf_counter() - t0:.2f}s")
+        log.info("Append seed complete", duration_s=round(time.perf_counter() - t0, 2))
 
         self._report_progress(StageId.SESSION_INIT_FRAME)
 
@@ -569,7 +593,8 @@ class WorldEngineManager:
         generator thread when `gen_frame` raises a device-flavoured exception.
         The whole recovery runs on the device thread so the generator thread
         blocks for the duration but doesn't bounce through the asyncio loop."""
-        logger.warning("[DEVICE RECOVERY] Attempting to recover from device error...")
+        log = logger.bind(operation="device_recovery")
+        log.warning("Attempting to recover from device error")
 
         def clear_device():
             if devices.is_available():
@@ -577,16 +602,16 @@ class WorldEngineManager:
                 devices.empty_cache()
             # Clear compiled functions cache (this clears corrupted graphs).
             devices.reset_compiled_graphs()
-            logger.info("[DEVICE RECOVERY] Device caches cleared and compiled graphs reset")
+            log.info("Device caches cleared and compiled graphs reset")
 
         try:
             self._device_executor.submit(clear_device).result()
             self.reset_state()
-        except Exception as e:
-            logger.error(f"[DEVICE RECOVERY] Failed to recover: {e}", exc_info=True)
+        except Exception:
+            log.exception("Failed to recover")
             return False
         else:
-            logger.info("[DEVICE RECOVERY] Recovery complete - engine ready")
+            log.info("Recovery complete; engine ready")
             return True
 
     async def warmup(self):
@@ -600,44 +625,53 @@ class WorldEngineManager:
         if self.seed_frame is None:
             raise SeedFrameNotSetError
         seed = self.seed_frame
+        log = logger.bind(operation="warmup")
 
         def do_warmup():
             warmup_start = time.perf_counter()
 
             self._report_progress(StageId.SESSION_WARMUP_RESET)
-            logger.info("[1/3] Resetting engine state...")
             reset_start = time.perf_counter()
             engine.reset()
-            logger.info(f"[1/3] Reset complete in {time.perf_counter() - reset_start:.2f}s")
+            log.info(
+                "Reset complete",
+                current_step=1,
+                total_steps=WARMUP_TOTAL_STEPS,
+                duration_s=round(time.perf_counter() - reset_start, 2),
+            )
 
             self._report_progress(StageId.SESSION_WARMUP_SEED)
-            logger.info("[2/3] Appending seed frame...")
             append_start = time.perf_counter()
             engine.append_frame(seed)
-            logger.info(f"[2/3] Seed frame appended in {time.perf_counter() - append_start:.2f}s")
+            log.info(
+                "Seed frame appended",
+                current_step=2,
+                total_steps=WARMUP_TOTAL_STEPS,
+                duration_s=round(time.perf_counter() - append_start, 2),
+            )
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
-            logger.info("[3/3] Generating first frame (compiling device graphs)...")
             gen_start = time.perf_counter()
             _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
-            logger.info(f"[3/3] First frame generated in {time.perf_counter() - gen_start:.2f}s")
+            log.info(
+                "First frame generated",
+                current_step=3,
+                total_steps=WARMUP_TOTAL_STEPS,
+                duration_s=round(time.perf_counter() - gen_start, 2),
+            )
 
             return time.perf_counter() - warmup_start
 
-        logger.info("=" * 60)
-        logger.info("[WARMUP] First client connected, compiling device graphs...")
-        logger.info("=" * 60)
+        log.info("First client connected, compiling device graphs")
 
         try:
             warmup_time = await self._run_on_device_thread(do_warmup)
         except RuntimeError as e:
             if devices.is_quant_unsupported_error(e):
-                logger.error(f"Quantization mode unsupported on this device: {e}")  # noqa: TRY400  -- not logging the traceback; we re-raise
+                log.error("Quantization mode unsupported on this device", error=str(e))  # noqa: TRY400  -- not logging the traceback; we re-raise as a typed error
                 raise QuantUnsupportedError() from e
             raise
 
-        logger.info("=" * 60)
-        logger.info(f"[WARMUP] Complete in {warmup_time:.2f}s")
-        logger.info("=" * 60)
+        log.info("Warmup complete", duration_s=round(warmup_time, 2))
 
         self.engine_warmed_up = True

@@ -21,6 +21,9 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+import structlog
+from structlog.types import Processor
+
 from server.protocol import LogMessage
 
 if TYPE_CHECKING:
@@ -111,24 +114,51 @@ _hosted_log_fp = open(SERVER_LOG_FILE, "w", encoding="utf-8", buffering=1)  # no
 sys.stdout = TeeStream(sys.stdout, _hosted_log_fp)
 sys.stderr = TeeStream(sys.stderr, _hosted_log_fp)
 
-# Format includes `%(name)s` so every log line shows the logger it came
-# through. Each module uses `logger = logging.getLogger(__name__)`, so the
-# name is the dotted module path (e.g. `engine.manager`,
-# `server.session.workers`). `[client_host]` / `[1/3]` / `[RECV]` style
-# prefixes inside messages are kept for per-event context that the module
-# name doesn't capture.
-_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] %(message)s"
-_LOG_DATEFMT = "%H:%M:%S"
+# `structlog` produces structured event dicts, runs them through a processor
+# pipeline, and emits the rendered string via stdlib's `logging.Logger.info(...)`.
+# That keeps existing transports (TeeStream → stdout, server.log file, WS
+# broadcast) unchanged while giving us:
+#   - Per-event structured fields (`logger.info("Loading seed", filename=name)`).
+#   - Per-connection scope via `structlog.contextvars.bind_contextvars(client_host=...)`
+#     at WS accept; asyncio tasks inherit, the gen thread is wired explicitly
+#     (see `server.session.workers.run_generator`).
+#   - A migration path to Rust's `tracing` if/when this server is ported.
+#
+# stdout / WS stream / server.log all see the same human-readable rendering:
+#
+#     12:34:56 [info] [engine.manager] Loading model model=waypoint-1.5 step=1/3
+#
+# `colors=False` keeps ANSI out of the log file; the renderer's terminal UI
+# already strips ANSI but adds its own colour pass.
 
-logging.basicConfig(
-    level=logging.INFO,
-    format=_LOG_FORMAT,
-    datefmt=_LOG_DATEFMT,
-    stream=sys.stdout,
+_PRE_CHAIN: list[Processor] = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.add_logger_name,
+    structlog.processors.TimeStamper(fmt="%H:%M:%S"),
+]
+
+structlog.configure(
+    processors=[
+        *_PRE_CHAIN,
+        # `format_exc_info` materialises tracebacks before render so
+        # `log.exception(...)` lands the formatted traceback in the message.
+        structlog.processors.format_exc_info,
+        structlog.dev.ConsoleRenderer(colors=False),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger(__name__)
 
-# Route uvicorn's loggers through our standard format.
+# Stdlib basicConfig provides the transport (TeeStream-wrapped stdout) and the
+# level filter; structlog has already rendered the full line so we use the
+# bare `%(message)s` format here.
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+
+logger = structlog.stdlib.get_logger(__name__)
+
+# Route uvicorn's loggers through our standard transport.
 for _uv_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
     _uv_logger = logging.getLogger(_uv_name)
     _uv_logger.handlers.clear()
@@ -216,4 +246,4 @@ async def stream_logs_to_client(conn: "Connection") -> None:
         pass
     except Exception as e:  # noqa: BLE001  -- websocket send/queue can fail with a wide variety of errors; we just want to stop cleanly without recursing through logger
         # Avoid recursion — don't use logger here.
-        print(f"[{conn.client_host}] Log stream stopped: {e}", flush=True)
+        print(f"Log stream stopped: {e}", flush=True)

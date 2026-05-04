@@ -21,7 +21,6 @@ workers live in `workers.py`. This module owns connection state only.
 
 import asyncio
 import contextlib
-import logging
 import struct
 import threading
 from dataclasses import dataclass, field
@@ -29,6 +28,7 @@ from queue import Full as QueueFull
 from queue import Queue
 from typing import TYPE_CHECKING
 
+import structlog
 from fastapi import WebSocket
 from pydantic import BaseModel
 
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from engine.manager import WorldEngineManager
     from util.system_info import SystemMonitor
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 @dataclass
@@ -344,4 +344,4 @@ class Connection:
             world_engine.set_progress_callback(None)
         self.end_action_log_segment()
         self.end_video_segment()
-        logger.info(f"[{self.client_host}] Disconnected (frames: {self.perceptual_frame_count})")
+        logger.info("Disconnected", frames=self.perceptual_frame_count)

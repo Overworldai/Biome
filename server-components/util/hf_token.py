@@ -11,11 +11,12 @@ Call `apply_resolved_token()` once at startup, before any module that
 reads `HF_TOKEN` is imported.
 """
 
-import logging
 import os
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.stdlib.get_logger(__name__)
 
 
 def resolve_hf_token() -> str | None:
