@@ -1,6 +1,11 @@
 import { createLogger } from '../utils/logger'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type { RpcErrorResponse, RpcSuccessResponse, ServerPushMessage } from '../types/protocol.generated'
+import type {
+  RpcErrorResponse,
+  RpcRequestMap,
+  RpcSuccessResponse,
+  ServerPushMessage
+} from '../types/protocol.generated'
 
 const log = createLogger('WsRpc')
 
@@ -22,6 +27,16 @@ export class RpcError extends Error {
  *  push messages and RPC envelopes separately; the parser needs the union. */
 export type RpcResponse = RpcSuccessResponse<unknown> | RpcErrorResponse
 export type ServerMessage = ServerPushMessage | RpcResponse
+
+/** Function signature shared by `WsRpcClient.request` and every consumer
+ *  that takes a request-sender as a callback (`StreamingContext`, hooks,
+ *  components). Type-linked to the codegen `RpcRequestMap` so a typo in
+ *  the discriminator literal or the params shape is a tsc error. */
+export type WsRequest = <K extends keyof RpcRequestMap>(
+  type: K,
+  params: Omit<RpcRequestMap[K]['request'], 'type' | 'req_id'>,
+  timeoutMs?: number
+) => Promise<RpcRequestMap[K]['response']>
 
 type PendingRequest = {
   resolve: (data: unknown) => void
@@ -75,10 +90,17 @@ export class WsRpcClient {
   }
 
   /**
-   * Send a request over WS and return a Promise that resolves with the
-   * response `data` field, or rejects on error / timeout / disconnect.
+   * Send a typed RPC request over the WebSocket. The `type` literal
+   * picks the request/response shape from `RpcRequestMap` (codegen'd
+   * from `*Request` ↔ `*ResponseData` pairs in `protocol.py`); `params`
+   * must match the request shape minus `type`/`req_id`, and the
+   * resolved value is the matching response payload.
    */
-  request<T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T> {
+  request<K extends keyof RpcRequestMap>(
+    type: K,
+    params: Omit<RpcRequestMap[K]['request'], 'type' | 'req_id'>,
+    timeoutMs?: number
+  ): Promise<RpcRequestMap[K]['response']> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new TranslatableError('app.server.websocketNotConnected'))
     }
@@ -86,7 +108,7 @@ export class WsRpcClient {
     const reqId = String(this.nextReqId++)
     const timeout = timeoutMs ?? DEFAULT_TIMEOUT_MS
 
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<RpcRequestMap[K]['response']>((resolve, reject) => {
       const timer =
         timeout > 0
           ? setTimeout(() => {
@@ -101,13 +123,11 @@ export class WsRpcClient {
         timer
       })
 
-      this.ws!.send(
-        JSON.stringify({
-          type,
-          req_id: reqId,
-          ...(params ?? {})
-        })
-      )
+      // Construct the typed request envelope. tsc verifies the params
+      // against the request shape; the spread reattaches them with the
+      // mandatory `type` / `req_id` fields the server expects.
+      const envelope = { type, req_id: reqId, ...params } as RpcRequestMap[K]['request']
+      this.ws!.send(JSON.stringify(envelope))
     })
   }
 }

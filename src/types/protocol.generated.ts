@@ -259,3 +259,12 @@ export type ClientMessage =
   | CheckSeedSafetyRequest
 
 export type ServerPushMessage = StatusMessage | SystemInfoMessage | ErrorMessage | WarningMessage | LogMessage
+
+// ─── RPC request ↔ response map ───────────────────────────────────────
+
+export type RpcRequestMap = {
+  init: { request: InitRequest; response: InitResponseData }
+  scene_edit: { request: SceneEditRequest; response: SceneEditResponseData }
+  generate_scene: { request: GenerateSceneRequest; response: GenerateSceneResponseData }
+  check_seed_safety: { request: CheckSeedSafetyRequest; response: CheckSeedSafetyResponseData }
+}

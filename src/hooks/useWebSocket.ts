@@ -18,7 +18,7 @@ import type {
   SystemInfo,
   WarningMessage
 } from '../types/protocol.generated'
-import type { ServerMessage } from '../lib/wsRpc'
+import type { ServerMessage, WsRequest } from '../lib/wsRpc'
 
 /** TS-side union of the fire-and-forget notifications the renderer
  *  sends; constructed per-call by the helpers below so tsc verifies
@@ -92,7 +92,7 @@ type WebSocketHook = {
   applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
   reset: () => void
-  request: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
+  request: WsRequest
   clearLogs: () => void
   isConnected: boolean
   isReady: boolean
@@ -392,7 +392,7 @@ export const useWebSocket = (): WebSocketHook => {
   const sendInit = useCallback((params: Omit<InitRequest, 'type' | 'req_id'>): Promise<InitResponseData> => {
     // No timeout — init can take minutes (model download, warmup, graph compilation).
     // The WebSocket close event will reject the promise if the connection drops.
-    return rpcRef.current.request<InitResponseData>('init', params, 0)
+    return rpcRef.current.request('init', params, 0)
   }, [])
 
   const applyInitResponse = useCallback((metrics: InitResponseData) => {
@@ -414,10 +414,8 @@ export const useWebSocket = (): WebSocketHook => {
     sendNotif(notif)
   }, [sendNotif])
 
-  const request = useCallback(
-    <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T> => {
-      return rpcRef.current.request<T>(type, params, timeoutMs)
-    },
+  const request = useCallback<WsRequest>(
+    (type, params, timeoutMs) => rpcRef.current.request(type, params, timeoutMs),
     []
   )
 

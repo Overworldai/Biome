@@ -3,6 +3,7 @@ import type { StageId } from '../stages'
 import type { TranslatableError } from '../i18n'
 import type { ServerConnection } from '../hooks/useWebSocket'
 import type { InputCode } from '../types/input'
+import type { WsRequest } from '../lib/wsRpc'
 import type { SceneEditState, SceneEditEvent } from './sceneEditMachine'
 
 export type StreamingStats = {
@@ -69,7 +70,7 @@ export type StreamingContextValue = {
   openSeedsDir: () => Promise<void>
   seedsDir: string | null
   selectSeed: (filename: string) => Promise<void>
-  wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
+  wsRequest: WsRequest
   wsLogs: string[]
   wsAllLogs: string[]
   clearWsLogs: () => void

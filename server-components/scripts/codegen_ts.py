@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import re
 import sys
 import types
 import typing
@@ -309,11 +310,57 @@ def collect_module_decls(
     return enums, models, union_aliases
 
 
+def collect_rpc_pairs(models: list[type[BaseModel]]) -> list[tuple[str, type[BaseModel], type[BaseModel]]]:
+    """Detect `*Request` ↔ `*ResponseData` pairs by name. Returns
+    `(discriminator, request_cls, response_cls)` triples — used to emit
+    a typed `RpcRequestMap` so callers of `WsRpcClient.request` can
+    only pass a known type literal and get the matching response back.
+
+    The discriminator string is read from the request's `type:
+    Literal["..."]` field. Both halves must live in the same module."""
+    by_name = {m.__name__: m for m in models}
+    pairs: list[tuple[str, type[BaseModel], type[BaseModel]]] = []
+    for request_cls in models:
+        if not request_cls.__name__.endswith("Request"):
+            continue
+        response_name = request_cls.__name__.removesuffix("Request") + "ResponseData"
+        response_cls = by_name.get(response_name)
+        if response_cls is None:
+            continue
+
+        type_field = request_cls.model_fields.get("type")
+        if type_field is None or get_origin(type_field.annotation) is not Literal:
+            continue
+        literal_args = get_args(type_field.annotation)
+        if len(literal_args) != 1 or not isinstance(literal_args[0], str):
+            continue
+        pairs.append((literal_args[0], request_cls, response_cls))
+    return pairs
+
+
+_TS_IDENT_RE = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+
+
+def render_rpc_request_map(pairs: list[tuple[str, type[BaseModel], type[BaseModel]]]) -> str:
+    """Emit a TS type that maps each RPC discriminator literal to its
+    `{ request, response }` pair. Consumers use this to type-link a
+    `request(type, params)` call to its response shape."""
+    out = ["export type RpcRequestMap = {"]
+    for discriminator, req, res in pairs:
+        # Prettier strips quotes around object keys that are valid identifiers;
+        # match its style upfront so the file is stable on first pass.
+        key = discriminator if _TS_IDENT_RE.match(discriminator) else render_literal(discriminator)
+        out.append(f"  {key}: {{ request: {ts_name(req.__name__)}; response: {ts_name(res.__name__)} }}")
+    out.append("}")
+    return "\n".join(out)
+
+
 # ─── Top-level ───────────────────────────────────────────────────────
 
 
 def generate(module: ModuleType) -> str:
     enums, models, union_aliases = collect_module_decls(module)
+    rpc_pairs = collect_rpc_pairs(models)
 
     sections: list[str] = [HEADER.rstrip()]
 
@@ -328,6 +375,10 @@ def generate(module: ModuleType) -> str:
     if union_aliases:
         sections.append("// ─── Discriminated unions ─────────────────────────────────────────────")
         sections.extend(render_union_alias(name, members) for name, members in union_aliases)
+
+    if rpc_pairs:
+        sections.append("// ─── RPC request ↔ response map ───────────────────────────────────────")
+        sections.append(render_rpc_request_map(rpc_pairs))
 
     return "\n\n".join(sections) + "\n"
 
