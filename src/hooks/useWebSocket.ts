@@ -6,15 +6,24 @@ import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError, type TranslationKey } from '../i18n'
 import type {
+  ControlNotif,
   ErrorMessage,
   ErrorSnapshot,
   FrameHeader,
   InitRequest,
   InitResponseData,
+  PauseNotif,
+  ResetNotif,
+  ResumeNotif,
   SystemInfo,
   WarningMessage
 } from '../types/protocol.generated'
 import type { ServerMessage } from '../lib/wsRpc'
+
+/** TS-side union of the fire-and-forget notifications the renderer
+ *  sends; constructed per-call by the helpers below so tsc verifies
+ *  the wire shape against the generated types. */
+type ClientNotif = ControlNotif | PauseNotif | ResumeNotif | ResetNotif
 import type { ServerCode } from '../types/input'
 
 const log = createLogger('WebSocket')
@@ -353,21 +362,32 @@ export const useWebSocket = (): WebSocketHook => {
     setHasRealFrame(false)
   }, [])
 
-  const sendControl = useCallback((buttons: ServerCode[] = [], mouseDx = 0, mouseDy = 0) => {
+  const sendNotif = useCallback((notif: ClientNotif): boolean => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const ts = performance.now()
-      wsRef.current.send(JSON.stringify({ type: 'control', buttons, mouse_dx: mouseDx, mouse_dy: mouseDy, ts }))
-      lastControlTsRef.current = ts
+      wsRef.current.send(JSON.stringify(notif))
       return true
     }
     return false
   }, [])
 
-  const sendPause = useCallback((paused: boolean) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: paused ? 'pause' : 'resume' }))
-    }
-  }, [])
+  const sendControl = useCallback(
+    (buttons: ServerCode[] = [], mouseDx = 0, mouseDy = 0) => {
+      const ts = performance.now()
+      const notif: ControlNotif = { type: 'control', buttons, mouse_dx: mouseDx, mouse_dy: mouseDy, ts }
+      const sent = sendNotif(notif)
+      if (sent) lastControlTsRef.current = ts
+      return sent
+    },
+    [sendNotif]
+  )
+
+  const sendPause = useCallback(
+    (paused: boolean) => {
+      const notif: PauseNotif | ResumeNotif = paused ? { type: 'pause' } : { type: 'resume' }
+      sendNotif(notif)
+    },
+    [sendNotif]
+  )
 
   const sendInit = useCallback((params: Omit<InitRequest, 'type' | 'req_id'>): Promise<InitResponseData> => {
     // No timeout — init can take minutes (model download, warmup, graph compilation).
@@ -390,10 +410,9 @@ export const useWebSocket = (): WebSocketHook => {
   }, [])
 
   const reset = useCallback(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'reset' }))
-    }
-  }, [])
+    const notif: ResetNotif = { type: 'reset' }
+    sendNotif(notif)
+  }, [sendNotif])
 
   const request = useCallback(
     <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<T> => {
