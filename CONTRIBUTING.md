@@ -169,24 +169,23 @@ IPC handlers are organized one file per domain in `electron/ipc/` (config, model
 
 ### WebSocket Protocol (renderer ↔ World Engine)
 
-The renderer connects to the World Engine at `ws(s)://{host}/ws`. All messages are JSON with a `type` field. The protocol has two layers:
+The renderer connects to the World Engine at `ws(s)://{host}/ws`. All messages are JSON with a `type` field. The protocol has two layers, both modelled as Pydantic discriminated unions in `server-components/server/protocol.py` and re-exported to TypeScript via codegen (see [Cross-language types](#cross-language-types) below).
 
 **Push messages** (server→client), handled in `useWebSocket.ts`:
 
-- `status` — loading progress (`code`, `stage: {id, label, percent}`); `code: 'ready'` signals the engine is ready
-- `frame` — a rendered frame (`data` as base64, `frame_id`, `gen_ms`)
-- `log` — server log line
-- `error` / `warning` — error or transient warning message (see [Server error messages](#server-error-messages) below)
+- `status` — `{stage: StageId, message?}`; the engine reports progress through every stage in `protocol.StageId`
+- `system_info` — one-shot hardware identity broadcast right after handshake
+- `error` / `warning` — see [Server error messages](#server-error-messages) below
+- `log` — server log line `{line, level}`
+- (binary) — JPEG frame with a `FrameHeader` JSON prefix
 
-**Client→server commands**, sent as fire-and-forget JSON:
+**Client→server notifications** (fire-and-forget, no `req_id`):
 
-- `control` — input (`buttons[]`, `mouse_dx`, `mouse_dy`)
-- `pause` / `resume` — pause/resume generation
-- `prompt` — set scene prompt
-- `prompt_with_seed` — prompt with a seed image (URL or filename)
-- `set_initial_seed`, `set_model`, `reset`
+- `control` — `{buttons[], mouse_dx, mouse_dy, ts?}`
+- `pause` / `resume` / `reset`
+- `prompt` — `{prompt}`
 
-**RPC layer** (`src/lib/wsRpc.ts`): For request/response patterns. Client sends `{type, req_id, ...params}`, server replies `{type: 'response', req_id, success, data/error}`. Used via `useWebSocket().request()`.
+**RPC layer** (`src/lib/wsRpc.ts`): For request/response patterns. Request types live in `protocol.py` as `*Request` (init, scene_edit, generate_scene, check_seed_safety); each carries a `req_id`. Server replies with `{type: 'response', req_id, success, data | error_id | error}`. Used via `useWebSocket().request()` or the `sendInit` helper.
 
 #### Server error messages
 
@@ -213,6 +212,64 @@ RPC error responses use the same convention with `error_id` instead of `error`:
 ```
 
 On the client, `RpcError` (from `src/lib/wsRpc.ts`) carries the `errorId` for consumers to resolve via `t()`.
+
+#### Cross-language types
+
+`server-components/server/protocol.py` is the single source of truth for the wire protocol. A small Python script regenerates the TypeScript view of it:
+
+```bash
+cd server-components
+uv run python scripts/codegen_ts.py            # writes ../src/types/protocol.generated.ts
+uv run python scripts/codegen_ts.py --check    # CI freshness gate; exit 1 if stale
+```
+
+What gets generated, from each Python construct:
+
+| Python                                          | TypeScript                                               |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `class Foo(BaseModel)`                          | `export interface Foo`                                   |
+| `class Foo[T: BaseModel](BaseModel)`            | `export interface Foo<T>`                                |
+| `class Foo(StrEnum)`                            | `export type Foo = 'a' \| 'b' \| ...`                    |
+| `Annotated[A \| B, Field(discriminator="...")]` | `export type Foo = A \| B`                               |
+| `T \| None = None`                              | `field?: T` (Pydantic's `exclude_none=True`)             |
+| `T = <default>` (non-Literal)                   | `field?: T`                                              |
+| `T` (no default)                                | `field: T` (required)                                    |
+| `Literal["x"]`                                  | `'x'` (discriminators stay required even with a default) |
+
+Any `# pyright:` ignore comments inside `protocol.py` shouldn't be needed — the protocol module is pure types and basedpyright is clean there. The script's own per-rule rationale and the rename map (`StageId` → `ServerStageId` for the Python set, leaving the broader `StageId` alias for the renderer) live in `scripts/codegen_ts.py`.
+
+**Drift gates.** `src/i18n/index.ts` carries compile-time assertions that fail if the protocol and the i18n keys diverge:
+
+- Every `MessageId` value (server-emitted) must have a translation under `app.server.{error,warning}.*`, **and** every translation key under those subtrees must correspond to a `MessageId`. The check is bidirectional — orphan keys on either side fail tsc.
+- Every `StageId` value (server `ServerStageId` plus installer-only `InstallerStageId` defined in `src/stages.ts`) must have a translation under `stage.*`, and vice versa.
+- `src/stages.ts` exports `STAGE_PERCENTS: Record<StageId, number>` — the `Record<>` type forces tsc to flag any new stage that doesn't have a percent.
+- `lint-backend` CI step runs `codegen_ts.py --check` after basedpyright; PRs that change `protocol.py` without regenerating the TS will fail.
+
+**Adding a new `MessageId`:**
+
+1. Add the enum member in `protocol.py` with the full `app.server.{error,warning}.<key>` value.
+2. Run the codegen.
+3. Add a translation for the new key to **every** locale under `src/i18n/` — `tsc` will tell you which ones you missed.
+
+**Adding a new `StageId`:**
+
+1. Add the enum member in `protocol.py`.
+2. Run the codegen.
+3. Add the percent in `STAGE_PERCENTS` in `src/stages.ts` and the translation under `stage.*` in every locale.
+
+**Adding a new message / RPC type:**
+
+1. Define the Pydantic model in `protocol.py`. If it's a discriminated union member, add it to the `ClientMessage` / `ServerPushMessage` union.
+2. Run the codegen.
+3. Wire the typed shape into the relevant TS consumer (`useWebSocket.ts`, `wsRpc.ts`, etc.).
+
+**Renaming the Python class.** Most `*Request` / `*Response` / `*Message` / `*Notif` names from the Python side ship verbatim to TS. The exceptions live in `_TS_RENAMES` at the top of the codegen script — keep that list short and justified.
+
+**Not gated yet** (room for future tightening):
+
+- The WS message parser in `useWebSocket.ts` and `wsRpc.ts` reads incoming JSON as `Record<string, unknown>`. A backend field rename would silently break runtime parsing without a compile-time signal.
+- `wsRpc.request<T>()` takes the response type as a caller-supplied generic — there's no compile link between the request type literal and its expected response shape.
+- The frame header binary path parses raw `Record<string, unknown>` even though `FrameHeader` is generated.
 
 ### State Management
 
