@@ -5,7 +5,7 @@ import { WsRpcClient } from '../lib/wsRpc'
 import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type { InitMessage, InitResponse, ServerErrorSnapshot, ServerSystemInfo } from '../types/ws'
+import type { ErrorSnapshot, InitRequest, InitResponseData, SystemInfo } from '../types/protocol.generated'
 import type { ServerCode } from '../types/input'
 
 const log = createLogger('WebSocket')
@@ -34,11 +34,11 @@ export type RuntimeMetrics = {
  *  Populated from the init RPC response (static identifiers), binary frame
  *  headers (runtime metrics), and error push messages (lastErrorSnapshot). */
 export type ServerConnection = {
-  systemInfo: ServerSystemInfo | null
+  systemInfo: SystemInfo | null
   model: string | null
   inferenceFps: number | null
   runtime: RuntimeMetrics | null
-  lastErrorSnapshot: ServerErrorSnapshot | null
+  lastErrorSnapshot: ErrorSnapshot | null
 }
 
 const emptyConnection = (): ServerConnection => ({
@@ -70,8 +70,8 @@ type WebSocketHook = {
   disconnect: () => void
   sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
   sendPause: (paused: boolean) => void
-  sendInit: (params: Omit<InitMessage, 'type' | 'req_id'>) => Promise<InitResponse>
-  applyInitResponse: (metrics: InitResponse) => void
+  sendInit: (params: Omit<InitRequest, 'type' | 'req_id'>) => Promise<InitResponseData>
+  applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
   reset: () => void
   request: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
@@ -277,7 +277,7 @@ export const useWebSocket = (): WebSocketHook => {
             case 'error': {
               setError(resolveServerMessage(msg, 'app.server.fallbackError'))
               setConnectionState('error')
-              const snapshot = msg.snapshot as ServerErrorSnapshot | undefined
+              const snapshot = msg.snapshot as ErrorSnapshot | undefined
               if (snapshot) {
                 setConnection((prev) => ({ ...prev, lastErrorSnapshot: snapshot }))
               }
@@ -288,7 +288,7 @@ export const useWebSocket = (): WebSocketHook => {
               // the hardware identity is available even if the session crashes
               // during model load / device warmup.
               const { type: _, ...info } = msg
-              setConnection((prev) => ({ ...prev, systemInfo: info as unknown as ServerSystemInfo }))
+              setConnection((prev) => ({ ...prev, systemInfo: info as unknown as SystemInfo }))
               break
             }
             case 'warning':
@@ -376,13 +376,13 @@ export const useWebSocket = (): WebSocketHook => {
     }
   }, [])
 
-  const sendInit = useCallback((params: Omit<InitMessage, 'type' | 'req_id'>): Promise<InitResponse> => {
+  const sendInit = useCallback((params: Omit<InitRequest, 'type' | 'req_id'>): Promise<InitResponseData> => {
     // No timeout — init can take minutes (model download, warmup, graph compilation).
     // The WebSocket close event will reject the promise if the connection drops.
-    return rpcRef.current.request<InitResponse>('init', params, 0)
+    return rpcRef.current.request<InitResponseData>('init', params, 0)
   }, [])
 
-  const applyInitResponse = useCallback((metrics: InitResponse) => {
+  const applyInitResponse = useCallback((metrics: InitResponseData) => {
     setConnection((prev) => ({
       ...prev,
       systemInfo: metrics.system_info ?? prev.systemInfo,

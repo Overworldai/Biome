@@ -4,7 +4,7 @@ import { invoke } from '../bridge'
 import { RpcError } from '../lib/wsRpc'
 import { useSettings } from './settingsContextValue'
 import { useStreaming } from '../context/streamingContextValue'
-import type { GenerateSceneResponse } from '../types/ws'
+import type { GenerateSceneResponseData } from '../types/protocol.generated'
 
 type GenerateState = 'idle' | 'loading' | 'error'
 
@@ -50,7 +50,7 @@ export function useSceneGeneration({ refreshSeeds, isActive, setLastAddedFilenam
       setGenerateError(null)
       setLastAddedFilename(null)
       try {
-        const response = await wsRequest<GenerateSceneResponse>('generate_scene', { prompt }, 60_000)
+        const response = await wsRequest<GenerateSceneResponseData>('generate_scene', { prompt }, 60_000)
         if (settings.scene_authoring_save_generated ?? true) {
           try {
             const record = await invoke('save-generated-seed', response.image_jpeg_base64)

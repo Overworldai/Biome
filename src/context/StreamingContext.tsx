@@ -270,7 +270,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         video_recording: recordingEnabled,
         video_output_dir: videoOutputDir,
         biome_version: biomeVersion,
-        quant: quant !== 'none' ? quant : null,
+        quant: quant !== 'none' ? quant : undefined,
         cap_inference_fps: settings.cap_inference_fps ?? true
       })
       applyInitResponse(metrics)
