@@ -27,8 +27,3 @@ export type EngineStatus = {
 }
 
 export type SetupStatus = 'saved' | 'error' | null
-
-export type LoadingStage = {
-  id: string
-  percent: number
-}
