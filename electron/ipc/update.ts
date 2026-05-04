@@ -1,4 +1,7 @@
 import { app, ipcMain } from 'electron'
+import { getLogger } from '../lib/logger.js'
+
+const log = getLogger('electron.update')
 
 const RELEASES_API_URL = 'https://api.github.com/repos/Overworldai/Biome/releases/latest'
 
@@ -82,7 +85,9 @@ export function registerUpdateIpc(): void {
         update_available: updateAvailable
       }
     } catch (error) {
-      console.warn('[UPDATES] Failed to check for new release:', error)
+      log.warning('Failed to check for new release', {
+        exception: error instanceof Error ? (error.stack ?? error.message) : String(error)
+      })
       return {
         current_version: currentVersion,
         latest_version: currentVersion,

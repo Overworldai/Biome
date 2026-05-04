@@ -16,8 +16,11 @@ import {
 } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
 import { parseLogLine } from '../lib/logRecord.js'
+import { getLogger } from '../lib/logger.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
 import { getOfflineEnv } from './settings.js'
+
+const log = getLogger('engine.server')
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -58,9 +61,7 @@ export function registerServerIpc(): void {
     // Ensure HF cache dir exists
     fs.mkdirSync(hfHubCacheDir, { recursive: true })
 
-    console.log(`[ENGINE] Starting server on port ${port}...`)
-    console.log(`[ENGINE] Engine dir: ${engineDir}`)
-    console.log(`[ENGINE] UV binary: ${uvBinary}`)
+    log.info('Starting server', { fields: { port, engine_dir: engineDir, uv_binary: uvBinary } })
 
     // Build env for server process
     const serverEnv: Record<string, string> = {
@@ -108,7 +109,7 @@ export function registerServerIpc(): void {
     })
 
     const pid = child.pid
-    console.log(`[ENGINE] Server process spawned with PID: ${pid}`)
+    log.info('Server process spawned', { fields: { pid: pid ?? -1 } })
     fs.writeFileSync(logFilePath, '', 'utf-8')
 
     // Rolling tail of recent stdout+stderr, drained from the line readers below.
@@ -116,9 +117,15 @@ export function registerServerIpc(): void {
     // re-read the log file.
     const recentLines: string[] = []
     const handleLine = (line: string, isStderr: boolean) => {
-      console.log(`[SERVER] ${line}`)
+      // Subprocess pass-through: write the raw line to our stdout (the
+      // line is already structured if it came from structlog; otherwise
+      // it's raw text from uvicorn / pre-init Python).  The same line
+      // also flows through `parseLogLine` for the renderer-bound IPC,
+      // which handles JSON parsing + fallback uniformly.
+      const sink = isStderr ? process.stderr : process.stdout
+      sink.write(line + '\n')
       fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
-      emitToAllWindows('engine-log', parseLogLine(line, isStderr))
+      emitToAllWindows('engine-log', parseLogLine(line, isStderr, 'engine.server'))
       recentLines.push(line)
       if (recentLines.length > LOG_TAIL_MAX_LINES) recentLines.shift()
     }
@@ -133,7 +140,7 @@ export function registerServerIpc(): void {
     lastServerExitTail = null
 
     child.on('exit', (code, signal) => {
-      console.log(`[ENGINE] Server process exited (code: ${code}, signal: ${signal})`)
+      log.info('Server process exited', { fields: { code: code ?? -1, signal: signal ?? '' } })
       if (code !== 0 && code !== null) {
         lastServerExitTail = recentLines.join('\n')
       }
@@ -147,7 +154,7 @@ export function registerServerIpc(): void {
 
     if (!child.exitCode && child.exitCode !== 0) {
       // Still running
-      console.log('[ENGINE] Server process is running')
+      log.info('Server process is running')
     } else if (child.exitCode !== null) {
       // Process exited immediately
       clearServerState()

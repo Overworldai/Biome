@@ -6,9 +6,8 @@ export async function runUvSyncWithMirroredLogs(
   uvBinary: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
-  options?: { logPrefix?: string; signal?: AbortSignal; onLine?: (line: string, isStderr: boolean) => void }
+  options?: { signal?: AbortSignal; onLine?: (line: string, isStderr: boolean) => void }
 ): Promise<void> {
-  const prefix = options?.logPrefix ?? '[UV]'
   const signal = options?.signal
   const onLine = options?.onLine
 
@@ -28,14 +27,15 @@ export async function runUvSyncWithMirroredLogs(
 
     const tail: string[] = []
     const handleLine = (line: string, isStderr: boolean) => {
-      const prefixed = `${prefix} ${line}`
-      if (isStderr) {
-        console.error(prefixed)
-      } else {
-        console.log(prefixed)
-      }
-      onLine?.(prefixed, isStderr)
-      tail.push(prefixed)
+      // Subprocess pass-through: write the raw uv line to our stdout/stderr.
+      // The renderer-bound `LogRecord` is built by the caller's `onLine`
+      // (which routes through `parseLogLine` with `engine.uv-sync` as the
+      // fallback logger), so attribution lives on the structured field
+      // rather than as a glued-on prefix.
+      const sink = isStderr ? process.stderr : process.stdout
+      sink.write(line + '\n')
+      onLine?.(line, isStderr)
+      tail.push(line)
       if (tail.length > 80) tail.shift()
     }
 

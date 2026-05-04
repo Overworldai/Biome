@@ -10,7 +10,15 @@ import { runUvSyncWithMirroredLogs } from '../lib/uvSync.js'
 import { copyServerComponentFiles, ensureEngineFont } from '../lib/serverFiles.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
 import { parseLogLine } from '../lib/logRecord.js'
+import { getLogger } from '../lib/logger.js'
 import { getOfflineEnv } from './settings.js'
+
+// `engine.setup` covers the user-visible phases (install uv, sync deps,
+// copy components, nuke); each call surfaces in the renderer's log buffer
+// via `defaultBroadcast: true`. `engine.diagnostics` is internal noise
+// from `check-engine-status` — kept on the Electron-side console only.
+const setupLog = getLogger('engine.setup', { defaultBroadcast: true })
+const diagLog = getLogger('engine.diagnostics')
 
 const UV_VERSION = '0.10.9'
 let engineInstallAbortController: AbortController | null = null
@@ -66,25 +74,24 @@ async function syncEngineDependencies(signal?: AbortSignal): Promise<void> {
     fs.mkdirSync(path.join(uvDir, subdir), { recursive: true })
   }
 
-  console.log('[ENGINE] Running uv sync for engine dependencies...')
+  setupLog.info('Running uv sync for engine dependencies')
   await runUvSyncWithMirroredLogs(
     uvBinary,
     engineDir,
     { ...process.env, ...uvEnv, ...getOfflineEnv() },
     {
-      logPrefix: '[ENGINE]',
       signal,
       onLine: (line, isStderr) => {
-        emitToAllWindows('engine-log', parseLogLine(line, isStderr))
+        emitToAllWindows('engine-log', parseLogLine(line, isStderr, 'engine.uv-sync'))
       }
     }
   )
-  console.log('[ENGINE] uv sync finished for engine dependencies')
+  setupLog.info('uv sync finished for engine dependencies')
 }
 
 /** Full engine setup: install UV if needed, copy server components, sync dependencies. */
 async function reinstallEngine(signal?: AbortSignal): Promise<void> {
-  emitToAllWindows('engine-log', parseLogLine('[ENGINE] Checking uv installation...', false))
+  setupLog.info('Checking uv installation')
   const uvBinary = getUvBinaryPath()
 
   let uvInstalled = false
@@ -98,17 +105,17 @@ async function reinstallEngine(signal?: AbortSignal): Promise<void> {
   }
 
   if (!uvInstalled) {
-    emitToAllWindows('engine-log', parseLogLine('[ENGINE] Installing uv...', false))
+    setupLog.info('Installing uv')
     await installUv()
   }
 
-  emitToAllWindows('engine-log', parseLogLine('[ENGINE] Setting up server components...', false))
+  setupLog.info('Setting up server components')
   copyServerComponentFiles(getEngineDir())
 
-  emitToAllWindows('engine-log', parseLogLine('[ENGINE] Syncing dependencies (this may take a while)...', false))
+  setupLog.info('Syncing dependencies (this may take a while)')
   await syncEngineDependencies(signal)
 
-  emitToAllWindows('engine-log', parseLogLine('[ENGINE] Setup complete.', false))
+  setupLog.info('Setup complete')
 }
 
 /** Nuke engine and UV directories. */
@@ -120,11 +127,11 @@ function nukeEngineDirectories(): void {
 
   if (fs.existsSync(engineDir)) {
     fs.rmSync(engineDir, { recursive: true, force: true })
-    emitToAllWindows('engine-log', parseLogLine(`[ENGINE] Removed ${engineDir}`, false))
+    setupLog.info('Removed engine directory', { fields: { path: engineDir } })
   }
   if (fs.existsSync(uvDir)) {
     fs.rmSync(uvDir, { recursive: true, force: true })
-    emitToAllWindows('engine-log', parseLogLine(`[ENGINE] Removed ${uvDir}`, false))
+    setupLog.info('Removed UV directory', { fields: { path: uvDir } })
   }
 }
 
@@ -136,7 +143,7 @@ async function installUv(): Promise<string> {
   const archiveName = getUvArchiveName()
   const downloadUrl = `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${archiveName}`
 
-  console.log(`[ENGINE] Downloading uv from ${downloadUrl}`)
+  setupLog.info('Downloading uv', { fields: { url: downloadUrl } })
   const response = await fetch(downloadUrl)
   if (!response.ok) {
     throw new Error(`Failed to download uv: HTTP ${response.status}`)
@@ -201,7 +208,7 @@ async function installUv(): Promise<string> {
 export function registerEngineIpc(): void {
   ipcMain.handle('check-engine-status', async (_event, source?: string) => {
     const caller = source ?? 'unknown'
-    console.log(`[ENGINE] check-engine-status: start (caller=${caller})`)
+    diagLog.info('check-engine-status: start', { fields: { caller } })
     const engineDir = getEngineDir()
     const uvBinary = getUvBinaryPath()
     const uvEnv = getUvEnvVars()
@@ -210,15 +217,15 @@ export function registerEngineIpc(): void {
     let uvInstalled = false
     if (fs.existsSync(uvBinary)) {
       try {
-        console.log('[ENGINE] check-engine-status: validating uv binary...')
+        diagLog.info('check-engine-status: validating uv binary')
         await execFileAsync(uvBinary, ['--version'], {
           ...getHiddenWindowOptions()
         })
         uvInstalled = true
-        console.log('[ENGINE] check-engine-status: uv binary ok')
+        diagLog.info('check-engine-status: uv binary ok')
       } catch {
         uvInstalled = false
-        console.log('[ENGINE] check-engine-status: uv binary validation failed')
+        diagLog.info('check-engine-status: uv binary validation failed')
       }
     }
 
@@ -234,17 +241,17 @@ export function registerEngineIpc(): void {
       const pythonPath = getVenvPythonPath(engineDir)
       if (fs.existsSync(pythonPath)) {
         try {
-          console.log('[ENGINE] check-engine-status: validating synced dependencies via uv run python --version...')
+          diagLog.info('check-engine-status: validating synced dependencies via uv run python --version')
           await execFileAsync(uvBinary, ['run', 'python', '--version'], {
             cwd: engineDir,
             env: { ...process.env, ...uvEnv, UV_FROZEN: '1' },
             ...getHiddenWindowOptions()
           })
           dependenciesSynced = true
-          console.log('[ENGINE] check-engine-status: dependency validation ok')
+          diagLog.info('check-engine-status: dependency validation ok')
         } catch {
           dependenciesSynced = false
-          console.log('[ENGINE] check-engine-status: dependency validation failed')
+          diagLog.info('check-engine-status: dependency validation failed')
         }
       }
     }
@@ -264,7 +271,14 @@ export function registerEngineIpc(): void {
       server_port: serverPort,
       server_log_path: serverLogPath
     }
-    console.log(`[ENGINE] check-engine-status: result ${JSON.stringify(result)}`)
+    diagLog.info('check-engine-status: result', {
+      fields: {
+        uv_installed: result.uv_installed,
+        repo_cloned: result.repo_cloned,
+        dependencies_synced: result.dependencies_synced,
+        server_running: result.server_running
+      }
+    })
     return result
   })
 

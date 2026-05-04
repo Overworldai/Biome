@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getSeedsDefaultDir, getSeedsGeneratedDir, getSeedsThumbnailDir, getSeedsUploadsDir } from '../lib/paths.js'
 import { SUPPORTED_IMAGE_EXTENSIONS } from '../lib/constants.js'
+import { getLogger } from '../lib/logger.js'
 import type { SeedFileRecord, SeedSource } from '../../src/types/app.js'
+
+const log = getLogger('electron.seeds')
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
   '.png': 'image/png',
@@ -103,7 +106,7 @@ export function registerSeedsIpc(): void {
     fs.mkdirSync(thumbDir, { recursive: true })
     const img = nativeImage.createFromPath(filePath)
     if (img.isEmpty()) {
-      console.error(`[SEEDS] Failed to load image for thumbnail: ${filePath}`)
+      log.error('Failed to load image for thumbnail', { fields: { path: filePath } })
       return null
     }
     const { width } = img.getSize()
