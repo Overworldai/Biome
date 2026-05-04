@@ -365,13 +365,13 @@ const zh = {
         error: {
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
+          initFailed: '会话初始化失败',
           sceneAuthoringModelLoadFailed: '场景创作模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
           generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
           sceneAuthoringEmptyPrompt: '提示词为空',
           sceneAuthoringModelNotLoaded: '场景创作模型未加载。请在设置中启用场景创作。',
           sceneAuthoringAlreadyInProgress: '场景创作已在进行中',
-          contentFilterLoadFailed: '内容过滤器加载失败',
           quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
           deviceRecoveryFailed: 'GPU 错误 - 恢复失败。请重新连接。'
         },
@@ -380,8 +380,7 @@ const zh = {
           invalidSeedData: '种子图片数据无效',
           seedSafetyCheckFailed: '种子安全检查失败',
           seedUnsafe: '种子被标记为不安全',
-          seedLoadFailed: '无法加载种子图片',
-          missingModelId: '缺少模型 ID'
+          seedLoadFailed: '无法加载种子图片'
         }
       }
     },
@@ -417,14 +416,9 @@ const zh = {
           load: '正在加载场景创作模型...',
           ready: '场景创作模型已就绪。'
         },
-        safety: {
-          load: '正在加载内容过滤器...',
-          ready: '内容过滤器已就绪。'
-        },
         warmup: {
           reset: '正在准备预热...',
           seed: '正在用测试帧预热...',
-          prompt: '正在用测试提示词预热...',
           compile: '正在为你的 GPU 做优化...'
         },
         init: {

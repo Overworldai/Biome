@@ -371,13 +371,13 @@ const he = {
         error: {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
+          initFailed: 'אתחול הסשן נכשל',
           sceneAuthoringModelLoadFailed: 'טעינת מודל יצירת הסצנות נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           sceneAuthoringEmptyPrompt: 'פרומפט ריק',
           sceneAuthoringModelNotLoaded: 'מודל יצירת הסצנות לא נטען. הפעל את יצירת סצנות בהגדרות.',
           sceneAuthoringAlreadyInProgress: 'יצירת סצנה כבר מתבצעת',
-          contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
           quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
           deviceRecoveryFailed: 'שגיאת GPU — השחזור נכשל. נא להתחבר מחדש.'
         },
@@ -386,8 +386,7 @@ const he = {
           invalidSeedData: 'נתוני seed לא חוקיים',
           seedSafetyCheckFailed: 'ה-seed נכשל בבדיקת בטיחות',
           seedUnsafe: 'ה-seed סומן כלא בטוח',
-          seedLoadFailed: 'טעינת תמונת ה-seed נכשלה',
-          missingModelId: 'חסר מזהה מודל'
+          seedLoadFailed: 'טעינת תמונת ה-seed נכשלה'
         }
       }
     },
@@ -423,14 +422,9 @@ const he = {
           load: 'טוען מודל יצירת סצנות...',
           ready: 'מודל יצירת הסצנות מוכן.'
         },
-        safety: {
-          load: 'טוען מסנן תוכן...',
-          ready: 'מסנן התוכן מוכן.'
-        },
         warmup: {
           reset: 'מתכונן לחימום...',
           seed: 'מחמם עם פריים בדיקה...',
-          prompt: 'מחמם עם פרומפט בדיקה...',
           compile: 'מבצע אופטימיזציה ל-GPU שלך...'
         },
         init: {

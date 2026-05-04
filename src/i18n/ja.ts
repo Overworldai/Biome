@@ -375,6 +375,7 @@ const ja = {
         error: {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
+          initFailed: 'セッションの初期化に失敗しました',
           sceneAuthoringModelLoadFailed: 'シーンオーサリングモデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
@@ -384,7 +385,6 @@ const ja = {
           sceneAuthoringModelNotLoaded:
             'シーンオーサリングモデルが読み込まれていません。設定でシーンオーサリングを有効にしてください。',
           sceneAuthoringAlreadyInProgress: 'シーンオーサリングが既に進行中です',
-          contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
           deviceRecoveryFailed: 'GPU エラー — 回復に失敗しました。再接続してください。'
         },
@@ -393,8 +393,7 @@ const ja = {
           invalidSeedData: 'シード画像データが無効です',
           seedSafetyCheckFailed: 'シードの安全性チェックに失敗しました',
           seedUnsafe: 'シードが安全でないとマークされています',
-          seedLoadFailed: 'シード画像の読み込みに失敗しました',
-          missingModelId: 'モデルIDがありません'
+          seedLoadFailed: 'シード画像の読み込みに失敗しました'
         }
       }
     },
@@ -430,14 +429,9 @@ const ja = {
           load: 'シーンオーサリングモデルを読み込んでいます...',
           ready: 'シーンオーサリングモデルの準備ができました。'
         },
-        safety: {
-          load: 'コンテンツフィルターを読み込んでいます...',
-          ready: 'コンテンツフィルターの準備ができました。'
-        },
         warmup: {
           reset: 'ウォームアップの準備をしています...',
           seed: 'テストフレームでウォームアップしています...',
-          prompt: 'テストプロンプトでウォームアップしています...',
           compile: 'GPU 向けに最適化しています...'
         },
         init: {

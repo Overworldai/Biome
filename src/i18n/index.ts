@@ -3,10 +3,32 @@ import type { ParseKeys } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { resources } from './resources'
 import { FALLBACK_LOCALE, isSupportedLocale, type SupportedLocale } from './locales'
+import type { MessageId } from '../types/protocol.generated'
+import type { StageId } from '../stages'
 
 export { FALLBACK_LOCALE, LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES, type SupportedLocale } from './locales'
 
 export type TranslationKey = ParseKeys
+
+// ─── Drift gate: server `MessageId` ↔ `app.server.{error,warning}.*` keys ───
+// `MessageId` is generated from `server-components/server/protocol.py`.
+// These compile-time assertions fail if (a) the server emits a key with no
+// translation, or (b) a translation exists with no server emitter — i.e.
+// either side has drifted relative to the other.
+type _Expect<T extends true> = T
+type _Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+
+// MessageId ↔ `app.server.{error,warning}.*`
+type _ServerMessageKey = Extract<TranslationKey, `app.server.error.${string}` | `app.server.warning.${string}`>
+type _MessageIdsAreKeys = _Expect<MessageId extends TranslationKey ? true : false>
+type _MessageIdsCoverKeys = _Expect<_Equals<MessageId, _ServerMessageKey>>
+
+// StageId ↔ `stage.*` — every stage we can render must have a translation,
+// and every stage translation must correspond to a stage we can render.
+type _StageTranslationKey = `stage.${StageId}`
+type _AllStageKeys = Extract<TranslationKey, `stage.${string}`>
+type _StagesAreKeys = _Expect<_StageTranslationKey extends TranslationKey ? true : false>
+type _StagesCoverKeys = _Expect<_Equals<_StageTranslationKey, _AllStageKeys>>
 
 /**
  * Error carrying a translation key + interpolation params.
