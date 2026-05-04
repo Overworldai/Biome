@@ -1,13 +1,15 @@
 import { z } from 'zod'
 import { createLogger } from '../utils/logger'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type {
-  RpcErrorResponse,
-  RpcRequestMap,
-  RpcSuccessResponse,
-  ServerPushMessage
+import {
+  RpcErrorResponseSchema,
+  RpcSuccessResponseSchema,
+  ServerPushMessageSchema,
+  type RpcErrorResponse,
+  type RpcRequestMap,
+  type RpcSuccessResponse,
+  type ServerPushMessage
 } from '../types/protocol.generated'
-import { RpcErrorResponseSchema, RpcSuccessResponseSchema, ServerPushMessageSchema } from '../types/protocol.zod'
 
 const log = createLogger('WsRpc')
 

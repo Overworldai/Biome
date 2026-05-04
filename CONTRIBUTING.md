@@ -215,7 +215,7 @@ On the client, `RpcError` (from `src/lib/wsRpc.ts`) carries the `errorId` for co
 
 #### Cross-language types
 
-`server-components/server/protocol.py` is the single source of truth for the wire protocol. A small Python script regenerates the TypeScript view of it:
+`server-components/server/protocol.py` (plus a small `EXTRA_MODULES` list in the codegen for `recording.video_recorder`) is the single source of truth for every shape that crosses the Python ↔ TypeScript boundary. A small Python script regenerates the TypeScript view:
 
 ```bash
 cd server-components
@@ -223,20 +223,24 @@ uv run python scripts/codegen_ts.py            # writes ../src/types/protocol.ge
 uv run python scripts/codegen_ts.py --check    # CI freshness gate; exit 1 if stale
 ```
 
+The generated file ships **both** Zod schemas and types. Schemas are the source of truth on the TS side; types are derived via `z.infer<typeof FooSchema>`. Drift between schema and type is structurally impossible — they're literally the same definition. The one exception is the generic `RpcSuccessResponse<T>`, which keeps a hand-typed `interface` because `z.infer` can't carry the generic parameter; the schema uses `data: z.unknown()` for runtime validation and the request map binds `T` at the call site.
+
 What gets generated, from each Python construct:
 
-| Python                                          | TypeScript                                               |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| `class Foo(BaseModel)`                          | `export interface Foo`                                   |
-| `class Foo[T: BaseModel](BaseModel)`            | `export interface Foo<T>`                                |
-| `class Foo(StrEnum)`                            | `export type Foo = 'a' \| 'b' \| ...`                    |
-| `Annotated[A \| B, Field(discriminator="...")]` | `export type Foo = A \| B`                               |
-| `T \| None = None`                              | `field?: T` (Pydantic's `exclude_none=True`)             |
-| `T = <default>` (non-Literal)                   | `field?: T`                                              |
-| `T` (no default)                                | `field: T` (required)                                    |
-| `Literal["x"]`                                  | `'x'` (discriminators stay required even with a default) |
+| Python                                          | TypeScript                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `class Foo(BaseModel)`                          | `export const FooSchema = z.object({...})` + `export type Foo = z.infer<typeof FooSchema>` |
+| `class Foo[T: BaseModel](BaseModel)`            | `export const FooSchema = z.object({...})` + hand-typed `export interface Foo<T>`          |
+| `class Foo(StrEnum)`                            | `export const FooSchema = z.enum([...])` + inferred type alias                             |
+| `Annotated[A \| B, Field(discriminator="...")]` | `z.discriminatedUnion('type', [...])` + inferred type alias                                |
+| `T \| None = None`                              | `field: <T>.optional()` ⇒ `field?: T` (Pydantic's `exclude_none=True`)                     |
+| `T = <default>` (non-Literal)                   | `field: <T>.optional()` ⇒ `field?: T`                                                      |
+| `T` (no default)                                | `field: <T>` ⇒ `field: T` (required)                                                       |
+| `Literal["x"]`                                  | `z.literal('x')` ⇒ `'x'` (discriminators stay required even with a default)                |
 
-Any `# pyright:` ignore comments inside `protocol.py` shouldn't be needed — the protocol module is pure types and basedpyright is clean there. The script's own per-rule rationale and the rename map (`StageId` → `ServerStageId` for the Python set, leaving the broader `StageId` alias for the renderer) live in `scripts/codegen_ts.py`.
+Any `# pyright:` ignore comments inside `protocol.py` shouldn't be needed — the protocol module is pure types and basedpyright is clean there. The script's own per-rule rationale and the rename map (`StageId` → `ServerStageId` for the Python set, leaving the broader `StageId` alias for the renderer; `RpcError` / `RpcSuccess` → `*Response` to dodge a JS Error name) live in `scripts/codegen_ts.py`.
+
+**Receive-path validation.** `useWebSocket.ts` runs `ServerMessageSchema.safeParse` on every incoming JSON message and `FrameHeaderSchema.safeParse` on every binary frame header. Push messages get full payload validation via the discriminated union; RPC responses validate the envelope (`type` / `req_id` / `success` / `error_id` / `error`) but leave `data` as `z.unknown()` — the request map binds the data shape at the call site. A failed validation logs the Zod error message and the raw payload, then drops the message rather than feeding garbage to the consumer.
 
 **Drift gates.** `src/i18n/index.ts` carries compile-time assertions that fail if the protocol and the i18n keys diverge:
 
@@ -259,17 +263,11 @@ Any `# pyright:` ignore comments inside `protocol.py` shouldn't be needed — th
 
 **Adding a new message / RPC type:**
 
-1. Define the Pydantic model in `protocol.py`. If it's a discriminated union member, add it to the `ClientMessage` / `ServerPushMessage` union.
+1. Define the Pydantic model in `protocol.py`. If it's a discriminated union member, add it to the `ClientMessage` / `ServerPushMessage` union. If it's an RPC, name the request `*Request` and the response payload `*ResponseData` so the codegen picks them up as a pair into `RpcRequestMap`.
 2. Run the codegen.
-3. Wire the typed shape into the relevant TS consumer (`useWebSocket.ts`, `wsRpc.ts`, etc.).
+3. Wire the typed shape into the relevant TS consumer. RPC sends use `request('discriminator', params)` — the request map infers both the params shape and the response type. Notifs send via the typed `sendNotif(notif)` helper in `useWebSocket.ts`.
 
 **Renaming the Python class.** Most `*Request` / `*Response` / `*Message` / `*Notif` names from the Python side ship verbatim to TS. The exceptions live in `_TS_RENAMES` at the top of the codegen script — keep that list short and justified.
-
-**Not gated yet** (room for future tightening):
-
-- The WS message parser in `useWebSocket.ts` and `wsRpc.ts` reads incoming JSON as `Record<string, unknown>`. A backend field rename would silently break runtime parsing without a compile-time signal.
-- `wsRpc.request<T>()` takes the response type as a caller-supplied generic — there's no compile link between the request type literal and its expected response shape.
-- The frame header binary path parses raw `Record<string, unknown>` even though `FrameHeader` is generated.
 
 ### State Management
 

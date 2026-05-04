@@ -19,7 +19,7 @@ import type {
   WarningMessage
 } from '../types/protocol.generated'
 import { ServerMessageSchema, type ServerMessage, type WsRequest } from '../lib/wsRpc'
-import { FrameHeaderSchema } from '../types/protocol.zod'
+import { FrameHeaderSchema } from '../types/protocol.generated'
 
 /** TS-side union of the fire-and-forget notifications the renderer
  *  sends; constructed per-call by the helpers below so tsc verifies

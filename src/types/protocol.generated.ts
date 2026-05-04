@@ -1,74 +1,85 @@
 // THIS FILE IS GENERATED. DO NOT EDIT BY HAND.
 //
-// Source:    server-components/server/protocol.py
+// Source:    server-components/server/protocol.py + recording/video_recorder.py
 // Regenerate: cd server-components && uv run python scripts/codegen_ts.py
 //
-// CI fails if this file is stale relative to its source. If you change
-// the Python protocol, re-run the codegen and commit the result.
+// Each item ships as a Zod schema (the runtime validator) plus a
+// `z.infer<typeof ...Schema>` type alias derived from it. Schemas are
+// the source of truth — drift between schema and type is structurally
+// impossible. CI runs the codegen with `--check` and fails if this
+// file is stale relative to its sources.
+
+import { z } from 'zod'
 
 // ─── Enums ────────────────────────────────────────────────────────────
 
-export type ServerStageId =
-  | 'startup.begin'
-  | 'startup.world_engine_manager'
-  | 'startup.safety_checker'
-  | 'startup.safety_ready'
-  | 'startup.ready'
-  | 'session.waiting_for_seed'
-  | 'session.loading_model.load'
-  | 'session.loading_model.instantiate'
-  | 'session.loading_model.done'
-  | 'session.warmup.reset'
-  | 'session.warmup.seed'
-  | 'session.warmup.compile'
-  | 'session.inpainting.load'
-  | 'session.inpainting.ready'
-  | 'session.init.reset'
-  | 'session.init.seed'
-  | 'session.init.frame'
-  | 'session.reset'
-  | 'session.ready'
+export const ServerStageIdSchema = z.enum([
+  'startup.begin',
+  'startup.world_engine_manager',
+  'startup.safety_checker',
+  'startup.safety_ready',
+  'startup.ready',
+  'session.waiting_for_seed',
+  'session.loading_model.load',
+  'session.loading_model.instantiate',
+  'session.loading_model.done',
+  'session.warmup.reset',
+  'session.warmup.seed',
+  'session.warmup.compile',
+  'session.inpainting.load',
+  'session.inpainting.ready',
+  'session.init.reset',
+  'session.init.seed',
+  'session.init.frame',
+  'session.reset',
+  'session.ready'
+])
+export type ServerStageId = z.infer<typeof ServerStageIdSchema>
 
-export type MessageId =
-  | 'app.server.error.serverStartupFailed'
-  | 'app.server.error.timeoutWaitingForSeed'
-  | 'app.server.error.initFailed'
-  | 'app.server.error.quantUnsupportedGpu'
-  | 'app.server.error.sceneAuthoringModelLoadFailed'
-  | 'app.server.error.sceneAuthoringEmptyPrompt'
-  | 'app.server.error.sceneAuthoringModelNotLoaded'
-  | 'app.server.error.sceneAuthoringAlreadyInProgress'
-  | 'app.server.error.sceneEditSafetyRejected'
-  | 'app.server.error.generateSceneSafetyRejected'
-  | 'app.server.error.deviceRecoveryFailed'
-  | 'app.server.warning.missingSeedData'
-  | 'app.server.warning.invalidSeedData'
-  | 'app.server.warning.seedUnsafe'
-  | 'app.server.warning.seedSafetyCheckFailed'
-  | 'app.server.warning.seedLoadFailed'
+export const MessageIdSchema = z.enum([
+  'app.server.error.serverStartupFailed',
+  'app.server.error.timeoutWaitingForSeed',
+  'app.server.error.initFailed',
+  'app.server.error.quantUnsupportedGpu',
+  'app.server.error.sceneAuthoringModelLoadFailed',
+  'app.server.error.sceneAuthoringEmptyPrompt',
+  'app.server.error.sceneAuthoringModelNotLoaded',
+  'app.server.error.sceneAuthoringAlreadyInProgress',
+  'app.server.error.sceneEditSafetyRejected',
+  'app.server.error.generateSceneSafetyRejected',
+  'app.server.error.deviceRecoveryFailed',
+  'app.server.warning.missingSeedData',
+  'app.server.warning.invalidSeedData',
+  'app.server.warning.seedUnsafe',
+  'app.server.warning.seedSafetyCheckFailed',
+  'app.server.warning.seedLoadFailed'
+])
+export type MessageId = z.infer<typeof MessageIdSchema>
 
 // ─── Models ───────────────────────────────────────────────────────────
 
 /** Static hardware/runtime identity, snapshot once at startup. */
-export interface SystemInfo {
-  cpu_name?: string
-  gpu_name?: string
-  vram_total_bytes?: number
-  runtime_version?: string
-  driver_version?: string
-  torch_version: string
-  gpu_count?: number
-}
+export const SystemInfoSchema = z.object({
+  cpu_name: z.string().optional(),
+  gpu_name: z.string().optional(),
+  vram_total_bytes: z.number().optional(),
+  runtime_version: z.string().optional(),
+  driver_version: z.string().optional(),
+  torch_version: z.string(),
+  gpu_count: z.number().optional()
+})
+export type SystemInfo = z.infer<typeof SystemInfoSchema>
 
 /** Ephemeral state captured at the moment of an error push. */
-export interface ErrorSnapshot {
-  process_rss_bytes?: number
-  ram_used_bytes?: number
-  ram_total_bytes?: number
-  vram_used_bytes?: number
-  vram_reserved_bytes?: number
-  gpu_util_percent?: number
-}
+export const ErrorSnapshotSchema = z.object({
+  process_rss_bytes: z.number().optional(),
+  ram_used_bytes: z.number().optional(),
+  ram_total_bytes: z.number().optional(),
+  vram_used_bytes: z.number().optional(),
+  vram_reserved_bytes: z.number().optional(),
+  gpu_util_percent: z.number().optional()
+})
+export type ErrorSnapshot = z.infer<typeof ErrorSnapshotSchema>
 
 /**
  * Per-frame input snapshot from the renderer. `buttons` carries
@@ -76,63 +87,72 @@ export interface ErrorSnapshot {
  * each via `keymap.BUTTON_CODES` into the int codes the
  * world engine consumes.
  */
-export interface ControlNotif {
-  type: 'control'
-  buttons?: string[]
-  mouse_dx?: number
-  mouse_dy?: number
-  ts?: number
-}
+export const ControlNotifSchema = z.object({
+  type: z.literal('control'),
+  buttons: z.array(z.string()).optional(),
+  mouse_dx: z.number().optional(),
+  mouse_dy: z.number().optional(),
+  ts: z.number().optional()
+})
+export type ControlNotif = z.infer<typeof ControlNotifSchema>
 
-export interface PauseNotif {
-  type: 'pause'
-}
+export const PauseNotifSchema = z.object({
+  type: z.literal('pause')
+})
+export type PauseNotif = z.infer<typeof PauseNotifSchema>
 
-export interface ResumeNotif {
-  type: 'resume'
-}
+export const ResumeNotifSchema = z.object({
+  type: z.literal('resume')
+})
+export type ResumeNotif = z.infer<typeof ResumeNotifSchema>
 
-export interface ResetNotif {
-  type: 'reset'
-}
+export const ResetNotifSchema = z.object({
+  type: z.literal('reset')
+})
+export type ResetNotif = z.infer<typeof ResetNotifSchema>
 
-export interface PromptNotif {
-  type: 'prompt'
-  prompt?: string
-}
+export const PromptNotifSchema = z.object({
+  type: z.literal('prompt'),
+  prompt: z.string().optional()
+})
+export type PromptNotif = z.infer<typeof PromptNotifSchema>
 
-export interface InitRequest {
-  type: 'init'
-  req_id: string
-  model?: string
-  seed_image_data?: string
-  seed_filename?: string
-  quant?: string
-  scene_authoring?: boolean
-  action_logging?: boolean
-  video_recording?: boolean
-  video_output_dir?: string
-  biome_version?: string
-  cap_inference_fps?: boolean
-}
+export const InitRequestSchema = z.object({
+  type: z.literal('init'),
+  req_id: z.string(),
+  model: z.string().optional(),
+  seed_image_data: z.string().optional(),
+  seed_filename: z.string().optional(),
+  quant: z.string().optional(),
+  scene_authoring: z.boolean().optional(),
+  action_logging: z.boolean().optional(),
+  video_recording: z.boolean().optional(),
+  video_output_dir: z.string().optional(),
+  biome_version: z.string().optional(),
+  cap_inference_fps: z.boolean().optional()
+})
+export type InitRequest = z.infer<typeof InitRequestSchema>
 
-export interface SceneEditRequest {
-  type: 'scene_edit'
-  req_id: string
-  prompt: string
-}
+export const SceneEditRequestSchema = z.object({
+  type: z.literal('scene_edit'),
+  req_id: z.string(),
+  prompt: z.string()
+})
+export type SceneEditRequest = z.infer<typeof SceneEditRequestSchema>
 
-export interface GenerateSceneRequest {
-  type: 'generate_scene'
-  req_id: string
-  prompt: string
-}
+export const GenerateSceneRequestSchema = z.object({
+  type: z.literal('generate_scene'),
+  req_id: z.string(),
+  prompt: z.string()
+})
+export type GenerateSceneRequest = z.infer<typeof GenerateSceneRequestSchema>
 
-export interface CheckSeedSafetyRequest {
-  type: 'check_seed_safety'
-  req_id: string
-  image_data: string
-}
+export const CheckSeedSafetyRequestSchema = z.object({
+  type: z.literal('check_seed_safety'),
+  req_id: z.string(),
+  image_data: z.string()
+})
+export type CheckSeedSafetyRequest = z.infer<typeof CheckSeedSafetyRequestSchema>
 
 /**
  * Engine progress stage broadcast. `stage` is a `StageId` enum
@@ -140,91 +160,107 @@ export interface CheckSeedSafetyRequest {
  * canonical Python-side registry, mirrored on the renderer in
  * `src/stages.json` for label / percent metadata.
  */
-export interface StatusMessage {
-  type: 'status'
-  stage: ServerStageId
-  message?: string
-}
+export const StatusMessageSchema = z.object({
+  type: z.literal('status'),
+  stage: ServerStageIdSchema,
+  message: z.string().optional()
+})
+export type StatusMessage = z.infer<typeof StatusMessageSchema>
 
 /** Hardware identity broadcast once per session, after handshake. */
-export interface SystemInfoMessage {
-  type: 'system_info'
-  cpu_name?: string
-  gpu_name?: string
-  vram_total_bytes?: number
-  runtime_version?: string
-  driver_version?: string
-  torch_version: string
-  gpu_count?: number
-}
+export const SystemInfoMessageSchema = z.object({
+  type: z.literal('system_info'),
+  cpu_name: z.string().optional(),
+  gpu_name: z.string().optional(),
+  vram_total_bytes: z.number().optional(),
+  runtime_version: z.string().optional(),
+  driver_version: z.string().optional(),
+  torch_version: z.string(),
+  gpu_count: z.number().optional()
+})
+export type SystemInfoMessage = z.infer<typeof SystemInfoMessageSchema>
 
 /**
  * Server-originated error.  `message_id` resolves to a translated
  * string on the client; `message` carries the raw exception detail
  * when the translation key wants to interpolate `{{message}}`.
  */
-export interface ErrorMessage {
-  type: 'error'
-  message_id?: MessageId
-  message?: string
-  params?: Record<string, string>
-  snapshot?: ErrorSnapshot
-}
+export const ErrorMessageSchema = z.object({
+  type: z.literal('error'),
+  message_id: MessageIdSchema.optional(),
+  message: z.string().optional(),
+  params: z.record(z.string(), z.string()).optional(),
+  snapshot: ErrorSnapshotSchema.optional()
+})
+export type ErrorMessage = z.infer<typeof ErrorMessageSchema>
 
 /** Transient, non-fatal server warning. */
-export interface WarningMessage {
-  type: 'warning'
-  message_id: MessageId
-  message?: string
-  params?: Record<string, string>
-}
+export const WarningMessageSchema = z.object({
+  type: z.literal('warning'),
+  message_id: MessageIdSchema,
+  message: z.string().optional(),
+  params: z.record(z.string(), z.string()).optional()
+})
+export type WarningMessage = z.infer<typeof WarningMessageSchema>
 
 /** A line of server log output, mirrored to connected clients. */
-export interface LogMessage {
-  type: 'log'
-  line: string
-  level?: string
-}
+export const LogMessageSchema = z.object({
+  type: z.literal('log'),
+  line: z.string(),
+  level: z.string().optional()
+})
+export type LogMessage = z.infer<typeof LogMessageSchema>
 
-export interface FrameHeader {
-  frame_id: number
-  client_ts: number
-  gen_ms: number
-  temporal_compression?: number
-  vram_used_bytes?: number
-  gpu_util_percent?: number
-  t_infer_ms?: number
-  t_sync_ms?: number
-  t_enc_ms?: number
-  t_metrics_ms?: number
-  t_overhead_ms?: number
-}
+export const FrameHeaderSchema = z.object({
+  frame_id: z.number(),
+  client_ts: z.number(),
+  gen_ms: z.number(),
+  temporal_compression: z.number().optional(),
+  vram_used_bytes: z.number().optional(),
+  gpu_util_percent: z.number().optional(),
+  t_infer_ms: z.number().optional(),
+  t_sync_ms: z.number().optional(),
+  t_enc_ms: z.number().optional(),
+  t_metrics_ms: z.number().optional(),
+  t_overhead_ms: z.number().optional()
+})
+export type FrameHeader = z.infer<typeof FrameHeaderSchema>
 
-export interface InitResponseData {
-  model: string
-  inference_fps: number
-  system_info: SystemInfo
-}
+export const InitResponseDataSchema = z.object({
+  model: z.string(),
+  inference_fps: z.number(),
+  system_info: SystemInfoSchema
+})
+export type InitResponseData = z.infer<typeof InitResponseDataSchema>
 
-export interface SceneEditResponseData {
-  original_jpeg_b64: string
-  preview_jpeg_b64: string
-  edit_prompt: string
-}
+export const SceneEditResponseDataSchema = z.object({
+  original_jpeg_b64: z.string(),
+  preview_jpeg_b64: z.string(),
+  edit_prompt: z.string()
+})
+export type SceneEditResponseData = z.infer<typeof SceneEditResponseDataSchema>
 
-export interface GenerateSceneResponseData {
-  elapsed_ms: number
-  image_jpeg_base64: string
-  user_prompt: string
-  sanitized_prompt: string
-  image_model: string
-}
+export const GenerateSceneResponseDataSchema = z.object({
+  elapsed_ms: z.number(),
+  image_jpeg_base64: z.string(),
+  user_prompt: z.string(),
+  sanitized_prompt: z.string(),
+  image_model: z.string()
+})
+export type GenerateSceneResponseData = z.infer<typeof GenerateSceneResponseDataSchema>
 
-export interface CheckSeedSafetyResponseData {
-  is_safe: boolean
-  hash: string
-}
+export const CheckSeedSafetyResponseDataSchema = z.object({
+  is_safe: z.boolean(),
+  hash: z.string()
+})
+export type CheckSeedSafetyResponseData = z.infer<typeof CheckSeedSafetyResponseDataSchema>
 
+export const RpcSuccessResponseSchema = z.object({
+  type: z.literal('response'),
+  req_id: z.string(),
+  success: z.literal(true),
+  data: z.unknown()
+})
 export interface RpcSuccessResponse<T> {
   type: 'response'
   req_id: string
@@ -237,13 +273,14 @@ export interface RpcSuccessResponse<T> {
  * can translate) over the raw `error` string; the latter is the
  * fallback for genuinely-unstructured exception messages.
  */
-export interface RpcErrorResponse {
-  type: 'response'
-  req_id: string
-  success: false
-  error_id?: MessageId
-  error?: string
-}
+export const RpcErrorResponseSchema = z.object({
+  type: z.literal('response'),
+  req_id: z.string(),
+  success: z.literal(false),
+  error_id: MessageIdSchema.optional(),
+  error: z.string().optional()
+})
+export type RpcErrorResponse = z.infer<typeof RpcErrorResponseSchema>
 
 /**
  * Semantic session state captured into the MP4's metadata so each
@@ -253,28 +290,38 @@ export interface RpcErrorResponse {
  * Picked up by the protocol codegen so the renderer side imports a
  * typed `RecordingProperties` alongside the WS protocol types.
  */
-export interface RecordingProperties {
-  biome_version?: string
-  model?: string
-  quant?: string
-  seed?: string
-  scene_authoring_enabled?: boolean
-}
+export const RecordingPropertiesSchema = z.object({
+  biome_version: z.string().optional(),
+  model: z.string().optional(),
+  quant: z.string().optional(),
+  seed: z.string().optional(),
+  scene_authoring_enabled: z.boolean().optional()
+})
+export type RecordingProperties = z.infer<typeof RecordingPropertiesSchema>
 
 // ─── Discriminated unions ─────────────────────────────────────────────
 
-export type ClientMessage =
-  | ControlNotif
-  | PauseNotif
-  | ResumeNotif
-  | ResetNotif
-  | PromptNotif
-  | InitRequest
-  | SceneEditRequest
-  | GenerateSceneRequest
-  | CheckSeedSafetyRequest
+export const ClientMessageSchema = z.discriminatedUnion('type', [
+  ControlNotifSchema,
+  PauseNotifSchema,
+  ResumeNotifSchema,
+  ResetNotifSchema,
+  PromptNotifSchema,
+  InitRequestSchema,
+  SceneEditRequestSchema,
+  GenerateSceneRequestSchema,
+  CheckSeedSafetyRequestSchema
+])
+export type ClientMessage = z.infer<typeof ClientMessageSchema>
 
-export type ServerPushMessage = StatusMessage | SystemInfoMessage | ErrorMessage | WarningMessage | LogMessage
+export const ServerPushMessageSchema = z.discriminatedUnion('type', [
+  StatusMessageSchema,
+  SystemInfoMessageSchema,
+  ErrorMessageSchema,
+  WarningMessageSchema,
+  LogMessageSchema
+])
+export type ServerPushMessage = z.infer<typeof ServerPushMessageSchema>
 
 // ─── RPC request ↔ response map ───────────────────────────────────────
 
