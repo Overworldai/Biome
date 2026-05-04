@@ -173,6 +173,25 @@ export type DiagnosticsStateAtError = {
   gpu_util_percent: number | null
 }
 
+/** A single log entry buffered on the renderer.  Mirrors the wire-shape of
+ *  the server's `LogMessage` (minus the `type` discriminator) and is also
+ *  used for engine-log IPC events from the Electron main process — local
+ *  events only carry `line`, server events carry the full structured form.
+ *  Stored as JSON objects in {@link DiagnosticsPayload} so external triagers
+ *  can read structured fields directly without re-parsing rendered text. */
+export type LogRecord = {
+  /** Human-readable rendering, ready for display. */
+  line: string
+  /** Severity ("info", "warning", "error", ...) when the source attaches one. */
+  level?: string
+  /** Logger name (typically the originating module path). */
+  logger?: string
+  /** Rendered timestamp from the server's structlog pipeline. */
+  timestamp?: string
+  /** Bound contextvars and event kwargs (e.g. `client_host`, `step`). */
+  fields?: Record<string, string>
+}
+
 /** Top-level diagnostics payload copied to clipboard / attached to GitHub
  *  issues.  Built by TerminalDisplay (loading/streaming errors) and
  *  EngineInstallModal (engine install errors). */
@@ -192,7 +211,7 @@ export type DiagnosticsPayload = {
   /** Server resource state at the moment of error, or null if unavailable. */
   state_at_error?: DiagnosticsStateAtError | null
   /** Tail of the server/engine log, most recent last. */
-  logs: string[]
+  logs: LogRecord[]
 }
 
 export type ExportDiagnosticsResult = {

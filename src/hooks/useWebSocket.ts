@@ -12,12 +12,14 @@ import type {
   FrameHeader,
   InitRequest,
   InitResponseData,
+  LogMessage,
   PauseNotif,
   ResetNotif,
   ResumeNotif,
   SystemInfo,
   WarningMessage
 } from '../types/protocol.generated'
+import type { LogRecord } from '../types/ipc'
 import { ServerMessageSchema, type ServerMessage, type WsRequest } from '../lib/wsRpc'
 import { FrameHeaderSchema } from '../types/protocol.generated'
 
@@ -29,6 +31,14 @@ import type { ServerCode } from '../types/input'
 
 const log = createLogger('WebSocket')
 const MAX_VISIBLE_LOG_LINES = 500
+
+const toLogRecord = (msg: LogMessage): LogRecord => ({
+  line: stripAnsi(msg.line),
+  level: msg.level,
+  logger: msg.logger,
+  timestamp: msg.timestamp,
+  fields: msg.fields
+})
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -83,8 +93,8 @@ type WebSocketHook = {
   frameIdRef: { current: number }
   connection: ServerConnection
   inputLatency: number | null
-  logs: string[]
-  allLogs: string[]
+  logs: LogRecord[]
+  allLogs: LogRecord[]
   connect: (endpointUrl: string) => void
   disconnect: () => void
   sendControl: (buttons?: string[], mouseDx?: number, mouseDy?: number) => boolean
@@ -110,10 +120,10 @@ export const useWebSocket = (): WebSocketHook => {
   const [isReady, setIsReady] = useState(false)
   const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
-  const [logs, setLogs] = useState<string[]>([])
+  const [logs, setLogs] = useState<LogRecord[]>([])
   const [connection, setConnection] = useState<ServerConnection>(emptyConnection)
   const [inputLatency, setInputLatency] = useState<number | null>(null)
-  const allLogsRef = useRef<string[]>([])
+  const allLogsRef = useRef<LogRecord[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectingRef = useRef(false)
@@ -139,10 +149,10 @@ export const useWebSocket = (): WebSocketHook => {
     []
   )
 
-  const appendLog = useCallback((line: string) => {
-    allLogsRef.current = [...allLogsRef.current, line]
+  const appendLog = useCallback((record: LogRecord) => {
+    allLogsRef.current = [...allLogsRef.current, record]
     setLogs((prev) => {
-      const next = [...prev, line]
+      const next = [...prev, record]
       return next.length > MAX_VISIBLE_LOG_LINES ? next.slice(-MAX_VISIBLE_LOG_LINES) : next
     })
   }, [])
@@ -290,7 +300,7 @@ export const useWebSocket = (): WebSocketHook => {
             break
           }
           case 'log': {
-            appendLog(stripAnsi(msg.line))
+            appendLog(toLogRecord(msg))
             break
           }
           case 'error': {

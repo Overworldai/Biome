@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type { DiagnosticsPayload } from '../types/ipc'
+import type { DiagnosticsPayload, LogRecord } from '../types/ipc'
 import Button from './ui/Button'
 import { findFocusables, findInDirection, focusSmooth } from '../lib/focusNavigation'
 import { getActiveScopeRoot } from '../context/focusScopeStack'
@@ -59,7 +59,7 @@ const ServerLogDisplay = ({
   showProgress?: boolean
   progressMessage?: string | null
   headerAction?: ReactNode
-  logs?: string[]
+  logs?: LogRecord[]
   title?: TranslationKey | null
   buildDiagnosticsPayload: () => Promise<DiagnosticsPayload>
   showExportAction?: boolean
@@ -143,7 +143,10 @@ const ServerLogDisplay = ({
       const appVersion = payload.app.version
       const platform = payload.client.os
       const gpuName = payload.server?.gpu ?? 'unknown'
-      const recentLogsRaw = logs.slice(-MAX_GITHUB_LOG_LINES).join('\n')
+      const recentLogsRaw = logs
+        .slice(-MAX_GITHUB_LOG_LINES)
+        .map((r) => r.line)
+        .join('\n')
       const recentLogsTrimmed =
         recentLogsRaw.length > MAX_GITHUB_LOG_CHARS
           ? `${recentLogsRaw.slice(0, MAX_GITHUB_LOG_CHARS)}\n... (truncated)`
@@ -266,9 +269,9 @@ const ServerLogDisplay = ({
         {logs.length === 0 ? (
           <div className="text-text-muted italic">{t('app.loading.terminal.waitingForServerOutput')}</div>
         ) : (
-          logs.map((line, index) => (
+          logs.map((record, index) => (
             <div key={index} className="break-all whitespace-pre-wrap text-text-modal-muted">
-              {line}
+              {record.line}
             </div>
           ))
         )}

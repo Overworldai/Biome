@@ -25,7 +25,7 @@ const ConnectionLostOverlay = () => {
   }
 
   const buildPayload = useCallback(() => {
-    const logs = errorDetail ? [...wsAllLogs, `[ERROR] ${errorDetail}`] : wsAllLogs
+    const logs = errorDetail ? [...wsAllLogs, { line: `[ERROR] ${errorDetail}`, level: 'error' }] : wsAllLogs
     return buildDiagnosticsPayload({
       connection,
       error: {

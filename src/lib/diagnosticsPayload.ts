@@ -18,7 +18,8 @@ import type {
   DiagnosticsPayload,
   DiagnosticsServer,
   DiagnosticsSession,
-  DiagnosticsStateAtError
+  DiagnosticsStateAtError,
+  LogRecord
 } from '../types/ipc'
 
 // ---------------------------------------------------------------------------
@@ -33,8 +34,10 @@ export type BuildDiagnosticsOptions = {
   /** What went wrong. */
   error: DiagnosticsError
 
-  /** Tail of the server/engine log, most recent last. */
-  logs: string[]
+  /** Tail of the server/engine log, most recent last.  Stored as structured
+   *  records so external triagers see logger / fields / level alongside the
+   *  rendered line. */
+  logs: LogRecord[]
 
   /** Session context — present for loading/streaming errors where the user
    *  was actively trying to run a model.  Omitted for install-time errors
