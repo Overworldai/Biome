@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from server import protocol
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "src" / "types" / "protocol.generated.ts"
+DEFAULT_ZOD_OUTPUT = Path(__file__).resolve().parent.parent.parent / "src" / "types" / "protocol.zod.ts"
 
 HEADER = """\
 // THIS FILE IS GENERATED. DO NOT EDIT BY HAND.
@@ -55,6 +56,17 @@ HEADER = """\
 //
 // CI fails if this file is stale relative to its source. If you change
 // the Python protocol, re-run the codegen and commit the result.
+"""
+
+ZOD_HEADER = """\
+// THIS FILE IS GENERATED. DO NOT EDIT BY HAND.
+//
+// Source:    server-components/server/protocol.py
+// Regenerate: cd server-components && uv run python scripts/codegen_ts.py
+//
+// Runtime validators paired with `protocol.generated.ts`. Each schema
+// asserts `satisfies z.ZodType<T>` against the matching type so any
+// drift between this file and the type definitions is a tsc error.
 """
 
 
@@ -355,6 +367,172 @@ def render_rpc_request_map(pairs: list[tuple[str, type[BaseModel], type[BaseMode
     return "\n".join(out)
 
 
+# ─── Zod schema rendering ────────────────────────────────────────────
+
+
+def render_zod_type(tp: Any) -> str:
+    """Render a Python type annotation as a Zod schema expression. Mirrors
+    `render_type` but emits `z.string()` etc. instead of TS types and
+    references `<Name>Schema` instead of `<Name>`."""
+    while get_origin(tp) is Annotated:
+        tp = get_args(tp)[0]
+
+    if isinstance(tp, typing.TypeVar):
+        # Generics aren't expressible directly as Zod schemas; the
+        # caller-side schema accepts `z.unknown()` for the type
+        # parameter and the request map binds the actual shape.
+        return "z.unknown()"
+
+    origin = get_origin(tp)
+
+    # Union types: T | U | None  →  z.union([T, U]).nullable()  (or .optional() at field level)
+    if origin in (Union, types.UnionType):
+        args = list(get_args(tp))
+        non_none = [a for a in args if a is not type(None)]
+        has_none = type(None) in args
+        if len(non_none) == 1:
+            inner = render_zod_type(non_none[0])
+        else:
+            inner = f"z.union([{', '.join(render_zod_type(a) for a in non_none)}])"
+        return f"{inner}.nullable()" if has_none else inner
+
+    if origin is Literal:
+        members = get_args(tp)
+        if len(members) == 1:
+            return f"z.literal({render_literal(members[0])})"
+        # Multiple string literals → z.enum is the idiomatic shape.
+        if all(isinstance(m, str) for m in members):
+            joined = ", ".join(render_literal(m) for m in members)
+            return f"z.enum([{joined}])"
+        return f"z.union([{', '.join(f'z.literal({render_literal(m)})' for m in members)}])"
+
+    if origin is list:
+        (inner,) = get_args(tp)
+        return f"z.array({render_zod_type(inner)})"
+
+    if origin is dict:
+        k, v = get_args(tp)
+        return f"z.record({render_zod_type(k)}, {render_zod_type(v)})"
+
+    if tp is str:
+        return "z.string()"
+    if tp is bool:
+        return "z.boolean()"
+    if tp is int or tp is float:
+        return "z.number()"
+    if tp is bytes:
+        return "z.string()"
+    if tp is type(None):
+        return "z.null()"
+
+    if inspect.isclass(tp):
+        if issubclass(tp, StrEnum):
+            return f"{ts_name(tp.__name__)}Schema"
+        if issubclass(tp, BaseModel):
+            return f"{ts_name(tp.__name__)}Schema"
+
+    raise NotImplementedError(f"Cannot render Zod schema for: {tp!r}")
+
+
+def render_zod_enum(enum_cls: type[StrEnum]) -> str:
+    """Wrap each enum member on its own line — Prettier always wraps
+    long array literals at the project's line width and the on-disk
+    file should match what Prettier would produce on first pass.
+    The project's `.prettierrc` sets `trailingComma: "none"`, so the
+    last member doesn't get a trailing comma."""
+    name = ts_name(enum_cls.__name__)
+    members = list(enum_cls)
+    out = [f"export const {name}Schema = z.enum(["]
+    for i, m in enumerate(members):
+        terminator = "" if i == len(members) - 1 else ","
+        out.append(f"  {render_literal(m.value)}{terminator}")
+    out.append(f"]) satisfies z.ZodType<{name}>")
+    return "\n".join(out)
+
+
+def render_zod_model(model_cls: type[BaseModel]) -> str:
+    """Emit `export const FooSchema = z.object({...}) satisfies z.ZodType<Foo>`.
+
+    Generic models (`__type_params__` non-empty) are rendered as plain
+    `z.object` without the `satisfies` clause — the type parameter
+    can't be expressed in Zod's runtime type, and we don't need full
+    payload validation for the only generic case (`RpcSuccessResponse`)
+    since the request map binds its `data` shape elsewhere."""
+    name = ts_name(model_cls.__name__)
+    is_generic = bool(getattr(model_cls, "__type_params__", ()))
+
+    fields = list(model_cls.model_fields.items())
+    out = [f"export const {name}Schema = z.object({{"]
+    for i, (field_name, field_info) in enumerate(fields):
+        ann = field_info.annotation
+        if is_wire_optional(field_info):
+            # Strip `| None` for the `T | None = None` shape so the
+            # schema is `<T>.optional()` rather than `<T>.nullable().optional()`.
+            if field_info.default is None and type(None) in get_args(ann):
+                ann = strip_none_from_annotation(ann)
+            rendered = f"{render_zod_type(ann)}.optional()"
+        else:
+            rendered = render_zod_type(ann)
+        terminator = "" if i == len(fields) - 1 else ","
+        out.append(f"  {field_name}: {rendered}{terminator}")
+    if is_generic:
+        out.append("})")
+    else:
+        out.append(f"}}) satisfies z.ZodType<{name}>")
+    return "\n".join(out)
+
+
+def render_zod_union(name: str, members: list[type[BaseModel]]) -> str:
+    """Render a discriminated union schema. All members must carry a
+    `type: Literal["..."]` discriminator; the codegen guarantees this
+    for every union it emits. Wrapped one-per-line to match what
+    Prettier would produce for any union past ~3 members."""
+    member_schemas = [f"{ts_name(m.__name__)}Schema" for m in members]
+    inline = f"z.discriminatedUnion('type', [{', '.join(member_schemas)}])"
+    inline_wrapper = f"export const {ts_name(name)}Schema = {inline} satisfies z.ZodType<{ts_name(name)}>"
+    if len(inline_wrapper) <= PRETTIER_LINE_WIDTH:
+        return inline_wrapper
+    out = [f"export const {ts_name(name)}Schema = z.discriminatedUnion('type', ["]
+    for i, schema in enumerate(member_schemas):
+        terminator = "" if i == len(member_schemas) - 1 else ","
+        out.append(f"  {schema}{terminator}")
+    out.append(f"]) satisfies z.ZodType<{ts_name(name)}>")
+    return "\n".join(out)
+
+
+def generate_zod(module: ModuleType) -> str:
+    enums, models, union_aliases = collect_module_decls(module)
+
+    sections: list[str] = [ZOD_HEADER.rstrip()]
+
+    # Imports: zod runtime + every generated type we'll reference in `satisfies`.
+    type_names: list[str] = []
+    type_names.extend(ts_name(e.__name__) for e in enums)
+    type_names.extend(ts_name(m.__name__) for m in models if not getattr(m, "__type_params__", ()))
+    type_names.extend(ts_name(name) for name, _ in union_aliases)
+    type_names = sorted(set(type_names))
+
+    sections.append("import { z } from 'zod'")
+    if type_names:
+        sections.append(
+            "import type {\n" + ",\n".join(f"  {n}" for n in type_names) + "\n} from './protocol.generated'"
+        )
+
+    if enums:
+        sections.append("// ─── Enums ────────────────────────────────────────────────────────────")
+        sections.extend(render_zod_enum(enum_cls) for enum_cls in enums)
+
+    if models:
+        sections.append("// ─── Models ───────────────────────────────────────────────────────────")
+        sections.extend(render_zod_model(model_cls) for model_cls in models)
+
+    if union_aliases:
+        sections.append("// ─── Discriminated unions ─────────────────────────────────────────────")
+        sections.extend(render_zod_union(name, members) for name, members in union_aliases)
+
+    return "\n\n".join(sections) + "\n"
+
+
 # ─── Top-level ───────────────────────────────────────────────────────
 
 
@@ -385,33 +563,42 @@ def generate(module: ModuleType) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output path (default: %(default)s)")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Type output (default: %(default)s)")
+    parser.add_argument(
+        "--zod-output", type=Path, default=DEFAULT_ZOD_OUTPUT, help="Zod schema output (default: %(default)s)"
+    )
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if the output file would change. Used for CI freshness gates.",
+        help="Exit non-zero if either output file would change. Used for CI freshness gates.",
     )
     args = parser.parse_args()
 
-    output = generate(protocol)
+    outputs = [
+        (args.output, generate(protocol)),
+        (args.zod_output, generate_zod(protocol)),
+    ]
 
     if args.check:
-        if not args.output.exists():
-            print(f"[codegen] {args.output} does not exist; run without --check to create it.", file=sys.stderr)
+        stale: list[Path] = []
+        for path, content in outputs:
+            if not path.exists() or path.read_text() != content:
+                stale.append(path)
+        if stale:
+            for path in stale:
+                print(
+                    f"[codegen] {path} is stale. Re-run `uv run python scripts/codegen_ts.py` and commit.",
+                    file=sys.stderr,
+                )
             return 1
-        existing = args.output.read_text()
-        if existing != output:
-            print(
-                f"[codegen] {args.output} is stale. Re-run `uv run python scripts/codegen_ts.py` and commit.",
-                file=sys.stderr,
-            )
-            return 1
-        print(f"[codegen] {args.output} is up to date.")
+        for path, _ in outputs:
+            print(f"[codegen] {path} is up to date.")
         return 0
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(output)
-    print(f"[codegen] wrote {args.output}")
+    for path, content in outputs:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        print(f"[codegen] wrote {path}")
     return 0
 
 

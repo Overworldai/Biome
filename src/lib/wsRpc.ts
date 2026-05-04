@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { createLogger } from '../utils/logger'
 import { TranslatableError, type TranslationKey } from '../i18n'
 import type {
@@ -6,6 +7,7 @@ import type {
   RpcSuccessResponse,
   ServerPushMessage
 } from '../types/protocol.generated'
+import { RpcErrorResponseSchema, RpcSuccessResponseSchema, ServerPushMessageSchema } from '../types/protocol.zod'
 
 const log = createLogger('WsRpc')
 
@@ -27,6 +29,17 @@ export class RpcError extends Error {
  *  push messages and RPC envelopes separately; the parser needs the union. */
 export type RpcResponse = RpcSuccessResponse<unknown> | RpcErrorResponse
 export type ServerMessage = ServerPushMessage | RpcResponse
+
+/** Runtime validator for incoming WS messages. Push messages get full
+ *  payload validation via the discriminated union; RPC responses validate
+ *  the envelope (`type` / `req_id` / `success` / `error_id` / `error`) but
+ *  leave `data` as `z.unknown()` — the request map binds the data shape at
+ *  the call site, so revalidating it here would be redundant. */
+export const ServerMessageSchema = z.union([
+  ServerPushMessageSchema,
+  RpcSuccessResponseSchema,
+  RpcErrorResponseSchema
+]) satisfies z.ZodType<ServerMessage>
 
 /** Function signature shared by `WsRpcClient.request` and every consumer
  *  that takes a request-sender as a callback (`StreamingContext`, hooks,

@@ -18,7 +18,8 @@ import type {
   SystemInfo,
   WarningMessage
 } from '../types/protocol.generated'
-import type { ServerMessage, WsRequest } from '../lib/wsRpc'
+import { ServerMessageSchema, type ServerMessage, type WsRequest } from '../lib/wsRpc'
+import { FrameHeaderSchema } from '../types/protocol.zod'
 
 /** TS-side union of the fire-and-forget notifications the renderer
  *  sends; constructed per-call by the helpers below so tsc verifies
@@ -207,12 +208,20 @@ export const useWebSocket = (): WebSocketHook => {
 
         // Binary messages: [4-byte LE header_len][FrameHeader JSON][JPEG bytes]
         // The server sends every frame envelope through `FrameHeader.model_dump_json`,
-        // so the wire shape matches the generated `FrameHeader` type.
+        // so the wire shape matches the generated `FrameHeader` type — and we
+        // validate it at runtime via `FrameHeaderSchema` to catch any mid-deploy
+        // version skew before the consumer reads possibly-missing fields.
         if (event.data instanceof ArrayBuffer) {
           const view = new DataView(event.data)
           const headerLen = view.getUint32(0, true)
           const headerBytes = new Uint8Array(event.data, 4, headerLen)
-          const header = JSON.parse(new TextDecoder().decode(headerBytes)) as FrameHeader
+          const headerJson: unknown = JSON.parse(new TextDecoder().decode(headerBytes))
+          const headerResult = FrameHeaderSchema.safeParse(headerJson)
+          if (!headerResult.success) {
+            log.error('Frame header failed validation:', headerResult.error.message, headerJson)
+            return
+          }
+          const header: FrameHeader = headerResult.data
           const imageBlob = new Blob([new Uint8Array(event.data, 4 + headerLen)], { type: 'image/jpeg' })
 
           const headerTemporalCompression = header.temporal_compression ?? 1
@@ -249,13 +258,22 @@ export const useWebSocket = (): WebSocketHook => {
           return
         }
 
-        let msg: ServerMessage
+        let raw: unknown
         try {
-          msg = JSON.parse(event.data) as ServerMessage
+          raw = JSON.parse(event.data)
         } catch (err) {
-          log.error('Failed to parse message:', err)
+          log.error('Failed to JSON-parse message:', err)
           return
         }
+        const msgResult = ServerMessageSchema.safeParse(raw)
+        if (!msgResult.success) {
+          // Wire shape didn't match any known variant — the server is on a
+          // different protocol version, or somebody is poking the WS with
+          // bad payloads. Log the Zod error and the raw blob, then drop.
+          log.error('Server message failed validation:', msgResult.error.message, raw)
+          return
+        }
+        const msg: ServerMessage = msgResult.data
 
         // RPC responses are routed via the type predicate; after this
         // returns false, `msg` narrows to push-only variants and the
