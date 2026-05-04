@@ -363,6 +363,8 @@ const zh = {
         networkUnreachable:
           '无法连接到互联网。如果你想要的引擎和模型已经下载过，可以在「通用设置」中启用离线模式，无需网络即可使用。\n\n详情：{{message}}',
         error: {
+          protocolVersionMismatch:
+            'Biome 无法与此服务器通信：客户端使用协议 v{{client}}，但服务器使用 v{{server}}。请更新 Biome（或服务器）以使版本一致。',
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
           initFailed: '会话初始化失败',

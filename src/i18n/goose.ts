@@ -376,6 +376,8 @@ const goose = {
         networkUnreachable:
           "Can't reach the open waters of the internet. If your engine and model are already nested in the pond, switch on Pond Isolation in General Settings to waddle along without a network.\n\nDetails: {{message}}",
         error: {
+          protocolVersionMismatch:
+            "Honk! These geese aren't speaking the same language: client is on protocol v{{client}}, server is on v{{server}}. Waddle over to an update so the flock matches.",
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           initFailed: 'Honk! Session initialization failed',

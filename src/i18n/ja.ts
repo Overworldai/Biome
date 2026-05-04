@@ -373,6 +373,8 @@ const ja = {
         networkUnreachable:
           'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
+          protocolVersionMismatch:
+            'このサーバーと通信できません：クライアントはプロトコル v{{client}} を使用していますが、サーバーは v{{server}} を使用しています。バージョンが一致するように Biome（またはサーバー）を更新してください。',
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
           initFailed: 'セッションの初期化に失敗しました',

@@ -319,14 +319,30 @@ def render_union_alias(name: str, members: list[type[BaseModel]]) -> str:
 # ─── Module walker ───────────────────────────────────────────────────
 
 
+_CONST_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
 def collect_module_decls(
     module: ModuleType,
-) -> tuple[list[type[StrEnum]], list[type[BaseModel]], list[tuple[str, list[type[BaseModel]]]]]:
-    """Walk a module; return (enums, models, union_aliases) preserving
-    declaration order. Skips re-exports from other modules and private names."""
+    *,
+    collect_constants: bool,
+) -> tuple[
+    list[type[StrEnum]],
+    list[type[BaseModel]],
+    list[tuple[str, list[type[BaseModel]]]],
+    list[tuple[str, int | float | str | bool]],
+]:
+    """Walk a module; return (enums, models, union_aliases, constants)
+    preserving declaration order. Skips re-exports from other modules and
+    private names. `constants` (when `collect_constants=True`) are
+    module-level UPPER_SNAKE_CASE primitives (int / float / str / bool),
+    emitted as `export const NAME = value`. Only the primary `protocol`
+    module is scanned for constants — extra modules contribute models but
+    not their internal implementation constants (e.g. local file paths)."""
     enums: list[type[StrEnum]] = []
     models: list[type[BaseModel]] = []
     union_aliases: list[tuple[str, list[type[BaseModel]]]] = []
+    constants: list[tuple[str, int | float | str | bool]] = []
 
     module_vars: dict[str, Any] = vars(module)
     for name, obj in module_vars.items():
@@ -351,8 +367,15 @@ def collect_module_decls(
                 members = [a for a in get_args(inner) if inspect.isclass(a) and issubclass(a, BaseModel)]
                 if members:
                     union_aliases.append((name, members))
+                    continue
 
-    return enums, models, union_aliases
+        # Module-level UPPER_SNAKE_CASE primitive — exported as a TS const.
+        # `bool` is a subclass of `int` in Python; check it first so `True`
+        # / `False` render as `true` / `false`, not `1` / `0`.
+        if collect_constants and _CONST_NAME_RE.match(name) and isinstance(obj, bool | int | float | str):
+            constants.append((name, obj))
+
+    return enums, models, union_aliases, constants
 
 
 def collect_rpc_pairs(models: list[type[BaseModel]]) -> list[tuple[str, type[BaseModel], type[BaseModel]]]:
@@ -472,26 +495,52 @@ def render_zod_type(tp: Any) -> str:
 
 def collect_all_decls(
     modules: list[ModuleType],
-) -> tuple[list[type[StrEnum]], list[type[BaseModel]], list[tuple[str, list[type[BaseModel]]]]]:
+) -> tuple[
+    list[type[StrEnum]],
+    list[type[BaseModel]],
+    list[tuple[str, list[type[BaseModel]]]],
+    list[tuple[str, int | float | str | bool]],
+]:
     """Walk multiple modules; concatenate their declarations preserving
     per-module order. Used to fold extra modules (`video_recorder` etc.)
     into the main `protocol` output as a single TS file."""
     enums: list[type[StrEnum]] = []
     models: list[type[BaseModel]] = []
     union_aliases: list[tuple[str, list[type[BaseModel]]]] = []
-    for m in modules:
-        m_enums, m_models, m_unions = collect_module_decls(m)
+    constants: list[tuple[str, int | float | str | bool]] = []
+    # Only the first module (the protocol module proper) contributes
+    # exported constants — extras like `video_recorder` carry models but
+    # their other module-level values are implementation details, not
+    # part of the wire protocol.
+    for i, m in enumerate(modules):
+        m_enums, m_models, m_unions, m_consts = collect_module_decls(m, collect_constants=(i == 0))
         enums.extend(m_enums)
         models.extend(m_models)
         union_aliases.extend(m_unions)
-    return enums, models, union_aliases
+        constants.extend(m_consts)
+    return enums, models, union_aliases, constants
+
+
+def render_constant(name: str, value: bool | int | float | str) -> str:  # noqa: FBT001  -- the value comes from a Python literal whose type is genuinely a primitive union; bool isn't a "trap" here, it's one valid wire-side primitive
+    """Emit a `export const NAME = value` line for a module-level primitive."""
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    elif isinstance(value, str):
+        rendered = render_literal(value)
+    else:
+        rendered = str(value)
+    return f"export const {name} = {rendered}"
 
 
 def generate(modules: list[ModuleType]) -> str:
-    enums, models, union_aliases = collect_all_decls(modules)
+    enums, models, union_aliases, constants = collect_all_decls(modules)
     rpc_pairs = collect_rpc_pairs(models)
 
     sections: list[str] = [HEADER.rstrip(), "import { z } from 'zod'"]
+
+    if constants:
+        sections.append("// ─── Constants ────────────────────────────────────────────────────────")
+        sections.extend(render_constant(name, value) for name, value in constants)
 
     if enums:
         sections.append("// ─── Enums ────────────────────────────────────────────────────────────")

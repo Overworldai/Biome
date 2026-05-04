@@ -185,7 +185,19 @@ IPC handlers are organized one file per domain in `electron/ipc/` (config, model
 
 ### WebSocket Protocol (renderer ↔ World Engine)
 
-The renderer connects to the World Engine at `ws(s)://{host}/ws`. All messages are JSON with a `type` field. The protocol has two layers, both modelled as Pydantic discriminated unions in `server-components/server/protocol.py` and re-exported to TypeScript via codegen (see [Cross-language types](#cross-language-types) below).
+The renderer connects to the World Engine at `ws(s)://{host}/ws?protocol_version=N` where `N` is the renderer's `PROTOCOL_VERSION`. All messages are JSON with a `type` field. The protocol has two layers, both modelled as Pydantic discriminated unions in `server-components/server/protocol.py` and re-exported to TypeScript via codegen (see [Cross-language types](#cross-language-types) below).
+
+#### Protocol version handshake
+
+`server/protocol.py` defines a module-level `PROTOCOL_VERSION` constant which the codegen ships verbatim to the renderer. On every WS connect the renderer appends `?protocol_version=N` (in `useWebSocket.connect`); the server reads `websocket.query_params["protocol_version"]` immediately after `accept()` and compares against its own constant. On mismatch (or missing / unparseable value) the server pushes a typed `ErrorMessage` with `message_id: app.server.error.protocolVersionMismatch` and `params: {client, server}`, then closes the socket. The existing `error`-message machinery (`resolveServerMessage` → `TranslatableError`) surfaces this as a localised "update Biome" error in the UI without any special-case path.
+
+**When to bump.** Any wire-incompatible change: a removed/renamed/retyped field, a new required field, an RPC semantics change, a discriminator rename. **When not to bump.** A new optional field, a new enum member that old clients won't emit, an entirely new message type that old clients won't see — those degrade gracefully through the existing receive-path validation.
+
+**Bumping it:**
+
+1. Increment `PROTOCOL_VERSION` in `server/protocol.py`.
+2. Run the codegen — the new value flows to `src/types/protocol.generated.ts` and into `useWebSocket.ts` via the existing import.
+3. Older clients connecting to the new server will get the typed mismatch error automatically; no client change required.
 
 **Push messages** (server→client), handled in `useWebSocket.ts`:
 
@@ -249,6 +261,7 @@ What gets generated, from each Python construct:
 | `class Foo[T: BaseModel](BaseModel)`            | `export const FooSchema = z.object({...})` + hand-typed `export interface Foo<T>`          |
 | `class Foo(StrEnum)`                            | `export const FooSchema = z.enum([...])` + inferred type alias                             |
 | `Annotated[A \| B, Field(discriminator="...")]` | `z.discriminatedUnion('type', [...])` + inferred type alias                                |
+| `FOO_BAR = <int \| float \| str \| bool>`       | `export const FOO_BAR = <value>` (UPPER_SNAKE_CASE, primary `protocol.py` only)            |
 | `T \| None = None`                              | `field: <T>.optional()` ⇒ `field?: T` (Pydantic's `exclude_none=True`)                     |
 | `T = <default>` (non-Literal)                   | `field: <T>.optional()` ⇒ `field?: T`                                                      |
 | `T` (no default)                                | `field: <T>` ⇒ `field: T` (required)                                                       |

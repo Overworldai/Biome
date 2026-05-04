@@ -369,6 +369,8 @@ const he = {
         networkUnreachable:
           'לא ניתן להגיע לאינטרנט. אם המנוע והמודל הרצויים כבר הורדו, ניתן להפעיל מצב לא מקוון בהגדרות הכלליות כדי להשתמש בהם ללא רשת.\n\nפרטים: {{message}}',
         error: {
+          protocolVersionMismatch:
+            'אין אפשרות לתקשר עם השרת הזה: הלקוח מדבר בפרוטוקול v{{client}} אבל השרת מדבר ב-v{{server}}. עדכן את Biome (או את השרת) כדי שהגרסאות יתאימו.',
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
           initFailed: 'אתחול הסשן נכשל',

@@ -41,7 +41,7 @@ from pydantic import BaseModel
 from structlog.contextvars import bound_contextvars
 
 from engine import Engines
-from server.protocol import MessageId, StageId, SystemInfoMessage, rpc_ok
+from server.protocol import PROTOCOL_VERSION, MessageId, StageId, SystemInfoMessage, rpc_ok
 from server.session.connection import Connection
 from server.session.handlers import build_init_response_data, prepare_session, run_preinit_handshake
 from server.session.workers import run_session
@@ -205,6 +205,29 @@ async def websocket_endpoint(
         logger.info("Client connected")
         conn = Connection(websocket=websocket, client_host=client_host, system_monitor=system_monitor)
         await websocket.accept()
+
+        # Reject mismatched clients before any other phase runs so the UI
+        # can surface a localised "update Biome" error. The check happens
+        # after `accept()` so the rejection rides on a typed `error` push;
+        # a handshake-time refusal would only give the renderer a generic
+        # "WebSocket connection failed" with no version detail.
+        client_version_raw = websocket.query_params.get("protocol_version")
+        try:
+            client_version = int(client_version_raw) if client_version_raw is not None else None
+        except ValueError:
+            client_version = None
+        if client_version != PROTOCOL_VERSION:
+            logger.warning(
+                "Protocol version mismatch — closing connection",
+                client_version=client_version_raw,
+                server_version=PROTOCOL_VERSION,
+            )
+            await conn.send_error(
+                message_id=MessageId.PROTOCOL_VERSION_MISMATCH,
+                params={"client": client_version_raw or "unknown", "server": str(PROTOCOL_VERSION)},
+            )
+            await websocket.close()
+            return
 
         log_task = asyncio.create_task(stream_logs_to_client(conn))
         progress_task: asyncio.Task[None] | None = None

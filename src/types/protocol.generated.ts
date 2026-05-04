@@ -11,6 +11,10 @@
 
 import { z } from 'zod'
 
+// ─── Constants ────────────────────────────────────────────────────────
+
+export const PROTOCOL_VERSION = 1
+
 // ─── Enums ────────────────────────────────────────────────────────────
 
 export const ServerStageIdSchema = z.enum([
@@ -37,6 +41,7 @@ export const ServerStageIdSchema = z.enum([
 export type ServerStageId = z.infer<typeof ServerStageIdSchema>
 
 export const MessageIdSchema = z.enum([
+  'app.server.error.protocolVersionMismatch',
   'app.server.error.serverStartupFailed',
   'app.server.error.timeoutWaitingForSeed',
   'app.server.error.initFailed',

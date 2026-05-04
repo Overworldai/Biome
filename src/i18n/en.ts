@@ -375,6 +375,8 @@ const en = {
         networkUnreachable:
           "Couldn't reach the internet. If the engine and model you want are already downloaded, turn on Offline Mode in General Settings to use them without a network.\n\nDetails: {{message}}",
         error: {
+          protocolVersionMismatch:
+            "Biome can't talk to this server: the client speaks protocol v{{client}} but the server speaks v{{server}}. Update Biome (or the server) so the versions match.",
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           initFailed: 'Session initialization failed',

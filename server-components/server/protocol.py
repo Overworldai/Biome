@@ -26,6 +26,25 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 # ──────────────────────────────────────────────────────────────────────
+# Protocol version.
+#
+# Bumped whenever a wire-incompatible change ships. The renderer reads
+# this value from the codegen output and passes it as a `?protocol_version=N`
+# query parameter on the WS URL; the server compares against its own
+# constant and refuses the session on mismatch with a typed error so the
+# UI can render an actionable "update Biome" message.
+#
+# Bump rules: any field/type/discriminator change that an old client
+# can't parse, any change to RPC semantics, any new required field on an
+# existing message. Adding a new optional field, a new enum member, or a
+# new push/RPC message that old clients simply don't emit doesn't count.
+# ──────────────────────────────────────────────────────────────────────
+
+
+PROTOCOL_VERSION = 1
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Engine progress stages.
 #
 # Every stage that the routes / engine / session can report is enumerated
@@ -77,6 +96,7 @@ class StageId(StrEnum):
 
 class MessageId(StrEnum):
     # ── Errors ────────────────────────────────────────────────────────
+    PROTOCOL_VERSION_MISMATCH = "app.server.error.protocolVersionMismatch"
     SERVER_STARTUP_FAILED = "app.server.error.serverStartupFailed"
     TIMEOUT_WAITING_FOR_SEED = "app.server.error.timeoutWaitingForSeed"
     INIT_FAILED = "app.server.error.initFailed"

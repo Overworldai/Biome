@@ -5,19 +5,20 @@ import { WsRpcClient } from '../lib/wsRpc'
 import type { StageId } from '../stages'
 import { toWebSocketUrl } from '../utils/serverUrl'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type {
-  ControlNotif,
-  ErrorMessage,
-  ErrorSnapshot,
-  FrameHeader,
-  InitRequest,
-  InitResponseData,
-  LogMessage,
-  PauseNotif,
-  ResetNotif,
-  ResumeNotif,
-  SystemInfo,
-  WarningMessage
+import {
+  PROTOCOL_VERSION,
+  type ControlNotif,
+  type ErrorMessage,
+  type ErrorSnapshot,
+  type FrameHeader,
+  type InitRequest,
+  type InitResponseData,
+  type LogMessage,
+  type PauseNotif,
+  type ResetNotif,
+  type ResumeNotif,
+  type SystemInfo,
+  type WarningMessage
 } from '../types/protocol.generated'
 import type { LogRecord } from '../types/ipc'
 import { ServerMessageSchema, type ServerMessage, type WsRequest } from '../lib/wsRpc'
@@ -183,7 +184,13 @@ export const useWebSocket = (): WebSocketHook => {
 
       let wsUrl: string
       try {
-        wsUrl = toWebSocketUrl(endpointUrl)
+        const baseUrl = toWebSocketUrl(endpointUrl)
+        // Tag the WS URL with the renderer's protocol version so the server
+        // can reject mismatched clients up front. The server compares against
+        // its own `PROTOCOL_VERSION`; on mismatch we get back a typed
+        // `error` push with `app.server.error.protocolVersionMismatch`.
+        const separator = baseUrl.includes('?') ? '&' : '?'
+        wsUrl = `${baseUrl}${separator}protocol_version=${PROTOCOL_VERSION}`
       } catch (err) {
         isConnectingRef.current = false
         setConnectionState('error')
