@@ -43,7 +43,14 @@ if TYPE_CHECKING:
 # Keep imports here so the script runs from `server-components/`.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from recording import video_recorder
 from server import protocol
+
+# Modules whose `BaseModel` / `StrEnum` declarations get generated alongside
+# `protocol.py`'s. Each module's classes are scanned independently and the
+# combined output is emitted as one TS file. Add a module here when a new
+# typed shape needs to cross the Python ↔ TS boundary.
+EXTRA_MODULES: list[ModuleType] = [video_recorder]
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "src" / "types" / "protocol.generated.ts"
 DEFAULT_ZOD_OUTPUT = Path(__file__).resolve().parent.parent.parent / "src" / "types" / "protocol.zod.ts"
@@ -500,8 +507,8 @@ def render_zod_union(name: str, members: list[type[BaseModel]]) -> str:
     return "\n".join(out)
 
 
-def generate_zod(module: ModuleType) -> str:
-    enums, models, union_aliases = collect_module_decls(module)
+def generate_zod(modules: list[ModuleType]) -> str:
+    enums, models, union_aliases = collect_all_decls(modules)
 
     sections: list[str] = [ZOD_HEADER.rstrip()]
 
@@ -536,8 +543,25 @@ def generate_zod(module: ModuleType) -> str:
 # ─── Top-level ───────────────────────────────────────────────────────
 
 
-def generate(module: ModuleType) -> str:
-    enums, models, union_aliases = collect_module_decls(module)
+def collect_all_decls(
+    modules: list[ModuleType],
+) -> tuple[list[type[StrEnum]], list[type[BaseModel]], list[tuple[str, list[type[BaseModel]]]]]:
+    """Walk multiple modules; concatenate their declarations preserving
+    per-module order. Used to fold extra modules (`video_recorder` etc.)
+    into the main `protocol` output as a single TS file."""
+    enums: list[type[StrEnum]] = []
+    models: list[type[BaseModel]] = []
+    union_aliases: list[tuple[str, list[type[BaseModel]]]] = []
+    for m in modules:
+        m_enums, m_models, m_unions = collect_module_decls(m)
+        enums.extend(m_enums)
+        models.extend(m_models)
+        union_aliases.extend(m_unions)
+    return enums, models, union_aliases
+
+
+def generate(modules: list[ModuleType]) -> str:
+    enums, models, union_aliases = collect_all_decls(modules)
     rpc_pairs = collect_rpc_pairs(models)
 
     sections: list[str] = [HEADER.rstrip()]
@@ -574,9 +598,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    modules: list[ModuleType] = [protocol, *EXTRA_MODULES]
     outputs = [
-        (args.output, generate(protocol)),
-        (args.zod_output, generate_zod(protocol)),
+        (args.output, generate(modules)),
+        (args.zod_output, generate_zod(modules)),
     ]
 
     if args.check:

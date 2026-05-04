@@ -245,6 +245,22 @@ export interface RpcErrorResponse {
   error?: string
 }
 
+/**
+ * Semantic session state captured into the MP4's metadata so each
+ * recording is self-describing. The field set is the wire format —
+ * callers (the session layer) construct this explicitly rather than
+ * passing a free-form dict, so the schema is fixed and searchable.
+ * Picked up by the protocol codegen so the renderer side imports a
+ * typed `RecordingProperties` alongside the WS protocol types.
+ */
+export interface RecordingProperties {
+  biome_version?: string
+  model?: string
+  quant?: string
+  seed?: string
+  scene_authoring_enabled?: boolean
+}
+
 // ─── Discriminated unions ─────────────────────────────────────────────
 
 export type ClientMessage =

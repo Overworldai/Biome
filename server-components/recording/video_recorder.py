@@ -14,16 +14,15 @@ preset, yuv420p output, +faststart, no audio.
 
 import contextlib
 import datetime
-import json
 import subprocess
 import tempfile
 import threading
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from pydantic import BaseModel, ConfigDict
 
 from util.server_logging import logger
 
@@ -40,12 +39,15 @@ MIN_DURATION_S = 3
 FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
 
 
-@dataclass(frozen=True)
-class RecordingProperties:
+class RecordingProperties(BaseModel):
     """Semantic session state captured into the MP4's metadata so each
-    recording is self-describing. The field set is the wire format — callers
-    (the session layer) construct this explicitly rather than passing a free-form
-    dict, so the schema is fixed and searchable."""
+    recording is self-describing. The field set is the wire format —
+    callers (the session layer) construct this explicitly rather than
+    passing a free-form dict, so the schema is fixed and searchable.
+    Picked up by the protocol codegen so the renderer side imports a
+    typed `RecordingProperties` alongside the WS protocol types."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     biome_version: str = "unknown"
     model: str | None = None
@@ -65,7 +67,7 @@ def _properties_to_mp4_metadata(properties: RecordingProperties) -> dict[str, st
     return {
         "title": "Biome Recording",
         "artist": f"Biome{version_suffix}",
-        "comment": json.dumps(asdict(properties), separators=(",", ":")),
+        "comment": properties.model_dump_json(),
     }
 
 

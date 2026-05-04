@@ -25,6 +25,7 @@ import type {
   MessageId,
   PauseNotif,
   PromptNotif,
+  RecordingProperties,
   ResetNotif,
   ResumeNotif,
   RpcErrorResponse,
@@ -251,6 +252,14 @@ export const RpcErrorResponseSchema = z.object({
   error_id: MessageIdSchema.optional(),
   error: z.string().optional()
 }) satisfies z.ZodType<RpcErrorResponse>
+
+export const RecordingPropertiesSchema = z.object({
+  biome_version: z.string().optional(),
+  model: z.string().optional(),
+  quant: z.string().optional(),
+  seed: z.string().optional(),
+  scene_authoring_enabled: z.boolean().optional()
+}) satisfies z.ZodType<RecordingProperties>
 
 // ─── Discriminated unions ─────────────────────────────────────────────
 
