@@ -6,10 +6,21 @@ import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
 import { useTranslation } from 'react-i18next'
 
+const MODAL_BUTTON = 'p-[0.5cqh_1.78cqh] text-[2.49cqh]'
+
 const ConnectionLostOverlay = () => {
   const { t } = useTranslation()
-  const { connectionLost, cancelConnection, connection, wsLogs, wsAllLogs, error, engineError, statusStage } =
-    useStreaming()
+  const {
+    connectionLost,
+    cancelConnection,
+    reconnectAfterConnectionLost,
+    connection,
+    wsLogs,
+    wsAllLogs,
+    error,
+    engineError,
+    statusStage
+  } = useStreaming()
   const { settings, isServerMode } = useSettings()
 
   // Same resolution logic as TerminalDisplay — prefer engineError, fall back to raw WS error.
@@ -22,6 +33,10 @@ const ConnectionLostOverlay = () => {
 
   const handleReturnToMainMenu = () => {
     void cancelConnection()
+  }
+
+  const handleReconnect = () => {
+    void reconnectAfterConnectionLost()
   }
 
   const buildPayload = useCallback(() => {
@@ -91,20 +106,25 @@ const ConnectionLostOverlay = () => {
           )}
         </div>
         <div className="h-[28cqh] w-full">
-          <ServerLogDisplay
-            errorMessage={errorDetail}
-            logs={wsLogs}
-            buildDiagnosticsPayload={buildPayload}
-            primaryAction={
-              <Button
-                variant="primary"
-                autoShrinkLabel
-                label="app.buttons.returnToMainMenu"
-                className="px-[1.4cqh] py-[0.4cqh] text-[2.13cqh]"
-                onClick={handleReturnToMainMenu}
-              />
-            }
+          <ServerLogDisplay errorMessage={errorDetail} logs={wsLogs} buildDiagnosticsPayload={buildPayload} />
+        </div>
+        <div className="flex w-full flex-wrap justify-end gap-[1.42cqh]">
+          <Button
+            variant={isServerMode ? 'secondary' : 'primary'}
+            autoShrinkLabel
+            label="app.buttons.returnToMainMenu"
+            className={MODAL_BUTTON}
+            onClick={handleReturnToMainMenu}
           />
+          {isServerMode && (
+            <Button
+              variant="primary"
+              autoShrinkLabel
+              label="app.buttons.reconnect"
+              className={MODAL_BUTTON}
+              onClick={handleReconnect}
+            />
+          )}
         </div>
       </div>
     </div>
