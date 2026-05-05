@@ -48,7 +48,6 @@ const CONNECTIVITY_RETRIES = 4
 const CONNECTIVITY_RETRY_DELAY_MS = 450
 
 const STARTUP_HEALTH_POLL_INTERVAL_MS = 500
-const STARTUP_HEALTH_TIMEOUT_MS = 120_000
 const STANDALONE_PORT_SCAN_LIMIT = 1337
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -75,9 +74,13 @@ const probeServerHealth = async (
  * Poll health endpoint until it responds 200.
  * Used instead of listening for stdout "SERVER READY" signals.
  *
- * Also watches for the server process dying mid-poll (e.g. uv failed to fetch
- * a dep at startup). When it does, throws a plain Error carrying the log tail
- * so the caller's classifier can decide whether it's a network failure.
+ * Polls indefinitely — the server's first-time init can include
+ * arbitrarily long synchronous work (model downloads, kernel JIT,
+ * device-graph compilation), and putting a wall-clock deadline on
+ * that just turns "user is patient" into "false-positive timeout".
+ * The user-cancel signal (`isCancelled`) and the process-died signal
+ * (`checkServerRunning`) are the meaningful exit conditions; if
+ * neither fires, the server is still working towards readiness.
  */
 const waitForHealthy = async (
   wsUrl: string,
@@ -88,10 +91,9 @@ const waitForHealthy = async (
   log: { info: (...args: unknown[]) => void }
 ): Promise<void> => {
   const healthUrl = toHealthUrl(wsUrl)
-  const deadline = Date.now() + STARTUP_HEALTH_TIMEOUT_MS
   log.info('Polling health endpoint until server is ready:', healthUrl)
 
-  while (Date.now() < deadline) {
+  while (true) {
     if (isCancelled()) return
     const ok = await probeServerHealthViaMain(healthUrl, CONNECTIVITY_TIMEOUT_MS)
     if (ok) {
@@ -104,8 +106,6 @@ const waitForHealthy = async (
     }
     await delay(STARTUP_HEALTH_POLL_INTERVAL_MS)
   }
-
-  throw new TranslatableError('app.server.startupTimeout')
 }
 
 const findFirstOpenStandalonePort = async (

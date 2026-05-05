@@ -370,7 +370,6 @@ const goose = {
         websocketConnectionFailed: 'Failed to create WebSocket connection',
         connectionFailed: 'Connection failed — the goose may have flown away',
         connectionLost: 'Connection lost — the goose may have flown away',
-        startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not honking back at {{url}}',
         networkUnreachable:

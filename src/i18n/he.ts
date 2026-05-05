@@ -363,7 +363,6 @@ const he = {
         websocketConnectionFailed: 'יצירת חיבור WebSocket נכשלה',
         connectionFailed: 'החיבור נכשל — ייתכן שהשרת קרס',
         connectionLost: 'החיבור אבד — ייתכן שהשרת קרס',
-        startupTimeout: 'תם הזמן להפעלת השרת — בדוק את הלוגים לשגיאות',
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
         networkUnreachable:

@@ -367,7 +367,6 @@ const ja = {
         websocketConnectionFailed: 'WebSocket接続の作成に失敗しました',
         connectionFailed: '接続に失敗しました — サーバーがクラッシュした可能性があります',
         connectionLost: '接続が失われました — サーバーがクラッシュした可能性があります',
-        startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
         networkUnreachable:

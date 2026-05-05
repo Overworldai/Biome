@@ -357,7 +357,6 @@ const zh = {
         websocketConnectionFailed: '无法创建 WebSocket 连接',
         connectionFailed: '连接失败 - 服务器可能已崩溃',
         connectionLost: '连接丢失 - 服务器可能已崩溃',
-        startupTimeout: '服务器启动超时 - 请检查日志',
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
         networkUnreachable:

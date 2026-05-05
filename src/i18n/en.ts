@@ -369,7 +369,6 @@ const en = {
         websocketConnectionFailed: 'Failed to create WebSocket connection',
         connectionFailed: 'Connection failed — server may have crashed',
         connectionLost: 'Connection lost — server may have crashed',
-        startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
         networkUnreachable:
