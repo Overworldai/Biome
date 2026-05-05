@@ -16,6 +16,8 @@ to "the device" / "the device thread" instead.
 # pyright: reportMissingTypeStubs=none, reportUnknownMemberType=none, reportUnknownVariableType=none
 
 import os
+import platform as _platform_mod
+import sys
 
 # Set the allocator config BEFORE torch is touched downstream — torch reads
 # this env var when the device context first initialises. Module-level
@@ -23,22 +25,46 @@ import os
 # the backend, and that has to happen before any device op.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-import pynvml
 import structlog
 import torch
 
+# pynvml is the NVML wrapper used by the live samplers below
+# (utilisation, driver version). Optional on platforms where it
+# can't load — Apple Silicon ships no NVML and the import raises.
+# Soft-fail to ``None`` and gate every NVML call site on availability.
+try:
+    import pynvml
+except (ImportError, OSError):
+    pynvml = None  # type: ignore[assignment]
+
 logger = structlog.stdlib.get_logger(__name__)
+
+# Apple Silicon has no CUDA. The DiT runs through ``quark.Engine``
+# (Metal-cpp + ANE TAEHV via CoreML); torch tensors that the manager
+# carries (seed frames, scene-authoring buffers) stay on CPU because
+# quark owns its own Metal allocator and consumes torch tensors /
+# numpy arrays at the API boundary. Routing the per-purpose device
+# strings to ``"cpu"`` keeps every existing
+# ``frame.to(device=WORLD_ENGINE_DEVICE)`` call site as a no-op
+# without per-call branching.
+_IS_DARWIN_ARM64 = sys.platform == "darwin" and _platform_mod.machine() == "arm64"
 
 # Device assignment per purpose. They all happen to be the same GPU today,
 # but split here so we can move pieces around — e.g. safety on CPU while
 # the world engine stays on GPU, or scene authoring on a second GPU —
 # without rewriting every call site.
-WORLD_ENGINE_DEVICE = "cuda"
-SCENE_AUTHORING_DEVICE = "cuda"
-SAFETY_DEVICE = "cuda"
+WORLD_ENGINE_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
+SCENE_AUTHORING_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
+SAFETY_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
 
 # Torch's OOM exception, re-exported under a backend-neutral name.
-OutOfMemoryError = torch.cuda.OutOfMemoryError
+# On Apple Silicon there's no ``torch.cuda.OutOfMemoryError`` to alias —
+# fall back to the plain ``MemoryError`` so the type still exists for
+# ``except devices.OutOfMemoryError`` blocks (which never trigger on
+# Apple anyway since there's no CUDA allocator pressure).
+OutOfMemoryError: type[BaseException] = (
+    MemoryError if _IS_DARWIN_ARM64 else torch.cuda.OutOfMemoryError
+)
 
 # Opaque NVML device handle — pynvml lacks proper stubs.
 NvmlHandle = object
@@ -164,6 +190,8 @@ def is_quant_unsupported_error(err: BaseException) -> bool:
 def open_nvml_handle() -> NvmlHandle | None:
     """Initialise NVML and return a handle for the current device, or
     `None` if NVML init fails. Logs the failure but doesn't raise."""
+    if pynvml is None:
+        return None
     try:
         pynvml.nvmlInit()
         return pynvml.nvmlDeviceGetHandleByIndex(current_device_index())
@@ -175,6 +203,8 @@ def open_nvml_handle() -> NvmlHandle | None:
 def driver_version_via_nvml() -> str | None:
     """GPU driver version (e.g. '550.78.01' on NVIDIA). `None` if NVML
     is unavailable or the call fails."""
+    if pynvml is None:
+        return None
     try:
         raw = pynvml.nvmlSystemGetDriverVersion()
         return raw.decode("utf-8") if isinstance(raw, bytes) else raw
@@ -186,6 +216,8 @@ def utilization_via_nvml(handle: NvmlHandle) -> int:
     """Device utilisation (0-100) from NVML; -1 on failure. NVML talks
     to the same driver as nvidia-smi, sometimes with fresher numbers
     than torch."""
+    if pynvml is None:
+        return -1
     try:
         return int(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
     except Exception:  # noqa: BLE001  -- pynvml lacks typed stubs; raises NVMLError subclasses, not a single base we can name
