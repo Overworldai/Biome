@@ -97,6 +97,7 @@ class StageId(StrEnum):
 class MessageId(StrEnum):
     # ── Errors ────────────────────────────────────────────────────────
     PROTOCOL_VERSION_MISMATCH = "app.server.error.protocolVersionMismatch"
+    SERVER_BUSY = "app.server.error.serverBusy"
     SERVER_STARTUP_FAILED = "app.server.error.serverStartupFailed"
     TIMEOUT_WAITING_FOR_SEED = "app.server.error.timeoutWaitingForSeed"
     INIT_FAILED = "app.server.error.initFailed"

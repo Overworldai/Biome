@@ -375,6 +375,8 @@ const ja = {
         error: {
           protocolVersionMismatch:
             'このサーバーと通信できません：クライアントはプロトコル v{{client}} を使用していますが、サーバーは v{{server}} を使用しています。バージョンが一致するように Biome（またはサーバー）を更新してください。',
+          serverBusy:
+            'サーバーはすでに別のクライアントで使用されています。現在のセッションが終了してから再度お試しください。',
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
           initFailed: 'セッションの初期化に失敗しました',

@@ -371,6 +371,7 @@ const he = {
         error: {
           protocolVersionMismatch:
             'אין אפשרות לתקשר עם השרת הזה: הלקוח מדבר בפרוטוקול v{{client}} אבל השרת מדבר ב-v{{server}}. עדכן את Biome (או את השרת) כדי שהגרסאות יתאימו.',
+          serverBusy: 'השרת כבר בשימוש על ידי לקוח אחר. המתן עד שהסשן הפעיל יסתיים ונסה שוב.',
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
           initFailed: 'אתחול הסשן נכשל',

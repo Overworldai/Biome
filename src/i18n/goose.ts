@@ -378,6 +378,8 @@ const goose = {
         error: {
           protocolVersionMismatch:
             "Honk! These geese aren't speaking the same language: client is on protocol v{{client}}, server is on v{{server}}. Waddle over to an update so the flock matches.",
+          serverBusy:
+            'Honk! Another goose is already nesting on this pond. Wait for them to flap off, then waddle back.',
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           initFailed: 'Honk! Session initialization failed',

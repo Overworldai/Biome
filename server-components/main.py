@@ -94,8 +94,6 @@ try:
 
     from util.system_info import SystemMonitor
 
-    system_monitor = SystemMonitor.collect()
-
     logger.info("Importing torchvision...")
     import torchvision
 
@@ -183,6 +181,16 @@ async def lifespan(app: FastAPI):
 
     startup = ServerStartup()
     app.state.startup = startup
+    app.state.system_monitor = SystemMonitor.collect()
+    # Single-session gate. The WS endpoint claims this slot on accept and
+    # clears it on teardown; concurrent handshakes from a second client
+    # are rejected with `MessageId.SERVER_BUSY`. The shared `WorldEngine`
+    # is fundamentally single-tenant — its rolling frame history, seed
+    # slot, and progress callback are process-wide singletons — and
+    # serialising two clients through it would just produce incoherent
+    # output. Reconnection (same client returning after disconnect) works
+    # fine because each session clears its slot on teardown.
+    app.state.active_session = None
 
     # Heavy init runs in background so /health responds immediately.
     init_task = asyncio.create_task(_heavy_init(app, startup))
@@ -213,8 +221,6 @@ app.add_middleware(
 )
 
 app.include_router(router)
-
-app.state.system_monitor = system_monitor
 
 
 if __name__ == "__main__":

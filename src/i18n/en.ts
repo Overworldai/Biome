@@ -377,6 +377,8 @@ const en = {
         error: {
           protocolVersionMismatch:
             "Biome can't talk to this server: the client speaks protocol v{{client}} but the server speaks v{{server}}. Update Biome (or the server) so the versions match.",
+          serverBusy:
+            'The server is already in use by another client. Wait for the active session to end and try again.',
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           initFailed: 'Session initialization failed',

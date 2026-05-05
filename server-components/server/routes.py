@@ -229,6 +229,21 @@ async def websocket_endpoint(
             await websocket.close()
             return
 
+        # Single-session gate: the shared `WorldEngine` is single-tenant
+        # (rolling frame history, seed slot, progress callback are all
+        # process-wide singletons), so a second concurrent client would
+        # interleave inputs into the same frame stream and produce
+        # incoherent output for both. Reject with a typed error and
+        # close. The check + claim are both synchronous, so no two
+        # concurrent handshakes can both pass under asyncio's
+        # cooperative scheduling.
+        if websocket.app.state.active_session is not None:
+            logger.warning("Rejecting client: another session is active")
+            await conn.send_error(message_id=MessageId.SERVER_BUSY)
+            await websocket.close()
+            return
+        websocket.app.state.active_session = conn
+
         log_task = asyncio.create_task(stream_logs_to_client(conn))
         progress_task: asyncio.Task[None] | None = None
         # Bound after the startup gate so `teardown`'s callback-clear can no-op
@@ -294,5 +309,11 @@ async def websocket_endpoint(
                 with contextlib.suppress(Exception):
                     await conn.send_error(message=str(e))
         finally:
+            # Identity check: only release the slot if we're still the
+            # session that claimed it. (We will always be — the gate
+            # above is the only way to enter this try block — but the
+            # check makes the intent explicit.)
+            if websocket.app.state.active_session is conn:
+                websocket.app.state.active_session = None
             world_engine_for_teardown = engines.world_engine if engines is not None else None
             conn.teardown(world_engine_for_teardown, log_task, progress_task)

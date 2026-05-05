@@ -42,6 +42,7 @@ export type ServerStageId = z.infer<typeof ServerStageIdSchema>
 
 export const MessageIdSchema = z.enum([
   'app.server.error.protocolVersionMismatch',
+  'app.server.error.serverBusy',
   'app.server.error.serverStartupFailed',
   'app.server.error.timeoutWaitingForSeed',
   'app.server.error.initFailed',

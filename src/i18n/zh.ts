@@ -365,6 +365,7 @@ const zh = {
         error: {
           protocolVersionMismatch:
             'Biome 无法与此服务器通信：客户端使用协议 v{{client}}，但服务器使用 v{{server}}。请更新 Biome（或服务器）以使版本一致。',
+          serverBusy: '服务器已被其他客户端占用。请等待当前会话结束后重试。',
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
           initFailed: '会话初始化失败',
