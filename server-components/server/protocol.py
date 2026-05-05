@@ -195,28 +195,40 @@ class PromptNotif(BaseModel):
 # ──────────────────────────────────────────────────────────────────────
 # Client → Server: RPC requests (req_id required, expect a response).
 #
-# Init carries partial deltas: every flag is optional, and the receiver
-# uses Pydantic's model_fields_set to distinguish "field absent" from
-# "field present and explicitly None" — preserving the existing
-# behaviour where `{"action_logging": false}` turns logging off but
-# `{}` leaves it untouched.
+# Init carries the full session configuration. The renderer always sends
+# every field (even if unchanged), and the server diffs against current
+# state to decide what to action. `SessionConfig` collects the live
+# tunables; `InitRequest` adds first-init-only data (seed, version) on
+# top.
 # ──────────────────────────────────────────────────────────────────────
+
+
+class SessionConfig(BaseModel):
+    """Live session configuration. Sent in full on every init — the
+    server compares against the running session and reconfigures the
+    deltas. `quant` is the only nullable field: `None` means "no
+    quantization" (the renderer maps its `'none'` UI sentinel to null
+    on the wire)."""
+
+    model_config = _FrozenStrict
+
+    quant: Literal["fp8w8a8", "intw8a8"] | None = None
+    scene_authoring: bool
+    action_logging: bool
+    video_recording: bool
+    video_output_dir: str | None
+    cap_inference_fps: bool
 
 
 class InitRequest(BaseModel):
     model_config = _FrozenLenient
     type: Literal["init"] = "init"
     req_id: str
-    model: str = ""
+    model: str
+    config: SessionConfig
     seed_image_data: str | None = None
     seed_filename: str | None = None
-    quant: str | None = None
-    scene_authoring: bool | None = None
-    action_logging: bool | None = None
-    video_recording: bool | None = None
-    video_output_dir: str | None = None
     biome_version: str | None = None
-    cap_inference_fps: bool | None = None
 
 
 class SceneEditRequest(BaseModel):

@@ -121,19 +121,31 @@ export const PromptNotifSchema = z.object({
 })
 export type PromptNotif = z.infer<typeof PromptNotifSchema>
 
+/**
+ * Live session configuration. Sent in full on every init — the
+ * server compares against the running session and reconfigures the
+ * deltas. `quant` is the only nullable field: `None` means "no
+ * quantization" (the renderer maps its `'none'` UI sentinel to null
+ * on the wire).
+ */
+export const SessionConfigSchema = z.object({
+  quant: z.enum(['fp8w8a8', 'intw8a8']).optional(),
+  scene_authoring: z.boolean(),
+  action_logging: z.boolean(),
+  video_recording: z.boolean(),
+  video_output_dir: z.string().nullable(),
+  cap_inference_fps: z.boolean()
+})
+export type SessionConfig = z.infer<typeof SessionConfigSchema>
+
 export const InitRequestSchema = z.object({
   type: z.literal('init'),
   req_id: z.string(),
-  model: z.string().optional(),
+  model: z.string(),
+  config: SessionConfigSchema,
   seed_image_data: z.string().optional(),
   seed_filename: z.string().optional(),
-  quant: z.string().optional(),
-  scene_authoring: z.boolean().optional(),
-  action_logging: z.boolean().optional(),
-  video_recording: z.boolean().optional(),
-  video_output_dir: z.string().optional(),
-  biome_version: z.string().optional(),
-  cap_inference_fps: z.boolean().optional()
+  biome_version: z.string().optional()
 })
 export type InitRequest = z.infer<typeof InitRequestSchema>
 

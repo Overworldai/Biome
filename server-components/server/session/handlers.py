@@ -159,35 +159,32 @@ async def handle_init(
     *,
     is_game_loop: bool = False,
 ) -> tuple[bool, bool]:
-    """Apply an InitRequest's deltas to the connection / engine.
+    """Apply an InitRequest to the connection / engine.
 
     Returns `(ready, seed_loaded)`: `ready` means the session has a
     seed frame and can begin generating; `seed_loaded` means a fresh
     seed was applied in this call.
 
-    `model_fields_set` distinguishes "field absent" from "field present
-    and explicitly None", so partial updates (`{"action_logging": false}`
-    while leaving everything else untouched) work as the renderer expects.
+    The renderer always sends the full session config; we diff each
+    field against current state to decide what to (re)load and which
+    flags to flip.
     """
-    present = req.model_fields_set
-    model_uri = (req.model or "").strip()
+    cfg = req.config
+    model_uri = req.model.strip()
     seed_data = req.seed_image_data
     seed_filename = req.seed_filename
-    quant = req.quant
 
-    # Update flags
-    if "scene_authoring" in present and req.scene_authoring is not None:
-        conn.scene_authoring_requested = req.scene_authoring
-    if "action_logging" in present and req.action_logging is not None:
-        conn.action_logging_requested = req.action_logging
-    if "video_recording" in present and req.video_recording is not None:
-        conn.video_recording_requested = req.video_recording
-    if "video_output_dir" in present:
-        conn.video_output_dir = req.video_output_dir
-    if "biome_version" in present:
+    # Apply live flags. Each is just an assignment — the comparison
+    # against current state happens implicitly via the lifecycle hooks
+    # below (e.g. action_logger lifecycle is keyed on `requested` vs
+    # `is None`).
+    conn.scene_authoring_requested = cfg.scene_authoring
+    conn.action_logging_requested = cfg.action_logging
+    conn.video_recording_requested = cfg.video_recording
+    conn.video_output_dir = cfg.video_output_dir
+    conn.cap_inference_fps = cfg.cap_inference_fps
+    if req.biome_version is not None:
         conn.biome_version = req.biome_version
-    if "cap_inference_fps" in present and req.cap_inference_fps is not None:
-        conn.cap_inference_fps = req.cap_inference_fps
 
     # Sync recorder lifecycle with requested state during gameplay
     if is_game_loop:
@@ -212,12 +209,11 @@ async def handle_init(
     # The engine must be loaded before the seed so that seed_target_size
     # and temporal_compression are resolved from the actual model config.
     model_changed = False
-    quant_changed = "quant" in present and quant != world_engine.quant
-    if model_uri and (model_uri != world_engine.model_uri or quant_changed):
+    if model_uri and (model_uri != world_engine.model_uri or cfg.quant != world_engine.quant):
         verb = "Live model switch" if is_game_loop else "Requested model"
-        logger.info(f"{verb}: {model_uri} (quant={quant})")
+        logger.info(f"{verb}: {model_uri} (quant={cfg.quant})")
         world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
-        await world_engine.load_engine(model_uri, quant=quant)
+        await world_engine.load_engine(model_uri, quant=cfg.quant)
         world_engine.set_progress_callback(None)
         world_engine.seed_frame = None
         conn.perceptual_frame_count = 0

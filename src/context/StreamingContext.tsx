@@ -13,7 +13,8 @@ import {
 import useWebSocket from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
 import { useSettings } from '../hooks/settingsContextValue'
-import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
+import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../types/settings'
+import type { SessionConfig } from '../types/protocol.generated'
 import useEngine from '../hooks/useEngine'
 import useSeeds from '../hooks/useSeeds'
 import { invoke } from '../bridge'
@@ -26,6 +27,28 @@ const log = createLogger('Streaming')
 
 // Browsers require ~1s delay before pointer lock can be re-requested
 const UNLOCK_DELAY_MS = 1250
+
+/** Build the wire-canonical `SessionConfig` from current settings. Sent
+ *  in every InitRequest — the server diffs each field against current
+ *  state and reconfigures the deltas. The renderer's `'none'` quant
+ *  sentinel maps to `undefined` (omitted on the wire); the server reads
+ *  that as no-quantization. Recording is gated to standalone mode,
+ *  matching what the server expects to receive. */
+const buildSessionConfig = async (settings: Settings, isStandaloneMode: boolean): Promise<SessionConfig> => {
+  const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+  const videoOutputDir = recordingEnabled
+    ? ((await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')) ?? null)
+    : null
+  const quant = settings.engine_quant ?? 'none'
+  return {
+    quant: quant !== 'none' ? quant : undefined,
+    scene_authoring: settings.scene_authoring_enabled ?? false,
+    action_logging: settings.debug_overlays?.action_logging ?? false,
+    video_recording: recordingEnabled,
+    video_output_dir: videoOutputDir,
+    cap_inference_fps: settings.cap_inference_fps ?? true
+  }
+}
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo, shutdown } = usePortal()
@@ -248,51 +271,25 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         ? `${selectedModel}+scene_authoring+${quant}`
         : `${selectedModel}+${quant}`
 
-      // Recording is standalone-only: in server mode the server owns its own
-      // output directory, so we never send enable=true or a directory path.
-      const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
-      const videoOutputDir = recordingEnabled
-        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
-        : undefined
-
       // App version — embedded into recording metadata so MP4s carry a
       // self-describing record of what Biome build produced them. Best-effort;
       // a fetch failure just omits the field from the metadata.
       const diag = await invoke('get-runtime-diagnostics-meta').catch(() => null)
       const biomeVersion = diag?.app_version
 
+      const config = await buildSessionConfig(settings, isStandaloneMode)
       const metrics = await sendInit({
         model: selectedModel,
+        config,
         seed_image_data: imageData,
         seed_filename: seedFilename,
-        scene_authoring: settings.scene_authoring_enabled ?? false,
-        action_logging: settings.debug_overlays?.action_logging ?? false,
-        video_recording: recordingEnabled,
-        video_output_dir: videoOutputDir,
-        biome_version: biomeVersion,
-        quant: quant !== 'none' ? quant : undefined,
-        cap_inference_fps: settings.cap_inference_fps ?? true
+        biome_version: biomeVersion
       })
       applyInitResponse(metrics)
     }
 
     bootstrap().catch((err) => log.error('Bootstrap failed:', err))
-  }, [
-    state,
-    states.LOADING,
-    isConnected,
-    isStandaloneMode,
-    settings?.engine_model,
-    settings?.engine_quant,
-    settings?.cap_inference_fps,
-    settings.scene_authoring_enabled,
-    settings.debug_overlays?.action_logging,
-    settings.recording?.enabled,
-    settings.recording?.output_dir,
-    sendInit,
-    applyInitResponse,
-    setPlaceholderFrame
-  ])
+  }, [state, states.LOADING, isConnected, isStandaloneMode, settings, sendInit, applyInitResponse, setPlaceholderFrame])
 
   useEffect(() => {
     if (!isConnected) {
@@ -301,21 +298,27 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isConnected, setPlaceholderFrame])
 
-  // Live-toggle action logging / video recording during streaming without a full re-bootstrap
+  // Live re-apply of the session config during streaming. Any change to
+  // a live-toggleable SessionConfig field (action logging, video
+  // recording, inference cap) re-sends the full config; the server diffs
+  // against current state and applies whatever differs without tearing
+  // the session down. Model / quant / scene-authoring changes can't be
+  // hot-swapped — those trigger a full lifecycle reconnect instead, so
+  // they're deliberately not in this dep list to avoid racing the
+  // reconnect with a stale-state init send.
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
   useEffect(() => {
     if (!isStreaming || !isConnected) return
-    const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
     const run = async () => {
-      const videoOutputDir = recordingEnabled
-        ? await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')
-        : undefined
+      const current = settingsRef.current
+      const config = await buildSessionConfig(current, isStandaloneMode)
       await sendInit({
-        action_logging: settings.debug_overlays?.action_logging ?? false,
-        video_recording: recordingEnabled,
-        video_output_dir: videoOutputDir
+        model: current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
+        config
       })
     }
-    run().catch((err) => log.error('Failed to toggle action logging / video recording:', err))
+    run().catch((err) => log.error('Failed to re-apply session config:', err))
   }, [
     isStreaming,
     isConnected,
@@ -323,16 +326,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings.debug_overlays?.action_logging,
     settings.recording?.enabled,
     settings.recording?.output_dir,
+    settings.cap_inference_fps,
     sendInit
   ])
-
-  // Live-toggle inference FPS cap during streaming without a full re-bootstrap
-  useEffect(() => {
-    if (!isStreaming || !isConnected) return
-    sendInit({ cap_inference_fps: settings.cap_inference_fps ?? true }).catch((err) =>
-      log.error('Failed to toggle inference FPS cap:', err)
-    )
-  }, [isStreaming, isConnected, settings.cap_inference_fps, sendInit])
 
   // Pointer lock controls
   const requestPointerLock = useCallback(() => {
@@ -767,10 +763,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       const result = await invoke('get-seed-image-base64', filename)
       if (!result) return
       lastSeedRef.current = { filename, imageData: result.base64 }
-      const metrics = await sendInit({ seed_image_data: result.base64, seed_filename: filename })
+      const config = await buildSessionConfig(settingsRef.current, isStandaloneMode)
+      const metrics = await sendInit({
+        model: settingsRef.current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
+        config,
+        seed_image_data: result.base64,
+        seed_filename: filename
+      })
       applyInitResponse(metrics)
     },
-    [sendInit, applyInitResponse]
+    [sendInit, applyInitResponse, isStandaloneMode]
   )
 
   const value: StreamingContextValue = {
