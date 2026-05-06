@@ -1,16 +1,16 @@
 import { useEffect, useReducer } from 'react'
-import { buildStreamingLifecycleSyncPayload } from '../../context/streamingLifecyclePayload'
+import { buildStreamingLifecycleSyncPayload } from '../../context/streaming/streamingLifecyclePayload'
 import {
   createStreamingLifecycleEffectHandlers,
   runStreamingLifecycleEffects
-} from '../../context/streamingLifecycleEffects'
+} from '../../context/streaming/streamingLifecycleEffects'
 import {
   initialStreamingLifecycleState,
   STREAMING_LIFECYCLE_EVENT,
   streamingLifecycleReducer
-} from '../../context/streamingLifecycleMachine'
-import type { ConnectionStatus } from '../useWebSocket'
-import type { PortalState } from '../../context/portalStateMachine'
+} from '../../context/streaming/streamingLifecycleMachine'
+import type { ConnectionStatus } from '../engine/useWebSocket'
+import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { TranslatableError } from '../../i18n'
 import type { Settings } from '../../types/settings'
 import { createLogger } from '../../utils/logger'

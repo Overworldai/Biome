@@ -1,4 +1,4 @@
-import type { SceneEditState, SceneEditEvent } from '../sceneEditMachine'
+import type { SceneEditState, SceneEditEvent } from './sceneEditMachine'
 import { createStreamingContext } from './createStreamingContext'
 import type { PauseState } from '../../hooks/streaming/usePauseState'
 

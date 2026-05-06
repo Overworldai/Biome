@@ -4,7 +4,7 @@ import {
   sceneEditReducer,
   type SceneEditEvent,
   type SceneEditState
-} from '../../context/sceneEditMachine'
+} from '../../context/streaming/sceneEditMachine'
 
 /** The scene-edit overlay state machine plus its 500 ms post-close
  *  grace window. The grace flag is used by the lifecycle machine to

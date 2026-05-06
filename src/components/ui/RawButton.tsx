@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react'
-import { useUISound } from '../../hooks/useUISound'
+import { useUISound } from '../../hooks/audio/useUISound'
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger'
 

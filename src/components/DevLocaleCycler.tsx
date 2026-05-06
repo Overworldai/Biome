@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettings } from '../hooks/settingsContextValue'
+import { useSettings } from '../hooks/settings/settingsContextValue'
 import { LOCALE_DISPLAY_NAMES, resolveLocale, SUPPORTED_LOCALES, type SupportedLocale } from '../i18n'
 
 const TOAST_MS = 1500

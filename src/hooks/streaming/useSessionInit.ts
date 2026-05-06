@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '../../bridge'
 import { buildSessionConfig } from '../../context/streaming/sessionConfig'
-import type { PortalState } from '../../context/portalStateMachine'
+import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
 import { DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../../types/settings'
 import { createLogger } from '../../utils/logger'

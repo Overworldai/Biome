@@ -1,4 +1,4 @@
-import { useUISound } from '../hooks/useUISound'
+import { useUISound } from '../hooks/audio/useUISound'
 import { useTranslation } from 'react-i18next'
 
 type SocialCtaRowProps = {

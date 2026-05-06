@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ENGINE_MODES, type EngineMode } from '../../types/settings'
-import type { PortalState } from '../../context/portalStateMachine'
+import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { TranslatableError } from '../../i18n'
 import { createLogger } from '../../utils/logger'
 

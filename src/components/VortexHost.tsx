@@ -11,7 +11,7 @@
  * moves it away from any previous owner.
  */
 import { useRef, useEffect } from 'react'
-import { useVortex } from '../context/vortexContextValue'
+import { useVortex } from '../context/vortex/vortexContextValue'
 
 type VortexHostProps = {
   mode: 'portal' | 'loading'

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StageId } from '../../stages'
 import type { TranslatableError } from '../../i18n'
-import { runWarmConnectionFlow, toTranslatableError } from '../../context/streamingWarmConnection'
-import type { UseEngineResult } from '../useEngineApi'
+import { runWarmConnectionFlow, toTranslatableError } from '../../context/streaming/streamingWarmConnection'
+import type { UseEngineResult } from '../engine/useEngineApi'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Warm')

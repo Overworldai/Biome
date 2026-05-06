@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../../i18n'
 import { SETTINGS_CONTROL_BASE, SETTINGS_OUTLINE_HOVER } from '../../styles'
-import { useUISound } from '../../hooks/useUISound'
+import { useUISound } from '../../hooks/audio/useUISound'
 import SettingsRow from './SettingsRow'
 
 type SettingsCheckboxProps = {

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../../i18n'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
-import { useUISound } from '../../hooks/useUISound'
+import { useUISound } from '../../hooks/audio/useUISound'
 
 type SettingsSelectOptionBase = {
   value: string

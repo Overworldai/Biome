@@ -1,5 +1,5 @@
 import type { DragEvent, ReactNode } from 'react'
-import { useUISound } from '../hooks/useUISound'
+import { useUISound } from '../hooks/audio/useUISound'
 
 type DragButtonHandler = (event: DragEvent<HTMLButtonElement>) => void
 

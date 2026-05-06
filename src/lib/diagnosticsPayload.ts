@@ -10,7 +10,7 @@
  */
 
 import { invoke } from '../bridge'
-import type { ServerConnection } from '../hooks/useWebSocket'
+import type { ServerConnection } from '../hooks/engine/useWebSocket'
 import type {
   DiagnosticsApp,
   DiagnosticsClient,

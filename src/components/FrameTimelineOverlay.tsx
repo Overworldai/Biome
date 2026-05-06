@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useConnection } from '../context/streaming/connection'
 import { useFrames } from '../context/streaming/frames'
-import { useSettings } from '../hooks/settingsContextValue'
+import { useSettings } from '../hooks/settings/settingsContextValue'
 
 const OVERLAY_BG = 'bg-black/50'
 const OVERLAY_BORDER = 'border border-white/20'

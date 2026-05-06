@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import useGameInput from '../../hooks/useGameInput'
+import useGameInput from '../../hooks/input/useGameInput'
 import type { InputCode, ServerCode } from '../../types/input'
 import type { Keybindings } from '../../types/settings'
 

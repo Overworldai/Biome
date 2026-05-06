@@ -1,6 +1,6 @@
 import type { TranslatableError } from '../../i18n'
 import type { StageId } from '../../stages'
-import type { ConnectionStatus, ServerConnection } from '../../hooks/useWebSocket'
+import type { ConnectionStatus, ServerConnection } from '../../hooks/engine/useWebSocket'
 import { createStreamingContext } from './createStreamingContext'
 
 export type ConnectionContextValue = {

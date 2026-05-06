@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { DEFAULT_KEYBINDINGS, type ControlBindKey, type Keybindings, type Settings } from '../../types/settings'
-import { GAME_ACTIONS, getKeybindConflict } from '../../hooks/useGameInput'
+import { GAME_ACTIONS, getKeybindConflict } from '../../hooks/input/useGameInput'
 import SettingsSection from '../ui/SettingsSection'
 import Slider from '../ui/Slider'
 import Button from '../ui/Button'

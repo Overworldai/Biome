@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useAudio } from '../context/audioContextValue'
-import { usePortal } from '../context/portalContextValue'
+import { useAudio } from '../context/audio/audioContextValue'
+import { usePortal } from '../context/portal/portalContextValue'
 import { useConnection } from '../context/streaming/connection'
 import { useSession } from '../context/streaming/session'
 

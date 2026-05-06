@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GAME_ACTIONS } from '../../hooks/useGameInput'
+import { GAME_ACTIONS } from '../../hooks/input/useGameInput'
 import type { Settings } from '../../types/settings'
 import SettingsSection from '../ui/SettingsSection'
 import Slider from '../ui/Slider'

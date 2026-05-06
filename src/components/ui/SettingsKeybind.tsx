@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, SETTINGS_OUTLINE_HOVER } from '../../styles'
-import { useUISound } from '../../hooks/useUISound'
-import { MOUSE_CODES } from '../../hooks/useGameInput'
+import { useUISound } from '../../hooks/audio/useUISound'
+import { MOUSE_CODES } from '../../hooks/input/useGameInput'
 import type { DisplayLabel, InputCode } from '../../types/input'
 
 const MOUSE_CODE_LABELS: Record<InputCode, DisplayLabel> = {

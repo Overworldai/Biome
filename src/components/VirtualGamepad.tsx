@@ -3,7 +3,7 @@
  *  the live stick deflections (polled directly from `navigator.getGamepads()`).
  *  Fades out after a few seconds of inactivity. */
 
-import { GAMEPAD_CODES } from '../hooks/useGameInput'
+import { GAMEPAD_CODES } from '../hooks/input/useGameInput'
 import type { InputCode } from '../types/input'
 
 const U = 4 // matches VirtualKeyboard/VirtualMouse unit (cqh)

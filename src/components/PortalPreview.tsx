@@ -1,5 +1,5 @@
 import { useRef, type CSSProperties, type ReactNode } from 'react'
-import { usePortalMediaMount } from '../hooks/usePortalMediaMount'
+import { usePortalMediaMount } from '../hooks/portal/usePortalMediaMount'
 import PortalSparks from './PortalSparks'
 import { PORTAL_ENTER_DURATION_MS, PORTAL_SHRINK_DURATION_MS, PORTAL_SHRINK_END_SCALE } from '../lib/portalAnimation'
 

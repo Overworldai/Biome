@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../../i18n'
-import { FocusScope } from '../../context/FocusScopeContext'
+import { FocusScope } from '../../context/focus/FocusScopeContext'
 
 type ModalProps = {
   title: TranslationKey

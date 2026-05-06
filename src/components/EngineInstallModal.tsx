@@ -4,10 +4,10 @@ import { invoke } from '../bridge'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { useConnection } from '../context/streaming/connection'
 import { useEngine } from '../context/streaming/engine'
-import { useEngineLogs } from '../hooks/useEngineLogs'
+import { useEngineLogs } from '../hooks/engine/useEngineLogs'
 import Button from './ui/Button'
 import ServerLogDisplay from './ServerLogDisplay'
-import { FocusScope } from '../context/FocusScopeContext'
+import { FocusScope } from '../context/focus/FocusScopeContext'
 import { useTranslation } from 'react-i18next'
 
 type EngineInstallModalProps = {

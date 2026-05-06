@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useConnection } from '../context/streaming/connection'
 import { useInput } from '../context/streaming/input'
-import { useSettings } from '../hooks/settingsContextValue'
+import { useSettings } from '../hooks/settings/settingsContextValue'
 import type { InputCode } from '../types/input'
-import { CODE_MAP } from '../hooks/useGameInput'
+import { CODE_MAP } from '../hooks/input/useGameInput'
 import VirtualGamepad, { type GamepadAxes } from './VirtualGamepad'
 
 // QWERTY keyboard layout (simple labels) — copied verbatim from owl-tube/app/InputDisplay/constants.ts

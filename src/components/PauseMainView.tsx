@@ -9,7 +9,7 @@ import Slider from './ui/Slider'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../styles'
 import { ALLOW_USER_SCENES } from '../constants'
 import { useTranslation } from 'react-i18next'
-import { useSettings } from '../hooks/settingsContextValue'
+import { useSettings } from '../hooks/settings/settingsContextValue'
 
 interface PauseMainViewProps {
   scenes: SeedRecord[]

@@ -1,4 +1,4 @@
-import { useUISound } from '../hooks/useUISound'
+import { useUISound } from '../hooks/audio/useUISound'
 import SceneCardBase from './SceneCardBase'
 
 interface SceneCardAddButtonProps {
