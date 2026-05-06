@@ -24,7 +24,8 @@ import { createLogger } from '../utils/logger'
 import { buildSessionConfig } from './streaming/sessionConfig'
 import { useFrameRenderer } from './streaming/useFrameRenderer'
 import { useInputLoop } from './streaming/useInputLoop'
-import { usePauseState, UNLOCK_DELAY_MS } from './streaming/usePauseState'
+import { usePauseState } from './streaming/usePauseState'
+import { usePointerLock } from './streaming/usePointerLock'
 import { ConnectionContext, type ConnectionContextValue } from './streaming/connection'
 import { EngineContext, type EngineContextValue } from './streaming/engine'
 import { SessionContext, type SessionContextValue } from './streaming/session'
@@ -104,7 +105,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
   const [loadingConnectionJobSeq, setLoadingConnectionJobSeq] = useState(0)
-  const [pointerLockBlockedSeq, setPointerLockBlockedSeq] = useState(0)
   const [preConnectionStage, setPreConnectionStage] = useState<StageId | null>(null)
   const [isFreshInstall, setIsFreshInstall] = useState(false)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
@@ -287,30 +287,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendInit
   ])
 
-  // Pointer lock controls
-  const requestPointerLock = useCallback(() => {
-    if (connectionLost) {
-      return false
-    }
-
-    // https://github.com/electron/electron/issues/33587 seems like there's no way around the pointerLock cooldown
-    // Enforce browser pointer-lock cooldown after an unlock to avoid dropped lock requests.
-    if (pauseState.kind === 'paused' && !pauseState.canUnpause) {
-      const remainingMs = Math.max(0, UNLOCK_DELAY_MS - pauseState.elapsedMs)
-      log.info(`Pointer lock request blocked by cooldown (${remainingMs}ms remaining)`)
-      setPointerLockBlockedSeq((seq) => seq + 1)
-      return false
-    }
-
-    containerRef.current?.requestPointerLock()
-    return true
-  }, [connectionLost, pauseState])
-
-  const exitPointerLock = useCallback(() => {
-    if (document.pointerLockElement) {
-      document.exitPointerLock()
-    }
-  }, [])
+  const {
+    blockedSeq: pointerLockBlockedSeq,
+    request: requestPointerLock,
+    exit: exitPointerLock
+  } = usePointerLock({ containerRef, pauseState, connectionLost })
 
   const handleReset = useCallback(() => {
     resetScene()
