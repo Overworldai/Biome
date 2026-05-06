@@ -60,11 +60,11 @@ const computeFrametimeStats = (entries: { time: number; value: number }[]): Fram
 }
 
 const PerformanceStatsOverlay = () => {
-  const { isStreaming, connection, inputLatency, latentGenMs, temporalCompression, frameId } = useStreaming()
+  const { isStreaming, server, inputLatency, latentGenMs, temporalCompression, frameId } = useStreaming()
   const { settings } = useSettings()
   const enabled = settings.debug_overlays.performance_stats
   const quant = settings.engine_quant ?? 'none'
-  const modelLabel = connection.model ? (quant !== 'none' ? `${connection.model} (${quant})` : connection.model) : '—'
+  const modelLabel = server.model ? (quant !== 'none' ? `${server.model} (${quant})` : server.model) : '—'
   const [, setTick] = useState(0)
   const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
 
@@ -82,8 +82,8 @@ const PerformanceStatsOverlay = () => {
   const perceivedFps = latentFps * temporalCompression
 
   // Static identifiers come from the init payload; runtime metrics from frame headers.
-  const systemInfo = connection.systemInfo
-  const runtime = connection.runtime
+  const systemInfo = server.systemInfo
+  const runtime = server.runtime
   const vramTotalBytes = systemInfo?.vram_total_bytes ?? null
   const vramPercent =
     runtime && runtime.vramUsedBytes >= 0 && vramTotalBytes && vramTotalBytes > 0
@@ -149,7 +149,7 @@ const PerformanceStatsOverlay = () => {
       <Row label="MDL" value={modelLabel} color={COLOR_WARM} />
       <Row
         label="ROLL"
-        value={`${connection.inferenceFps ? formatElapsed(frameId / connection.inferenceFps) : '--'} (${frameId}f)`}
+        value={`${server.inferenceFps ? formatElapsed(frameId / server.inferenceFps) : '--'} (${frameId}f)`}
         color={COLOR_HUD}
         className="mb-[0.4cqh]"
       />

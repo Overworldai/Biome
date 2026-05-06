@@ -27,9 +27,9 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type BuildDiagnosticsOptions = {
-  /** Current server connection state (system info, runtime metrics, error
-   *  snapshot).  The single source of truth for everything server-side. */
-  connection: ServerConnection
+  /** Current server identity + runtime metrics + error snapshot.  The
+   *  single source of truth for everything server-side. */
+  server: ServerConnection
 
   /** What went wrong. */
   error: DiagnosticsError
@@ -85,8 +85,8 @@ function buildClient(
   }
 }
 
-function buildServer(connection: ServerConnection): DiagnosticsServer | null {
-  const si = connection.systemInfo
+function buildServer(server: ServerConnection): DiagnosticsServer | null {
+  const si = server.systemInfo
   if (!si) return null
   return {
     cpu: si.cpu_name ?? null,
@@ -101,20 +101,20 @@ function buildServer(connection: ServerConnection): DiagnosticsServer | null {
 
 function buildSession(
   opts: NonNullable<BuildDiagnosticsOptions['session']>,
-  connection: ServerConnection
+  server: ServerConnection
 ): DiagnosticsSession {
   return {
     engine_mode: opts.engineMode,
     requested_model: opts.requestedModel,
     requested_quant: opts.requestedQuant,
-    confirmed_model: connection.model || null,
-    inference_fps: connection.inferenceFps
+    confirmed_model: server.model || null,
+    inference_fps: server.inferenceFps
   }
 }
 
-function buildStateAtError(connection: ServerConnection): DiagnosticsStateAtError | null {
-  const snap = connection.lastErrorSnapshot
-  const rt = connection.runtime
+function buildStateAtError(server: ServerConnection): DiagnosticsStateAtError | null {
+  const snap = server.lastErrorSnapshot
+  const rt = server.runtime
   if (!snap && !rt) return null
   return {
     process_rss_bytes: snap?.process_rss_bytes ?? null,
@@ -142,15 +142,15 @@ export async function buildDiagnosticsPayload(opts: BuildDiagnosticsOptions): Pr
     generated_at: new Date().toISOString(),
     app: buildApp(meta),
     client: buildClient(meta, sys),
-    server: buildServer(opts.connection),
+    server: buildServer(opts.server),
     error: opts.error,
     electron_logs: electronLogs,
     server_logs: opts.serverLogs
   }
 
   if (opts.session) {
-    payload.session = buildSession(opts.session, opts.connection)
-    payload.state_at_error = buildStateAtError(opts.connection)
+    payload.session = buildSession(opts.session, opts.server)
+    payload.state_at_error = buildStateAtError(opts.server)
   }
 
   return payload

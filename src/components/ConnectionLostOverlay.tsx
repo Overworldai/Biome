@@ -14,7 +14,7 @@ const ConnectionLostOverlay = () => {
     connectionLost,
     cancelConnection,
     reconnectAfterConnectionLost,
-    connection,
+    server,
     wsLogs,
     wsAllLogs,
     error,
@@ -36,7 +36,7 @@ const ConnectionLostOverlay = () => {
 
   const buildPayload = useCallback(() => {
     return buildDiagnosticsPayload({
-      connection,
+      server,
       error: {
         message: errorDetail,
         stage: statusStage,
@@ -49,7 +49,7 @@ const ConnectionLostOverlay = () => {
         requestedQuant: settings.engine_quant ?? null
       }
     })
-  }, [connection, wsAllLogs, errorDetail, statusStage, isServerMode, settings.engine_model, settings.engine_quant])
+  }, [server, wsAllLogs, errorDetail, statusStage, isServerMode, settings.engine_model, settings.engine_quant])
 
   return (
     <div

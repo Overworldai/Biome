@@ -20,7 +20,7 @@ type DebugTabProps = {
 
 const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }, ref) => {
   const { t } = useTranslation()
-  const { connection, wsAllLogs } = useStreaming()
+  const { server, wsAllLogs } = useStreaming()
   const isServerMode = settings.engine_mode === ENGINE_MODES.SERVER
   const [menuPerformanceStats, setMenuPerformanceStats] = useState(settings.debug_overlays.performance_stats)
   const [menuInputOverlay, setMenuInputOverlay] = useState(settings.debug_overlays.input)
@@ -50,7 +50,7 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
       // setup / lifecycle / settings / etc.); we just hand it the
       // WS-sourced server events.
       const payload = await buildDiagnosticsPayload({
-        connection,
+        server,
         error: { message: null },
         serverLogs: wsAllLogs,
         session: {
@@ -64,7 +64,7 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
     } catch {
       setDiagnosticsStatus(t('app.settings.debugMetrics.copyFailed'))
     }
-  }, [connection, wsAllLogs, isServerMode, settings.engine_model, settings.engine_quant, t])
+  }, [server, wsAllLogs, isServerMode, settings.engine_model, settings.engine_quant, t])
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>

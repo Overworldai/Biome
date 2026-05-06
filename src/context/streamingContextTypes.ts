@@ -45,7 +45,7 @@ export type StreamingContextValue = {
   showStats: boolean
   setShowStats: (value: boolean) => void
   stats: StreamingStats
-  connection: ServerConnection
+  server: ServerConnection
   inputLatency: number | null
   frameTimelineRef: { current: { currentIndex: number; slotDisplayAts: (number | null)[] } }
 
@@ -89,7 +89,7 @@ export type StreamingContextValue = {
   reconnectAfterConnectionLost: () => Promise<void>
   cancelConnection: () => Promise<void>
   prepareReturnToMainMenu: () => Promise<void>
-  reset: () => void
+  resetScene: () => void
   resume: () => void
   requestPointerLock: () => boolean
   exitPointerLock: () => void

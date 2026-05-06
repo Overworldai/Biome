@@ -15,7 +15,7 @@ type EngineInstallModalProps = {
 
 const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
   const { t } = useTranslation()
-  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup, connection } = useStreaming()
+  const { engineSetupInProgress, setupProgress, engineSetupError, abortEngineSetup, server } = useStreaming()
   const { logs: installLogs, clear: clearInstallLogs } = useEngineLogs(true)
   const [isExportingInstallDiagnostics, setIsExportingInstallDiagnostics] = useState(false)
   const [isAbortingInstall, setIsAbortingInstall] = useState(false)
@@ -31,7 +31,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
   const buildPayload = useCallback(
     () =>
       buildDiagnosticsPayload({
-        connection,
+        server,
         error: {
           message: engineSetupError,
           stage: setupProgress,
@@ -42,7 +42,7 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
         // the only log source.
         serverLogs: []
       }),
-    [connection, engineSetupError, engineSetupInProgress, setupProgress]
+    [server, engineSetupError, engineSetupInProgress, setupProgress]
   )
 
   const handleExportInstallDiagnostics = async () => {

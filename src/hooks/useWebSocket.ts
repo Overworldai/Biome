@@ -129,7 +129,7 @@ type WebSocketHook = {
   frameGenMsRef: { current: number }
   frameTemporalCompressionRef: { current: number }
   frameIdRef: { current: number }
-  connection: ServerConnection
+  server: ServerConnection
   inputLatency: number | null
   logs: LogRecord[]
   allLogs: LogRecord[]
@@ -140,7 +140,9 @@ type WebSocketHook = {
   sendInit: (params: Omit<InitRequest, 'type' | 'req_id'>) => Promise<InitResponseData>
   applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
-  reset: () => void
+  /** Send a scene-reset notification to the server. Triggered by the
+   *  user pressing the reset keybind. */
+  resetScene: () => void
   request: WsRequest
   clearLogs: () => void
 }
@@ -154,7 +156,7 @@ export const useWebSocket = (): WebSocketHook => {
   const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
   const [logs, setLogs] = useState<LogRecord[]>([])
-  const [connection, setConnection] = useState<ServerConnection>(emptyConnection)
+  const [server, setServer] = useState<ServerConnection>(emptyConnection)
   const [inputLatency, setInputLatency] = useState<number | null>(null)
   const allLogsRef = useRef<LogRecord[]>([])
 
@@ -299,7 +301,7 @@ export const useWebSocket = (): WebSocketHook => {
                     }
                   : null
             }
-            setConnection((prev) => ({ ...prev, runtime }))
+            setServer((prev) => ({ ...prev, runtime }))
           }
           setFrame(imageBlob)
           setHasRealFrame(true)
@@ -349,7 +351,7 @@ export const useWebSocket = (): WebSocketHook => {
             const error = resolveServerMessage(msg, 'app.server.fallbackError')
             setStatus({ kind: 'error', error })
             if (msg.snapshot) {
-              setConnection((prev) => ({ ...prev, lastErrorSnapshot: msg.snapshot ?? prev.lastErrorSnapshot }))
+              setServer((prev) => ({ ...prev, lastErrorSnapshot: msg.snapshot ?? prev.lastErrorSnapshot }))
             }
             break
           }
@@ -358,7 +360,7 @@ export const useWebSocket = (): WebSocketHook => {
             // the hardware identity is available even if the session crashes
             // during model load / device warmup.
             const { type: _type, ...info } = msg
-            setConnection((prev) => ({ ...prev, systemInfo: info }))
+            setServer((prev) => ({ ...prev, systemInfo: info }))
             break
           }
           case 'warning':
@@ -402,7 +404,7 @@ export const useWebSocket = (): WebSocketHook => {
         // copied after the server dies still has the hardware identity + the
         // error-time snapshot.  Model/inferenceFps/runtime are session-scoped
         // and get reset.
-        setConnection((prev) => ({
+        setServer((prev) => ({
           ...emptyConnection(),
           systemInfo: prev.systemInfo,
           lastErrorSnapshot: prev.lastErrorSnapshot
@@ -427,7 +429,7 @@ export const useWebSocket = (): WebSocketHook => {
     setGenTime(null)
     // Explicit user-initiated disconnect — clear everything including any
     // previously cached systemInfo, since this isn't a "server died" case.
-    setConnection(emptyConnection())
+    setServer(emptyConnection())
     setInputLatency(null)
     setStatusStage(null)
     setHasRealFrame(false)
@@ -468,7 +470,7 @@ export const useWebSocket = (): WebSocketHook => {
   }, [])
 
   const applyInitResponse = useCallback((metrics: InitResponseData) => {
-    setConnection((prev) => ({
+    setServer((prev) => ({
       ...prev,
       systemInfo: metrics.system_info ?? prev.systemInfo,
       model: metrics.model || null,
@@ -481,7 +483,7 @@ export const useWebSocket = (): WebSocketHook => {
     setFrame(frame)
   }, [])
 
-  const reset = useCallback(() => {
+  const resetScene = useCallback(() => {
     const notif: ResetNotif = { type: 'reset' }
     sendNotif(notif)
   }, [sendNotif])
@@ -509,7 +511,7 @@ export const useWebSocket = (): WebSocketHook => {
     frameGenMsRef,
     frameTemporalCompressionRef,
     frameIdRef,
-    connection,
+    server,
     inputLatency,
     logs,
     allLogs: allLogsRef.current,
@@ -520,7 +522,7 @@ export const useWebSocket = (): WebSocketHook => {
     sendInit,
     applyInitResponse,
     setPlaceholderFrame,
-    reset,
+    resetScene,
     request,
     clearLogs
   }

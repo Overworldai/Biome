@@ -25,7 +25,7 @@ type TerminalDisplayProps = {
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { t } = useTranslation()
-  const { connectionStatus, statusStage, isFreshInstall, error, cancelConnection, wsLogs, wsAllLogs, connection } =
+  const { connectionStatus, statusStage, isFreshInstall, error, cancelConnection, wsLogs, wsAllLogs, server } =
     useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode, settings } = useSettings()
@@ -89,7 +89,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     // it the WS-side history. The error message is captured separately
     // in `error.message`, so no synthetic log record is needed.
     return buildDiagnosticsPayload({
-      connection,
+      server,
       error: {
         message: errorDetail,
         stage: statusStage,
@@ -105,7 +105,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
     })
   }, [
     wsAllLogs,
-    connection,
+    server,
     connectionStatus,
     errorDetail,
     isServerMode,

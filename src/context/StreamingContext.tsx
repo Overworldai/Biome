@@ -92,7 +92,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     frameGenMsRef,
     frameTemporalCompressionRef,
     frameIdRef,
-    connection,
+    server,
     inputLatency,
     logs: wsLogs,
     allLogs: wsAllLogs,
@@ -103,7 +103,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     sendInit,
     applyInitResponse,
     setPlaceholderFrame,
-    reset,
+    resetScene,
     request: wsRequest,
     clearLogs: clearWsLogs
   } = useWebSocket()
@@ -359,9 +359,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   const handleReset = useCallback(() => {
-    reset()
+    resetScene()
     requestPointerLock()
-  }, [reset, requestPointerLock])
+  }, [resetScene, requestPointerLock])
 
   const handleSceneEdit = useCallback(() => {
     exitPointerLock()
@@ -390,7 +390,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         // Init is considered complete once applyInitResponse has set model.
         // Used to gate the LOADING → STREAMING transition so an error between
         // session.ready and the init response doesn't leak us into streaming.
-        initCompleted: connection.model !== null,
+        initCompleted: server.model !== null,
         isPointerLocked,
         settingsOpen,
         isPaused,
@@ -407,7 +407,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     settings.scene_authoring_enabled,
     engineError,
     hasReceivedFrame,
-    connection.model,
+    server.model,
     isPointerLocked,
     settingsOpen,
     isPaused,
@@ -805,7 +805,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     },
     showStats,
     setShowStats,
-    connection,
+    server,
     inputLatency,
     frameTimelineRef,
 
@@ -853,7 +853,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     reconnectAfterConnectionLost,
     cancelConnection,
     prepareReturnToMainMenu,
-    reset,
+    resetScene,
     resume,
     requestPointerLock,
     exitPointerLock,
