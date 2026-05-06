@@ -27,7 +27,6 @@ dist-ssr
 *.bak
 
 .venv/
-uv.lock
 __pycache__
 
 # Electron build artifacts

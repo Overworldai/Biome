@@ -16,6 +16,7 @@ uvx ruff check .          # Lint
 uvx ruff format .         # Auto-format (also: --check to verify without rewriting)
 uvx ruff check --fix .    # Auto-fix lint issues where ruff has a safe rewrite
 uvx basedpyright .        # Type-check (strict mode)
+uv lock --check           # Verify uv.lock is in sync with pyproject.toml
 ```
 
 All must pass before a commit lands. The typed Pydantic boundaries in `server/protocol.py` and the `Connection` invariants in `server/session/` are what we rely on to catch real semantic errors.
@@ -406,7 +407,9 @@ Electron Forge with Vite plugin. Three separate Vite configs and tsconfigs:
 
 `forge.config.ts` bundles `server-components` and `seeds` as extra resources.
 
-**Local builds**: `npm run build` copies `server-components/` and other extra resource directories verbatim into the installer. Make sure your workspace is clean before building — any untracked files (`.venv`, `__pycache__`, `uv.lock`, `server.log`, etc.) will be included and can bloat the installer by gigabytes. Production releases should be cut via CI from a clean checkout.
+**Local builds**: `npm run build` copies `server-components/` and other extra resource directories verbatim into the installer. Make sure your workspace is clean before building — any untracked files (`.venv`, `__pycache__`, `server.log`, etc.) will be included and can bloat the installer by gigabytes. Production releases should be cut via CI from a clean checkout.
+
+`server-components/uv.lock` **is** tracked and ships in the installer — it's the canonical lockfile (universal across the Linux/x86_64 + Windows/AMD64 environments declared in `[tool.uv].environments`) and the standalone-mode mirror copies it into `world_engine/` alongside `pyproject.toml`. Without it, `uv sync` on a user's machine has to resolve from PyPI and can drift between users. Whenever you change `server-components/pyproject.toml`, regenerate the lockfile with `cd server-components && uv lock` and commit both files together; CI runs `uv lock --check` to catch drift.
 
 **Linux AppImage builds**: The default AppImage produced by `@reforged/maker-appimage` is a thin wrapper — it relies on the host system having GTK3, X11, NSS, a C toolchain (for Triton's runtime CUDA JIT), and a correctly-configured OpenSSL. In practice, this fails on many distros: OpenSuSE Tumbleweed crashes on OpenSSL config ([#92](https://github.com/Overworldai/Biome/issues/92)), NixOS has none of these at standard FHS paths, and most desktop Linux installs don't ship `gcc`. Our post-processing pipeline turns the bare AppImage into a self-contained bundle that works across distributions.
 
