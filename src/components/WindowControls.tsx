@@ -49,7 +49,7 @@ const WindowControls = () => {
     userSelect: 'none'
   } as CSSProperties
 
-  const hidden = isStreaming && !session.isPaused
+  const hidden = isStreaming && session.pause.kind !== 'paused'
 
   return (
     <div className="absolute inset-x-0 top-0 z-9998 h-10" style={dragRegionStyle}>

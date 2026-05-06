@@ -24,6 +24,7 @@ import { createLogger } from '../utils/logger'
 import { buildSessionConfig } from './streaming/sessionConfig'
 import { useFrameRenderer } from './streaming/useFrameRenderer'
 import { useInputLoop } from './streaming/useInputLoop'
+import { usePauseState, UNLOCK_DELAY_MS } from './streaming/usePauseState'
 import { ConnectionContext, type ConnectionContextValue } from './streaming/connection'
 import { EngineContext, type EngineContextValue } from './streaming/engine'
 import { SessionContext, type SessionContextValue } from './streaming/session'
@@ -35,9 +36,6 @@ import { SurfaceContext, type SurfaceContextValue } from './streaming/surface'
 import { initialSceneEditState, sceneEditReducer } from './sceneEditMachine'
 
 const log = createLogger('Streaming')
-
-// Browsers require ~1s delay before pointer lock can be re-requested
-const UNLOCK_DELAY_MS = 1250
 
 export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo } = usePortal()
@@ -95,9 +93,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const transportError = wsConnectionError(connectionStatus)
   const { getSeedsDirPath, openSeedsDir, seedsDir } = useSeedsDir()
 
-  const [isPaused, setIsPaused] = useState(false)
-  const [pausedAt, setPausedAt] = useState<number | null>(null)
-  const [pauseElapsedMs, setPauseElapsedMs] = useState(0)
+  const { state: pauseState, pause: pauseSession, resume: resumeSession } = usePauseState()
+  const isPaused = pauseState.kind === 'paused'
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sceneEditState, dispatchSceneEdit] = useReducer(sceneEditReducer, initialSceneEditState)
   const sceneEditActive = sceneEditState.phase !== 'inactive'
@@ -129,7 +126,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
   const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen && !connectionLost && !sceneEditActive
-  const canUnpause = pauseElapsedMs >= UNLOCK_DELAY_MS
 
   // Time-based grace period after scene edit closes — suppresses pauseOnPointerUnlock
   // long enough for the delayed requestPointerLock() to succeed.
@@ -141,21 +137,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       return () => clearTimeout(timer)
     }
   }, [sceneEditActive]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Track elapsed time since pause for unlock delay
-  useEffect(() => {
-    if (!isPaused || !pausedAt) {
-      setPauseElapsedMs(0)
-      return
-    }
-
-    // Update elapsed time every 50ms for smooth countdown
-    const interval = setInterval(() => {
-      setPauseElapsedMs(Date.now() - pausedAt)
-    }, 50)
-
-    return () => clearInterval(interval)
-  }, [isPaused, pausedAt])
 
   // Check engine status on mount (for standalone mode)
   useEffect(() => {
@@ -314,8 +295,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     // https://github.com/electron/electron/issues/33587 seems like there's no way around the pointerLock cooldown
     // Enforce browser pointer-lock cooldown after an unlock to avoid dropped lock requests.
-    if (isPaused && !canUnpause) {
-      const remainingMs = Math.max(0, UNLOCK_DELAY_MS - pauseElapsedMs)
+    if (pauseState.kind === 'paused' && !pauseState.canUnpause) {
+      const remainingMs = Math.max(0, UNLOCK_DELAY_MS - pauseState.elapsedMs)
       log.info(`Pointer lock request blocked by cooldown (${remainingMs}ms remaining)`)
       setPointerLockBlockedSeq((seq) => seq + 1)
       return false
@@ -323,7 +304,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
     containerRef.current?.requestPointerLock()
     return true
-  }, [connectionLost, isPaused, canUnpause, pauseElapsedMs])
+  }, [connectionLost, pauseState])
 
   const exitPointerLock = useCallback(() => {
     if (document.pointerLockElement) {
@@ -480,10 +461,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   const resume = useCallback(() => {
     setSettingsOpen(false)
-    setIsPaused(false)
-    setPausedAt(null)
+    resumeSession()
     sendPause(false)
-  }, [sendPause])
+  }, [sendPause, resumeSession])
 
   useEffect(() => {
     const { effects } = lifecycleState
@@ -497,8 +477,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       warmFlowCancelledRef,
       setConnectionLost,
       setSettingsOpen,
-      setIsPaused,
-      setPausedAt,
+      pauseSession,
+      resumeSession,
       disconnect,
       transitionTo,
       states,
@@ -509,7 +489,18 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
 
     runStreamingLifecycleEffects({ effects, handlers })
-  }, [lifecycleState, transitionTo, states, disconnect, settings, exitPointerLock, sendPause, resume])
+  }, [
+    lifecycleState,
+    transitionTo,
+    states,
+    disconnect,
+    settings,
+    exitPointerLock,
+    sendPause,
+    resume,
+    pauseSession,
+    resumeSession
+  ])
 
   const { registerCanvas, canvasReady, frameTimelineRef } = useFrameRenderer({
     frame,
@@ -531,9 +522,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     disconnect()
     setEngineError(null)
     setSettingsOpen(false)
-    setIsPaused(false)
-    setPausedAt(null)
-  }, [exitPointerLock, disconnect])
+    resumeSession()
+  }, [exitPointerLock, disconnect, resumeSession])
 
   const stopServerIfRunning = useCallback(async () => {
     if (isStandaloneMode && isServerRunning) {
@@ -628,15 +618,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   const sessionValue = useMemo<SessionContextValue>(
     () => ({
-      isPaused,
-      pausedAt,
-      pauseElapsedMs,
-      canUnpause,
-      unlockDelayMs: UNLOCK_DELAY_MS,
+      pause: pauseState,
       settingsOpen,
       sceneEdit: { state: sceneEditState, dispatch: dispatchSceneEdit }
     }),
-    [isPaused, pausedAt, pauseElapsedMs, canUnpause, settingsOpen, sceneEditState, dispatchSceneEdit]
+    [pauseState, settingsOpen, sceneEditState, dispatchSceneEdit]
   )
 
   const framesValue = useMemo<FramesContextValue>(

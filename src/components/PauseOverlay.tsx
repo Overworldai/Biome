@@ -150,7 +150,7 @@ const PauseOverlayContent = () => {
  *  never lingers in the DOM while inactive. */
 const PauseOverlay = () => {
   const session = useSession()
-  const visible = session.isPaused && session.sceneEdit.state.phase === 'inactive'
+  const visible = session.pause.kind === 'paused' && session.sceneEdit.state.phase === 'inactive'
 
   return (
     <AnimatePresence>

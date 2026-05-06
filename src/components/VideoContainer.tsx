@@ -27,7 +27,7 @@ const VideoContainer = () => {
 
   const cursorClass = input.pointerLock.isLocked
     ? 'cursor-none'
-    : session.isPaused
+    : session.pause.kind === 'paused'
       ? 'cursor-default'
       : isStreaming
         ? 'cursor-crosshair'
@@ -48,7 +48,7 @@ const VideoContainer = () => {
         height={720}
         className={`
           pointer-events-none absolute inset-0 size-full object-cover select-none
-          ${session.isPaused ? 'brightness-[0.8] saturate-[0.62]' : ''}
+          ${session.pause.kind === 'paused' ? 'brightness-[0.8] saturate-[0.62]' : ''}
         `}
       />
     </div>

@@ -38,12 +38,12 @@ const AudioController = () => {
   // Swap between gameplay and pause music with crossfade
   useEffect(() => {
     if (state !== states.STREAMING) return
-    if (session.isPaused) {
+    if (session.pause.kind === 'paused') {
       crossfadeLoop('music_gameplay', 'music_pause', MUSIC_FADE_S)
     } else {
       crossfadeLoop('music_pause', 'music_gameplay', MUSIC_FADE_S)
     }
-  }, [session.isPaused, state, states, crossfadeLoop])
+  }, [session.pause.kind, state, states, crossfadeLoop])
 
   // On error during loading: play error sound
   useEffect(() => {

@@ -1,13 +1,10 @@
 import type { SceneEditState, SceneEditEvent } from '../sceneEditMachine'
 import { createStreamingContext } from './createStreamingContext'
+import type { PauseState } from './usePauseState'
 
 /** Pause / scene-edit / menu lifecycle state for the active session. */
 export type SessionContextValue = {
-  isPaused: boolean
-  pausedAt: number | null
-  pauseElapsedMs: number
-  canUnpause: boolean
-  unlockDelayMs: number
+  pause: PauseState
   settingsOpen: boolean
   sceneEdit: {
     state: SceneEditState

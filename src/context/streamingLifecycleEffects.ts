@@ -36,8 +36,8 @@ type CreateHandlersArgs = {
   warmFlowCancelledRef: { current: boolean }
   setConnectionLost: (value: boolean) => void
   setSettingsOpen: (value: boolean) => void
-  setIsPaused: (value: boolean) => void
-  setPausedAt: (value: number | null) => void
+  pauseSession: () => void
+  resumeSession: () => void
   disconnect: () => void
   transitionTo: (state: PortalState) => void | Promise<boolean>
   states: PortalStatesLike
@@ -61,8 +61,8 @@ export const createStreamingLifecycleEffectHandlers = ({
   warmFlowCancelledRef,
   setConnectionLost,
   setSettingsOpen,
-  setIsPaused,
-  setPausedAt,
+  pauseSession,
+  resumeSession,
   disconnect,
   transitionTo,
   states,
@@ -96,8 +96,7 @@ export const createStreamingLifecycleEffectHandlers = ({
       warmBootstrapSentRef.current = false
       setConnectionLost(false)
       setSettingsOpen(false)
-      setIsPaused(false)
-      setPausedAt(null)
+      resumeSession()
       disconnect()
     },
     transitionToLoadingAfterIntentionalDisconnect: () => {
@@ -114,8 +113,7 @@ export const createStreamingLifecycleEffectHandlers = ({
       lastAppliedModelRef.current = null
       exitPointerLock()
       setSettingsOpen(false)
-      setIsPaused(false)
-      setPausedAt(null)
+      resumeSession()
     },
     resumeOnPointerLock: () => {
       resume()
@@ -123,8 +121,7 @@ export const createStreamingLifecycleEffectHandlers = ({
     },
     pauseOnPointerUnlock: () => {
       setSettingsOpen(true)
-      setIsPaused(true)
-      setPausedAt(Date.now())
+      pauseSession()
       sendPause(true)
       log.info('Pointer unlocked - settings opened, paused')
     },

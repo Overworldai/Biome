@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAudio } from '../context/audioContextValue'
 import { useInput } from '../context/streaming/input'
 import { useSession } from '../context/streaming/session'
+import { UNLOCK_DELAY_MS } from '../context/streaming/usePauseState'
 
 /**
  * Centralizes pointer-lock cooldown feedback: plays an error sound and
@@ -10,10 +11,13 @@ import { useSession } from '../context/streaming/session'
  */
 export function usePointerLockFeedback(isActive: boolean) {
   const { play } = useAudio()
-  const { canUnpause, unlockDelayMs, pauseElapsedMs } = useSession()
+  const { pause } = useSession()
   const pointerLockBlockedSeq = useInput().pointerLock.blockedSeq
   const [showUnlockHint, setShowUnlockHint] = useState(false)
   const lastBlockedSeqRef = useRef(pointerLockBlockedSeq)
+
+  const canUnpause = pause.kind === 'paused' && pause.canUnpause
+  const elapsedMs = pause.kind === 'paused' ? pause.elapsedMs : 0
 
   // Reset when overlay deactivates
   useEffect(() => {
@@ -46,7 +50,7 @@ export function usePointerLockFeedback(isActive: boolean) {
     }
   }, [canUnpause])
 
-  const pauseLockoutRemainingMs = Math.max(0, unlockDelayMs - pauseElapsedMs)
+  const pauseLockoutRemainingMs = Math.max(0, UNLOCK_DELAY_MS - elapsedMs)
   const showPauseLockoutTimer = isActive && !canUnpause && pauseLockoutRemainingMs > 0 && showUnlockHint
   const pauseLockoutSecondsText = (pauseLockoutRemainingMs / 1000).toFixed(1)
 
