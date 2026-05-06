@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAudio } from '../context/audioContextValue'
 import { useInput } from '../context/streaming/input'
 import { useSession } from '../context/streaming/session'
-import { UNLOCK_DELAY_MS } from '../context/streaming/usePauseState'
+import { UNLOCK_DELAY_MS } from './streaming/usePauseState'
 
 /**
  * Centralizes pointer-lock cooldown feedback: plays an error sound and
