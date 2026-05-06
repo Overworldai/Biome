@@ -16,16 +16,19 @@ import useWebSocket, {
   connectionError as wsConnectionError
 } from '../hooks/useWebSocket'
 import { useSettings } from '../hooks/settingsContextValue'
-import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
+import { DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
 import useEngineApi from '../hooks/useEngineApi'
 import useSeedsDir from '../hooks/useSeedsDir'
 import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
 import { buildSessionConfig } from './streaming/sessionConfig'
+import { useEngineRespawn } from '../hooks/streaming/useEngineRespawn'
 import { useFrameRenderer } from '../hooks/streaming/useFrameRenderer'
+import { useLoadingFailureCleanup } from '../hooks/streaming/useLoadingFailureCleanup'
 import { useInputLoop } from '../hooks/streaming/useInputLoop'
 import { usePauseState } from '../hooks/streaming/usePauseState'
 import { usePointerLock } from '../hooks/streaming/usePointerLock'
+import { useSceneEdit } from '../hooks/streaming/useSceneEdit'
 import { ConnectionContext, type ConnectionContextValue } from './streaming/connection'
 import { EngineContext, type EngineContextValue } from './streaming/engine'
 import { SessionContext, type SessionContextValue } from './streaming/session'
@@ -34,7 +37,6 @@ import { InputContext, type InputContextValue } from './streaming/input'
 import { SeedsContext, type SeedsContextValue } from './streaming/seeds'
 import { WebsocketContext, type WebsocketContextValue } from './streaming/websocket'
 import { SurfaceContext, type SurfaceContextValue } from './streaming/surface'
-import { initialSceneEditState, sceneEditReducer } from './sceneEditMachine'
 
 const log = createLogger('Streaming')
 
@@ -97,9 +99,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state: pauseState, pause: pauseSession, resume: resumeSession } = usePauseState()
   const isPaused = pauseState.kind === 'paused'
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [sceneEditState, dispatchSceneEdit] = useReducer(sceneEditReducer, initialSceneEditState)
-  const sceneEditActive = sceneEditState.phase !== 'inactive'
-  const [sceneEditGrace, setSceneEditGrace] = useState(false)
+  const sceneEdit = useSceneEdit()
   const mouseSensitivity = settings.mouse_sensitivity
   const gamepadSensitivity = settings.gamepad_sensitivity
   const [connectionLost, setConnectionLost] = useState(false)
@@ -109,13 +109,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [isFreshInstall, setIsFreshInstall] = useState(false)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
-  const prevEngineModeRef = useRef(engineMode)
-  const prevOfflineModeRef = useRef(settings.offline_mode ?? false)
   const lastAppliedModelRef = useRef<string | null>(null)
   const lastSeedRef = useRef<{ filename: string; imageData: string } | null>(null)
   const warmBootstrapSentRef = useRef(false)
   const warmFlowCancelledRef = useRef(false)
-  const loadingFailureStopHandledRef = useRef(false)
 
   // Once the WebSocket starts reporting its own stages, clear the pre-connection stage
   const effectiveStatusStage = useMemo(() => statusStage ?? preConnectionStage, [statusStage, preConnectionStage])
@@ -125,18 +122,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   const hasReceivedFrame = frame !== null
   const isStreaming = state === states.STREAMING
-  const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen && !connectionLost && !sceneEditActive
-
-  // Time-based grace period after scene edit closes — suppresses pauseOnPointerUnlock
-  // long enough for the delayed requestPointerLock() to succeed.
-  useEffect(() => {
-    if (sceneEditActive) {
-      setSceneEditGrace(true)
-    } else if (sceneEditGrace) {
-      const timer = setTimeout(() => setSceneEditGrace(false), 500)
-      return () => clearTimeout(timer)
-    }
-  }, [sceneEditActive]) // eslint-disable-line react-hooks/exhaustive-deps
+  const inputEnabled = isStreaming && isReady && !isPaused && !settingsOpen && !connectionLost && !sceneEdit.isActive
 
   // Check engine status on mount (for standalone mode)
   useEffect(() => {
@@ -145,42 +131,18 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isStandaloneMode, checkEngineStatus])
 
-  // Restart whenever a spawn-time setting changes: engine_mode (local-vs-remote
-  // process) or offline_mode (env vars injected at spawn). The env only takes
-  // effect when the Python process starts, so a mid-stream toggle needs a full
-  // teardown-and-reconnect. Offline changes only matter in standalone mode.
-  useEffect(() => {
-    const prevMode = prevEngineModeRef.current
-    const prevOffline = prevOfflineModeRef.current
-    const nextOffline = settings.offline_mode ?? false
-    prevEngineModeRef.current = engineMode
-    prevOfflineModeRef.current = nextOffline
-
-    const engineModeChanged = !!prevMode && prevMode !== engineMode
-    const offlineChanged = prevOffline !== nextOffline && engineMode === ENGINE_MODES.STANDALONE
-
-    if (!engineModeChanged && !offlineChanged) return
-    if (state === states.MAIN_MENU) return
-
-    log.info(`Respawn: engine_mode ${prevMode}->${engineMode}, offline ${prevOffline}->${nextOffline}`)
-
-    disconnect()
-    if (isServerRunning) {
-      stopServer().catch((err) => log.error('Failed to stop server during respawn:', err))
-    }
-    setEngineError(null)
-    transitionTo(states.LOADING)
-  }, [
+  useEngineRespawn({
     engineMode,
-    settings.offline_mode,
-    state,
-    states.MAIN_MENU,
-    states.LOADING,
-    disconnect,
+    offlineMode: settings.offline_mode ?? false,
+    portalState: state,
+    mainMenuState: states.MAIN_MENU,
+    loadingState: states.LOADING,
     isServerRunning,
+    disconnect,
     stopServer,
+    setEngineError,
     transitionTo
-  ])
+  })
 
   // Resolve local seeds dir path on mount (does not require server availability)
   useEffect(() => {
@@ -300,8 +262,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   const handleSceneEdit = useCallback(() => {
     exitPointerLock()
-    dispatchSceneEdit({ type: 'OPEN' })
-  }, [exitPointerLock])
+    sceneEdit.dispatch({ type: 'OPEN' })
+  }, [exitPointerLock, sceneEdit])
 
   const { pressedKeys, mouseButtons, pressedGamepad, scrollActive, isPointerLocked } = useInputLoop({
     enabled: inputEnabled,
@@ -332,7 +294,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         isPointerLocked,
         settingsOpen,
         isPaused,
-        sceneEditActive: sceneEditGrace,
+        sceneEditActive: sceneEdit.graceActive,
         sceneAuthoringEnabled: settings.scene_authoring_enabled,
         engineQuant: settings.engine_quant
       })
@@ -349,7 +311,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isPointerLocked,
     settingsOpen,
     isPaused,
-    sceneEditGrace
+    sceneEdit.graceActive
   ])
 
   useEffect(() => {
@@ -409,36 +371,15 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingConnectionJobSeq])
 
-  useEffect(() => {
-    const loadingFailed =
-      state === states.LOADING && (connectionStatus.kind === 'error' || connectionStatus.kind === 'idle')
-
-    if (!loadingFailed || !engineError) {
-      loadingFailureStopHandledRef.current = false
-      return
-    }
-    if (!isStandaloneMode || !isServerRunning) return
-    if (loadingFailureStopHandledRef.current) return
-
-    loadingFailureStopHandledRef.current = true
-    ;(async () => {
-      log.info('Loading failure detected - stopping standalone server')
-      try {
-        await stopServer()
-      } catch (stopErr) {
-        log.error('Failed to stop standalone server after loading failure:', stopErr)
-      }
-    })()
-  }, [
-    state,
-    states.LOADING,
+  useLoadingFailureCleanup({
+    portalState: state,
+    loadingState: states.LOADING,
     connectionStatus,
     engineError,
     isStandaloneMode,
     isServerRunning,
-    stopServer,
-    checkEngineStatus
-  ])
+    stopServer
+  })
 
   const resume = useCallback(() => {
     setSettingsOpen(false)
@@ -601,9 +542,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       pause: pauseState,
       settingsOpen,
-      sceneEdit: { state: sceneEditState, dispatch: dispatchSceneEdit }
+      sceneEdit: { state: sceneEdit.state, dispatch: sceneEdit.dispatch }
     }),
-    [pauseState, settingsOpen, sceneEditState, dispatchSceneEdit]
+    [pauseState, settingsOpen, sceneEdit]
   )
 
   const framesValue = useMemo<FramesContextValue>(
