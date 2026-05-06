@@ -123,120 +123,114 @@ const findFirstOpenStandalonePort = async (
   return null
 }
 
-export const runWarmConnectionFlow = async ({
-  currentServerPort,
-  isStandaloneMode,
-  offlineMode,
-  endpointUrl,
-  serverUrl,
-  isServerRunning,
-  checkServerReady,
-  checkPortInUse,
-  checkServerRunning,
-  getLastServerExitTail,
-  probeServerHealthViaMain,
-  checkEngineStatus,
-  startServer,
-  setupEngine,
-  connect,
-  onServerError,
-  onStage,
-  onFreshInstall,
-  isCancelled,
-  log
-}: WarmConnectionOptions): Promise<void> => {
-  const classify = (err: unknown) => toTranslatableError(err, offlineMode)
-  const healthWait = () =>
-    waitForHealthy(wsUrl, probeServerHealthViaMain, checkServerRunning, getLastServerExitTail, isCancelled, log)
+/** Sentinel thrown by the standalone helpers to short-circuit a flow
+ *  the user has cancelled mid-flight. The main catch handler routes
+ *  via `isCancelled()` rather than the error type, so this exists only
+ *  to make exit-via-throw legible in the helpers. */
+class CancelledError extends Error {
+  constructor() {
+    super('warm-flow cancelled')
+    this.name = 'CancelledError'
+  }
+}
 
-  // In server mode, derive WS URL from the configured server URL (or override endpoint).
-  // In standalone mode, wsUrl is always overwritten below with localhost:{port}.
-  let wsUrl = toWebSocketUrl(endpointUrl || serverUrl || localhostUrl(STANDALONE_PORT))
+/** Attach to a managed standalone server that's already running.
+ *  Resolves the port (from the prop, or by asking the engine), opens
+ *  the WS URL, and (if the server isn't yet ready) waits for health.
+ *  Throws on health-poll failure or on cancellation between awaits. */
+const attachToRunningStandalone = async (opts: WarmConnectionOptions): Promise<string> => {
+  let selectedPort = opts.currentServerPort ?? STANDALONE_PORT
+  if (!opts.currentServerPort) {
+    const status = await opts.checkEngineStatus()
+    if (status?.server_port) selectedPort = status.server_port
+  }
+  const wsUrl = toWebSocketUrl(localhostUrl(selectedPort))
 
-  if (isStandaloneMode) {
-    onStage('setup.checking')
-    log.info('Standalone mode enabled, checking server state...')
-    let selectedPort = STANDALONE_PORT
-
-    // Only attach to an already-running server when it's Biome's managed process.
-    if (isServerRunning) {
-      selectedPort = currentServerPort ?? selectedPort
-      if (!currentServerPort) {
-        const status = await checkEngineStatus()
-        if (status?.server_port) selectedPort = status.server_port
-      }
-      wsUrl = toWebSocketUrl(localhostUrl(selectedPort))
-
-      const serverAlreadyReady = await checkServerReady()
-      if (serverAlreadyReady) {
-        log.info('Managed standalone server already running and ready on port', selectedPort)
-      } else {
-        onStage('setup.health_poll')
-        log.info('Managed standalone server running but not ready; polling health on port', selectedPort)
-        try {
-          await healthWait()
-          if (isCancelled()) return
-        } catch (err) {
-          if (isCancelled()) return
-          onServerError(classify(err))
-          return
-        }
-      }
-    } else {
-      onStage('setup.port_scan')
-      const openPort = await findFirstOpenStandalonePort(STANDALONE_PORT, checkPortInUse, log)
-      if (openPort === null) {
-        onServerError(
-          new TranslatableError('app.server.noOpenPort', {
-            rangeStart: String(STANDALONE_PORT),
-            rangeEnd: String(STANDALONE_PORT + STANDALONE_PORT_SCAN_LIMIT - 1)
-          })
-        )
-        return
-      }
-      selectedPort = openPort
-      wsUrl = toWebSocketUrl(localhostUrl(selectedPort))
-
-      const status = await checkEngineStatus()
-      if (!status?.uv_installed || !status?.repo_cloned || !status?.dependencies_synced) {
-        onFreshInstall(true)
-        onStage('setup.engine')
-        log.info('Engine not fully set up, running auto-setup...')
-        try {
-          await setupEngine(onStage)
-          if (isCancelled()) return
-        } catch (err) {
-          if (isCancelled()) return
-          onServerError(classify(err))
-          return
-        }
-      }
-
-      try {
-        onStage('setup.server_start')
-        log.info('Starting standalone server on port', selectedPort)
-        await startServer(selectedPort)
-        onStage('setup.health_poll')
-        log.info('Server started, polling health until ready...')
-        await healthWait()
-        if (isCancelled()) return
-      } catch (err) {
-        if (isCancelled()) return
-        onServerError(classify(err))
-        return
-      }
-    }
+  if (await opts.checkServerReady()) {
+    opts.log.info('Managed standalone server already running and ready on port', selectedPort)
+    return wsUrl
   }
 
-  onStage('setup.connecting')
+  opts.onStage('setup.health_poll')
+  opts.log.info('Managed standalone server running but not ready; polling health on port', selectedPort)
+  await waitForHealthy(
+    wsUrl,
+    opts.probeServerHealthViaMain,
+    opts.checkServerRunning,
+    opts.getLastServerExitTail,
+    opts.isCancelled,
+    opts.log
+  )
+  return wsUrl
+}
 
-  const responsive = await probeServerHealth(wsUrl, probeServerHealthViaMain)
+/** Boot a fresh managed standalone server: scan for an open port,
+ *  run engine setup if missing, start the server, and wait for it to
+ *  become healthy. Throws on any failure or on cancellation between
+ *  awaits. */
+const bootStandalone = async (opts: WarmConnectionOptions): Promise<string> => {
+  opts.onStage('setup.port_scan')
+  const port = await findFirstOpenStandalonePort(STANDALONE_PORT, opts.checkPortInUse, opts.log)
+  if (port === null) {
+    throw new TranslatableError('app.server.noOpenPort', {
+      rangeStart: String(STANDALONE_PORT),
+      rangeEnd: String(STANDALONE_PORT + STANDALONE_PORT_SCAN_LIMIT - 1)
+    })
+  }
+  const wsUrl = toWebSocketUrl(localhostUrl(port))
+
+  const status = await opts.checkEngineStatus()
+  if (!status?.uv_installed || !status?.repo_cloned || !status?.dependencies_synced) {
+    opts.onFreshInstall(true)
+    opts.onStage('setup.engine')
+    opts.log.info('Engine not fully set up, running auto-setup...')
+    await opts.setupEngine(opts.onStage)
+    if (opts.isCancelled()) throw new CancelledError()
+  }
+
+  opts.onStage('setup.server_start')
+  opts.log.info('Starting standalone server on port', port)
+  await opts.startServer(port)
+  opts.onStage('setup.health_poll')
+  opts.log.info('Server started, polling health until ready...')
+  await waitForHealthy(
+    wsUrl,
+    opts.probeServerHealthViaMain,
+    opts.checkServerRunning,
+    opts.getLastServerExitTail,
+    opts.isCancelled,
+    opts.log
+  )
+  return wsUrl
+}
+
+export const runWarmConnectionFlow = async (opts: WarmConnectionOptions): Promise<void> => {
+  // In server mode, derive WS URL from the configured server URL (or override endpoint).
+  // In standalone mode, wsUrl is overwritten below with localhost:{port}.
+  let wsUrl = toWebSocketUrl(opts.endpointUrl || opts.serverUrl || localhostUrl(STANDALONE_PORT))
+
+  if (opts.isStandaloneMode) {
+    opts.onStage('setup.checking')
+    opts.log.info('Standalone mode enabled, checking server state...')
+    try {
+      // Only attach to an already-running server when it's Biome's managed process.
+      wsUrl = opts.isServerRunning ? await attachToRunningStandalone(opts) : await bootStandalone(opts)
+    } catch (err) {
+      if (opts.isCancelled()) return
+      opts.onServerError(toTranslatableError(err, opts.offlineMode))
+      return
+    }
+    if (opts.isCancelled()) return
+  }
+
+  opts.onStage('setup.connecting')
+  const responsive = await probeServerHealth(wsUrl, opts.probeServerHealthViaMain)
   if (!responsive) {
-    onServerError(new TranslatableError('app.server.notResponding', { url: toHealthUrl(wsUrl) }))
+    opts.onServerError(new TranslatableError('app.server.notResponding', { url: toHealthUrl(wsUrl) }))
     return
   }
 
-  if (isCancelled()) return
-  log.info('Connecting to WebSocket endpoint:', wsUrl)
-  connect(wsUrl)
+  if (opts.isCancelled()) return
+  opts.log.info('Connecting to WebSocket endpoint:', wsUrl)
+  opts.connect(wsUrl)
 }
