@@ -37,9 +37,12 @@ const EngineInstallModal = ({ onClose }: EngineInstallModalProps) => {
           stage: setupProgress,
           in_progress: engineSetupInProgress
         },
-        logs: installLogs
+        // Install runs entirely on the Electron side — no WS connection
+        // yet — so the Electron-process tail (pulled by the builder) is
+        // the only log source.
+        serverLogs: []
       }),
-    [connection, engineSetupError, engineSetupInProgress, installLogs, setupProgress]
+    [connection, engineSetupError, engineSetupInProgress, setupProgress]
   )
 
   const handleExportInstallDiagnostics = async () => {

@@ -370,32 +370,34 @@ const goose = {
         websocketConnectionFailed: 'Failed to create WebSocket connection',
         connectionFailed: 'Connection failed — the goose may have flown away',
         connectionLost: 'Connection lost — the goose may have flown away',
-        startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not honking back at {{url}}',
         networkUnreachable:
           "Can't reach the open waters of the internet. If your engine and model are already nested in the pond, switch on Pond Isolation in General Settings to waddle along without a network.\n\nDetails: {{message}}",
         error: {
+          protocolVersionMismatch:
+            "Honk! These geese aren't speaking the same language: client is on protocol v{{client}}, server is on v{{server}}. Waddle over to an update so the flock matches.",
+          serverBusy:
+            'Honk! Another goose is already nesting on this pond. Wait for them to flap off, then waddle back.',
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
+          initFailed: 'Honk! Session initialization failed',
           sceneAuthoringModelLoadFailed: 'Pond authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
           sceneAuthoringEmptyPrompt: 'Empty prompt',
           sceneAuthoringModelNotLoaded: 'Pond authoring model not loaded. Enable Pond Authoring in settings.',
           sceneAuthoringAlreadyInProgress: 'Pond authoring already in progress',
-          contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
-          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
+          deviceRecoveryFailed: 'Goose-honking GPU error — recovery failed. Please reconnect.'
         },
         warning: {
           missingSeedData: 'Missing seed image data',
           invalidSeedData: 'Invalid seed image data',
           seedSafetyCheckFailed: 'Seed failed safety check',
           seedUnsafe: 'Seed marked as unsafe',
-          seedLoadFailed: 'Failed to load seed image',
-          missingModelId: 'Missing model ID'
+          seedLoadFailed: 'Failed to load seed image'
         }
       }
     },
@@ -423,23 +425,15 @@ const goose = {
       session: {
         waiting_for_seed: 'Choosing a pond...',
         loading_model: {
-          import: 'Importing model framework...',
           load: 'Loading model...',
-          instantiate: 'Loading model into memory...',
-          done: 'The goose has landed!'
+          instantiate: 'Loading model into memory...'
         },
-        inpainting: {
-          load: 'Loading pond authoring model...',
-          ready: 'Pond authoring model ready.'
-        },
-        safety: {
-          load: 'Loading fox detector...',
-          ready: 'Fox detector ready.'
+        scene_authoring: {
+          load: 'Loading Pond Authoring models...'
         },
         warmup: {
           reset: 'Stretching wings...',
           seed: 'Warming up with test frame...',
-          prompt: 'Warming up with test prompt...',
           compile: 'Optimizing for your GPU...'
         },
         init: {

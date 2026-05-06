@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TranslatableError, type TranslationKey } from '../i18n'
-import type { DiagnosticsPayload } from '../types/ipc'
+import type { DiagnosticsPayload, LogRecord } from '../types/ipc'
 import Button from './ui/Button'
 import { findFocusables, findInDirection, focusSmooth } from '../lib/focusNavigation'
 import { getActiveScopeRoot } from '../context/focusScopeStack'
@@ -12,6 +12,73 @@ const MAX_GITHUB_LOG_LINES = 10
 const MAX_GITHUB_LOG_CHARS = 450
 const DISCORD_HELP_URL = 'https://discord.gg/overworld'
 const GITHUB_NEW_ISSUE_URL = 'https://github.com/Overworldai/Biome/issues/new'
+
+/** Per-level text-color class.  Severity drives saturation: info stays
+ *  near the body color, warning warms up, error is the bright variant.
+ *  Unknown levels (e.g. structlog `debug` events the user hasn't filtered
+ *  yet) fall back to the body color. */
+const LEVEL_TEXT_CLASS: Record<string, string> = {
+  debug: 'text-text-muted',
+  info: 'text-text-modal-muted',
+  warning: 'text-(--color-warning)',
+  error: 'text-(--color-error-bright)',
+  critical: 'text-(--color-error-bright)'
+}
+
+/** Render a single `LogRecord` as a flat string for places the renderer
+ *  can't markup — clipboard exports, GitHub-issue body, etc.  Layout
+ *  matches the Python / Electron text renderers: `timestamp [level]
+ *  [logger] event k=v ...`, with the logger pill before the event so the
+ *  fixed prefix block stays scannable. */
+function formatLogRecordPlainText(record: LogRecord): string {
+  const parts: string[] = []
+  if (record.timestamp) parts.push(record.timestamp)
+  if (record.level) parts.push(`[${record.level}]`)
+  if (record.logger) parts.push(`[${record.logger}]`)
+  parts.push(record.event)
+  if (record.fields) {
+    for (const [k, v] of Object.entries(record.fields)) parts.push(`${k}=${String(v)}`)
+  }
+  let line = parts.join(' ')
+  if (record.exception) line += `\n${record.exception}`
+  return line
+}
+
+/** Pretty-render a single `LogRecord` in the on-screen log panel.
+ *  Visual hierarchy mirrors the plain-text formatter — timestamp dim,
+ *  level uppercase + color-coded, logger pill subdued, event prominent,
+ *  fields as `key=value` after the event, exception preformatted underneath. */
+function LogLine({ record }: { record: LogRecord }) {
+  const levelClass = (record.level && LEVEL_TEXT_CLASS[record.level]) ?? 'text-text-modal-muted'
+  return (
+    <div
+      className={`
+        break-all whitespace-pre-wrap
+        ${levelClass}
+      `}
+    >
+      {record.timestamp && <span className="text-text-muted/70">{record.timestamp} </span>}
+      {record.level && <span className="font-bold uppercase">{record.level} </span>}
+      {record.logger && <span className="text-text-muted/70">[{record.logger}] </span>}
+      <span>{record.event}</span>
+      {record.fields && Object.keys(record.fields).length > 0 && (
+        <span className="text-text-muted/80">
+          {' '}
+          {Object.entries(record.fields).map(([k, v], i) => (
+            <span key={k}>
+              {i > 0 && ' '}
+              <span className="text-text-muted/60">{k}=</span>
+              <span>{String(v)}</span>
+            </span>
+          ))}
+        </span>
+      )}
+      {record.exception && (
+        <pre className="mt-[0.4cqh] whitespace-pre-wrap text-error-bright/80">{record.exception}</pre>
+      )}
+    </div>
+  )
+}
 
 function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
@@ -59,7 +126,7 @@ const ServerLogDisplay = ({
   showProgress?: boolean
   progressMessage?: string | null
   headerAction?: ReactNode
-  logs?: string[]
+  logs?: LogRecord[]
   title?: TranslationKey | null
   buildDiagnosticsPayload: () => Promise<DiagnosticsPayload>
   showExportAction?: boolean
@@ -143,7 +210,7 @@ const ServerLogDisplay = ({
       const appVersion = payload.app.version
       const platform = payload.client.os
       const gpuName = payload.server?.gpu ?? 'unknown'
-      const recentLogsRaw = logs.slice(-MAX_GITHUB_LOG_LINES).join('\n')
+      const recentLogsRaw = logs.slice(-MAX_GITHUB_LOG_LINES).map(formatLogRecordPlainText).join('\n')
       const recentLogsTrimmed =
         recentLogsRaw.length > MAX_GITHUB_LOG_CHARS
           ? `${recentLogsRaw.slice(0, MAX_GITHUB_LOG_CHARS)}\n... (truncated)`
@@ -266,11 +333,7 @@ const ServerLogDisplay = ({
         {logs.length === 0 ? (
           <div className="text-text-muted italic">{t('app.loading.terminal.waitingForServerOutput')}</div>
         ) : (
-          logs.map((line, index) => (
-            <div key={index} className="break-all whitespace-pre-wrap text-text-modal-muted">
-              {line}
-            </div>
-          ))
+          logs.map((record, index) => <LogLine key={index} record={record} />)
         )}
       </div>
       {progressMessage && (

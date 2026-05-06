@@ -68,12 +68,7 @@ const SceneEditOverlay = () => {
 
     dispatchSceneEdit({ type: 'SUBMIT', prompt: trimmed })
     try {
-      const result = await wsRequest<{
-        elapsed_ms: number
-        original_jpeg_b64?: string
-        preview_jpeg_b64?: string
-        edit_prompt?: string
-      }>('scene_edit', { prompt: trimmed }, 30_000)
+      const result = await wsRequest('scene_edit', { prompt: trimmed }, 30_000)
       dispatchSceneEdit({
         type: 'SUCCESS',
         preview:

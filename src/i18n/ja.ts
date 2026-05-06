@@ -367,14 +367,18 @@ const ja = {
         websocketConnectionFailed: 'WebSocket接続の作成に失敗しました',
         connectionFailed: '接続に失敗しました — サーバーがクラッシュした可能性があります',
         connectionLost: '接続が失われました — サーバーがクラッシュした可能性があります',
-        startupTimeout: 'サーバーの起動がタイムアウトしました — ログを確認してください',
         noOpenPort: '範囲 {{rangeStart}}–{{rangeEnd}} で空きポートが見つかりませんでした',
         notResponding: 'サーバーが {{url}} で応答していません',
         networkUnreachable:
           'インターネットに接続できませんでした。使用したいエンジンとモデルがすでにダウンロード済みであれば、一般設定で「オフラインモード」をオンにすると、ネットワークなしで使用できます。\n\n詳細: {{message}}',
         error: {
+          protocolVersionMismatch:
+            'このサーバーと通信できません：クライアントはプロトコル v{{client}} を使用していますが、サーバーは v{{server}} を使用しています。バージョンが一致するように Biome（またはサーバー）を更新してください。',
+          serverBusy:
+            'サーバーはすでに別のクライアントで使用されています。現在のセッションが終了してから再度お試しください。',
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
+          initFailed: 'セッションの初期化に失敗しました',
           sceneAuthoringModelLoadFailed: 'シーンオーサリングモデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',
@@ -384,17 +388,15 @@ const ja = {
           sceneAuthoringModelNotLoaded:
             'シーンオーサリングモデルが読み込まれていません。設定でシーンオーサリングを有効にしてください。',
           sceneAuthoringAlreadyInProgress: 'シーンオーサリングが既に進行中です',
-          contentFilterLoadFailed: 'コンテンツフィルターの読み込みに失敗しました',
           quantUnsupportedGpu: 'お使いの GPU は {{quant}} 量子化に対応していません。別の量子化設定をお試しください。',
-          cudaRecoveryFailed: 'CUDAエラー — 回復に失敗しました。再接続してください。'
+          deviceRecoveryFailed: 'GPU エラー — 回復に失敗しました。再接続してください。'
         },
         warning: {
           missingSeedData: 'シード画像データがありません',
           invalidSeedData: 'シード画像データが無効です',
           seedSafetyCheckFailed: 'シードの安全性チェックに失敗しました',
           seedUnsafe: 'シードが安全でないとマークされています',
-          seedLoadFailed: 'シード画像の読み込みに失敗しました',
-          missingModelId: 'モデルIDがありません'
+          seedLoadFailed: 'シード画像の読み込みに失敗しました'
         }
       }
     },
@@ -422,23 +424,15 @@ const ja = {
       session: {
         waiting_for_seed: 'シーンを準備しています...',
         loading_model: {
-          import: 'モデルフレームワークを読み込んでいます...',
           load: 'モデルを読み込んでいます...',
-          instantiate: 'モデルをメモリに読み込んでいます...',
-          done: 'モデルを読み込みました。'
+          instantiate: 'モデルをメモリに読み込んでいます...'
         },
-        inpainting: {
-          load: 'シーンオーサリングモデルを読み込んでいます...',
-          ready: 'シーンオーサリングモデルの準備ができました。'
-        },
-        safety: {
-          load: 'コンテンツフィルターを読み込んでいます...',
-          ready: 'コンテンツフィルターの準備ができました。'
+        scene_authoring: {
+          load: 'シーンオーサリングモデルを読み込んでいます...'
         },
         warmup: {
           reset: 'ウォームアップの準備をしています...',
           seed: 'テストフレームでウォームアップしています...',
-          prompt: 'テストプロンプトでウォームアップしています...',
           compile: 'GPU 向けに最適化しています...'
         },
         init: {

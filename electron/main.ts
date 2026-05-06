@@ -5,6 +5,9 @@ import { registerAllIpc } from './ipc/index.js'
 import { stopServerSync } from './lib/serverState.js'
 import { getBackgroundsDir } from './ipc/backgrounds.js'
 import { getCurrentRecordingsDir } from './ipc/recordings.js'
+import { getLogger } from './lib/logger.js'
+
+const log = getLogger('electron.main')
 
 // Register biome-bg / biome-recording as privileged schemes so <video> elements
 // can stream from them. Must be called before app.whenReady().
@@ -166,7 +169,7 @@ app
     createWindow()
   })
   .catch((err) => {
-    console.error('[APP] Failed during startup:', err)
+    log.error('Startup failed', { exception: err instanceof Error ? (err.stack ?? err.message) : String(err) })
     app.quit()
   })
 
@@ -183,24 +186,26 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
-  console.log('[ENGINE] App quitting, stopping server...')
+  log.info('App quitting, stopping server')
   stopServerSync()
 })
 
 process.on('SIGINT', () => {
-  console.log('[ENGINE] Received SIGINT, stopping server...')
+  log.info('Received SIGINT, stopping server')
   stopServerSync()
   process.exit(0)
 })
 
 process.on('SIGTERM', () => {
-  console.log('[ENGINE] Received SIGTERM, stopping server...')
+  log.info('Received SIGTERM, stopping server')
   stopServerSync()
   process.exit(0)
 })
 
 process.on('uncaughtException', (err) => {
-  console.error('[ENGINE] Uncaught exception, stopping server...', err)
+  log.error('Uncaught exception, stopping server', {
+    exception: err instanceof Error ? (err.stack ?? err.message) : String(err)
+  })
   stopServerSync()
   process.exit(1)
 })

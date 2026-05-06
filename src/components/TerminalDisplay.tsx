@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '../bridge'
+import type { TranslationKey } from '../i18n'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { resolveStage } from '../stages'
 import { useStreaming } from '../context/streamingContextValue'
@@ -24,8 +25,17 @@ type TerminalDisplayProps = {
 
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { t } = useTranslation()
-  const { connectionState, statusStage, isFreshInstall, engineError, error, cancelConnection, wsLogs, connection } =
-    useStreaming()
+  const {
+    connectionState,
+    statusStage,
+    isFreshInstall,
+    engineError,
+    error,
+    cancelConnection,
+    wsLogs,
+    wsAllLogs,
+    connection
+  } = useStreaming()
   const { setErrorMode } = useVortex()
   const { isServerMode, settings } = useSettings()
   const { logs: engineLogs } = useEngineLogs(!isServerMode)
@@ -58,10 +68,10 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const progressPercent = currentStage ? Math.max(0, Math.min(100, Math.round(currentStage.percent))) : 0
   const statusText = useMemo(() => {
     if (errorDetail) return t('app.loading.error')
-    if (currentStage?.label) return t(`stage.${currentStage.id}`, { defaultValue: currentStage.label })
+    if (currentStage) return t(`stage.${currentStage.id}` as TranslationKey)
     if (connectionState === 'connecting') return t('app.loading.connecting')
     return t('app.loading.starting')
-  }, [connectionState, currentStage?.id, currentStage?.label, errorDetail, t])
+  }, [connectionState, currentStage, errorDetail, t])
 
   const handleExportDiagnostics = async () => {
     if (isExportingDiagnostics) return
@@ -87,7 +97,9 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   }
 
   const buildPayload = useCallback(() => {
-    const logs = errorDetail ? [...activeLogs, `[ERROR] ${errorDetail}`] : activeLogs
+    // Builder pulls the Electron-process log tail itself; we just hand
+    // it the WS-side history. The error message is captured separately
+    // in `error.message`, so no synthetic log record is needed.
     return buildDiagnosticsPayload({
       connection,
       error: {
@@ -96,7 +108,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
         progress_percent: progressPercent,
         connection_state: connectionState
       },
-      logs,
+      serverLogs: wsAllLogs,
       session: {
         engineMode: isServerMode ? 'server' : 'standalone',
         requestedModel: settings.engine_model ?? null,
@@ -104,7 +116,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
       }
     })
   }, [
-    activeLogs,
+    wsAllLogs,
     connection,
     connectionState,
     errorDetail,

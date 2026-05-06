@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { execSync } from 'node:child_process'
 import os from 'node:os'
+import { getRecentElectronLogs } from '../lib/logger.js'
 
 function resolveCommitHash(): string {
   const envCommit =
@@ -72,6 +73,17 @@ export function registerDebugIpc(): void {
       gpu_feature_status: app.getGPUFeatureStatus()
     }
   })
+
+  // Snapshot of every `LogRecord` produced on the Electron side so far —
+  // both `getLogger` events and the subprocess pass-through that flows
+  // through `parseLogLine`.  Used by diagnostic-export call sites
+  // ("Copy diagnostics" in Debug settings, the loading/error overlays)
+  // to capture the Electron-only events that don't broadcast onto the
+  // `engine-log` channel (e.g. `electron.update`, `electron.settings`,
+  // `engine.diagnostics`).  In server mode this is the only Electron-
+  // process log surface; in standalone mode it complements `wsAllLogs`
+  // (the structured Python events).
+  ipcMain.handle('get-electron-log-tail', () => getRecentElectronLogs())
 
   ipcMain.handle('export-loading-diagnostics', async (_event, reportText: string) => {
     const parentWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]

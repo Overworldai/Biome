@@ -18,7 +18,8 @@ import type {
   DiagnosticsPayload,
   DiagnosticsServer,
   DiagnosticsSession,
-  DiagnosticsStateAtError
+  DiagnosticsStateAtError,
+  LogRecord
 } from '../types/ipc'
 
 // ---------------------------------------------------------------------------
@@ -33,8 +34,12 @@ export type BuildDiagnosticsOptions = {
   /** What went wrong. */
   error: DiagnosticsError
 
-  /** Tail of the server/engine log, most recent last. */
-  logs: string[]
+  /** Server-side log records (WS broadcasts from Python's structlog).
+   *  The builder always pulls the Electron-process rolling buffer via
+   *  `get-electron-log-tail` separately, so callers only need to supply
+   *  the WS-sourced records here.  Pass `[]` when there's no WS history
+   *  (e.g. install-time errors before any connection). */
+  serverLogs: LogRecord[]
 
   /** Session context — present for loading/streaming errors where the user
    *  was actively trying to run a model.  Omitted for install-time errors
@@ -88,7 +93,7 @@ function buildServer(connection: ServerConnection): DiagnosticsServer | null {
     gpu: si.gpu_name ?? null,
     gpu_count: si.gpu_count ?? 0,
     vram_total_bytes: si.vram_total_bytes ?? null,
-    cuda: si.cuda_version ?? null,
+    runtime: si.runtime_version ?? null,
     driver: si.driver_version ?? null,
     torch: si.torch_version ?? null
   }
@@ -124,13 +129,14 @@ function buildStateAtError(connection: ServerConnection): DiagnosticsStateAtErro
 // importing the IPC types directly.
 const fetchMeta = () => invoke('get-runtime-diagnostics-meta')
 const fetchSys = () => invoke('get-system-diagnostics')
+const fetchElectronLogs = () => invoke('get-electron-log-tail')
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export async function buildDiagnosticsPayload(opts: BuildDiagnosticsOptions): Promise<DiagnosticsPayload> {
-  const [meta, sys] = await Promise.all([fetchMeta(), fetchSys()])
+  const [meta, sys, electronLogs] = await Promise.all([fetchMeta(), fetchSys(), fetchElectronLogs()])
 
   const payload: DiagnosticsPayload = {
     generated_at: new Date().toISOString(),
@@ -138,7 +144,8 @@ export async function buildDiagnosticsPayload(opts: BuildDiagnosticsOptions): Pr
     client: buildClient(meta, sys),
     server: buildServer(opts.connection),
     error: opts.error,
-    logs: opts.logs
+    electron_logs: electronLogs,
+    server_logs: opts.serverLogs
   }
 
   if (opts.session) {

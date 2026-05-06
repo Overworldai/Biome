@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStreaming } from '../context/streamingContextValue'
+import { useSettings } from '../hooks/settingsContextValue'
 import Sparkline from './Sparkline'
 
 const BUFFER_SIZE = 60
@@ -61,6 +62,9 @@ const computeFrametimeStats = (entries: { time: number; value: number }[]): Fram
 const PerformanceStatsOverlay = () => {
   const { performanceStatsOverlay, isStreaming, connection, inputLatency, latentGenMs, temporalCompression, frameId } =
     useStreaming()
+  const { settings } = useSettings()
+  const quant = settings.engine_quant ?? 'none'
+  const modelLabel = connection.model ? (quant !== 'none' ? `${connection.model} (${quant})` : connection.model) : '—'
   const [, setTick] = useState(0)
   const [ftStats, setFtStats] = useState<FrametimeStats | null>(null)
 
@@ -142,7 +146,7 @@ const PerformanceStatsOverlay = () => {
     >
       <Row label="CPU" value={systemInfo?.cpu_name ?? '[Unknown CPU]'} color={COLOR_HUD} />
       <Row label="GPU" value={systemInfo?.gpu_name ?? '[Unknown GPU]'} color={COLOR_HUD} />
-      <Row label="MDL" value={connection.model || '\u2014'} color={COLOR_WARM} />
+      <Row label="MDL" value={modelLabel} color={COLOR_WARM} />
       <Row
         label="ROLL"
         value={`${connection.inferenceFps ? formatElapsed(frameId / connection.inferenceFps) : '--'} (${frameId}f)`}

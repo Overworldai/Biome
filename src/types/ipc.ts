@@ -86,7 +86,7 @@ export type DiagnosticsClient = {
   cpu_cores: number
   /** Rendering GPU device name from Chromium (e.g. "NVIDIA GeForce RTX 5090").
    *  This is the GPU used for compositing the Electron window — it may differ
-   *  from the CUDA GPU in multi-GPU setups.  null if unavailable. */
+   *  from the inference GPU in multi-GPU setups.  null if unavailable. */
   gpu: string | null
   /** Total physical RAM in bytes. */
   ram_total_bytes: number
@@ -97,28 +97,30 @@ export type DiagnosticsClient = {
   uptime_seconds: number
   /** Chromium GPU compositing feature flags (e.g. webgl, vulkan, rasterization).
    *  Indicates whether the Electron renderer is using hardware acceleration;
-   *  software fallback here can cause UI rendering issues unrelated to CUDA. */
+   *  software fallback here can cause UI rendering issues unrelated to the
+   *  inference path. */
   gpu_compositing: Record<string, string>
 }
 
-/** The machine running the World Engine server (Python / CUDA).
- *  Same physical machine as the client in standalone mode; a remote host
- *  in server mode.  null in the payload if the server was never reached
- *  (e.g. engine install failure, server didn't start). */
+/** The machine running the World Engine server.  Same physical machine as
+ *  the client in standalone mode; a remote host in server mode.  null in
+ *  the payload if the server was never reached (e.g. engine install
+ *  failure, server didn't start). */
 export type DiagnosticsServer = {
   /** CPU model string reported by py-cpuinfo on the server host. */
   cpu: string | null
-  /** CUDA GPU device name (e.g. "NVIDIA GeForce RTX 5090"). */
+  /** Inference GPU device name (e.g. "NVIDIA GeForce RTX 5090"). */
   gpu: string | null
-  /** Number of CUDA-visible GPU devices.  0 if unknown (server never reached). */
+  /** Number of GPU devices visible to the inference backend.  0 if
+   *  unknown (server never reached). */
   gpu_count: number
   /** Total VRAM on device 0 in bytes. */
   vram_total_bytes: number | null
-  /** CUDA toolkit version (e.g. "12.8"). */
-  cuda: string | null
-  /** NVIDIA driver version (e.g. "580.142"). */
+  /** Backend runtime version (e.g. "12.8" for the toolkit on NVIDIA). */
+  runtime: string | null
+  /** GPU driver version (e.g. "580.142" on NVIDIA). */
   driver: string | null
-  /** PyTorch version including CUDA suffix (e.g. "2.10.0+cu128"). */
+  /** PyTorch version (e.g. "2.10.0+cu128"). */
   torch: string | null
 }
 
@@ -171,6 +173,29 @@ export type DiagnosticsStateAtError = {
   gpu_util_percent: number | null
 }
 
+/** A single log entry buffered on the renderer.  Mirrors the wire-shape of
+ *  the server's `LogMessage` (minus the `type` discriminator) and is also
+ *  used for engine-log IPC events from the Electron main process — events
+ *  whose source is a structlog event_dict carry the full structured form;
+ *  events whose source is raw subprocess stdout (uv sync output, pre-init
+ *  Python stderr, etc.) degrade to `{ event }` plus a derived `level`.
+ *  Stored as JSON objects in {@link DiagnosticsPayload} so external triagers
+ *  see the structured form directly. */
+export type LogRecord = {
+  /** Human-readable message — the first positional arg passed to the logger. */
+  event: string
+  /** Severity ("info", "warning", "error", ...) when the source attaches one. */
+  level?: string
+  /** Logger name (typically the originating module path). */
+  logger?: string
+  /** Rendered timestamp from the server's structlog pipeline. */
+  timestamp?: string
+  /** Pre-formatted exception traceback when the event was a `log.exception(...)`. */
+  exception?: string
+  /** Bound contextvars and event kwargs (e.g. `client_host`, `step`). */
+  fields?: Record<string, string | number | boolean>
+}
+
 /** Top-level diagnostics payload copied to clipboard / attached to GitHub
  *  issues.  Built by TerminalDisplay (loading/streaming errors) and
  *  EngineInstallModal (engine install errors). */
@@ -189,8 +214,17 @@ export type DiagnosticsPayload = {
   error: DiagnosticsError
   /** Server resource state at the moment of error, or null if unavailable. */
   state_at_error?: DiagnosticsStateAtError | null
-  /** Tail of the server/engine log, most recent last. */
-  logs: string[]
+  /** Tail of Electron-process log records (`getLogger` events plus
+   *  subprocess pass-through that flowed through `parseLogLine`).
+   *  Pulled from the rolling buffer in `electron/lib/logger.ts` so the
+   *  export captures Electron-only events that don't broadcast onto
+   *  the `engine-log` channel (`electron.update`, `electron.settings`,
+   *  `engine.diagnostics`, …). */
+  electron_logs: LogRecord[]
+  /** Tail of server-side WS-broadcast log events (Python's structlog
+   *  output).  Empty pre-connect; in standalone mode this is the same
+   *  stream the on-screen log panel shows. */
+  server_logs: LogRecord[]
 }
 
 export type ExportDiagnosticsResult = {
@@ -205,17 +239,8 @@ export type AppUpdateInfo = {
   update_available: boolean
 }
 
-/** Semantic session state parsed from a recording's MP4 `comment` atom.
- *  Matches the dataclass in server-components/video_recorder.py. All fields
- *  optional on the renderer side because older files may lack the atom or
- *  its contents may be malformed. */
-export type RecordingProperties = {
-  biome_version?: string
-  model?: string | null
-  quant?: string
-  seed?: string | null
-  scene_authoring_enabled?: boolean
-}
+export type { RecordingProperties } from './protocol.generated'
+import type { RecordingProperties } from './protocol.generated'
 
 export type RecordingEntry = {
   filename: string
@@ -287,6 +312,7 @@ export type IpcCommandMap = {
   'write-spark-tuning': { args: [tuning: PortalSparksTuning]; return: void }
   'get-runtime-diagnostics-meta': { args: []; return: RuntimeDiagnosticsMeta }
   'get-system-diagnostics': { args: []; return: SystemDiagnostics }
+  'get-electron-log-tail': { args: []; return: LogRecord[] }
   'export-loading-diagnostics': { args: [reportText: string]; return: ExportDiagnosticsResult }
 
   // Updates
@@ -308,6 +334,6 @@ export type IpcCommandMap = {
 export type IpcEventMap = {
   'server-ready': boolean
   'server-stage': { id: string; label: string; percent: number }
-  'engine-log': { line: string; is_stderr: boolean }
+  'engine-log': LogRecord
   'window-resized': { width: number; height: number }
 }

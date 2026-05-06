@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listen } from '../bridge'
+import type { LogRecord } from '../types/ipc'
 
 const MAX_LINES = 500
 
@@ -23,15 +24,15 @@ const MAX_LINES = 500
  * (e.g. TerminalDisplay and EngineInstallModal) can coexist without
  * interfering.
  */
-export function useEngineLogs(enabled = true): { logs: string[]; clear: () => void } {
-  const [logs, setLogs] = useState<string[]>([])
+export function useEngineLogs(enabled = true): { logs: LogRecord[]; clear: () => void } {
+  const [logs, setLogs] = useState<LogRecord[]>([])
 
   useEffect(() => {
     if (!enabled) return
 
-    const unlisten = listen('engine-log', (payload) => {
+    const unlisten = listen('engine-log', (record) => {
       setLogs((prev) => {
-        const next = [...prev, payload.line]
+        const next = [...prev, record]
         return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
       })
     })

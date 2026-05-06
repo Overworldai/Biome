@@ -3,14 +3,25 @@ import { app } from 'electron'
 
 const WORLD_ENGINE_DIR = 'world_engine'
 
-/** Patterns to exclude when copying server-components to the engine dir.
- * Matches directory names and file names (not full paths). */
+/** Names to exclude when mirroring server-components into the engine dir.
+ *  Matches directory names and file names (not full paths).  These are
+ *  *protected on both sides* of the mirror: never copied from source,
+ *  never pruned from dest.  Source-side entries are usually dev artefacts
+ *  (`.venv`, `.ruff_cache`, `__pycache__`, `uv.lock`); dest-side entries
+ *  are runtime state that must outlive a mirror pass — `server.log`
+ *  (the canonical log file), the synced `.venv`, plus library caches
+ *  written next to the engine: `.safety_cache.json` (NSFW classifier),
+ *  `gemlite_config.json` (gemlite kernel cache), `.cache/` (Triton et al). */
 export const SERVER_COMPONENT_EXCLUDES = new Set([
   '.venv',
   '__pycache__',
+  '.ruff_cache',
+  '.cache',
   'uv.lock',
   'server.log',
   'server-hosted.log',
+  '.safety_cache.json',
+  'gemlite_config.json',
   '.python-version',
   'node_modules'
 ])

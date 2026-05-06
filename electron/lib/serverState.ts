@@ -1,5 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
 import treeKill from 'tree-kill'
+import { getLogger } from './logger.js'
+
+const log = getLogger('engine.server')
 
 interface ServerState {
   process: ChildProcess | null
@@ -40,7 +43,7 @@ export function stopServerSync(): string | null {
   }
 
   const pid = state.process.pid
-  console.log(`[ENGINE] Stopping server process tree (PID: ${pid})...`)
+  log.info('Stopping server process tree', { fields: { pid: pid ?? -1 } })
 
   if (pid) {
     try {
@@ -49,14 +52,16 @@ export function stopServerSync(): string | null {
         // The server is spawned with detached:true to create a new group,
         // so this kills uv + python together.
         process.kill(-pid, 'SIGKILL')
-        console.log('[ENGINE] SIGKILL sent to process group')
+        log.info('SIGKILL sent to process group')
       } else {
         // Windows: use tree-kill to walk the process tree via taskkill
         treeKill(pid, 'SIGKILL')
-        console.log('[ENGINE] Kill signal sent to process tree')
+        log.info('Kill signal sent to process tree')
       }
     } catch (e) {
-      console.log('[ENGINE] Process tree kill failed, falling back to direct kill:', e)
+      log.warning('Process tree kill failed, falling back to direct kill', {
+        exception: e instanceof Error ? (e.stack ?? e.message) : String(e)
+      })
       state.process.kill('SIGKILL')
     }
   } else {
@@ -64,6 +69,6 @@ export function stopServerSync(): string | null {
   }
 
   clearServerState()
-  console.log('[ENGINE] Server stopped successfully')
+  log.info('Server stopped successfully')
   return pid ? `Server stopped (PID: ${pid})` : 'Server stopped'
 }

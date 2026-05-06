@@ -357,31 +357,32 @@ const zh = {
         websocketConnectionFailed: '无法创建 WebSocket 连接',
         connectionFailed: '连接失败 - 服务器可能已崩溃',
         connectionLost: '连接丢失 - 服务器可能已崩溃',
-        startupTimeout: '服务器启动超时 - 请检查日志',
         noOpenPort: '在范围 {{rangeStart}}–{{rangeEnd}} 中未找到可用端口',
         notResponding: '服务器在 {{url}} 没有响应',
         networkUnreachable:
           '无法连接到互联网。如果你想要的引擎和模型已经下载过，可以在「通用设置」中启用离线模式，无需网络即可使用。\n\n详情：{{message}}',
         error: {
+          protocolVersionMismatch:
+            'Biome 无法与此服务器通信：客户端使用协议 v{{client}}，但服务器使用 v{{server}}。请更新 Biome（或服务器）以使版本一致。',
+          serverBusy: '服务器已被其他客户端占用。请等待当前会话结束后重试。',
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
+          initFailed: '会话初始化失败',
           sceneAuthoringModelLoadFailed: '场景创作模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
           generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',
           sceneAuthoringEmptyPrompt: '提示词为空',
           sceneAuthoringModelNotLoaded: '场景创作模型未加载。请在设置中启用场景创作。',
           sceneAuthoringAlreadyInProgress: '场景创作已在进行中',
-          contentFilterLoadFailed: '内容过滤器加载失败',
           quantUnsupportedGpu: '你的显卡不支持 {{quant}} 量化。请尝试其他量化设置。',
-          cudaRecoveryFailed: 'CUDA 错误 - 恢复失败。请重新连接。'
+          deviceRecoveryFailed: 'GPU 错误 - 恢复失败。请重新连接。'
         },
         warning: {
           missingSeedData: '缺少种子图片数据',
           invalidSeedData: '种子图片数据无效',
           seedSafetyCheckFailed: '种子安全检查失败',
           seedUnsafe: '种子被标记为不安全',
-          seedLoadFailed: '无法加载种子图片',
-          missingModelId: '缺少模型 ID'
+          seedLoadFailed: '无法加载种子图片'
         }
       }
     },
@@ -409,23 +410,15 @@ const zh = {
       session: {
         waiting_for_seed: '正在准备场景...',
         loading_model: {
-          import: '正在导入模型框架...',
           load: '正在加载模型...',
-          instantiate: '正在将模型载入内存...',
-          done: '模型已加载！'
+          instantiate: '正在将模型载入内存...'
         },
-        inpainting: {
-          load: '正在加载场景创作模型...',
-          ready: '场景创作模型已就绪。'
-        },
-        safety: {
-          load: '正在加载内容过滤器...',
-          ready: '内容过滤器已就绪。'
+        scene_authoring: {
+          load: '正在加载场景创作模型...'
         },
         warmup: {
           reset: '正在准备预热...',
           seed: '正在用测试帧预热...',
-          prompt: '正在用测试提示词预热...',
           compile: '正在为你的 GPU 做优化...'
         },
         init: {

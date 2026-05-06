@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { invoke } from '../bridge'
 import type { EngineStatus } from '../types/app'
 import type { StageId } from '../stages'
@@ -32,6 +32,14 @@ export const useEngine = (): UseEngineResult => {
   const [error, setError] = useState<string | null>(null)
   const [setupProgress, setSetupProgress] = useState<string | null>(null)
   const [serverStarting, setServerStarting] = useState(false)
+  // `checkServerRunning` polls during warm-connection and needs to refresh
+  // the full engine status on the running-state transition.  Track the
+  // previous `is-server-running` result via a ref rather than via React
+  // state, so the comparison is against the real previous-call value
+  // rather than whatever stale `status` is captured by the callback's
+  // closure — `waitForHealthy` holds the same callback reference across
+  // its whole poll loop, so closure-captured state would never update.
+  const lastRunningRef = useRef<boolean | null>(null)
 
   const checkStatus = useCallback(async () => {
     try {
@@ -128,7 +136,8 @@ export const useEngine = (): UseEngineResult => {
   const checkServerRunning = useCallback(async () => {
     try {
       const running = await invoke('is-server-running')
-      if (status?.server_running !== running) {
+      if (lastRunningRef.current !== running) {
+        lastRunningRef.current = running
         const newStatus = await invoke('check-engine-status', 'useEngine.checkServerRunning.delta')
         setStatus(newStatus)
       }
@@ -136,7 +145,7 @@ export const useEngine = (): UseEngineResult => {
     } catch {
       return false
     }
-  }, [status?.server_running])
+  }, [])
 
   const checkServerReady = useCallback(async () => {
     try {

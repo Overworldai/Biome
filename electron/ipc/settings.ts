@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getConfigDir, getSeedsDefaultDir, getSeedsUploadsDir } from '../lib/paths.js'
 import { settingsSchema, DEFAULT_SCENE_ORDER } from '../../src/types/settings.js'
+import { getLogger } from '../lib/logger.js'
 import type { Settings } from '../../src/types/settings.js'
+
+const log = getLogger('electron.settings')
 
 const SETTINGS_FILENAME = 'settings.json'
 const LEGACY_CONFIG_FILENAME = 'config.json'
@@ -125,10 +128,12 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
         const legacyParsed = JSON.parse(legacyContent) as Record<string, unknown>
         const migrated = migrateFromLegacyConfig(legacyParsed)
         const result = settingsSchema.parse(migrated)
-        console.log('[SETTINGS] Migrated from config.json to settings.json')
+        log.info('Migrated from config.json to settings.json')
         return { settings: result, dirty: true }
       } catch (err) {
-        console.warn('[SETTINGS] Failed to migrate config.json, using defaults:', err)
+        log.warning('Failed to migrate config.json, using defaults', {
+          exception: err instanceof Error ? (err.stack ?? err.message) : String(err)
+        })
       }
     }
     return { settings: settingsSchema.parse({}), dirty: true }
@@ -139,7 +144,7 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
   try {
     parsed = JSON.parse(content)
   } catch {
-    console.warn('[SETTINGS] Failed to parse settings.json, using defaults')
+    log.warning('Failed to parse settings.json, using defaults')
     return { settings: settingsSchema.parse({}), dirty: true }
   }
 
@@ -149,7 +154,7 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
     return { settings: result.data, dirty: migrated !== parsed }
   }
 
-  console.warn('[SETTINGS] Invalid settings.json, using defaults:', result.error.message)
+  log.warning('Invalid settings.json, using defaults', { fields: { error: result.error.message } })
   return { settings: settingsSchema.parse({}), dirty: true }
 }
 
@@ -173,7 +178,9 @@ export function registerSettingsIpc(): void {
   try {
     validateDefaultScenes()
   } catch (err) {
-    console.error('[SETTINGS]', err instanceof Error ? err.message : err)
+    log.error('Default scene validation failed', {
+      exception: err instanceof Error ? (err.stack ?? err.message) : String(err)
+    })
     throw err
   }
 

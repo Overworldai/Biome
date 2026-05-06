@@ -363,31 +363,32 @@ const he = {
         websocketConnectionFailed: 'יצירת חיבור WebSocket נכשלה',
         connectionFailed: 'החיבור נכשל — ייתכן שהשרת קרס',
         connectionLost: 'החיבור אבד — ייתכן שהשרת קרס',
-        startupTimeout: 'תם הזמן להפעלת השרת — בדוק את הלוגים לשגיאות',
         noOpenPort: 'לא נמצא פורט פתוח בטווח {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'השרת לא מגיב ב-{{url}}',
         networkUnreachable:
           'לא ניתן להגיע לאינטרנט. אם המנוע והמודל הרצויים כבר הורדו, ניתן להפעיל מצב לא מקוון בהגדרות הכלליות כדי להשתמש בהם ללא רשת.\n\nפרטים: {{message}}',
         error: {
+          protocolVersionMismatch:
+            'אין אפשרות לתקשר עם השרת הזה: הלקוח מדבר בפרוטוקול v{{client}} אבל השרת מדבר ב-v{{server}}. עדכן את Biome (או את השרת) כדי שהגרסאות יתאימו.',
+          serverBusy: 'השרת כבר בשימוש על ידי לקוח אחר. המתן עד שהסשן הפעיל יסתיים ונסה שוב.',
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
+          initFailed: 'אתחול הסשן נכשל',
           sceneAuthoringModelLoadFailed: 'טעינת מודל יצירת הסצנות נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           sceneAuthoringEmptyPrompt: 'פרומפט ריק',
           sceneAuthoringModelNotLoaded: 'מודל יצירת הסצנות לא נטען. הפעל את יצירת סצנות בהגדרות.',
           sceneAuthoringAlreadyInProgress: 'יצירת סצנה כבר מתבצעת',
-          contentFilterLoadFailed: 'טעינת מסנן התוכן נכשלה',
           quantUnsupportedGpu: 'ה-GPU שלך לא תומך בקוונטיזציית {{quant}}. נסה הגדרת קוונטיזציה אחרת.',
-          cudaRecoveryFailed: 'שגיאת CUDA — השחזור נכשל. נא להתחבר מחדש.'
+          deviceRecoveryFailed: 'שגיאת GPU — השחזור נכשל. נא להתחבר מחדש.'
         },
         warning: {
           missingSeedData: 'חסרים נתוני seed',
           invalidSeedData: 'נתוני seed לא חוקיים',
           seedSafetyCheckFailed: 'ה-seed נכשל בבדיקת בטיחות',
           seedUnsafe: 'ה-seed סומן כלא בטוח',
-          seedLoadFailed: 'טעינת תמונת ה-seed נכשלה',
-          missingModelId: 'חסר מזהה מודל'
+          seedLoadFailed: 'טעינת תמונת ה-seed נכשלה'
         }
       }
     },
@@ -415,23 +416,15 @@ const he = {
       session: {
         waiting_for_seed: 'מכין סצנה...',
         loading_model: {
-          import: 'מייבא מסגרת מודל...',
           load: 'טוען מודל...',
-          instantiate: 'טוען מודל לזיכרון...',
-          done: 'המודל נטען!'
+          instantiate: 'טוען מודל לזיכרון...'
         },
-        inpainting: {
-          load: 'טוען מודל יצירת סצנות...',
-          ready: 'מודל יצירת הסצנות מוכן.'
-        },
-        safety: {
-          load: 'טוען מסנן תוכן...',
-          ready: 'מסנן התוכן מוכן.'
+        scene_authoring: {
+          load: 'טוען מודל יצירת סצנות...'
         },
         warmup: {
           reset: 'מתכונן לחימום...',
           seed: 'מחמם עם פריים בדיקה...',
-          prompt: 'מחמם עם פרומפט בדיקה...',
           compile: 'מבצע אופטימיזציה ל-GPU שלך...'
         },
         init: {

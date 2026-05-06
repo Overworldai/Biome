@@ -2,7 +2,9 @@ import type { EngineStatus } from '../types/app'
 import type { StageId } from '../stages'
 import type { TranslatableError } from '../i18n'
 import type { ServerConnection } from '../hooks/useWebSocket'
+import type { LogRecord } from '../types/ipc'
 import type { InputCode } from '../types/input'
+import type { WsRequest } from '../lib/wsRpc'
 import type { SceneEditState, SceneEditEvent } from './sceneEditMachine'
 
 export type StreamingStats = {
@@ -69,9 +71,9 @@ export type StreamingContextValue = {
   openSeedsDir: () => Promise<void>
   seedsDir: string | null
   selectSeed: (filename: string) => Promise<void>
-  wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
-  wsLogs: string[]
-  wsAllLogs: string[]
+  wsRequest: WsRequest
+  wsLogs: LogRecord[]
+  wsAllLogs: LogRecord[]
   clearWsLogs: () => void
 
   mouseSensitivity: number

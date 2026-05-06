@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { invoke } from '../bridge'
 import { TranslatableError } from '../i18n'
 import type { SeedRecord, SeedFileRecord } from '../types/app'
+import type { WsRequest } from '../lib/wsRpc'
 
 function readBlobAsBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -67,7 +68,7 @@ function sortSeeds(a: SeedFileRecord, b: SeedFileRecord) {
 }
 
 type UseSeedManagerOptions = {
-  wsRequest: <T = unknown>(type: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
+  wsRequest: WsRequest
   isActive: boolean
   onPinnedSceneRemoved: (filename: string) => void
   /** Invoked with the list of filenames that were successfully uploaded/pasted
@@ -99,7 +100,7 @@ export function useSeedManager({ wsRequest, isActive, onPinnedSceneRemoved, onSc
         try {
           const imageResult = await invoke('get-seed-image-base64', seed.filename)
           if (!imageResult || !isMountedRef.current) continue
-          const result = await wsRequest<{ is_safe: boolean; hash: string }>('check_seed_safety', {
+          const result = await wsRequest('check_seed_safety', {
             image_data: imageResult.base64
           })
           if (!isMountedRef.current) return

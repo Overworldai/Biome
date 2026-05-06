@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import open from 'open'
 import { parseFile } from 'music-metadata'
+import { getLogger } from '../lib/logger.js'
 import type { RecordingProperties } from '../../src/types/ipc.js'
+
+const log = getLogger('electron.recordings')
 
 export type RecordingEntry = {
   filename: string
@@ -68,7 +71,10 @@ function isWithin(child: string, parent: string): boolean {
  *  edge cases, and detaching + unref'ing so Biome can exit independently. */
 function openDetached(target: string): void {
   open(target).catch((err) => {
-    console.error(`[RECORDINGS] Failed to open "${target}":`, err)
+    log.error('Failed to open recording', {
+      fields: { path: target },
+      exception: err instanceof Error ? (err.stack ?? err.message) : String(err)
+    })
   })
 }
 

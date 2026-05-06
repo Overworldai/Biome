@@ -369,32 +369,34 @@ const en = {
         websocketConnectionFailed: 'Failed to create WebSocket connection',
         connectionFailed: 'Connection failed — server may have crashed',
         connectionLost: 'Connection lost — server may have crashed',
-        startupTimeout: 'Server startup timeout — check logs for errors',
         noOpenPort: 'No open standalone port found in range {{rangeStart}}–{{rangeEnd}}',
         notResponding: 'Server is not responding at {{url}}',
         networkUnreachable:
           "Couldn't reach the internet. If the engine and model you want are already downloaded, turn on Offline Mode in General Settings to use them without a network.\n\nDetails: {{message}}",
         error: {
+          protocolVersionMismatch:
+            "Biome can't talk to this server: the client speaks protocol v{{client}} but the server speaks v{{server}}. Update Biome (or the server) so the versions match.",
+          serverBusy:
+            'The server is already in use by another client. Wait for the active session to end and try again.',
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
+          initFailed: 'Session initialization failed',
           sceneAuthoringModelLoadFailed: 'Scene authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',
           sceneAuthoringEmptyPrompt: 'Empty prompt',
           sceneAuthoringModelNotLoaded: 'Scene authoring model not loaded. Enable Scene Authoring in settings.',
           sceneAuthoringAlreadyInProgress: 'Scene authoring already in progress',
-          contentFilterLoadFailed: 'Content filter failed to load',
           quantUnsupportedGpu:
             'Your GPU does not support {{quant}} quantization. Try a different quantization setting.',
-          cudaRecoveryFailed: 'CUDA error — recovery failed. Please reconnect.'
+          deviceRecoveryFailed: 'GPU error — recovery failed. Please reconnect.'
         },
         warning: {
           missingSeedData: 'Missing seed image data',
           invalidSeedData: 'Invalid seed image data',
           seedSafetyCheckFailed: 'Seed failed safety check',
           seedUnsafe: 'Seed marked as unsafe',
-          seedLoadFailed: 'Failed to load seed image',
-          missingModelId: 'Missing model ID'
+          seedLoadFailed: 'Failed to load seed image'
         }
       }
     },
@@ -422,23 +424,15 @@ const en = {
       session: {
         waiting_for_seed: 'Preparing scene...',
         loading_model: {
-          import: 'Importing model framework...',
           load: 'Loading model...',
-          instantiate: 'Loading model into memory...',
-          done: 'Model loaded!'
+          instantiate: 'Loading model into memory...'
         },
-        inpainting: {
-          load: 'Loading scene authoring model...',
-          ready: 'Scene authoring model ready.'
-        },
-        safety: {
-          load: 'Loading content filter...',
-          ready: 'Content filter ready.'
+        scene_authoring: {
+          load: 'Loading Scene Authoring models...'
         },
         warmup: {
           reset: 'Preparing for warmup...',
           seed: 'Warming up with test frame...',
-          prompt: 'Warming up with test prompt...',
           compile: 'Optimizing for your GPU...'
         },
         init: {

@@ -15,8 +15,12 @@ import {
   stopServerSync
 } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
+import { parseLogLine } from '../lib/logRecord.js'
+import { getLogger } from '../lib/logger.js'
 import { emitToAllWindows } from '../lib/ipcUtils.js'
 import { getOfflineEnv } from './settings.js'
+
+const log = getLogger('engine.server')
 
 function isLocalhost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -57,9 +61,7 @@ export function registerServerIpc(): void {
     // Ensure HF cache dir exists
     fs.mkdirSync(hfHubCacheDir, { recursive: true })
 
-    console.log(`[ENGINE] Starting server on port ${port}...`)
-    console.log(`[ENGINE] Engine dir: ${engineDir}`)
-    console.log(`[ENGINE] UV binary: ${uvBinary}`)
+    log.info('Starting server', { fields: { port, engine_dir: engineDir, uv_binary: uvBinary } })
 
     // Build env for server process
     const serverEnv: Record<string, string> = {
@@ -72,6 +74,14 @@ export function registerServerIpc(): void {
       PYTHONUNBUFFERED: '1',
       PYTHONFAULTHANDLER: '1',
       BIOME_SERVER_LOG_PATH: path.join(engineDir, 'server.log'),
+      // Pin the standalone-spawned server to JSON output regardless of what
+      // the parent shell has set.  In standalone mode the child's stdout is
+      // consumed by `parseLogLine` for the renderer's engine-log buffer; if
+      // the dev sets `BIOME_LOG_FORMAT=text` in their shell, the inherited
+      // value would degrade engineLogs to text-only fallback records.  The
+      // dev's terminal still gets the JSON via our raw pass-through write,
+      // so dropping into `jq` recovers the human-readable form when needed.
+      BIOME_LOG_FORMAT: 'json',
       ...getOfflineEnv()
     }
 
@@ -85,13 +95,10 @@ export function registerServerIpc(): void {
       serverEnv.C_INCLUDE_PATH = existingCPath ? `${pythonIncludeDir}:${existingCPath}` : pythonIncludeDir
     }
 
-    // Create log file path
-    const logFilePath = path.join(engineDir, 'server.log')
-
     // Base args for the server. Note that we use localhost for the host to prevent
     // the Windows firewall for asking for permissions to expose the server to
     // the world
-    const baseServerArgs = ['run', 'python', '-u', 'server.py', '--host', '127.0.0.1', '--port', String(port)]
+    const baseServerArgs = ['run', 'python', '-u', 'main.py', '--host', '127.0.0.1', '--port', String(port)]
 
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
     const serverArgs =
@@ -107,17 +114,24 @@ export function registerServerIpc(): void {
     })
 
     const pid = child.pid
-    console.log(`[ENGINE] Server process spawned with PID: ${pid}`)
-    fs.writeFileSync(logFilePath, '', 'utf-8')
+    log.info('Server process spawned', { fields: { pid: pid ?? -1 } })
 
     // Rolling tail of recent stdout+stderr, drained from the line readers below.
     // Kept in memory so the exit handler and immediate-crash path don't need to
     // re-read the log file.
     const recentLines: string[] = []
     const handleLine = (line: string, isStderr: boolean) => {
-      console.log(`[SERVER] ${line}`)
-      fs.appendFileSync(logFilePath, line + '\n', 'utf-8')
-      emitToAllWindows('engine-log', { line, is_stderr: isStderr })
+      // Subprocess pass-through.  We write the raw line to our own
+      // stdout/stderr (so the dev's terminal sees Python's output) and
+      // forward a parsed `LogRecord` onto the `engine-log` IPC channel
+      // for the renderer's on-screen log panel.  We do NOT record it
+      // into the Electron rolling buffer or write it to `server.log` —
+      // both would duplicate Python's own work: structlog already owns
+      // the WS broadcast (→ `wsAllLogs` → diagnostic `server_logs`)
+      // and `TeeStream` already mirrors stdout/stderr into `server.log`.
+      const sink = isStderr ? process.stderr : process.stdout
+      sink.write(line + '\n')
+      emitToAllWindows('engine-log', parseLogLine(line, isStderr, 'engine.server'))
       recentLines.push(line)
       if (recentLines.length > LOG_TAIL_MAX_LINES) recentLines.shift()
     }
@@ -132,7 +146,7 @@ export function registerServerIpc(): void {
     lastServerExitTail = null
 
     child.on('exit', (code, signal) => {
-      console.log(`[ENGINE] Server process exited (code: ${code}, signal: ${signal})`)
+      log.info('Server process exited', { fields: { code: code ?? -1, signal: signal ?? '' } })
       if (code !== 0 && code !== null) {
         lastServerExitTail = recentLines.join('\n')
       }
@@ -146,7 +160,7 @@ export function registerServerIpc(): void {
 
     if (!child.exitCode && child.exitCode !== 0) {
       // Still running
-      console.log('[ENGINE] Server process is running')
+      log.info('Server process is running')
     } else if (child.exitCode !== null) {
       // Process exited immediately
       clearServerState()
