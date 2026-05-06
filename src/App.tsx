@@ -96,7 +96,8 @@ const AppShell = () => {
     toggleSettings,
     transitionTo
   } = usePortal()
-  const { isStreaming, isUIActive, connectionStatus, prepareReturnToMainMenu, sceneEditState } = useStreaming()
+  const { isStreaming, isUIActive, connectionStatus, prepareReturnToMainMenu, session } = useStreaming()
+  const sceneEditState = session.sceneEdit.state
   useGamepadNavigation(isUIActive)
   const {
     getBackgroundVideoElement,

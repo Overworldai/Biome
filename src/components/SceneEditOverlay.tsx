@@ -8,8 +8,9 @@ import { RpcError } from '../lib/wsRpc'
 
 const SceneEditOverlay = () => {
   const { t } = useTranslation()
-  const { sceneEditState, dispatchSceneEdit, wsRequest, input } = useStreaming()
+  const { session, wsRequest, input } = useStreaming()
   const requestPointerLock = input.pointerLock.request
+  const { state: sceneEditState, dispatch: dispatchSceneEdit } = session.sceneEdit
   const { phase, errorMessage } = sceneEditState
   const isActive = phase !== 'inactive'
 

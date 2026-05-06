@@ -40,7 +40,8 @@ const WindowControlButton = ({
 
 const WindowControls = () => {
   const { minimize, toggleMaximize, close } = useWindow()
-  const { isStreaming, isPaused } = useStreaming()
+  const { isStreaming, session } = useStreaming()
+  const isPaused = session.isPaused
   const dragRegionStyle = {
     WebkitAppRegion: 'drag',
     WebkitUserSelect: 'none',

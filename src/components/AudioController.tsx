@@ -13,7 +13,8 @@ const MUSIC_FADE_S = 0.5
 const AudioController = () => {
   const { play, fadeOutLoop, crossfadeLoop, stopAllLoops } = useAudio()
   const { state, states } = usePortal()
-  const { error, isPaused } = useStreaming()
+  const { error, session } = useStreaming()
+  const isPaused = session.isPaused
   const prevHasErrorRef = useRef(false)
   // Manage ambient loops based on portal state
   useEffect(() => {

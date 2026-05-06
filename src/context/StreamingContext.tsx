@@ -770,15 +770,19 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     connectionLost,
     isVideoReady: hasReceivedFrame && canvasReady,
     isStreaming,
-    isPaused,
     isUIActive: !inputEnabled,
-    pausedAt,
-    canUnpause,
-    unlockDelayMs: UNLOCK_DELAY_MS,
-    pauseElapsedMs,
-    settingsOpen,
-    sceneEditState,
-    dispatchSceneEdit,
+    session: {
+      isPaused,
+      pausedAt,
+      pauseElapsedMs,
+      canUnpause,
+      unlockDelayMs: UNLOCK_DELAY_MS,
+      settingsOpen,
+      sceneEdit: {
+        state: sceneEditState,
+        dispatch: dispatchSceneEdit
+      }
+    },
     statusStage: effectiveStatusStage,
     isFreshInstall,
 
@@ -846,7 +850,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     cancelConnection,
     prepareReturnToMainMenu,
     resetScene,
-    resume,
     registerContainerRef,
     registerCanvasRef,
     handleContainerClick

@@ -145,8 +145,8 @@ const PauseOverlayContent = () => {
  *  AnimatePresence so App.tsx just drops `<PauseOverlay />` in and the overlay
  *  never lingers in the DOM while inactive. */
 const PauseOverlay = () => {
-  const { isPaused, sceneEditState } = useStreaming()
-  const visible = isPaused && sceneEditState.phase === 'inactive'
+  const { session } = useStreaming()
+  const visible = session.isPaused && session.sceneEdit.state.phase === 'inactive'
 
   return (
     <AnimatePresence>

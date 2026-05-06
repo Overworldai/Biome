@@ -17,18 +17,23 @@ export type StreamingContextValue = {
   connectionLost: boolean
   isVideoReady: boolean
   isStreaming: boolean
-  isPaused: boolean
   /** True when the user is actively driving the game (streaming + unpaused + no menu/modal).
    *  UI surfaces consult this to decide whether gamepad input goes to the game or to
    *  UI navigation. Inverse of `inputEnabled` in game terms. */
   isUIActive: boolean
-  pausedAt: number | null
-  canUnpause: boolean
-  unlockDelayMs: number
-  pauseElapsedMs: number
-  settingsOpen: boolean
-  sceneEditState: SceneEditState
-  dispatchSceneEdit: (event: SceneEditEvent) => void
+  /** Pause / scene-edit / menu lifecycle state for the active session. */
+  session: {
+    isPaused: boolean
+    pausedAt: number | null
+    pauseElapsedMs: number
+    canUnpause: boolean
+    unlockDelayMs: number
+    settingsOpen: boolean
+    sceneEdit: {
+      state: SceneEditState
+      dispatch: (event: SceneEditEvent) => void
+    }
+  }
   statusStage: StageId | null
   isFreshInstall: boolean
 
@@ -104,7 +109,6 @@ export type StreamingContextValue = {
   cancelConnection: () => Promise<void>
   prepareReturnToMainMenu: () => Promise<void>
   resetScene: () => void
-  resume: () => void
   registerContainerRef: (element: HTMLDivElement | null) => void
   registerCanvasRef: (element: HTMLCanvasElement | null) => void
   handleContainerClick: () => void

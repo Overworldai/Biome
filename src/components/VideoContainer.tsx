@@ -2,7 +2,8 @@ import { useRef, useEffect, useCallback } from 'react'
 import { useStreaming } from '../context/streamingContextValue'
 
 const VideoContainer = () => {
-  const { isStreaming, isPaused, registerContainerRef, registerCanvasRef, handleContainerClick, input } = useStreaming()
+  const { isStreaming, session, registerContainerRef, registerCanvasRef, handleContainerClick, input } = useStreaming()
+  const isPaused = session.isPaused
   const isPointerLocked = input.pointerLock.isLocked
 
   const containerRef = useRef<HTMLDivElement | null>(null)
