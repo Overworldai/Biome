@@ -30,7 +30,10 @@ type CreateHandlersArgs = {
   log: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
   settings: { engine_model?: string | null } | null
   setEngineError: (value: TranslatableError | null) => void
-  warmBootstrapSentRef: { current: boolean }
+  /** Clears `warmBootstrapSent` + `lastAppliedModel`; used when the
+   *  reducer needs the next LOADING entry to start from a clean
+   *  bootstrap. */
+  resetSession: () => void
   /** Reads the warm-connection flow's cancellation state. The
    *  loadingFailureError handler suppresses error reporting while
    *  cancelled so a torn-down flow's late errors don't pollute the UI. */
@@ -42,7 +45,6 @@ type CreateHandlersArgs = {
   disconnect: () => void
   transitionTo: (state: PortalState) => void | Promise<boolean>
   states: PortalStatesLike
-  lastAppliedModelRef: { current: string | null }
   exitPointerLock: () => void
   sendPause: (paused: boolean) => void
   resume: () => void
@@ -56,7 +58,7 @@ export const createStreamingLifecycleEffectHandlers = ({
   log,
   settings,
   setEngineError,
-  warmBootstrapSentRef,
+  resetSession,
   isWarmFlowCancelled,
   setConnectionLost,
   setSettingsOpen,
@@ -65,7 +67,6 @@ export const createStreamingLifecycleEffectHandlers = ({
   disconnect,
   transitionTo,
   states,
-  lastAppliedModelRef,
   exitPointerLock,
   sendPause,
   resume
@@ -97,7 +98,7 @@ export const createStreamingLifecycleEffectHandlers = ({
     startIntentionalReconnect: () => {
       const selectedModel = settings?.engine_model || DEFAULT_WORLD_ENGINE_MODEL
       log.info('Model changed in settings while streaming - reconnecting to start a fresh session:', selectedModel)
-      warmBootstrapSentRef.current = false
+      resetSession()
       setConnectionLost(false)
       setSettingsOpen(false)
       resumeSession()
@@ -113,8 +114,7 @@ export const createStreamingLifecycleEffectHandlers = ({
     },
     teardownForInactivePortalState: () => {
       disconnect()
-      warmBootstrapSentRef.current = false
-      lastAppliedModelRef.current = null
+      resetSession()
       exitPointerLock()
       setSettingsOpen(false)
       resumeSession()

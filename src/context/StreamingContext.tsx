@@ -14,12 +14,9 @@ import useWebSocket, {
   connectionError as wsConnectionError
 } from '../hooks/useWebSocket'
 import { useSettings } from '../hooks/settingsContextValue'
-import { DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
 import useEngineApi from '../hooks/useEngineApi'
 import useSeedsDir from '../hooks/useSeedsDir'
-import { invoke } from '../bridge'
 import { createLogger } from '../utils/logger'
-import { buildSessionConfig } from './streaming/sessionConfig'
 import { useEngineRespawn } from '../hooks/streaming/useEngineRespawn'
 import { useFrameRenderer } from '../hooks/streaming/useFrameRenderer'
 import { useLoadingFailureCleanup } from '../hooks/streaming/useLoadingFailureCleanup'
@@ -27,6 +24,7 @@ import { useInputLoop } from '../hooks/streaming/useInputLoop'
 import { usePauseState } from '../hooks/streaming/usePauseState'
 import { usePointerLock } from '../hooks/streaming/usePointerLock'
 import { useSceneEdit } from '../hooks/streaming/useSceneEdit'
+import { useSessionInit } from '../hooks/streaming/useSessionInit'
 import { useWarmConnection } from '../hooks/streaming/useWarmConnection'
 import { ConnectionContext, type ConnectionContextValue } from './streaming/connection'
 import { EngineContext, type EngineContextValue } from './streaming/engine'
@@ -105,10 +103,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
   const [lifecycleState, dispatchLifecycle] = useReducer(streamingLifecycleReducer, initialStreamingLifecycleState)
 
-  const lastAppliedModelRef = useRef<string | null>(null)
-  const lastSeedRef = useRef<{ filename: string; imageData: string } | null>(null)
-  const warmBootstrapSentRef = useRef(false)
-
   const {
     preConnectionStage,
     isFreshInstall,
@@ -170,103 +164,17 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [getSeedsDirPath])
 
-  // Bootstrap each new LOADING websocket session deterministically:
-  // send model + seed together so server applies model first and can load seed
-  // immediately when model load completes.
-  useEffect(() => {
-    if (state !== states.LOADING) return
-    if (!isConnected) return
-    if (warmBootstrapSentRef.current) return
-    warmBootstrapSentRef.current = true
-
-    const selectedModel = settings?.engine_model || DEFAULT_WORLD_ENGINE_MODEL
-    const seedFilename = lastSeedRef.current?.filename ?? 'default.jpg'
-    log.info('Loading connected - bootstrapping session with model+seed:', selectedModel, seedFilename)
-
-    const bootstrap = async () => {
-      // Load seed image data via IPC (or reuse cached)
-      let imageData = lastSeedRef.current?.imageData
-      if (!imageData) {
-        const result = await invoke('get-seed-image-base64', seedFilename)
-        if (result) {
-          imageData = result.base64
-          lastSeedRef.current = { filename: seedFilename, imageData }
-        }
-      }
-
-      // Use the seed image as placeholder frame
-      if (imageData) {
-        const binary = atob(imageData)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        setPlaceholderFrame(new Blob([bytes], { type: 'image/jpeg' }))
-      }
-
-      // Set lastAppliedModel before await to prevent the lifecycle machine from
-      // seeing a model mismatch during the re-render triggered by applyInitResponse.
-      const quant = settings.engine_quant ?? 'none'
-      lastAppliedModelRef.current = settings.scene_authoring_enabled
-        ? `${selectedModel}+scene_authoring+${quant}`
-        : `${selectedModel}+${quant}`
-
-      // App version — embedded into recording metadata so MP4s carry a
-      // self-describing record of what Biome build produced them. Best-effort;
-      // a fetch failure just omits the field from the metadata.
-      const diag = await invoke('get-runtime-diagnostics-meta').catch(() => null)
-      const biomeVersion = diag?.app_version
-
-      const config = await buildSessionConfig(settings, isStandaloneMode)
-      const metrics = await sendInit({
-        model: selectedModel,
-        config,
-        seed_image_data: imageData,
-        seed_filename: seedFilename,
-        biome_version: biomeVersion
-      })
-      applyInitResponse(metrics)
-    }
-
-    bootstrap().catch((err) => log.error('Bootstrap failed:', err))
-  }, [state, states.LOADING, isConnected, isStandaloneMode, settings, sendInit, applyInitResponse, setPlaceholderFrame])
-
-  useEffect(() => {
-    if (!isConnected) {
-      warmBootstrapSentRef.current = false
-      setPlaceholderFrame(null)
-    }
-  }, [isConnected, setPlaceholderFrame])
-
-  // Live re-apply of the session config during streaming. Any change to
-  // a live-toggleable SessionConfig field (action logging, video
-  // recording, inference cap) re-sends the full config; the server diffs
-  // against current state and applies whatever differs without tearing
-  // the session down. Model / quant / scene-authoring changes can't be
-  // hot-swapped — those trigger a full lifecycle reconnect instead, so
-  // they're deliberately not in this dep list to avoid racing the
-  // reconnect with a stale-state init send.
-  const settingsRef = useRef(settings)
-  settingsRef.current = settings
-  useEffect(() => {
-    if (!isStreaming || !isConnected) return
-    const run = async () => {
-      const current = settingsRef.current
-      const config = await buildSessionConfig(current, isStandaloneMode)
-      await sendInit({
-        model: current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
-        config
-      })
-    }
-    run().catch((err) => log.error('Failed to re-apply session config:', err))
-  }, [
-    isStreaming,
+  const { selectSeed, lastAppliedModel, resetSession } = useSessionInit({
+    portalState: state,
+    loadingState: states.LOADING,
     isConnected,
+    isStreaming,
     isStandaloneMode,
-    settings.debug_overlays?.action_logging,
-    settings.recording?.enabled,
-    settings.recording?.output_dir,
-    settings.cap_inference_fps,
-    sendInit
-  ])
+    settings,
+    sendInit,
+    applyInitResponse,
+    setPlaceholderFrame
+  })
 
   const {
     blockedSeq: pointerLockBlockedSeq,
@@ -303,7 +211,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
         portalState: state,
         connectionStatus,
         engineModel: settings?.engine_model,
-        lastAppliedModel: lastAppliedModelRef.current,
+        lastAppliedModel,
         engineError,
         hasReceivedFrame,
         // Init is considered complete once applyInitResponse has set model.
@@ -330,7 +238,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isPointerLocked,
     settingsOpen,
     isPaused,
-    sceneEdit.graceActive
+    sceneEdit.graceActive,
+    lastAppliedModel
   ])
 
   useLoadingFailureCleanup({
@@ -355,7 +264,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       log,
       settings,
       setEngineError,
-      warmBootstrapSentRef,
+      resetSession,
       isWarmFlowCancelled,
       setConnectionLost,
       setSettingsOpen,
@@ -364,7 +273,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       disconnect,
       transitionTo,
       states,
-      lastAppliedModelRef,
       exitPointerLock,
       sendPause,
       resume
@@ -382,6 +290,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     resume,
     pauseSession,
     resumeSession,
+    resetSession,
     isWarmFlowCancelled
   ])
 
@@ -429,9 +338,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     log.info('Reconnecting after connection lost')
     setConnectionLost(false)
     cleanupState()
-    warmBootstrapSentRef.current = false
+    resetSession()
     transitionTo(states.LOADING)
-  }, [cleanupState, transitionTo, states.LOADING])
+  }, [cleanupState, resetSession, transitionTo, states.LOADING])
 
   const cancelConnection = useCallback(async () => {
     log.info('Cancelling connection')
@@ -445,23 +354,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     cleanupState()
     await stopServerIfRunning()
   }, [cleanupState, stopServerIfRunning])
-
-  const selectSeed = useCallback(
-    async (filename: string) => {
-      const result = await invoke('get-seed-image-base64', filename)
-      if (!result) return
-      lastSeedRef.current = { filename, imageData: result.base64 }
-      const config = await buildSessionConfig(settingsRef.current, isStandaloneMode)
-      const metrics = await sendInit({
-        model: settingsRef.current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
-        config,
-        seed_image_data: result.base64,
-        seed_filename: filename
-      })
-      applyInitResponse(metrics)
-    },
-    [sendInit, applyInitResponse, isStandaloneMode]
-  )
 
   const error = engineError ?? transportError
 
