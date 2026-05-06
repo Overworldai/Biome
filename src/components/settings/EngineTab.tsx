@@ -56,6 +56,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { t } = useTranslation()
   const { saveSettings } = useSettings()
   const engine = useEngine()
+  const checkEngine = engine.check
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
@@ -145,9 +146,9 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
   useEffect(() => {
     if (menuEngineMode === 'standalone') {
-      engine.check().catch(() => null)
+      checkEngine().catch(() => null)
     }
-  }, [menuEngineMode, engine])
+  }, [menuEngineMode, checkEngine])
 
   const serverUrlStatusRef = useRef(serverUrlStatus)
   serverUrlStatusRef.current = serverUrlStatus

@@ -22,7 +22,7 @@ type FrameSlot = {
 
 const FrameTimelineOverlay = () => {
   const { isStreaming } = useConnection()
-  const frames = useFrames()
+  const { temporalCompression, timelineRef } = useFrames()
   const { settings } = useSettings()
   const enabled = settings.debug_overlays.frame_timeline
   const [slots, setSlots] = useState<FrameSlot[]>([])
@@ -33,9 +33,9 @@ const FrameTimelineOverlay = () => {
 
     const tick = () => {
       const now = performance.now()
-      const { currentIndex, slotDisplayAts } = frames.timelineRef.current
+      const { currentIndex, slotDisplayAts } = timelineRef.current
 
-      const next: FrameSlot[] = Array.from({ length: frames.temporalCompression }, (_, i) => {
+      const next: FrameSlot[] = Array.from({ length: temporalCompression }, (_, i) => {
         const displayAt = slotDisplayAts[i]
 
         let state: SlotState
@@ -64,7 +64,7 @@ const FrameTimelineOverlay = () => {
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [enabled, isStreaming, frames])
+  }, [enabled, isStreaming, temporalCompression, timelineRef])
 
   if (!enabled || !isStreaming) return null
 

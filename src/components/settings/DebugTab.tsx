@@ -66,7 +66,7 @@ const DebugTab = forwardRef<DebugTabHandle, DebugTabProps>(({ settings, active }
     } catch {
       setDiagnosticsStatus(t('app.settings.debugMetrics.copyFailed'))
     }
-  }, [server, websocket, isServerMode, settings.engine_model, settings.engine_quant, t])
+  }, [server, websocket.allLogs, isServerMode, settings.engine_model, settings.engine_quant, t])
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>

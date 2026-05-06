@@ -11,7 +11,7 @@ import { RpcError } from '../../lib/wsRpc'
 const SceneEditOverlay = () => {
   const { t } = useTranslation()
   const requestPointerLock = useInput().pointerLock.request
-  const websocket = useWebsocket()
+  const wsRequest = useWebsocket().request
   const { state: sceneEditState, dispatch: dispatchSceneEdit } = useSession().sceneEdit
   const { phase, errorMessage } = sceneEditState
   const isActive = phase !== 'inactive'
@@ -72,7 +72,7 @@ const SceneEditOverlay = () => {
 
     dispatchSceneEdit({ type: 'SUBMIT', prompt: trimmed })
     try {
-      const result = await websocket.request('scene_edit', { prompt: trimmed }, 30_000)
+      const result = await wsRequest('scene_edit', { prompt: trimmed }, 30_000)
       dispatchSceneEdit({
         type: 'SUCCESS',
         preview:
@@ -90,7 +90,7 @@ const SceneEditOverlay = () => {
       }
       dispatchSceneEdit({ type: 'ERROR', message: msg })
     }
-  }, [prompt, phase, websocket, dispatchSceneEdit, t])
+  }, [prompt, phase, wsRequest, dispatchSceneEdit, t])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

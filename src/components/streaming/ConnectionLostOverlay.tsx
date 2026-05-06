@@ -42,7 +42,7 @@ const ConnectionLostOverlay = () => {
         requestedQuant: settings.engine_quant ?? null
       }
     })
-  }, [server, websocket, errorDetail, statusStage, isServerMode, settings.engine_model, settings.engine_quant])
+  }, [server, websocket.allLogs, errorDetail, statusStage, isServerMode, settings.engine_model, settings.engine_quant])
 
   return (
     <div
