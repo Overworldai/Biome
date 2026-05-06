@@ -10,6 +10,7 @@ import { useSettings } from '../hooks/settingsContextValue'
 import useEngineApi from '../hooks/useEngineApi'
 import useSeedsDir from '../hooks/useSeedsDir'
 import { createLogger } from '../utils/logger'
+import { useConnectionActions } from '../hooks/streaming/useConnectionActions'
 import { useEngineRespawn } from '../hooks/streaming/useEngineRespawn'
 import { useFrameRenderer } from '../hooks/streaming/useFrameRenderer'
 import { useLoadingFailureCleanup } from '../hooks/streaming/useLoadingFailureCleanup'
@@ -260,53 +261,23 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     if (isStreaming && isReady && !connectionLost) requestPointerLock()
   }, [isStreaming, isReady, connectionLost, requestPointerLock])
 
-  // Cleanup helper for logout/dismiss
-  const cleanupState = useCallback(() => {
-    cancelWarmFlow()
-    exitPointerLock()
-    disconnect()
-    setEngineError(null)
-    setSettingsOpen(false)
-    resumeSession()
-  }, [cancelWarmFlow, exitPointerLock, disconnect, resumeSession])
-
-  const stopServerIfRunning = useCallback(async () => {
-    if (isStandaloneMode && isServerRunning) {
-      log.info('Stopping standalone server...')
-      try {
-        await stopServer()
-        log.info('Server stopped')
-      } catch (err) {
-        log.error('Failed to stop server:', err)
-      }
-    }
-  }, [isStandaloneMode, isServerRunning, stopServer])
-
-  const dismissConnectionLost = useCallback(async () => {
-    log.info('Acknowledging connection lost overlay')
-    setConnectionLost(false)
-  }, [])
-
-  const reconnectAfterConnectionLost = useCallback(async () => {
-    log.info('Reconnecting after connection lost')
-    setConnectionLost(false)
-    cleanupState()
-    resetSession()
-    transitionTo(states.LOADING)
-  }, [cleanupState, resetSession, transitionTo, states.LOADING])
-
-  const cancelConnection = useCallback(async () => {
-    log.info('Cancelling connection')
-    cleanupState()
-    await stopServerIfRunning()
-    transitionTo(states.MAIN_MENU)
-  }, [cleanupState, stopServerIfRunning, transitionTo, states.MAIN_MENU])
-
-  const prepareReturnToMainMenu = useCallback(async () => {
-    log.info('Preparing return to main menu')
-    cleanupState()
-    await stopServerIfRunning()
-  }, [cleanupState, stopServerIfRunning])
+  const { dismissConnectionLost, reconnectAfterConnectionLost, cancelConnection, prepareReturnToMainMenu } =
+    useConnectionActions({
+      isStandaloneMode,
+      isServerRunning,
+      cancelWarmFlow,
+      disconnect,
+      exitPointerLock,
+      stopServer,
+      transitionTo,
+      loadingState: states.LOADING,
+      mainMenuState: states.MAIN_MENU,
+      resetSession,
+      resumeSession,
+      setEngineError,
+      setSettingsOpen,
+      setConnectionLost
+    })
 
   const error = engineError ?? transportError
 
