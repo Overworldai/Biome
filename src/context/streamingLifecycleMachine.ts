@@ -1,8 +1,10 @@
 import { PORTAL_STATES, type PortalState } from './portalStateMachine'
+import type { ConnectionStatus } from '../hooks/useWebSocket'
 import type { TranslatableError, TranslationKey } from '../i18n'
 
-const ACTIVE_CONNECTION_STATES = new Set(['connecting', 'connected'])
-const FAILURE_CONNECTION_STATES = new Set(['disconnected', 'error'])
+const isActiveConnection = (s: ConnectionStatus): boolean =>
+  s.kind === 'connecting' || s.kind === 'loading' || s.kind === 'ready'
+const isFailedConnection = (s: ConnectionStatus): boolean => s.kind === 'idle' || s.kind === 'error'
 
 export const STREAMING_LIFECYCLE_EVENT = {
   SYNC: 'sync'
@@ -72,13 +74,11 @@ export const initialStreamingLifecycleState: StreamingLifecycleState = {
 
 export type StreamingLifecycleSyncPayload = {
   portalState: PortalState
-  connectionState: string
-  transportError: TranslatableError | null
+  connectionStatus: ConnectionStatus
   selectedModel: string
   lastAppliedModel: string | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
-  socketReady: boolean
   initCompleted: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
@@ -99,13 +99,11 @@ export const streamingLifecycleReducer = (
 
   const {
     portalState,
-    connectionState,
-    transportError,
+    connectionStatus,
     selectedModel,
     lastAppliedModel,
     engineError,
     hasReceivedFrame,
-    socketReady,
     initCompleted,
     isPointerLocked,
     settingsOpen,
@@ -122,9 +120,10 @@ export const streamingLifecycleReducer = (
   const inLoadingState = portalState === PORTAL_STATES.LOADING
   const inStreamingState = portalState === PORTAL_STATES.STREAMING
   const inSessionPortalState = inLoadingState || inStreamingState
+  const socketOpen = connectionStatus.kind === 'loading' || connectionStatus.kind === 'ready'
+  const socketReady = connectionStatus.kind === 'ready'
 
-  const shouldIntentionalReconnect =
-    inStreamingState && connectionState === 'connected' && selectedModel !== lastAppliedModel
+  const shouldIntentionalReconnect = inStreamingState && socketOpen && selectedModel !== lastAppliedModel
 
   const enteredLoading = inLoadingState && state.lastPortalState !== PORTAL_STATES.LOADING
   if (enteredLoading) {
@@ -147,7 +146,7 @@ export const streamingLifecycleReducer = (
   if (
     next.intentionalReconnectInProgress &&
     inStreamingState &&
-    connectionState === 'disconnected' &&
+    connectionStatus.kind === 'idle' &&
     !next.loadingTransitionRequestedForIntentionalReconnect
   ) {
     next.effects.transitionToLoadingAfterIntentionalDisconnect = true
@@ -168,8 +167,7 @@ export const streamingLifecycleReducer = (
   // *before* the init response lands, so without this guard a crash between
   // session.ready and init response would transition us into STREAMING with
   // stale state (Overworldai/Biome#79 follow-up).
-  const canTransitionToStreaming =
-    inLoadingState && connectionState === 'connected' && socketReady && hasReceivedFrame && initCompleted
+  const canTransitionToStreaming = inLoadingState && socketReady && hasReceivedFrame && initCompleted
 
   if (canTransitionToStreaming && !next.streamingTransitionRequested) {
     next.effects.transitionToStreaming = true
@@ -184,28 +182,28 @@ export const streamingLifecycleReducer = (
     next.effects.pauseOnPointerUnlock = true
   }
 
-  if (inLoadingState && connectionState === 'connecting') {
+  if (inLoadingState && connectionStatus.kind === 'connecting') {
     next.loadingAttempted = true
   }
 
-  if (inLoadingState && next.loadingAttempted && FAILURE_CONNECTION_STATES.has(connectionState)) {
+  if (inLoadingState && next.loadingAttempted && isFailedConnection(connectionStatus)) {
     if (next.intentionalReconnectInProgress) {
       next.effects.suppressedIntentionalWarmError = true
     } else {
-      const isError = connectionState === 'error'
+      const transportError = connectionStatus.kind === 'error' ? connectionStatus.error : null
       next.effects.loadingFailureError = transportError
         ? { transportError }
-        : { key: isError ? 'app.server.connectionFailed' : 'app.server.connectionLost' }
+        : { key: connectionStatus.kind === 'error' ? 'app.server.connectionFailed' : 'app.server.connectionLost' }
     }
     next.loadingAttempted = false
   }
 
-  if (inStreamingState && ACTIVE_CONNECTION_STATES.has(connectionState)) {
+  if (inStreamingState && isActiveConnection(connectionStatus)) {
     next.wasConnectedInStreamingState = true
     next.connectionLostSignaled = false
   }
 
-  if (next.wasConnectedInStreamingState && inStreamingState && FAILURE_CONNECTION_STATES.has(connectionState)) {
+  if (next.wasConnectedInStreamingState && inStreamingState && isFailedConnection(connectionStatus)) {
     if (!next.connectionLostSignaled) {
       if (next.intentionalReconnectInProgress) {
         next.effects.suppressedIntentionalConnectionLost = true
@@ -229,7 +227,7 @@ export const streamingLifecycleReducer = (
     next.effects.clearConnectionLost = true
   }
 
-  if (inLoadingState && connectionState === 'connected' && next.intentionalReconnectInProgress) {
+  if (inLoadingState && socketOpen && next.intentionalReconnectInProgress) {
     next.intentionalReconnectInProgress = false
     next.loadingTransitionRequestedForIntentionalReconnect = false
   }

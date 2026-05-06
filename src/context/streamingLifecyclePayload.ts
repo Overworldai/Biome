@@ -1,17 +1,16 @@
 import { DEFAULT_WORLD_ENGINE_MODEL } from '../types/settings'
+import type { ConnectionStatus } from '../hooks/useWebSocket'
 import type { TranslatableError } from '../i18n'
 import type { PortalState } from './portalStateMachine'
 import type { StreamingLifecycleSyncPayload } from './streamingLifecycleMachine'
 
 type BuildStreamingLifecycleSyncPayloadArgs = {
   portalState: PortalState
-  connectionState: string
-  transportError: TranslatableError | null
+  connectionStatus: ConnectionStatus
   engineModel?: string | null
   lastAppliedModel: string | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
-  socketReady: boolean
   initCompleted: boolean
   isPointerLocked: boolean
   settingsOpen: boolean
@@ -33,13 +32,11 @@ export const buildStreamingLifecycleSyncPayload = (
 
   return {
     portalState: args.portalState,
-    connectionState: args.connectionState,
-    transportError: args.transportError,
+    connectionStatus: args.connectionStatus,
     selectedModel,
     lastAppliedModel: args.lastAppliedModel,
     engineError: args.engineError,
     hasReceivedFrame: args.hasReceivedFrame,
-    socketReady: args.socketReady,
     initCompleted: args.initCompleted,
     isPointerLocked: args.isPointerLocked,
     settingsOpen: args.settingsOpen,

@@ -1,7 +1,7 @@
 import type { EngineStatus } from '../types/app'
 import type { StageId } from '../stages'
 import type { TranslatableError } from '../i18n'
-import type { ServerConnection } from '../hooks/useWebSocket'
+import type { ConnectionStatus, ServerConnection } from '../hooks/useWebSocket'
 import type { LogRecord } from '../types/ipc'
 import type { InputCode } from '../types/input'
 import type { WsRequest } from '../lib/wsRpc'
@@ -13,13 +13,9 @@ export type StreamingStats = {
 }
 
 export type StreamingContextValue = {
-  connectionState: string
+  connectionStatus: ConnectionStatus
   connectionLost: boolean
-  error: TranslatableError | null
-  isConnected: boolean
   isVideoReady: boolean
-  isReady: boolean
-  isLoading: boolean
   isStreaming: boolean
   isPaused: boolean
   /** True when the user is actively driving the game (streaming + unpaused + no menu/modal).

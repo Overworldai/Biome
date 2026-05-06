@@ -42,7 +42,44 @@ const toLogRecord = (msg: LogMessage): LogRecord => ({
   fields: msg.fields
 })
 
-type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
+/** Discriminated lifecycle for the WebSocket connection. Replaces the
+ *  flat-string `connectionState` + parallel booleans (`isConnected`,
+ *  `isReady`, `isLoading`) — branch on `kind` rather than maintaining
+ *  off-by-one bool combinations.
+ *
+ *  Transitions:
+ *  - `idle`        → `connecting`  (consumer calls `connect`)
+ *  - `connecting`  → `loading`     (WS open event)
+ *  - `connecting`  → `error`       (WS construction / endpoint failure)
+ *  - `loading`     → `ready`       (`session.ready` stage push received)
+ *  - any           → `error`       (transport error or server `error` push)
+ *  - any           → `idle`        (explicit disconnect, or clean WS close
+ *                                  without a prior error)
+ *
+ *  `kind: 'ready'` is the connection-level "frames flowing" state and is
+ *  distinct from the portal-level `isStreaming` (which means "the
+ *  gameplay UI is mounted") — the two can briefly diverge during an
+ *  intentional reconnect.
+ */
+export type ConnectionStatus =
+  | { kind: 'idle' }
+  | { kind: 'connecting' }
+  | { kind: 'loading' }
+  | { kind: 'ready' }
+  | { kind: 'error'; error: TranslatableError }
+
+/** True when the socket is open (init may still be running). */
+export const isConnected = (s: ConnectionStatus): boolean => s.kind === 'loading' || s.kind === 'ready'
+
+/** True when the init handshake has completed and frames are flowing. */
+export const isReady = (s: ConnectionStatus): boolean => s.kind === 'ready'
+
+/** True during the connect / init phases (anything before frames flow,
+ *  excluding the idle and error terminal states). */
+export const isLoading = (s: ConnectionStatus): boolean => s.kind === 'connecting' || s.kind === 'loading'
+
+/** Extract the transport error if the connection is in `error`, else null. */
+export const connectionError = (s: ConnectionStatus): TranslatableError | null => (s.kind === 'error' ? s.error : null)
 
 export type FrameProfile = {
   inferMs: number
@@ -81,9 +118,8 @@ const emptyConnection = (): ServerConnection => ({
 })
 
 type WebSocketHook = {
-  connectionState: ConnectionState
+  status: ConnectionStatus
   statusStage: StageId | null
-  error: TranslatableError | null
   frame: Blob | string | null
   hasRealFrame: boolean
   frameId: number
@@ -107,19 +143,14 @@ type WebSocketHook = {
   reset: () => void
   request: WsRequest
   clearLogs: () => void
-  isConnected: boolean
-  isReady: boolean
-  isLoading: boolean
 }
 
 export const useWebSocket = (): WebSocketHook => {
-  const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
+  const [status, setStatus] = useState<ConnectionStatus>({ kind: 'idle' })
   const [frame, setFrame] = useState<Blob | string | null>(null)
   const [frameId, setFrameId] = useState(0)
-  const [error, setError] = useState<TranslatableError | null>(null)
   const [genTime, setGenTime] = useState<number | null>(null)
   const [latentGenMs, setLatentGenMs] = useState<number | null>(null)
-  const [isReady, setIsReady] = useState(false)
   const [statusStage, setStatusStage] = useState<StageId | null>(null)
   const [hasRealFrame, setHasRealFrame] = useState(false)
   const [logs, setLogs] = useState<LogRecord[]>([])
@@ -171,13 +202,12 @@ export const useWebSocket = (): WebSocketHook => {
       }
 
       if (!endpointUrl) {
-        setError(new TranslatableError('app.server.noEndpointUrl'))
+        setStatus({ kind: 'error', error: new TranslatableError('app.server.noEndpointUrl') })
         return
       }
 
       isConnectingRef.current = true
-      setConnectionState('connecting')
-      setError(null)
+      setStatus({ kind: 'connecting' })
       setStatusStage(null)
       setHasRealFrame(false)
       allLogsRef.current = []
@@ -194,8 +224,10 @@ export const useWebSocket = (): WebSocketHook => {
         wsUrl = `${baseUrl}${separator}protocol_version=${PROTOCOL_VERSION}`
       } catch (err) {
         isConnectingRef.current = false
-        setConnectionState('error')
-        setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint'))
+        setStatus({
+          kind: 'error',
+          error: err instanceof TranslatableError ? err : new TranslatableError('app.server.invalidWebsocketEndpoint')
+        })
         return
       }
 
@@ -204,8 +236,10 @@ export const useWebSocket = (): WebSocketHook => {
         ws = new WebSocket(wsUrl)
       } catch (err) {
         isConnectingRef.current = false
-        setConnectionState('error')
-        setError(err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed'))
+        setStatus({
+          kind: 'error',
+          error: err instanceof TranslatableError ? err : new TranslatableError('app.server.websocketConnectionFailed')
+        })
         return
       }
       wsRef.current = ws
@@ -216,7 +250,7 @@ export const useWebSocket = (): WebSocketHook => {
       ws.onopen = () => {
         if (wsRef.current !== ws) return
         isConnectingRef.current = false
-        setConnectionState('connected')
+        setStatus({ kind: 'loading' })
       }
 
       ws.binaryType = 'arraybuffer'
@@ -302,7 +336,7 @@ export const useWebSocket = (): WebSocketHook => {
           case 'status': {
             setStatusStage(msg.stage)
             if (msg.stage === 'session.ready') {
-              setIsReady(true)
+              setStatus({ kind: 'ready' })
               isReadyRef.current = true
             }
             break
@@ -312,8 +346,8 @@ export const useWebSocket = (): WebSocketHook => {
             break
           }
           case 'error': {
-            setError(resolveServerMessage(msg, 'app.server.fallbackError'))
-            setConnectionState('error')
+            const error = resolveServerMessage(msg, 'app.server.fallbackError')
+            setStatus({ kind: 'error', error })
             if (msg.snapshot) {
               setConnection((prev) => ({ ...prev, lastErrorSnapshot: msg.snapshot ?? prev.lastErrorSnapshot }))
             }
@@ -342,8 +376,7 @@ export const useWebSocket = (): WebSocketHook => {
       ws.onerror = () => {
         if (wsRef.current !== ws) return
         isConnectingRef.current = false
-        setError(new TranslatableError('app.server.websocketError'))
-        setConnectionState('error')
+        setStatus({ kind: 'error', error: new TranslatableError('app.server.websocketError') })
       }
 
       ws.onclose = () => {
@@ -351,8 +384,12 @@ export const useWebSocket = (): WebSocketHook => {
         isConnectingRef.current = false
         rpc.detach()
         wsRef.current = null
-        setConnectionState('disconnected')
-        setIsReady(false)
+        // Preserve any prior `error` state across close so the
+        // post-mortem stays attached; otherwise drop to idle. The server
+        // typically sends an error push and *then* closes, so without
+        // this guard we'd erase the diagnostic mid-close.
+        setStatus((prev) => (prev.kind === 'error' ? prev : { kind: 'idle' }))
+        isReadyRef.current = false
         // Preserve statusStage across close so a bug report captures where the
         // server was in its init flow (e.g. "session.scene_authoring.load") when it
         // died.  It's overwritten by the next session's status messages on reconnect.
@@ -384,11 +421,9 @@ export const useWebSocket = (): WebSocketHook => {
       wsRef.current.close()
       wsRef.current = null
     }
-    setConnectionState('disconnected')
-    setIsReady(false)
+    setStatus({ kind: 'idle' })
     setFrame(null)
     setFrameId(0)
-    setError(null)
     setGenTime(null)
     // Explicit user-initiated disconnect — clear everything including any
     // previously cached systemInfo, since this isn't a "server died" case.
@@ -463,9 +498,8 @@ export const useWebSocket = (): WebSocketHook => {
   }, [disconnect])
 
   return {
-    connectionState,
+    status,
     statusStage,
-    error,
     frame,
     hasRealFrame,
     frameId,
@@ -488,10 +522,7 @@ export const useWebSocket = (): WebSocketHook => {
     setPlaceholderFrame,
     reset,
     request,
-    clearLogs,
-    isConnected: connectionState === 'connected',
-    isReady,
-    isLoading: connectionState === 'connecting' || (connectionState === 'connected' && !isReady)
+    clearLogs
   }
 }
 

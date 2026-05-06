@@ -96,7 +96,7 @@ const AppShell = () => {
     toggleSettings,
     transitionTo
   } = usePortal()
-  const { isStreaming, isUIActive, connectionState, prepareReturnToMainMenu, sceneEditState } = useStreaming()
+  const { isStreaming, isUIActive, connectionStatus, prepareReturnToMainMenu, sceneEditState } = useStreaming()
   useGamepadNavigation(isUIActive)
   const {
     getBackgroundVideoElement,
@@ -252,7 +252,7 @@ const AppShell = () => {
   const handleLaunch = () => {
     if (
       portalState === portalStates.MAIN_MENU &&
-      connectionState !== 'connecting' &&
+      connectionStatus.kind !== 'connecting' &&
       !isSettingsOpen &&
       transitionPhase === 'idle'
     ) {

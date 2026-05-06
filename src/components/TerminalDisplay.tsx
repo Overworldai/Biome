@@ -4,6 +4,7 @@ import type { TranslationKey } from '../i18n'
 import { buildDiagnosticsPayload } from '../lib/diagnosticsPayload'
 import { resolveStage } from '../stages'
 import { useStreaming } from '../context/streamingContextValue'
+import { connectionError } from '../hooks/useWebSocket'
 import { useVortex } from '../context/vortexContextValue'
 import { useSettings } from '../hooks/settingsContextValue'
 import { useEngineLogs } from '../hooks/useEngineLogs'
@@ -26,16 +27,16 @@ type TerminalDisplayProps = {
 const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const { t } = useTranslation()
   const {
-    connectionState,
+    connectionStatus,
     statusStage,
     isFreshInstall,
     engineError,
-    error,
     cancelConnection,
     wsLogs,
     wsAllLogs,
     connection
   } = useStreaming()
+  const error = connectionError(connectionStatus)
   const { setErrorMode } = useVortex()
   const { isServerMode, settings } = useSettings()
   const { logs: engineLogs } = useEngineLogs(!isServerMode)
@@ -69,9 +70,9 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   const statusText = useMemo(() => {
     if (errorDetail) return t('app.loading.error')
     if (currentStage) return t(`stage.${currentStage.id}` as TranslationKey)
-    if (connectionState === 'connecting') return t('app.loading.connecting')
+    if (connectionStatus.kind === 'connecting') return t('app.loading.connecting')
     return t('app.loading.starting')
-  }, [connectionState, currentStage, errorDetail, t])
+  }, [connectionStatus, currentStage, errorDetail, t])
 
   const handleExportDiagnostics = async () => {
     if (isExportingDiagnostics) return
@@ -106,7 +107,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
         message: errorDetail,
         stage: statusStage,
         progress_percent: progressPercent,
-        connection_state: connectionState
+        connection_state: connectionStatus.kind
       },
       serverLogs: wsAllLogs,
       session: {
@@ -118,7 +119,7 @@ const TerminalDisplay = ({ onCancel }: TerminalDisplayProps) => {
   }, [
     wsAllLogs,
     connection,
-    connectionState,
+    connectionStatus,
     errorDetail,
     isServerMode,
     progressPercent,

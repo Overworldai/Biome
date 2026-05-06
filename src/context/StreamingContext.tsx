@@ -10,7 +10,7 @@ import {
   streamingLifecycleReducer,
   STREAMING_LIFECYCLE_EVENT
 } from './streamingLifecycleMachine'
-import useWebSocket from '../hooks/useWebSocket'
+import useWebSocket, { isConnected as wsIsConnected, isReady as wsIsReady } from '../hooks/useWebSocket'
 import useGameInput from '../hooks/useGameInput'
 import { useSettings } from '../hooks/settingsContextValue'
 import { ENGINE_MODES, DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../types/settings'
@@ -78,9 +78,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     error: engineSetupError
   } = useEngine()
   const {
-    connectionState,
+    status: connectionStatus,
     statusStage,
-    error,
     frame,
     frameId,
     genTime,
@@ -102,11 +101,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     setPlaceholderFrame,
     reset,
     request: wsRequest,
-    clearLogs: clearWsLogs,
-    isConnected,
-    isReady,
-    isLoading
+    clearLogs: clearWsLogs
   } = useWebSocket()
+  const isConnected = wsIsConnected(connectionStatus)
+  const isReady = wsIsReady(connectionStatus)
   const { getSeedsDirPath, openSeedsDir, seedsDir } = useSeeds()
 
   const [isPaused, setIsPaused] = useState(false)
@@ -379,13 +377,11 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       type: STREAMING_LIFECYCLE_EVENT.SYNC,
       payload: buildStreamingLifecycleSyncPayload({
         portalState: state,
-        connectionState,
-        transportError: error,
+        connectionStatus,
         engineModel: settings?.engine_model,
         lastAppliedModel: lastAppliedModelRef.current,
         engineError,
         hasReceivedFrame,
-        socketReady: isReady,
         // Init is considered complete once applyInitResponse has set model.
         // Used to gate the LOADING → STREAMING transition so an error between
         // session.ready and the init response doesn't leak us into streaming.
@@ -400,14 +396,12 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [
     state,
-    connectionState,
-    error,
+    connectionStatus,
     settings?.engine_model,
     settings?.engine_quant,
     settings.scene_authoring_enabled,
     engineError,
     hasReceivedFrame,
-    isReady,
     connection.model,
     isPointerLocked,
     settingsOpen,
@@ -474,7 +468,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const loadingFailed =
-      state === states.LOADING && (connectionState === 'error' || connectionState === 'disconnected')
+      state === states.LOADING && (connectionStatus.kind === 'error' || connectionStatus.kind === 'idle')
 
     if (!loadingFailed || !engineError) {
       loadingFailureStopHandledRef.current = false
@@ -495,7 +489,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   }, [
     state,
     states.LOADING,
-    connectionState,
+    connectionStatus,
     engineError,
     isStandaloneMode,
     isServerRunning,
@@ -777,13 +771,9 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
 
   const value: StreamingContextValue = {
     // Connection state
-    connectionState,
+    connectionStatus,
     connectionLost,
-    error,
-    isConnected,
     isVideoReady: hasReceivedFrame && canvasReady,
-    isReady,
-    isLoading,
     isStreaming,
     isPaused,
     isUIActive: !inputEnabled,
