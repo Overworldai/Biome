@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStreaming } from '../context/streamingContextValue'
+import { useSettings } from '../hooks/settingsContextValue'
 
 const OVERLAY_BG = 'bg-black/50'
 const OVERLAY_BORDER = 'border border-white/20'
@@ -19,12 +20,14 @@ type FrameSlot = {
 }
 
 const FrameTimelineOverlay = () => {
-  const { frameTimelineOverlay, isStreaming, frameTimelineRef, temporalCompression } = useStreaming()
+  const { isStreaming, frameTimelineRef, temporalCompression } = useStreaming()
+  const { settings } = useSettings()
+  const enabled = settings.debug_overlays.frame_timeline
   const [slots, setSlots] = useState<FrameSlot[]>([])
   const rafRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!frameTimelineOverlay || !isStreaming) return
+    if (!enabled || !isStreaming) return
 
     const tick = () => {
       const now = performance.now()
@@ -59,9 +62,9 @@ const FrameTimelineOverlay = () => {
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [frameTimelineOverlay, isStreaming, frameTimelineRef, temporalCompression])
+  }, [enabled, isStreaming, frameTimelineRef, temporalCompression])
 
-  if (!frameTimelineOverlay || !isStreaming) return null
+  if (!enabled || !isStreaming) return null
 
   return (
     <div

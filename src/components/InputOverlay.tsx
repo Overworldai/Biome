@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStreaming } from '../context/streamingContextValue'
+import { useSettings } from '../hooks/settingsContextValue'
 import type { InputCode } from '../types/input'
 import { CODE_MAP } from '../hooks/useGameInput'
 import VirtualGamepad, { type GamepadAxes } from './VirtualGamepad'
@@ -270,8 +271,9 @@ const computeSimulatedKBM = (pressedGamepad: Set<InputCode>): Set<InputCode> => 
 }
 
 const InputOverlay = () => {
-  const { inputOverlay, isStreaming, pressedKeys, mouseButtons, pressedGamepad, scrollActive, gamepadSensitivity } =
-    useStreaming()
+  const { isStreaming, pressedKeys, mouseButtons, pressedGamepad, scrollActive, gamepadSensitivity } = useStreaming()
+  const { settings } = useSettings()
+  const enabled = settings.debug_overlays.input
 
   const mouseDeltaRef = useRef({ dx: 0, dy: 0 })
   const [mouseDelta, setMouseDelta] = useState({ dx: 0, dy: 0 })
@@ -283,7 +285,7 @@ const InputOverlay = () => {
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (!inputOverlay || !isStreaming) {
+    if (!enabled || !isStreaming) {
       if (decayTimeoutRef.current) clearTimeout(decayTimeoutRef.current)
       return
     }
@@ -304,10 +306,10 @@ const InputOverlay = () => {
       document.removeEventListener('mousemove', handleMouseMove)
       if (decayTimeoutRef.current) clearTimeout(decayTimeoutRef.current)
     }
-  }, [inputOverlay, isStreaming])
+  }, [enabled, isStreaming])
 
   useEffect(() => {
-    if (!inputOverlay || !isStreaming) return
+    if (!enabled || !isStreaming) return
     let raf = 0
     const poll = () => {
       const pads = navigator.getGamepads()
@@ -343,7 +345,7 @@ const InputOverlay = () => {
       cancelAnimationFrame(raf)
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     }
-  }, [inputOverlay, isStreaming])
+  }, [enabled, isStreaming])
 
   const simulatedCodes = useMemo(() => computeSimulatedKBM(pressedGamepad), [pressedGamepad])
 
@@ -357,7 +359,7 @@ const InputOverlay = () => {
     return { dx, dy }
   }, [axes.rx, axes.ry, gamepadSensitivity])
 
-  if (!inputOverlay || !isStreaming) return null
+  if (!enabled || !isStreaming) return null
 
   return (
     <>

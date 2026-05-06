@@ -42,9 +42,6 @@ export type StreamingContextValue = {
   stats: StreamingStats
   connection: ServerConnection
   inputLatency: number | null
-  performanceStatsOverlay: boolean
-  inputOverlay: boolean
-  frameTimelineOverlay: boolean
   frameTimelineRef: { current: { currentIndex: number; slotDisplayAts: (number | null)[] } }
 
   endpointUrl: string | null

@@ -60,9 +60,9 @@ const computeFrametimeStats = (entries: { time: number; value: number }[]): Fram
 }
 
 const PerformanceStatsOverlay = () => {
-  const { performanceStatsOverlay, isStreaming, connection, inputLatency, latentGenMs, temporalCompression, frameId } =
-    useStreaming()
+  const { isStreaming, connection, inputLatency, latentGenMs, temporalCompression, frameId } = useStreaming()
   const { settings } = useSettings()
+  const enabled = settings.debug_overlays.performance_stats
   const quant = settings.engine_quant ?? 'none'
   const modelLabel = connection.model ? (quant !== 'none' ? `${connection.model} (${quant})` : connection.model) : '—'
   const [, setTick] = useState(0)
@@ -122,15 +122,15 @@ const PerformanceStatsOverlay = () => {
 
   // Re-render at 2Hz to update sparklines and recompute frametime stats
   useEffect(() => {
-    if (!performanceStatsOverlay || !isStreaming) return
+    if (!enabled || !isStreaming) return
     const interval = setInterval(() => {
       setTick((t) => t + 1)
       setFtStats(computeFrametimeStats(ftBufRef.current))
     }, 500)
     return () => clearInterval(interval)
-  }, [performanceStatsOverlay, isStreaming])
+  }, [enabled, isStreaming])
 
-  if (!performanceStatsOverlay || !isStreaming) return null
+  if (!enabled || !isStreaming) return null
 
   const p = runtime?.profile ?? null
 
