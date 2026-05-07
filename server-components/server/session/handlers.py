@@ -219,7 +219,18 @@ async def handle_init(
         world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
         await world_engine.load_engine(model_uri, quant=cfg.quant, backend=cfg.engine_backend)
         world_engine.set_progress_callback(None)
+        # The reload wiped engine-side seed state; the connection's
+        # seed-dedup cache (`current_seed_hash`/`filename`) and the
+        # `original_seed_frame` U-key target are predicated on the
+        # engine holding that seed, so they have to invalidate
+        # together. Without this, a re-sent identical seed hits the
+        # hash-match short-circuit in `load_seed_from_data` and the
+        # new engine starts with `seed_frame is None` — warmup then
+        # raises `SeedFrameNotSetError`.
         world_engine.seed_frame = None
+        world_engine.original_seed_frame = None
+        conn.current_seed_hash = None
+        conn.current_seed_filename = None
         conn.perceptual_frame_count = 0
         conn.max_perceptual_frames = (world_engine.n_frames - 2) * world_engine.temporal_compression
         model_changed = True
