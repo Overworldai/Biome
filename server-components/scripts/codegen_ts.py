@@ -585,7 +585,7 @@ def main() -> int:
     output = generate(modules)
 
     if args.check:
-        if not args.output.exists() or args.output.read_text() != output:
+        if not args.output.exists() or args.output.read_text(encoding="utf-8") != output:
             print(
                 f"[codegen] {args.output} is stale. Re-run `uv run python scripts/codegen_ts.py` and commit.",
                 file=sys.stderr,
@@ -595,7 +595,7 @@ def main() -> int:
         return 0
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(output)
+    args.output.write_text(output, encoding="utf-8")
     print(f"[codegen] wrote {args.output}")
     return 0
 
