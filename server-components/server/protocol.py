@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 # ──────────────────────────────────────────────────────────────────────
 
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -208,11 +208,13 @@ class SessionConfig(BaseModel):
     server compares against the running session and reconfigures the
     deltas. `quant` is the only nullable field: `None` means "no
     quantization" (the renderer maps its `'none'` UI sentinel to null
-    on the wire)."""
+    on the wire). `engine_backend` selects the inference package — a
+    backend change forces a model reload, same as a `quant` change."""
 
     model_config = _FrozenStrict
 
     quant: Literal["fp8w8a8", "intw8a8"] | None = None
+    engine_backend: Literal["world_engine", "quark"] = "world_engine"
     scene_authoring: bool
     action_logging: bool
     video_recording: bool

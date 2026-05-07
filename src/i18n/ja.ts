@@ -191,6 +191,13 @@ const ja = {
           fp8w8a8: 'FP8 W8A8',
           intw8a8: 'INT8 W8A8'
         },
+        engineBackend: {
+          title: 'バックエンド',
+          description:
+            'どの推論エンジンでモデルを動かしますか？ ドライバの問題や性能比較のために切り替えてみてください。',
+          world_engine: 'World Engine',
+          quark: 'Quark'
+        },
         worldModel: {
           title: 'ワールドモデル',
           description: 'どの Overworld モデルで世界をシミュレートしますか？',

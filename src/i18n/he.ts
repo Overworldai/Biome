@@ -187,6 +187,12 @@ const he = {
           fp8w8a8: 'FP8 W8A8',
           intw8a8: 'INT8 W8A8'
         },
+        engineBackend: {
+          title: 'מנגנון',
+          description: 'איזה מנגנון אינפרנס יפעיל את המודל? החלף אם יש בעיות דרייבר או כדי להשוות ביצועים.',
+          world_engine: 'World Engine',
+          quark: 'Quark'
+        },
         worldModel: {
           title: 'מודל עולם',
           description: 'איזה מודל Overworld ידמה את העולם שלך?',

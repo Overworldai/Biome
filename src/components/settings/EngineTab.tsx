@@ -2,7 +2,14 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
-import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
+import {
+  ENGINE_BACKEND_OPTIONS,
+  ENGINE_MODES,
+  QUANT_OPTIONS,
+  type EngineBackend,
+  type QuantOption,
+  type Settings
+} from '../../types/settings'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { useEngine } from '../../context/streaming/engine'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
@@ -27,6 +34,9 @@ type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error'
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
 const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
+/** On macOS the legacy `world_engine` package doesn't import (CUDA-only),
+ *  so quark is the only viable backend. On Windows/Linux both are available. */
+const availableEngineBackendOptions = ENGINE_BACKEND_OPTIONS.filter((b) => !isMac || b !== 'world_engine')
 
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
@@ -38,9 +48,9 @@ export type EngineTabHandle = {
   /** Check whether the current draft is savable. If not, surfaces an error modal
    *  internally and returns false so the parent can abort the save flow. */
   validateBeforeSave: () => boolean
-  /** True when engine-mode / world-model / quantization differ from persisted
-   *  settings — parent uses this (alongside `isStreaming`) to decide whether a
-   *  mid-session restart confirmation modal is needed. */
+  /** True when engine-mode / world-model / backend / quantization differ from
+   *  persisted settings — parent uses this (alongside `isStreaming`) to decide
+   *  whether a mid-session restart confirmation modal is needed. */
   hasChangesRequiringRestart: () => boolean
 }
 
@@ -66,6 +76,12 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
   const [menuQuant, setMenuQuant] = useState<QuantOption>(settings.engine_quant ?? 'none')
+  const [menuEngineBackend, setMenuEngineBackend] = useState<EngineBackend>(() => {
+    const saved = settings.engine_backend ?? 'world_engine'
+    // On Mac, `world_engine` isn't a runnable choice — coerce to `quark`
+    // so the dropdown always reflects something that can actually load.
+    return isMac && saved === 'world_engine' ? 'quark' : saved
+  })
   const [menuCapInferenceFps, setMenuCapInferenceFps] = useState(() => settings.cap_inference_fps ?? true)
 
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
@@ -111,6 +127,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
           engine_mode: menuEngineMode === 'server' ? ENGINE_MODES.SERVER : ENGINE_MODES.STANDALONE,
           server_url: nextServerUrl,
           engine_model: menuWorldModel,
+          engine_backend: menuEngineBackend,
           engine_quant: menuQuant,
           cap_inference_fps: menuCapInferenceFps
         }
@@ -127,6 +144,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
         if (menuEngineMode !== configMode) return true
         if (menuWorldModel !== configWorldModel) return true
         if (menuQuant !== (settings.engine_quant ?? 'none')) return true
+        if (menuEngineBackend !== (settings.engine_backend ?? 'world_engine')) return true
         return false
       }
     }),
@@ -135,12 +153,14 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       menuServerUrl,
       menuWorldModel,
       menuQuant,
+      menuEngineBackend,
       menuCapInferenceFps,
       serverUrlStatus,
       configEngineMode,
       configServerUrl,
       configWorldModel,
-      settings.engine_quant
+      settings.engine_quant,
+      settings.engine_backend
     ]
   )
 
@@ -477,6 +497,17 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
             {menuModelsError}
           </p>
         )}
+      </SettingsSection>
+
+      <SettingsSection title="app.settings.engineBackend.title" description="app.settings.engineBackend.description">
+        <SettingsSelect
+          options={availableEngineBackendOptions.map((b) => ({
+            value: b,
+            label: `app.settings.engineBackend.${b}` as const
+          }))}
+          value={menuEngineBackend}
+          onChange={(v) => setMenuEngineBackend(v as EngineBackend)}
+        />
       </SettingsSection>
 
       <SettingsSection title="app.settings.performance.title" description="app.settings.performance.description">

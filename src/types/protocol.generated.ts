@@ -13,7 +13,7 @@ import { z } from 'zod'
 
 // ─── Constants ────────────────────────────────────────────────────────
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 // ─── Enums ────────────────────────────────────────────────────────────
 
@@ -126,10 +126,12 @@ export type PromptNotif = z.infer<typeof PromptNotifSchema>
  * server compares against the running session and reconfigures the
  * deltas. `quant` is the only nullable field: `None` means "no
  * quantization" (the renderer maps its `'none'` UI sentinel to null
- * on the wire).
+ * on the wire). `engine_backend` selects the inference package — a
+ * backend change forces a model reload, same as a `quant` change.
  */
 export const SessionConfigSchema = z.object({
   quant: z.enum(['fp8w8a8', 'intw8a8']).optional(),
+  engine_backend: z.enum(['world_engine', 'quark']),
   scene_authoring: z.boolean(),
   action_logging: z.boolean(),
   video_recording: z.boolean(),

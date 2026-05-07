@@ -192,6 +192,12 @@ const en = {
           fp8w8a8: 'FP8 W8A8',
           intw8a8: 'INT8 W8A8'
         },
+        engineBackend: {
+          title: 'Backend',
+          description: 'which inference engine should run the model? swap if you hit driver issues or want to compare.',
+          world_engine: 'World Engine',
+          quark: 'Quark'
+        },
         worldModel: {
           title: 'World Model',
           description: 'which Overworld model will simulate your world?',

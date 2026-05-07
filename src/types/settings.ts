@@ -5,6 +5,12 @@ export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as co
 export const LOCALE_OPTIONS = ['system', ...SUPPORTED_LOCALES] as const
 export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
 export type QuantOption = (typeof QUANT_OPTIONS)[number]
+// Inference backend. `world_engine` is the legacy upstream package (CUDA only);
+// `quark` is the unified backend that dispatches to CUDA or Metal at runtime
+// and is the only option on Apple Silicon. Default stays on `world_engine`
+// until quark has soaked enough to flip.
+export const ENGINE_BACKEND_OPTIONS = ['world_engine', 'quark'] as const
+export type EngineBackend = (typeof ENGINE_BACKEND_OPTIONS)[number]
 
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
@@ -60,6 +66,7 @@ export const settingsSchema = z.object({
   server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
+  engine_backend: z.enum(ENGINE_BACKEND_OPTIONS).default('world_engine'),
   engine_quant: z.enum(QUANT_OPTIONS).default('none'),
   cap_inference_fps: z.boolean().default(true),
   offline_mode: z.boolean().default(false),

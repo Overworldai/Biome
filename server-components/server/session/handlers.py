@@ -205,15 +205,19 @@ async def handle_init(
             conn.video_recorder = None
             logger.info("Video recording disabled")
 
-    # Model delta — reload if model URI or quantization changed.
+    # Model delta — reload if model URI, quantization, or backend changed.
     # The engine must be loaded before the seed so that seed_target_size
     # and temporal_compression are resolved from the actual model config.
     model_changed = False
-    if model_uri and (model_uri != world_engine.model_uri or cfg.quant != world_engine.quant):
+    if model_uri and (
+        model_uri != world_engine.model_uri
+        or cfg.quant != world_engine.quant
+        or cfg.engine_backend != world_engine.backend
+    ):
         verb = "Live model switch" if is_game_loop else "Requested model"
-        logger.info(f"{verb}: {model_uri} (quant={cfg.quant})")
+        logger.info(f"{verb}: {model_uri} (quant={cfg.quant}, backend={cfg.engine_backend})")
         world_engine.set_progress_callback(conn.push_progress, conn.main_loop)
-        await world_engine.load_engine(model_uri, quant=cfg.quant)
+        await world_engine.load_engine(model_uri, quant=cfg.quant, backend=cfg.engine_backend)
         world_engine.set_progress_callback(None)
         world_engine.seed_frame = None
         conn.perceptual_frame_count = 0

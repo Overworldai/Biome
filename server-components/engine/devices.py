@@ -62,9 +62,7 @@ SAFETY_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
 # fall back to the plain ``MemoryError`` so the type still exists for
 # ``except devices.OutOfMemoryError`` blocks (which never trigger on
 # Apple anyway since there's no CUDA allocator pressure).
-OutOfMemoryError: type[BaseException] = (
-    MemoryError if _IS_DARWIN_ARM64 else torch.cuda.OutOfMemoryError
-)
+OutOfMemoryError: type[BaseException] = MemoryError if _IS_DARWIN_ARM64 else torch.cuda.OutOfMemoryError
 
 # Opaque NVML device handle — pynvml lacks proper stubs.
 NvmlHandle = object

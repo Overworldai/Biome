@@ -184,6 +184,12 @@ const zh = {
           fp8w8a8: 'FP8 W8A8',
           intw8a8: 'INT8 W8A8'
         },
+        engineBackend: {
+          title: '后端',
+          description: '用哪个推理引擎来跑模型？遇到驱动问题或想比较性能时可以切换。',
+          world_engine: 'World Engine',
+          quark: 'Quark'
+        },
         worldModel: {
           title: '世界模型',
           description: '要使用哪个 Overworld 模型来模拟你的世界？',

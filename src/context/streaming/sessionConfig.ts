@@ -16,6 +16,7 @@ export const buildSessionConfig = async (settings: Settings, isStandaloneMode: b
   const quant = settings.engine_quant ?? 'none'
   return {
     quant: quant !== 'none' ? quant : undefined,
+    engine_backend: settings.engine_backend ?? 'world_engine',
     scene_authoring: settings.scene_authoring_enabled ?? false,
     action_logging: settings.debug_overlays?.action_logging ?? false,
     video_recording: recordingEnabled,

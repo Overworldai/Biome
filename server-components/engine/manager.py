@@ -9,31 +9,18 @@ import asyncio
 import base64
 import contextlib
 import gc
+import importlib
 import io
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-
-import os
+from typing import Literal
 
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812  -- canonical alias used throughout the PyTorch ecosystem
 from PIL import Image
-
-# Inference backend toggle. ``True`` routes through ``quark.Engine``
-# (Apple + CUDA — quark's ``Engine.__new__`` factory dispatches to
-# ``EngineCUDA`` or ``EngineMetal`` based on platform). ``False``
-# uses the legacy upstream ``world_engine`` package (CUDA only).
-# Hard-coded for now; will become a runtime setting once quark is
-# the default. ``CtrlInput`` and ``WorldEngine`` are aliased so the
-# rest of the file stays backend-agnostic.
-USE_QUARK = True
-
-if USE_QUARK:
-    from quark import CtrlInput, Engine as WorldEngine
-else:
-    from world_engine import CtrlInput, WorldEngine  # type: ignore[no-redef]
 
 try:
     import simplejpeg
@@ -47,6 +34,35 @@ from engine.devices import WORLD_ENGINE_DEVICE
 from server.protocol import StageId
 
 logger = structlog.stdlib.get_logger(__name__)
+
+
+# ============================================================================
+# Backend selection
+# ============================================================================
+
+# Inference backend identifier — wire-aligned with the renderer's
+# `EngineBackend` setting (`SessionConfig.engine_backend`). ``'quark'``
+# routes through ``quark.Engine`` (CUDA + Apple — quark's
+# ``Engine.__new__`` factory dispatches to ``EngineCUDA`` or
+# ``EngineMetal`` based on platform). ``'world_engine'`` uses the
+# legacy upstream ``world_engine`` package (CUDA only); on Apple
+# Silicon the renderer must pick ``'quark'`` since legacy
+# ``world_engine`` doesn't import there.
+EngineBackend = Literal["world_engine", "quark"]
+
+
+def _resolve_backend(backend: EngineBackend) -> tuple[type, type]:
+    """Lazy-import the chosen backend's ``WorldEngine`` and ``CtrlInput``
+    classes. Both packages export the same surface (`WorldEngine`-like
+    factory + `CtrlInput` dataclass), so the rest of the manager stays
+    backend-agnostic — only the import target differs."""
+    if backend == "quark":
+        mod = importlib.import_module("quark")
+        return mod.Engine, mod.CtrlInput
+    if backend == "world_engine":
+        mod = importlib.import_module("world_engine")
+        return mod.WorldEngine, mod.CtrlInput
+    raise UnsupportedBackendError(backend)
 
 
 # ============================================================================
@@ -104,6 +120,16 @@ class UnsupportedModelTypeError(RuntimeError):
         self.model_type = model_type
         self.supported = supported
         super().__init__(f"Unsupported model_type {model_type!r}; supported: {', '.join(supported)}")
+
+
+class UnsupportedBackendError(ValueError):
+    """Raised when `load_engine` is called with a backend identifier that
+    isn't one of the wire-protocol values (`'world_engine'` / `'quark'`).
+    The renderer's enum and `SessionConfig.engine_backend` already pin the
+    set; this is the server-side last line of defence."""
+
+    def __init__(self, backend: object) -> None:
+        super().__init__(f"Unsupported engine backend {backend!r}; expected 'world_engine' or 'quark'")
 
 
 @dataclass(frozen=True)
@@ -187,6 +213,15 @@ class WorldEngineManager:
         self.original_seed_frame = None  # Preserved across scene edits for U-key reset
         self.model_uri: str | None = None
         self.quant: str | None = None
+        # Active backend (`'world_engine'` / `'quark'`) and the resolved
+        # classes from that package. Both populated by `load_engine`; a
+        # backend change forces a reload (the delta-check in `handle_init`
+        # treats it identically to a model-URI or quant change). The
+        # ``_ctrl_input_cls`` is what `warmup` uses to construct the
+        # zero-input control struct without re-importing per call.
+        self.backend: EngineBackend | None = None
+        self._engine_cls: type | None = None
+        self._ctrl_input_cls: type | None = None
         self.engine_warmed_up = False
         self._progress_callback = None
         self._progress_loop = None
@@ -206,10 +241,15 @@ class WorldEngineManager:
             raise EngineNotLoadedError
         return self.model_config
 
-    def _require_engine(self) -> WorldEngine:
+    def _require_engine(self):
         if self._engine is None:
             raise EngineNotLoadedError
         return self._engine
+
+    def _require_ctrl_input_cls(self) -> type:
+        if self._ctrl_input_cls is None:
+            raise EngineNotLoadedError
+        return self._ctrl_input_cls
 
     @property
     def n_frames(self) -> int:
@@ -299,6 +339,11 @@ class WorldEngineManager:
         self.model_config = None
         self.seed_frame = None
         self.engine_warmed_up = False
+        # Resolved backend classes are kept across unload — they're
+        # stateless module attributes and re-importing them on every
+        # backend-unchanged reload would cost a few hundred ms for no
+        # benefit. `load_engine` overwrites them when the backend
+        # actually changes.
         self._free_device_memory_sync()
 
     def _load_seed_from_file_sync(self, file_path: str) -> torch.Tensor | None:
@@ -350,23 +395,37 @@ class WorldEngineManager:
         """Load a seed frame from base64 encoded data (async wrapper)."""
         return await self._run_on_device_thread(lambda: self._load_seed_from_base64_sync(base64_data))
 
-    async def load_engine(self, model_uri: str, quant: str | None = None):
+    async def load_engine(
+        self,
+        model_uri: str,
+        quant: str | None = None,
+        backend: EngineBackend = "world_engine",
+    ):
         """Initialize or switch the WorldEngine model.
 
         model_uri is required — the server does not have a default model.
-        The client must always specify which model to load.
+        The client must always specify which model to load. ``backend``
+        selects the inference package; a backend change forces a reload
+        even if the model URI and quant are unchanged.
         """
         if not model_uri or not model_uri.strip():
             raise ModelUriRequiredError
         async with self._model_load_lock:
             requested_model = model_uri.strip()
             requested_quant = quant or None  # Normalize empty string to None
+            requested_backend: EngineBackend = backend
 
             model_unchanged = requested_model == self.model_uri
             quant_unchanged = requested_quant == self.quant
+            backend_unchanged = requested_backend == self.backend
 
-            if self._engine is not None and model_unchanged and quant_unchanged:
-                logger.info("Model already loaded", model=requested_model, quant=self.quant)
+            if self._engine is not None and model_unchanged and quant_unchanged and backend_unchanged:
+                logger.info(
+                    "Model already loaded",
+                    model=requested_model,
+                    quant=self.quant,
+                    backend=self.backend,
+                )
                 return
 
             if self._engine is not None:
@@ -374,6 +433,8 @@ class WorldEngineManager:
                     logger.info("Switching model", from_model=self.model_uri, to_model=requested_model)
                 if not quant_unchanged:
                     logger.info("Switching quant", from_quant=self.quant, to_quant=requested_quant)
+                if not backend_unchanged:
+                    logger.info("Switching backend", from_backend=self.backend, to_backend=requested_backend)
                 self._log_device_memory("before unload")
                 await self._run_on_device_thread(self._unload_engine_sync)
                 self._log_device_memory("after unload")
@@ -384,6 +445,18 @@ class WorldEngineManager:
             await self._run_on_device_thread(self._free_device_memory_sync)
             self._log_device_memory("after pre-load cleanup")
 
+            # Resolve backend classes lazily so the chosen package is
+            # only imported when actually used. Re-resolves only when
+            # the backend changes — `_resolve_backend` itself is a
+            # cheap `importlib.import_module` lookup, but the real
+            # cost is the first import of `quark` or `world_engine`
+            # which triggers torch / coremltools / etc. eager imports.
+            if not backend_unchanged or self._engine_cls is None:
+                engine_cls, ctrl_input_cls = _resolve_backend(requested_backend)
+                self._engine_cls = engine_cls
+                self._ctrl_input_cls = ctrl_input_cls
+            engine_cls = self._engine_cls
+
             self._report_progress(StageId.SESSION_LOADING_MODEL)
             logger.info(
                 "Loading model",
@@ -391,6 +464,7 @@ class WorldEngineManager:
                 total_steps=LOAD_ENGINE_TOTAL_STEPS,
                 model=requested_model,
                 quant=requested_quant,
+                backend=requested_backend,
                 device=WORLD_ENGINE_DEVICE,
             )
 
@@ -406,24 +480,24 @@ class WorldEngineManager:
             # Biome-owned path (via ``BIOME_TAEHV_CACHE_DIR``, set by
             # Electron) keeps every TAEHV byte under app control on
             # Apple; quark CUDA ignores it. The legacy world_engine
-            # path doesn't accept it at all, so it's gated on
-            # ``USE_QUARK``. The shared kwargs (``device``, ``quant``,
+            # path doesn't accept it at all, so it's gated on the
+            # active backend. The shared kwargs (``device``, ``quant``,
             # ``dtype``) are accepted identically by both backends —
             # quark's Metal subclass internally forces ``quant`` to
             # all-bf16 (no native fp8 in MSL) and treats ``device`` as
             # informational, so passing the CUDA-shaped args through
             # is safe.
             backend_kwargs: dict[str, object] = {}
-            if USE_QUARK:
+            if requested_backend == "quark":
                 backend_kwargs["taehv_cache_dir"] = os.environ.get("BIOME_TAEHV_CACHE_DIR") or None
 
             dtype_attempts = [torch.bfloat16, torch.float16]
             for dtype in dtype_attempts:
                 try:
-                    logger.info("Attempting load", backend="quark" if USE_QUARK else "world_engine", dtype=str(dtype))
+                    logger.info("Attempting load", backend=requested_backend, dtype=str(dtype))
 
-                    def _create_engine(dtype=dtype):
-                        return WorldEngine(
+                    def _create_engine(dtype=dtype, cls=engine_cls):
+                        return cls(
                             requested_model,
                             device=WORLD_ENGINE_DEVICE,
                             quant=requested_quant,
@@ -479,6 +553,7 @@ class WorldEngineManager:
 
             self.model_uri = requested_model
             self.quant = requested_quant
+            self.backend = requested_backend
 
             # Keep any existing seed frame. Server-side set_model flow explicitly clears
             # seed_frame when a new seed is required after a model switch.
@@ -655,6 +730,7 @@ class WorldEngineManager:
         callers translate that into a typed `MessageId.QUANT_UNSUPPORTED_GPU`.
         Other runtime errors propagate as-is."""
         engine = self._require_engine()
+        ctrl_input_cls = self._require_ctrl_input_cls()
         if self.seed_frame is None:
             raise SeedFrameNotSetError
         seed = self.seed_frame
@@ -685,7 +761,7 @@ class WorldEngineManager:
 
             self._report_progress(StageId.SESSION_WARMUP_COMPILE)
             gen_start = time.perf_counter()
-            _ = engine.gen_frame(ctrl=CtrlInput(button=set(), mouse=(0.0, 0.0)))
+            _ = engine.gen_frame(ctrl=ctrl_input_cls(button=set(), mouse=(0.0, 0.0)))
             log.info(
                 "First frame generated",
                 current_step=3,
