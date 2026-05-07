@@ -31,6 +31,15 @@ No test framework is configured.
 
 ## Python Style
 
+Server-components Python aims for a Rust-influenced, tightly-typed style — `basedpyright --strict` + `ruff check` with zero project-wide suppressions.
+
+- **Pydantic for interface types** — wire protocol, RPC requests/responses, session state, configuration. Prefer `BaseModel` (or `dataclass` for purely-internal types) over free-form `dict` at any boundary, with `model_config = ConfigDict(frozen=True, extra="forbid")` by default.
+- **Sum types via discriminated unions** — model protocol variants with `Annotated[Union[...], Field(discriminator="type")]` and `Literal["..."]` tags rather than `if msg.get("type") == ...`. Use `match` with exhaustive coverage.
+- **Type fields tightly** — avoid `Any`, `dict[str, Any]`, and `getattr` for defensive access. If a field exists, type it; if it might not, model the absence with `T | None` (preferred over `Optional[T]`).
+- **State flows explicitly** — pass state down via FastAPI `app.state` / dependency injection rather than singletons or module globals. Constructors take what they need.
+- **Frozen by default** — Pydantic models and dataclasses with `frozen=True`; mutate by constructing new values rather than reassigning fields.
+- **Local imports** are reserved for load-time or cycle-breaking reasons, and documented when used.
+
 ### Suppressions strategy
 
 `pyproject.toml` carries **zero project-wide ruff or basedpyright suppressions** — every silenced lint/type report is scoped to the line or file that triggers it, so a new violation in pure-Python code surfaces under strict mode. Three layers, in order of preference:
