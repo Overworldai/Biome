@@ -13,14 +13,27 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   lint-frontend:
     name: Lint frontend (Prettier + tsc)
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      # Reuse the shared build-env script for Node — keeps the Node
-      # version in sync with the Docker image and release workflow.
+      # Linux: reuse the shared build-env script for Node — keeps the
+      # Node version in sync with the Docker image and release workflow.
       - name: Set up build environment
+        if: runner.os == 'Linux'
         run: sudo ./build/appimage/setup-build-env.sh
+
+      # Windows: no shared script yet; native setup.
+      - name: Setup Node.js
+        if: runner.os == 'Windows'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -42,7 +55,11 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   lint-backend:
     name: Lint backend (ruff + basedpyright)
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
     defaults:
       run:
         working-directory: server-components
