@@ -15,28 +15,25 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import os
-import platform as _platform_mod
-import sys
 
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812  -- canonical alias used throughout the PyTorch ecosystem
 from PIL import Image
 
-# ``WorldEngine`` import varies by platform. On Apple Silicon the
-# DiT runs through ``quark.Engine`` (Metal-cpp + ANE TAEHV via CoreML
-# through ``quark.taehv``), the WE-shaped drop-in for the legacy
-# ``MLXWorldEngine``. On CUDA / CPU the upstream ``world_engine``
-# package is the production path. The conditional import keeps the
-# Apple Silicon dep graph torch-only (no ``world_engine``-imported
-# CUDA ops) and the CUDA dep graph quark-free. ``CtrlInput`` is
-# re-exported from whichever backend module is loaded so caller
-# typing stays uniform.
-_IS_DARWIN_ARM64 = sys.platform == "darwin" and _platform_mod.machine() == "arm64"
-if _IS_DARWIN_ARM64:
-    from quark import CtrlInput, Engine as WorldEngine  # type: ignore[no-redef]
+# Inference backend toggle. ``True`` routes through ``quark.Engine``
+# (Apple + CUDA — quark's ``Engine.__new__`` factory dispatches to
+# ``EngineCUDA`` or ``EngineMetal`` based on platform). ``False``
+# uses the legacy upstream ``world_engine`` package (CUDA only).
+# Hard-coded for now; will become a runtime setting once quark is
+# the default. ``CtrlInput`` and ``WorldEngine`` are aliased so the
+# rest of the file stays backend-agnostic.
+USE_QUARK = True
+
+if USE_QUARK:
+    from quark import CtrlInput, Engine as WorldEngine
 else:
-    from world_engine import CtrlInput, WorldEngine
+    from world_engine import CtrlInput, WorldEngine  # type: ignore[no-redef]
 
 try:
     import simplejpeg
@@ -402,79 +399,56 @@ class WorldEngineManager:
             last_error = None
             selected_dtype = None
 
-            if _IS_DARWIN_ARM64:
-                # Apple Silicon: ``WorldEngine`` is the locally-aliased
-                # ``quark.Engine`` (see module-level conditional import).
-                # Quark on Metal is bf16-only — no native fp8 (no e4m3 in
-                # MSL) and no int8 KV path today — so the dtype-fallback
-                # loop and the client's ``requested_quant`` are both
-                # irrelevant. ``available_quants`` only offers ``"none"``
-                # on this platform anyway.
-                #
-                # ``taehv_cache_dir`` plumbing: quark.Engine pulls
-                # pre-built CoreML ``.mlpackage`` artifacts from a HF
-                # repo on first use and materialises them under
-                # ``cache_dir`` (HF cache + a hard-linked mirror, see
-                # ``quark.taehv.fetch``). Pointing it at a Biome-owned
-                # path keeps every TAEHV byte under app control so
-                # uninstall / "clear cache" flows can ``rm -rf`` it
-                # without leaving artifacts in ``~/.cache/quark/``.
-                # Read from ``BIOME_TAEHV_CACHE_DIR`` (Electron sets
-                # it when spawning the server); fall through to
-                # quark's default if unset.
-                taehv_cache_dir = os.environ.get("BIOME_TAEHV_CACHE_DIR") or None
-                try:
-                    logger.info(
-                        "Attempting load",
-                        backend="quark.Engine",
-                        quant="bf16",
-                        taehv_cache_dir=taehv_cache_dir or "<quark default>",
-                    )
+            # Backend-specific extra kwargs. ``taehv_cache_dir`` is a
+            # quark-only kwarg: quark.taehv pulls pre-built CoreML
+            # ``.mlpackage`` artifacts from HF on first use and
+            # materialises them under ``cache_dir``. Pointing it at a
+            # Biome-owned path (via ``BIOME_TAEHV_CACHE_DIR``, set by
+            # Electron) keeps every TAEHV byte under app control on
+            # Apple; quark CUDA ignores it. The legacy world_engine
+            # path doesn't accept it at all, so it's gated on
+            # ``USE_QUARK``. The shared kwargs (``device``, ``quant``,
+            # ``dtype``) are accepted identically by both backends —
+            # quark's Metal subclass internally forces ``quant`` to
+            # all-bf16 (no native fp8 in MSL) and treats ``device`` as
+            # informational, so passing the CUDA-shaped args through
+            # is safe.
+            backend_kwargs: dict[str, object] = {}
+            if USE_QUARK:
+                backend_kwargs["taehv_cache_dir"] = os.environ.get("BIOME_TAEHV_CACHE_DIR") or None
 
-                    def _create_engine():
+            dtype_attempts = [torch.bfloat16, torch.float16]
+            for dtype in dtype_attempts:
+                try:
+                    logger.info("Attempting load", backend="quark" if USE_QUARK else "world_engine", dtype=str(dtype))
+
+                    def _create_engine(dtype=dtype):
                         return WorldEngine(
                             requested_model,
-                            quant="bf16",
-                            taehv_cache_dir=taehv_cache_dir,
+                            device=WORLD_ENGINE_DEVICE,
+                            quant=requested_quant,
+                            dtype=dtype,
+                            **backend_kwargs,
                         )
 
                     new_engine = await self._run_on_device_thread(_create_engine)
-                    selected_dtype = torch.bfloat16
-                except Exception as e:  # noqa: BLE001  -- quark.Engine init can raise from coremltools / huggingface_hub / Metal-cpp; capture and re-raise below
+                    selected_dtype = dtype
+                    break
+                except devices.OutOfMemoryError as e:
                     last_error = e
+                    logger.warning(
+                        "OOM loading; retrying with lower memory settings",
+                        model=requested_model,
+                        dtype=str(dtype),
+                    )
                     await self._run_on_device_thread(self._unload_engine_sync)
-            else:
-                dtype_attempts = [torch.bfloat16, torch.float16]
-                for dtype in dtype_attempts:
-                    try:
-                        logger.info("Attempting load", dtype=str(dtype))
-
-                        def _create_engine(dtype=dtype):
-                            return WorldEngine(
-                                requested_model,
-                                device=WORLD_ENGINE_DEVICE,
-                                quant=requested_quant,
-                                dtype=dtype,
-                            )
-
-                        new_engine = await self._run_on_device_thread(_create_engine)
-                        selected_dtype = dtype
-                        break
-                    except devices.OutOfMemoryError as e:
-                        last_error = e
-                        logger.warning(
-                            "OOM loading; retrying with lower memory settings",
-                            model=requested_model,
-                            dtype=str(dtype),
-                        )
-                        await self._run_on_device_thread(self._unload_engine_sync)
-                        self._log_device_memory("after OOM cleanup")
-                    except Exception as e:  # noqa: BLE001  -- WorldEngine init can raise from torch / HF / world_engine; we capture and re-raise below
-                        last_error = e
-                        # Clear partially-allocated model state after failed initialization.
-                        await self._run_on_device_thread(self._unload_engine_sync)
-                        self._log_device_memory("after failed load cleanup")
-                        break
+                    self._log_device_memory("after OOM cleanup")
+                except Exception as e:  # noqa: BLE001  -- engine init can raise from torch / HF / coremltools / Metal-cpp / world_engine; capture and re-raise below
+                    last_error = e
+                    # Clear partially-allocated model state after failed initialization.
+                    await self._run_on_device_thread(self._unload_engine_sync)
+                    self._log_device_memory("after failed load cleanup")
+                    break
 
             if new_engine is None:
                 raise (last_error if last_error is not None else RuntimeError("Failed to initialize WorldEngine"))

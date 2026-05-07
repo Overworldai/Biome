@@ -29,15 +29,14 @@ dependencies = [
   "gguf>=0.10.0; sys_platform != 'darwin'",
   "imageio-ffmpeg==0.6.0",
   "structlog==25.5.0",
-  # Apple Silicon inference backend. Replaces the legacy MLX path —
-  # ``quark.Engine`` is a drop-in for ``world_engine.MLXWorldEngine``
-  # on the same hardware, runs the DiT on Metal-cpp directly + the
-  # TAEHV VAE on the Apple Neural Engine via CoreML through
-  # ``quark.taehv``. ``[engine]`` brings in torch / Pillow / PyYAML /
-  # einops + ``quark[taehv]`` (coremltools + huggingface_hub) — all
-  # already transitively present in Biome's deps, no new top-level
-  # surface.
-  "quark[engine] ; sys_platform == 'darwin'",
+  # Quark inference backend, used on every platform. ``Engine`` is a
+  # drop-in for ``world_engine.WorldEngine`` / ``MLXWorldEngine`` and
+  # dispatches to ``EngineCUDA`` (Linux / Windows) or ``EngineMetal``
+  # (Apple Silicon) via its ``__new__`` factory. ``[engine]`` brings
+  # in torch / Pillow / PyYAML / einops + ``quark[taehv]``
+  # (coremltools + huggingface_hub) — all already transitively
+  # present in Biome's deps, no new top-level surface.
+  "quark[engine]",
 ]
 
 [dependency-groups]
