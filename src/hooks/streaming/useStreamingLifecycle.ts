@@ -13,6 +13,7 @@ import type { ConnectionStatus } from '../engine/useWebSocket'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { TranslatableError } from '../../i18n'
 import type { Settings } from '../../types/settings'
+import type { RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Lifecycle')
@@ -35,7 +36,7 @@ export function useStreamingLifecycle(opts: {
   portalState: PortalState
   connectionStatus: ConnectionStatus
   settings: Settings
-  lastAppliedSession: string | null
+  lastApplied: RestartSignatures | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
   initCompleted: boolean
@@ -70,7 +71,7 @@ export function useStreamingLifecycle(opts: {
         portalState: opts.portalState,
         connectionStatus: opts.connectionStatus,
         settings: opts.settings,
-        lastAppliedSession: opts.lastAppliedSession,
+        lastApplied: opts.lastApplied,
         engineError: opts.engineError,
         hasReceivedFrame: opts.hasReceivedFrame,
         initCompleted: opts.initCompleted,
@@ -91,7 +92,7 @@ export function useStreamingLifecycle(opts: {
     opts.settingsOpen,
     opts.isPaused,
     opts.sceneEditActive,
-    opts.lastAppliedSession
+    opts.lastApplied
   ])
 
   // Run the effects emitted by the latest reducer pass.

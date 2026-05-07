@@ -154,7 +154,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [getSeedsDirPath])
 
-  const { selectSeed, lastAppliedSession, resetSession } = useSessionInit({
+  const { selectSeed, lastApplied, resetSession } = useSessionInit({
     portalState: state,
     loadingState: states.LOADING,
     isConnected: wsIsConnected(connectionStatus),
@@ -214,7 +214,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     portalState: state,
     connectionStatus,
     settings,
-    lastAppliedSession,
+    lastApplied,
     engineError,
     hasReceivedFrame,
     // Init is considered complete once applyInitResponse has set the

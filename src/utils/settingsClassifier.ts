@@ -39,6 +39,17 @@ export const getSessionSignature = (s: Settings): string => signatureFor(s, SESS
 export const getProcessSignature = (s: Settings): string => signatureFor(s, PROCESS_PATHS)
 export const getLiveSignature = (s: Settings): string => signatureFor(s, LIVE_PATHS)
 
+/** Bundle of signatures for the two restart-triggering classes. The
+ *  lifecycle reducer compares this against the last-applied snapshot to
+ *  decide whether a settings change requires an in-place reconnect or a
+ *  full server respawn — see `intentionalRestart` in the reducer. */
+export type RestartSignatures = { session: string; process: string }
+
+export const getRestartSignatures = (s: Settings): RestartSignatures => ({
+  session: getSessionSignature(s),
+  process: getProcessSignature(s)
+})
+
 /** The strongest class of change between `prev` and `next`. `process`
  *  beats `session` beats `live` beats `none` — apply the heaviest
  *  applicable handler. */

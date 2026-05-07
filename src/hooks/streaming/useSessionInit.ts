@@ -4,7 +4,7 @@ import { buildSessionConfig } from '../../context/streaming/sessionConfig'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
 import { DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../../types/settings'
-import { getLiveSignature, getSessionSignature } from '../../utils/settingsClassifier'
+import { getLiveSignature, getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Session')
@@ -19,15 +19,15 @@ type SendInit = (params: Omit<InitRequest, 'type' | 'req_id'>) => Promise<InitRe
  *  - `lastSeedRef`: the most-recently-loaded seed (filename + base64)
  *    so we can resume with the same seed across reconnects without
  *    re-loading the IPC blob.
- *  - `lastAppliedSession`: the session signature
- *    (`getSessionSignature(settings)`) the server is currently
- *    configured for. Surfaced so the lifecycle reducer can detect a
- *    settings change that requires an intentional reconnect.
+ *  - `lastApplied`: the session+process signatures the server is
+ *    currently configured for. Surfaced so the lifecycle reducer can
+ *    detect a settings change that requires either an intentional
+ *    reconnect (session diff) or a respawn (process diff).
  *  - `warmBootstrapSentRef`: an idempotency guard so the bootstrap
  *    effect runs once per LOADING → connected transition.
  *
- *  `resetSession()` clears the bootstrap guard and the applied session
- *  signature; the lifecycle effects fire it on intentional reconnect
+ *  `resetSession()` clears the bootstrap guard and the applied
+ *  signatures; the lifecycle effects fire it on intentional reconnect
  *  and on teardown so the next LOADING entry starts from a clean
  *  slate. */
 export function useSessionInit(opts: {
@@ -42,7 +42,7 @@ export function useSessionInit(opts: {
   setPlaceholderFrame: (frame: Blob | string | null) => void
 }): {
   selectSeed: (filename: string) => Promise<void>
-  lastAppliedSession: string | null
+  lastApplied: RestartSignatures | null
   resetSession: () => void
 } {
   const {
@@ -59,7 +59,7 @@ export function useSessionInit(opts: {
 
   const lastSeedRef = useRef<{ filename: string; imageData: string } | null>(null)
   const warmBootstrapSentRef = useRef(false)
-  const [lastAppliedSession, setLastAppliedSession] = useState<string | null>(null)
+  const [lastApplied, setLastApplied] = useState<RestartSignatures | null>(null)
 
   // Read-latest settings without depending on the whole settings object —
   // the live re-apply effect is keyed on a small subset and reads the
@@ -98,9 +98,10 @@ export function useSessionInit(opts: {
         setPlaceholderFrame(new Blob([bytes], { type: 'image/jpeg' }))
       }
 
-      // Set lastAppliedSession before await so the lifecycle machine doesn't
-      // see a session mismatch during the re-render triggered by applyInitResponse.
-      setLastAppliedSession(getSessionSignature(settings))
+      // Set lastApplied before await so the lifecycle machine doesn't
+      // see a stale mismatch during the re-render triggered by
+      // applyInitResponse.
+      setLastApplied(getRestartSignatures(settings))
 
       // App version — embedded into recording metadata so MP4s carry a
       // self-describing record of what Biome build produced them. Best-effort;
@@ -180,8 +181,8 @@ export function useSessionInit(opts: {
 
   const resetSession = useCallback(() => {
     warmBootstrapSentRef.current = false
-    setLastAppliedSession(null)
+    setLastApplied(null)
   }, [])
 
-  return { selectSeed, lastAppliedSession, resetSession }
+  return { selectSeed, lastApplied, resetSession }
 }
