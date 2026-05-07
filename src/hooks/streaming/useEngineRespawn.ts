@@ -65,12 +65,24 @@ export function useEngineRespawn(opts: {
 
     log.info('Process-class settings changed - respawning server')
 
-    disconnect()
-    if (isServerRunning) {
-      stopServer().catch((err) => log.error('Failed to stop server during respawn:', err))
-    }
-    setEngineError(null)
-    transitionTo(loadingState)
+    // Tear down in order, awaiting `stopServer` so the IPC "server
+    // exited" event has propagated to `isServerRunning=false` before
+    // LOADING fires. Without the await, the warm-connect flow reads
+    // stale React state, picks the attach-to-running branch, and
+    // throws "Server exited before becoming ready" while the doomed
+    // server finishes dying.
+    void (async () => {
+      disconnect()
+      if (isServerRunning) {
+        try {
+          await stopServer()
+        } catch (err) {
+          log.error('Failed to stop server during respawn:', err)
+        }
+      }
+      setEngineError(null)
+      transitionTo(loadingState)
+    })()
   }, [
     settings,
     portalState,
