@@ -676,7 +676,7 @@ class SceneAuthoringManager:
         target_h, target_w = self._aligned_size(h_orig, w_orig)
 
         scene_pil = Image.fromarray(frame_numpy).resize((target_w, target_h))
-        reference_pil = _flatten_to_white(reference).resize((target_w, target_h))
+        reference_pil = _flatten_and_letterbox(reference, target_h, target_w)
 
         prompt = _build_prop_edit_prompt(kind=kind, target=target, subject=subject)
 
@@ -818,6 +818,23 @@ def _flatten_to_white(image: Image.Image) -> Image.Image:
     bg = Image.new("RGB", image.size, (255, 255, 255))
     bg.paste(image, mask=image.split()[3])
     return bg
+
+
+def _flatten_and_letterbox(reference: Image.Image, target_h: int, target_w: int) -> Image.Image:
+    """Flatten the reference onto white and letterbox it onto a white
+    target_w-by-target_h canvas (uniform scale, centred). Used so the
+    multi-image Klein edit receives a reference with the same aspect
+    as the scene -- a non-uniform resize here is what causes the
+    horizontal-stretch artefacts on spawned props."""
+    flat = _flatten_to_white(reference)
+    src_w, src_h = flat.size
+    scale = min(target_w / src_w, target_h / src_h)
+    new_w = max(1, round(src_w * scale))
+    new_h = max(1, round(src_h * scale))
+    scaled = flat.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
+    canvas.paste(scaled, ((target_w - new_w) // 2, (target_h - new_h) // 2))
+    return canvas
 
 
 def _build_prop_edit_prompt(kind: str, target: str, subject: str) -> str:
