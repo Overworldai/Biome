@@ -95,6 +95,18 @@ export type EngineLifecycleContextValue = {
   /** Cancel an in-flight reinstall by triggering Electron's
    *  `abort-engine-install` IPC. */
   abortReinstall: () => Promise<void>
+
+  /** Override the saved `engine_mode` for orchestration purposes —
+   *  pass `true` to speculatively bring up the local server, `false`
+   *  to tear it down, or `null` to revert to the saved setting.
+   *
+   *  Used by the settings menu so the user gets a working model picker
+   *  while toggling the engine_mode draft, without requiring them to
+   *  Save first. Clearing on unmount restores the saved-settings view.
+   *
+   *  No-op when the lifecycle is mid-stream — see `EngineTab`'s
+   *  streaming guard for the rationale. */
+  setDraftStandalone: (value: boolean | null) => void
 }
 
 export const EngineLifecycleContext = createContext<EngineLifecycleContextValue | null>(null)

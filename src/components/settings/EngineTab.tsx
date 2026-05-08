@@ -4,6 +4,7 @@ import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
 import { useEngineLifecycle } from '../../context/engineLifecycle/engineLifecycleContextValue'
+import { useConnection } from '../../context/streaming/connection'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -59,6 +60,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
   const lifecycle = useEngineLifecycle()
+  const { isStreaming } = useConnection()
   const checkEngine = lifecycle.check
   const engineReady = lifecycle.state.kind === 'ready'
 
@@ -144,6 +146,28 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       checkEngine().catch(() => null)
     }
   }, [menuEngineMode, checkEngine])
+
+  // Speculatively drive the engine lifecycle from the menu's draft toggle so
+  // the model picker has a working server to query before the user clicks
+  // Save. Skipped while streaming — flipping the toggle mid-session would
+  // tear down the active engine; the existing restart-confirm modal in
+  // MenuSettingsView still gates that case at save-time.
+  const setDraftStandalone = lifecycle.setDraftStandalone
+  useEffect(() => {
+    if (isStreaming) return
+    setDraftStandalone(menuEngineMode === 'standalone')
+  }, [menuEngineMode, isStreaming, setDraftStandalone])
+
+  // Clear the override on unmount so the lifecycle reverts to the saved
+  // setting — handles the back-out-without-saving path. Separated from the
+  // sync-effect above so toggling within the menu doesn't briefly null the
+  // override between cleanup and re-set.
+  useEffect(
+    () => () => {
+      setDraftStandalone(null)
+    },
+    [setDraftStandalone]
+  )
 
   const serverUrlStatusRef = useRef(serverUrlStatus)
   serverUrlStatusRef.current = serverUrlStatus

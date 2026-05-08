@@ -79,9 +79,17 @@ const startServer = async (): Promise<LifecycleState> => {
 }
 
 export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) => {
-  const { isStandaloneMode } = useSettings()
+  const { isStandaloneMode: savedStandalone } = useSettings()
   const engine = useEngineApi()
   const [state, setState] = useState<LifecycleState>(() => ({ kind: 'preparing' }))
+
+  // Optional override from the settings menu so it can speculatively bring
+  // up / tear down the local server while the user is toggling engine_mode
+  // in the draft, without forcing them to Save first. `null` means "no
+  // override — use the saved setting"; the provider re-orchestrates on every
+  // effective-mode change just as it does on a saved-settings change.
+  const [draftStandalone, setDraftStandaloneState] = useState<boolean | null>(null)
+  const isStandaloneMode = draftStandalone ?? savedStandalone
 
   // Latest-state ref so `ensureReady`'s wait loop reads fresh state across
   // its `await new Promise(...)` boundaries without listing `state` as a
@@ -100,11 +108,6 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
   // waiter re-checks its loop condition and either resolves or
   // re-registers.
   const waitersRef = useRef<(() => void)[]>([])
-
-  // The orchestration must run exactly once per mount. React StrictMode in
-  // dev double-invokes effects on the first commit, which would otherwise
-  // double-spawn the server.
-  const ranOnceRef = useRef(false)
 
   useEffect(() => {
     const waiters = waitersRef.current
@@ -186,15 +189,24 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
     await invoke('abort-engine-install')
   }, [])
 
+  // Fires on mount and whenever `isStandaloneMode` flips (e.g. user
+  // toggling engine_mode in settings). The `runExclusive` lock handles
+  // StrictMode's dev double-mount and any in-flight reinstall — concurrent
+  // calls coalesce on the same pipeline promise.
   useEffect(() => {
-    if (ranOnceRef.current) return
-    ranOnceRef.current = true
     void runExclusive(async () => {
       if (!isStandaloneMode) {
-        // Server mode: no local boot. The renderer talks to the configured
-        // `server_url`; reachability is handled by the existing
-        // serverUrlStatus probe on the settings panel.
+        // Server mode: no local boot. Stop any local server left over
+        // from a previous standalone session so it doesn't keep running
+        // unused — useEngineRespawn skips this teardown when the user
+        // toggles modes from the main menu (its guard is mid-stream-only),
+        // so the lifecycle has to handle it.
         log.info('Server mode: skipping local startup orchestration')
+        try {
+          await invoke('stop-engine-server')
+        } catch (e) {
+          log.warn('stop-engine-server during mode switch failed:', errorMessage(e))
+        }
         return { kind: 'ready' }
       }
 
@@ -228,6 +240,10 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
     })
   }, [isStandaloneMode, runExclusive])
 
+  const setDraftStandalone = useCallback((value: boolean | null) => {
+    setDraftStandaloneState(value)
+  }, [])
+
   const value = useMemo<EngineLifecycleContextValue>(
     () => ({
       state,
@@ -240,7 +256,8 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
       probeServerHealth: engine.probeServerHealth,
       reinstallEngine,
       ensureReady,
-      abortReinstall
+      abortReinstall,
+      setDraftStandalone
     }),
     [
       state,
@@ -253,7 +270,8 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
       engine.probeServerHealth,
       reinstallEngine,
       ensureReady,
-      abortReinstall
+      abortReinstall,
+      setDraftStandalone
     ]
   )
 
