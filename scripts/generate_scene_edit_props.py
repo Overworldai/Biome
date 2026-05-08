@@ -76,6 +76,9 @@ class Prop:
     # Holdables only: long/heavy props that read better as a two-handed grip
     # (rifles, sledgehammer, axe, bat, chainsaw). Ignored for spawnables.
     two_handed: bool = False
+    # Spawnables only: when true, render with a character/full-body studio
+    # wrapper instead of the object wrapper (which says "no people").
+    is_character: bool = False
 
     @property
     def id(self) -> str:
@@ -94,6 +97,17 @@ def _h(category: str, slug: str, prompt: str, *, two_handed: bool = False) -> Pr
 
 def _s(category: str, slug: str, prompt: str) -> Prop:
     return Prop(category=category, slug=slug, kind="spawnable", prompt=prompt)
+
+
+def _n(category: str, slug: str, prompt: str) -> Prop:
+    """NPC/character: spawnable that uses the character studio wrapper."""
+    return Prop(
+        category=category,
+        slug=slug,
+        kind="spawnable",
+        prompt=prompt,
+        is_character=True,
+    )
 
 
 CATALOGUE: list[Prop] = [
@@ -352,6 +366,101 @@ CATALOGUE: list[Prop] = [
         "duffel_bag",
         "a black canvas duffel bag with carrying straps",
     ),
+    _n(
+        "npcs",
+        "construction_worker",
+        "a Latino male construction worker, stocky build, in an orange high-visibility vest, white hard hat, jeans, and work boots",
+    ),
+    _n(
+        "npcs",
+        "mechanic_jumpsuit",
+        "a white male mechanic, average build, in a navy blue grease-stained work jumpsuit",
+    ),
+    _n(
+        "npcs",
+        "chef_white_uniform",
+        "a South Asian male chef, heavyset build, in a white double-breasted jacket and a tall white toque hat",
+    ),
+    _n(
+        "npcs",
+        "doctor_lab_coat",
+        "a Black male doctor, slim build, in a white lab coat over a shirt and tie, stethoscope around the neck",
+    ),
+    _n(
+        "npcs",
+        "nurse_scrubs",
+        "a tall lean Middle Eastern male nurse in light blue medical scrubs with a stethoscope around the neck",
+    ),
+    _n(
+        "npcs",
+        "security_guard",
+        "a tall muscular East Asian male security guard in a black uniform shirt with shoulder badges, peaked cap, and dark trousers",
+    ),
+    _n(
+        "npcs",
+        "janitor_uniform",
+        "a short stocky white male janitor in grey work overalls and a baseball cap",
+    ),
+    _n(
+        "npcs",
+        "firefighter_turnout_gear",
+        "a South Asian male firefighter, athletic build, in yellow turnout gear with reflective stripes and a yellow firefighter helmet",
+    ),
+    _n(
+        "npcs",
+        "delivery_courier",
+        "a slim Black male delivery courier in a brown short-sleeve uniform with a baseball cap and a shoulder bag",
+    ),
+    _n(
+        "npcs",
+        "businessman_suit",
+        "an East Asian male businessman, average build, in a charcoal grey suit, white shirt, and red tie",
+    ),
+    _n(
+        "npcs",
+        "jogger_sportswear",
+        "a Middle Eastern male jogger, athletic build, in athletic shorts, a t-shirt, and running sneakers",
+    ),
+    _n(
+        "npcs",
+        "elderly_man_cane",
+        "a slim elderly Latino man with a wooden walking cane, wearing a beige cardigan and slacks",
+    ),
+    _n(
+        "npcs",
+        "police_officer",
+        "a stocky South Asian male police officer in a dark blue uniform with a peaked cap, badge, and duty belt",
+    ),
+    _n(
+        "npcs",
+        "swat_officer",
+        "a Latino male SWAT officer, athletic build, in black tactical gear with a helmet, balaclava, and body armor",
+    ),
+    _n(
+        "npcs",
+        "soldier_modern_infantry",
+        "a muscular Middle Eastern male modern infantry soldier in multicam fatigues, plate carrier, and combat helmet",
+    ),
+    _n(
+        "npcs",
+        "biker_cop",
+        "a tall Black male motorcycle police officer, average build, in uniform with a white helmet, sunglasses, and tall riding boots",
+    ),
+    _n(
+        "npcs",
+        "gangster_leather_jacket",
+        "a stocky white man in a black leather biker jacket, dark jeans, and a silver chain, urban gangster style",
+    ),
+    _n(
+        "npcs",
+        "masked_robber_balaclava",
+        "a man of average build in a black balaclava completely covering his face, black hoodie, and dark trousers",
+    ),
+    _n(
+        "npcs",
+        "prisoner_orange_jumpsuit",
+        "a heavyset white man in an orange prison jumpsuit",
+    ),
 ]
 
 
@@ -367,6 +476,14 @@ SPAWNABLE_STUDIO_WRAPPER = (
     "and centred with margin around all sides, photorealistic, soft even "
     "studio lighting, no shadow, no people, sharp focus, high detail, modern "
     "video game asset"
+)
+
+CHARACTER_STUDIO_WRAPPER = (
+    "{prompt}, professional studio photograph, isolated on a pure white "
+    "background, full body shown from head to toe with margin around all "
+    "sides, neutral standing pose facing the camera, photorealistic, DSLR "
+    "photography, soft even studio lighting, no shadow, sharp focus, high "
+    "detail, realistic skin tones and fabric textures"
 )
 
 HOLDABLE_STUDIO_WRAPPER = (
@@ -406,9 +523,12 @@ HELD_EDIT_PROMPT_TWO_HANDED = (
 
 
 def studio_prompt(prop: Prop) -> str:
-    template = (
-        HOLDABLE_STUDIO_WRAPPER if prop.kind == "holdable" else SPAWNABLE_STUDIO_WRAPPER
-    )
+    if prop.kind == "holdable":
+        template = HOLDABLE_STUDIO_WRAPPER
+    elif prop.is_character:
+        template = CHARACTER_STUDIO_WRAPPER
+    else:
+        template = SPAWNABLE_STUDIO_WRAPPER
     return template.format(prompt=prop.prompt)
 
 
