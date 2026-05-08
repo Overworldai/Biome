@@ -82,6 +82,12 @@ class HealthResponse(BaseModel):
     startup_complete: bool
     world_engine: WorldEngineHealth
     safety: SafetyHealth
+    # True when this server was launched by a Biome instance running in
+    # standalone mode (via `--launched-from-standalone`). The renderer
+    # uses this in remote-server mode to refuse a URL that points to
+    # any standalone-managed server: leaving server mode pointed at one
+    # invites the next mode-switch to tear it down underneath the user.
+    launched_from_standalone: bool = False
 
 
 class ModelInfoResponse(BaseModel):
@@ -184,6 +190,8 @@ async def health(request: Request, startup: Annotated[ServerStartup, Depends(get
     for engine handles since they may not be populated yet during startup."""
     engines: Engines | None = getattr(request.app.state, "engines", None)
     we = engines.world_engine if engines else None
+    startup_config = getattr(request.app.state, "startup_config", None)
+    launched_from_standalone = startup_config.launched_from_standalone if startup_config is not None else False
     return HealthResponse(
         startup_complete=startup.complete,
         world_engine=WorldEngineHealth(
@@ -192,6 +200,7 @@ async def health(request: Request, startup: Annotated[ServerStartup, Depends(get
             has_seed=we is not None and we.seed_frame is not None,
         ),
         safety=SafetyHealth(loaded=engines is not None),
+        launched_from_standalone=launched_from_standalone,
     )
 
 

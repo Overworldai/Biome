@@ -94,6 +94,11 @@ const en = {
             'Could not connect to {{url}}. The server may be down, the URL may be wrong, or a firewall may be blocking the connection.\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.',
           secureTransportHint:
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
+        },
+        serverOwnManaged: {
+          title: "That's Biome's built-in server",
+          description:
+            'It only runs while Biome is in standalone mode. Switch back to standalone, or point at an independent server.'
         }
       },
       startup: {
@@ -169,6 +174,7 @@ const en = {
           checking: 'checking...',
           connected: 'connected',
           unreachable: 'unreachable',
+          ownManaged: "Biome's built-in server",
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {

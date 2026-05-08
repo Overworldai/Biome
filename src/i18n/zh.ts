@@ -89,6 +89,10 @@ const zh = {
           withUrlSecure:
             '无法连接到 {{url}}。服务器可能已停止、URL 有误，或被防火墙拦截。\n\n默认不支持 HTTPS 和 WSS；如果你是直接连接 Biome 服务器，请尝试使用 HTTP 或 WS。',
           secureTransportHint: '默认不支持 HTTPS 和 WSS；如果你是直接连接 Biome 服务器，请尝试使用 HTTP 或 WS。'
+        },
+        serverOwnManaged: {
+          title: '这是 Biome 的内置服务器',
+          description: '它只在独立模式下运行。请切换回独立模式，或指向独立运行的服务器。'
         }
       },
       startup: {
@@ -162,6 +166,7 @@ const zh = {
           checking: '检查中...',
           connected: '已连接',
           unreachable: '无法访问',
+          ownManaged: 'Biome 的内置服务器',
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {

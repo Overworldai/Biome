@@ -22,7 +22,12 @@ type MenuModelOption = {
   sizeBytes: number | null
 }
 
-type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error'
+/** Outcome of the server-URL validation probe. `error` covers
+ *  unreachable / 4xx / 5xx; `ownManaged` is the special case where the
+ *  URL resolves to *this* Biome's local managed standalone server —
+ *  saving server-mode with that URL would teardown the server during
+ *  the mode switch and immediately disconnect the user. */
+type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error' | 'ownManaged'
 
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
@@ -162,13 +167,15 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setServerUrlStatus('loading')
       try {
         const normalizedUrl = normalizeServerUrl(menuServerUrl)
-        const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+        const identity = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
         if (cancelled) return
-        if (ok) {
+        if (!identity.reachable) {
+          setServerUrlStatus('error')
+        } else if (identity.launched_from_standalone) {
+          setServerUrlStatus('ownManaged')
+        } else {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
-        } else {
-          setServerUrlStatus('error')
         }
       } catch {
         if (!cancelled) setServerUrlStatus('error')
@@ -264,13 +271,16 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
     setServerUrlStatus('loading')
     try {
-      const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
-      if (ok) {
-        setServerUrlStatus('valid')
-        setLastValidatedServerUrl(normalizedUrl)
-      } else {
+      const identity = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+      if (!identity.reachable) {
         setServerUrlStatus('error')
         setShowServerErrorModal(true)
+      } else if (identity.launched_from_standalone) {
+        setServerUrlStatus('ownManaged')
+        setShowServerErrorModal(true)
+      } else {
+        setServerUrlStatus('valid')
+        setLastValidatedServerUrl(normalizedUrl)
       }
     } catch {
       setServerUrlStatus('error')
@@ -396,9 +406,13 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
                   />
                 </>
               )}
-              {serverUrlStatus === 'error' && (
+              {(serverUrlStatus === 'error' || serverUrlStatus === 'ownManaged') && (
                 <>
-                  {` · ${t('app.settings.serverUrl.unreachable')}`}
+                  {` · ${t(
+                    serverUrlStatus === 'ownManaged'
+                      ? 'app.settings.serverUrl.ownManaged'
+                      : 'app.settings.serverUrl.unreachable'
+                  )}`}
                   <span
                     className="
                       inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)]
@@ -545,13 +559,19 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
       {showServerErrorModal && (
         <ConfirmModal
-          title="app.dialogs.serverUnreachable.title"
+          title={
+            serverUrlStatus === 'ownManaged'
+              ? 'app.dialogs.serverOwnManaged.title'
+              : 'app.dialogs.serverUnreachable.title'
+          }
           description={
-            !menuServerUrl.trim()
-              ? 'app.dialogs.serverUnreachable.noUrl'
-              : serverUrlUsesSecureTransport
-                ? 'app.dialogs.serverUnreachable.withUrlSecure'
-                : 'app.dialogs.serverUnreachable.withUrl'
+            serverUrlStatus === 'ownManaged'
+              ? 'app.dialogs.serverOwnManaged.description'
+              : !menuServerUrl.trim()
+                ? 'app.dialogs.serverUnreachable.noUrl'
+                : serverUrlUsesSecureTransport
+                  ? 'app.dialogs.serverUnreachable.withUrlSecure'
+                  : 'app.dialogs.serverUnreachable.withUrl'
           }
           descriptionParams={{ url: menuServerUrl }}
           onConfirm={() => setShowServerErrorModal(false)}

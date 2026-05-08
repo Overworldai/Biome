@@ -91,6 +91,10 @@ const he = {
             'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.\n\nHTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.',
           secureTransportHint:
             'HTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.'
+        },
+        serverOwnManaged: {
+          title: 'זה השרת המובנה של Biome',
+          description: 'הוא פועל רק כש-Biome במצב standalone. חזור למצב standalone, או הצבע על שרת עצמאי.'
         }
       },
       startup: {
@@ -164,6 +168,7 @@ const he = {
           checking: 'בודק...',
           connected: 'מחובר',
           unreachable: 'לא זמין',
+          ownManaged: 'השרת המובנה של Biome',
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {

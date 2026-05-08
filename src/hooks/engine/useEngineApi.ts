@@ -165,7 +165,11 @@ export const useEngineApi = (): UseEngineResult => {
 
   const probeServerHealth = useCallback(async (healthUrl: string, timeoutMs?: number) => {
     try {
-      return await invoke('probe-server-health', healthUrl, timeoutMs)
+      // The IPC returns the full identity object; warm-connect callers and
+      // health-poll loops only care about reachability — strip down to
+      // the boolean here so the shared shape stays simple.
+      const result = await invoke('probe-server-health', healthUrl, timeoutMs)
+      return result.reachable
     } catch {
       return false
     }

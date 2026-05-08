@@ -39,6 +39,12 @@ class StartupConfig:
     before the lifespan body itself runs."""
 
     parent_pid: int | None = None
+    # True when the launching Biome instance is in standalone mode and
+    # owns this process's lifecycle — set via `--launched-from-standalone`
+    # so the renderer can refuse to point itself at a server it would
+    # itself shut down on the next mode switch. False for any operator
+    # who launched the server by hand for use as a remote backend.
+    launched_from_standalone: bool = False
 
 
 # If launched with --parent-pid, poll the parent PID and exit if it dies.
@@ -191,9 +197,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--parent-pid", type=int, default=None, help="PID of parent process; server exits if parent dies"
     )
+    parser.add_argument(
+        "--launched-from-standalone",
+        action="store_true",
+        help=(
+            "Marks this server as managed by a standalone-mode Biome instance. The renderer reads it from /health"
+            " to refuse server-mode URLs that would tear themselves down on the next mode switch."
+        ),
+    )
     args = parser.parse_args()
 
-    app.state.startup_config = StartupConfig(parent_pid=args.parent_pid)
+    app.state.startup_config = StartupConfig(
+        parent_pid=args.parent_pid,
+        launched_from_standalone=args.launched_from_standalone,
+    )
     if args.parent_pid is not None:
         logger.info("Monitoring parent process", parent_pid=args.parent_pid)
         ParentWatchdog(args.parent_pid).check_alive_or_exit()

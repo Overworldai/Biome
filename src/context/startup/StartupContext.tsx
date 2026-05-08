@@ -67,8 +67,8 @@ export const StartupProvider = ({ children }: { children: ReactNode }) => {
     const healthUrl = `http://localhost:${port}/health`
     log.info('Polling /health at', healthUrl)
     while (true) {
-      const ok = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
-      if (ok) {
+      const probe = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
+      if (probe.reachable) {
         log.info('Server ready on port', port)
         setPhase('ready')
         return

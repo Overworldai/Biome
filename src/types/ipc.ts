@@ -284,7 +284,10 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
-  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'probe-server-health': {
+    args: [healthUrl: string, timeoutMs?: number]
+    return: { reachable: boolean; launched_from_standalone: boolean }
+  }
   'get-last-server-exit-tail': { args: []; return: string | null }
 
   // Seeds

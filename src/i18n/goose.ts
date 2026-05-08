@@ -95,6 +95,11 @@ const goose = {
             'Could not connect to {{url}}. The server may be down, the address may be wrong, or a fox may be blocking the path.\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.',
           secureTransportHint:
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
+        },
+        serverOwnManaged: {
+          title: "That's Biome's home pond",
+          description:
+            'It only fills up while Biome is in standalone mode. Waddle back to standalone, or point at an independent pond.'
         }
       },
       startup: {
@@ -170,6 +175,7 @@ const goose = {
           checking: 'checking...',
           connected: 'connected',
           unreachable: 'unreachable',
+          ownManaged: "Biome's home pond",
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
