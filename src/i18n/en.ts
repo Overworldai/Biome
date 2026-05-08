@@ -178,7 +178,7 @@ const en = {
           totalReinstall: 'Total Reinstall'
         },
         performance: {
-          title: 'Performance Settings',
+          title: 'Performance',
           description: "want to dial in the model's performance?",
           quantization: 'Quantization',
           quantizationDescription:
@@ -193,14 +193,20 @@ const en = {
           intw8a8: 'INT8 W8A8'
         },
         engineBackend: {
-          title: 'Backend',
-          description: 'which inference engine should run the model? swap if you hit driver issues or want to compare.',
           world_engine: 'World Engine',
           quark: 'Quark'
         },
+        experience: {
+          title: 'Experience',
+          description: 'what kind of experience will you have?',
+          worldModel: 'World Model',
+          worldModelDescription:
+            'The Overworld world model that will simulate your world.\nWe recommend that you use the newest and largest model that your system can run.',
+          backend: 'Backend',
+          backendDescription:
+            'Which inference backend will be used for the world model.\nWorld Engine is our default option, but Quark is our new backend with macOS support and more.'
+        },
         worldModel: {
-          title: 'World Model',
-          description: 'which Overworld model will simulate your world?',
           local: 'local',
           download: 'download',
           removeCustomModel: 'Remove custom model',

@@ -173,7 +173,7 @@ const he = {
           totalReinstall: 'התקנה מחדש מלאה'
         },
         performance: {
-          title: 'הגדרות ביצועים',
+          title: 'ביצועים',
           description: 'רוצה לכוון את ביצועי המודל?',
           quantization: 'קוונטיזציה',
           quantizationDescription:
@@ -188,14 +188,20 @@ const he = {
           intw8a8: 'INT8 W8A8'
         },
         engineBackend: {
-          title: 'מנגנון',
-          description: 'איזה מנגנון אינפרנס יפעיל את המודל? החלף אם יש בעיות דרייבר או כדי להשוות ביצועים.',
           world_engine: 'World Engine',
           quark: 'Quark'
         },
+        experience: {
+          title: 'חוויה',
+          description: 'איזו חוויה תרצה לקבל?',
+          worldModel: 'מודל עולם',
+          worldModelDescription:
+            'מודל העולם של Overworld שידמה את העולם שלך.\nמומלץ להשתמש במודל החדש והגדול ביותר שהמערכת שלך מסוגלת להריץ.',
+          backend: 'מנגנון',
+          backendDescription:
+            'מנגנון האינפרנס שיריץ את מודל העולם.\nWorld Engine הוא ברירת המחדל, ו-Quark הוא המנגנון החדש שלנו עם תמיכת macOS ועוד.'
+        },
         worldModel: {
-          title: 'מודל עולם',
-          description: 'איזה מודל Overworld ידמה את העולם שלך?',
           local: 'מקומי',
           download: 'הורדה',
           removeCustomModel: 'הסר מודל מותאם אישית',

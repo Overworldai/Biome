@@ -179,7 +179,7 @@ const goose = {
           totalReinstall: 'Full Molt'
         },
         performance: {
-          title: 'Performance Settings',
+          title: 'Performance',
           description: "want to dial in the model's performance?",
           quantization: 'Quantization',
           quantizationDescription:
@@ -194,15 +194,20 @@ const goose = {
           intw8a8: 'INT8 W8A8'
         },
         engineBackend: {
-          title: 'Backend',
-          description:
-            'which inference engine should run the flock? swap if your honks come out garbled or you fancy a comparison.',
           world_engine: 'World Engine',
           quark: 'Quark'
         },
+        experience: {
+          title: 'Pond',
+          description: 'what kind of pond will you paddle in?',
+          worldModel: 'World Model',
+          worldModelDescription:
+            'The Overworld world model that will shape your pond.\nPick the newest, biggest model your pond can hold.',
+          backend: 'Backend',
+          backendDescription:
+            'Which inference backend will drive the flock.\nWorld Engine is the trusty old waddler; Quark is our new fledgling with macOS feathers and then some.'
+        },
         worldModel: {
-          title: 'World Model',
-          description: 'which Overworld model will shape your pond?',
           local: 'local',
           download: 'download',
           removeCustomModel: 'Remove custom model',

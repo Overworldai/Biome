@@ -439,75 +439,84 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
         />
       )}
 
-      <SettingsSection title="app.settings.worldModel.title" description="app.settings.worldModel.description">
-        <SettingsSelect
-          options={[...menuModelOptions]
-            .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
-            .sort((a, b) => {
-              // 1. Downloaded before undownloaded
-              if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1
-              // 2. Default models before custom
-              if (savedCustomModels.includes(a.id) !== savedCustomModels.includes(b.id))
-                return savedCustomModels.includes(a.id) ? 1 : -1
-              // 3. Alphabetical
-              return a.id.localeCompare(b.id)
-            })
-            .map((model) => {
-              const isCustom = savedCustomModels.includes(model.id)
-              return {
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === false ? t('app.settings.worldModel.download') : null
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                deletable: isCustom && model.isLocal === true && menuEngineMode === 'standalone',
-                cacheDeletable: !isCustom && model.isLocal === true && menuEngineMode === 'standalone',
-                dimmed: model.isLocal === false
-              }
-            })}
-          value={menuWorldModel}
-          onChange={handleWorldModelChange}
-          onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
-          onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
-          hideSelectedInDropdown
-          disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
-          allowCustom
-          onCustomBlur={(modelId) => void handleCustomModelBlur(modelId)}
-          customLabel="app.settings.worldModel.custom"
-          deleteLabel="app.settings.worldModel.deleteLocalCache"
-          cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
-          rawCustomPrefix={
-            customModelStatus.state === 'loading'
-              ? t('app.settings.worldModel.checking')
-              : customModelStatus.state === 'error'
-                ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
-                : undefined
-          }
-        />
-        {menuModelsError && (
-          <p
-            className={`
-              ${SETTINGS_MUTED_TEXT}
-              m-[0.35cqh_0_0.8cqh] text-left
-            `}
+      <SettingsSection title="app.settings.experience.title" description="app.settings.experience.description">
+        <div className="flex flex-col gap-[1cqh]">
+          <SettingsRow
+            label={t('app.settings.experience.worldModel')}
+            hint={t('app.settings.experience.worldModelDescription')}
           >
-            {menuModelsError}
-          </p>
-        )}
-      </SettingsSection>
-
-      <SettingsSection title="app.settings.engineBackend.title" description="app.settings.engineBackend.description">
-        <SettingsSelect
-          options={availableEngineBackendOptions.map((b) => ({
-            value: b,
-            label: `app.settings.engineBackend.${b}` as const
-          }))}
-          value={menuEngineBackend}
-          onChange={(v) => setMenuEngineBackend(v as EngineBackend)}
-        />
+            <SettingsSelect
+              options={[...menuModelOptions]
+                .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
+                .sort((a, b) => {
+                  // 1. Downloaded before undownloaded
+                  if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1
+                  // 2. Default models before custom
+                  if (savedCustomModels.includes(a.id) !== savedCustomModels.includes(b.id))
+                    return savedCustomModels.includes(a.id) ? 1 : -1
+                  // 3. Alphabetical
+                  return a.id.localeCompare(b.id)
+                })
+                .map((model) => {
+                  const isCustom = savedCustomModels.includes(model.id)
+                  return {
+                    value: model.id,
+                    rawLabel: model.id.replace(/^Overworld\//, ''),
+                    prefix: [
+                      model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+                      model.isLocal === false ? t('app.settings.worldModel.download') : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    deletable: isCustom && model.isLocal === true && menuEngineMode === 'standalone',
+                    cacheDeletable: !isCustom && model.isLocal === true && menuEngineMode === 'standalone',
+                    dimmed: model.isLocal === false
+                  }
+                })}
+              value={menuWorldModel}
+              onChange={handleWorldModelChange}
+              onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              hideSelectedInDropdown
+              disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
+              allowCustom
+              onCustomBlur={(modelId) => void handleCustomModelBlur(modelId)}
+              customLabel="app.settings.worldModel.custom"
+              deleteLabel="app.settings.worldModel.deleteLocalCache"
+              cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
+              rawCustomPrefix={
+                customModelStatus.state === 'loading'
+                  ? t('app.settings.worldModel.checking')
+                  : customModelStatus.state === 'error'
+                    ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
+                    : undefined
+              }
+            />
+          </SettingsRow>
+          {menuModelsError && (
+            <p
+              className={`
+                ${SETTINGS_MUTED_TEXT}
+                m-[0.35cqh_0_0.8cqh] text-left
+              `}
+            >
+              {menuModelsError}
+            </p>
+          )}
+          <SettingsRow
+            label={t('app.settings.experience.backend')}
+            hint={t('app.settings.experience.backendDescription')}
+          >
+            <SettingsSelect
+              options={availableEngineBackendOptions.map((b) => ({
+                value: b,
+                label: `app.settings.engineBackend.${b}` as const
+              }))}
+              value={menuEngineBackend}
+              onChange={(v) => setMenuEngineBackend(v as EngineBackend)}
+            />
+          </SettingsRow>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="app.settings.performance.title" description="app.settings.performance.description">

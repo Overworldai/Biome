@@ -177,7 +177,7 @@ const ja = {
           totalReinstall: '完全再インストール'
         },
         performance: {
-          title: 'パフォーマンス設定',
+          title: 'パフォーマンス',
           description: 'モデルのパフォーマンスを調整しますか？',
           quantization: '量子化',
           quantizationDescription:
@@ -192,15 +192,20 @@ const ja = {
           intw8a8: 'INT8 W8A8'
         },
         engineBackend: {
-          title: 'バックエンド',
-          description:
-            'どの推論エンジンでモデルを動かしますか？ ドライバの問題や性能比較のために切り替えてみてください。',
           world_engine: 'World Engine',
           quark: 'Quark'
         },
+        experience: {
+          title: 'エクスペリエンス',
+          description: 'どんな体験にしますか？',
+          worldModel: 'ワールドモデル',
+          worldModelDescription:
+            '世界をシミュレートする Overworld のワールドモデル。\nお使いのシステムで動作する範囲で、最も新しく最も大きいモデルをおすすめします。',
+          backend: 'バックエンド',
+          backendDescription:
+            'ワールドモデルの推論に使用するバックエンド。\nWorld Engine が既定ですが、Quark は macOS 対応などを備えた新しいバックエンドです。'
+        },
         worldModel: {
-          title: 'ワールドモデル',
-          description: 'どの Overworld モデルで世界をシミュレートしますか？',
           local: 'ローカル',
           download: 'ダウンロード',
           removeCustomModel: 'カスタムモデルを削除',

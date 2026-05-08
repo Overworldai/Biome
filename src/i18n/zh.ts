@@ -171,7 +171,7 @@ const zh = {
           totalReinstall: '全部重装'
         },
         performance: {
-          title: '性能设置',
+          title: '性能',
           description: '想要调整模型的性能吗？',
           quantization: '量化',
           quantizationDescription:
@@ -185,14 +185,20 @@ const zh = {
           intw8a8: 'INT8 W8A8'
         },
         engineBackend: {
-          title: '后端',
-          description: '用哪个推理引擎来跑模型？遇到驱动问题或想比较性能时可以切换。',
           world_engine: 'World Engine',
           quark: 'Quark'
         },
+        experience: {
+          title: '体验',
+          description: '想要怎样的体验？',
+          worldModel: '世界模型',
+          worldModelDescription:
+            '用于模拟你的世界的 Overworld 世界模型。\n建议在你的系统能够运行的范围内，使用最新且最大的模型。',
+          backend: '后端',
+          backendDescription:
+            '用于运行世界模型的推理后端。\nWorld Engine 是默认选项，Quark 是我们的新后端，支持 macOS 等更多功能。'
+        },
         worldModel: {
-          title: '世界模型',
-          description: '要使用哪个 Overworld 模型来模拟你的世界？',
           local: '本地',
           download: '下载',
           removeCustomModel: '删除自定义模型',
