@@ -4,7 +4,8 @@ import type { TranslationKey } from '../../i18n'
 import { VIEW_DESCRIPTION, VIEW_HEADING } from '../../styles'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { useConnection } from '../../context/streaming/connection'
-import { ENGINE_MODES } from '../../types/settings'
+import { ENGINE_MODES, type Settings } from '../../types/settings'
+import { diffRequiresRestartConfirmation } from '../../utils/settingsClassifier'
 import { useVolumeControls } from '../../hooks/audio/useVolumeControls'
 import MenuButton from '../ui/MenuButton'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -62,13 +63,13 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
     setHasKeybindConflict(hasConflict)
   }, [])
 
-  const applyDraftSettings = useCallback(async () => {
+  const buildPendingSettings = useCallback((): Settings => {
     const engineDraft = engineRef.current?.collectDraft() ?? {}
     const keyboardDraft = keyboardRef.current?.collectDraft() ?? {}
     const gamepadDraft = gamepadRef.current?.collectDraft() ?? {}
     const debugDraft = debugRef.current?.collectDraft() ?? {}
 
-    await saveSettings({
+    return {
       ...settings,
       ...engineDraft,
       ...keyboardDraft,
@@ -77,30 +78,23 @@ const MenuSettingsView = ({ onBack }: MenuSettingsViewProps) => {
       audio: volume.getAudioSettings(),
       offline_mode: menuOfflineMode,
       scene_authoring_enabled: menuSceneAuthoringEnabled
-    })
-  }, [settings, saveSettings, volume, menuSceneAuthoringEnabled, menuOfflineMode])
+    }
+  }, [settings, volume, menuSceneAuthoringEnabled, menuOfflineMode])
+
+  const applyDraftSettings = useCallback(async () => {
+    await saveSettings(buildPendingSettings())
+  }, [saveSettings, buildPendingSettings])
 
   const handleBackClick = useCallback(async () => {
     if (hasKeybindConflict) return
     if (engineRef.current && !engineRef.current.validateBeforeSave()) return
-    const offlineChanged =
-      settings.engine_mode === ENGINE_MODES.STANDALONE && menuOfflineMode !== (settings.offline_mode ?? false)
-    const sceneAuthoringChanged = menuSceneAuthoringEnabled !== (settings.scene_authoring_enabled ?? false)
-    if (isStreaming && (engineRef.current?.hasChangesRequiringRestart() || offlineChanged || sceneAuthoringChanged)) {
+    if (isStreaming && diffRequiresRestartConfirmation(settings, buildPendingSettings())) {
       setShowModeSwitchModal(true)
       return
     }
     await applyDraftSettings()
     onBack()
-  }, [
-    hasKeybindConflict,
-    isStreaming,
-    applyDraftSettings,
-    onBack,
-    settings,
-    menuOfflineMode,
-    menuSceneAuthoringEnabled
-  ])
+  }, [hasKeybindConflict, isStreaming, applyDraftSettings, onBack, settings, buildPendingSettings])
 
   useEffect(() => {
     const handleKeyUp = (e: KeyboardEvent) => {

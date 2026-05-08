@@ -37,7 +37,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo } = usePortal()
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const { settings, isStandaloneMode, engineMode } = useSettings()
+  const { settings, isStandaloneMode } = useSettings()
   const {
     status: engineStatus,
     startServer,
@@ -136,8 +136,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   }, [isStandaloneMode, checkEngineStatus])
 
   useEngineRespawn({
-    engineMode,
-    offlineMode: settings.offline_mode ?? false,
+    settings,
     portalState: state,
     mainMenuState: states.MAIN_MENU,
     loadingState: states.LOADING,
@@ -155,7 +154,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [getSeedsDirPath])
 
-  const { selectSeed, lastAppliedModel, resetSession } = useSessionInit({
+  const { selectSeed, lastApplied, resetSession } = useSessionInit({
     portalState: state,
     loadingState: states.LOADING,
     isConnected: wsIsConnected(connectionStatus),
@@ -214,10 +213,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   useStreamingLifecycle({
     portalState: state,
     connectionStatus,
-    engineModel: settings?.engine_model,
-    engineQuant: settings.engine_quant,
-    sceneAuthoringEnabled: settings.scene_authoring_enabled,
-    lastAppliedModel,
+    settings,
+    lastApplied,
     engineError,
     hasReceivedFrame,
     // Init is considered complete once applyInitResponse has set the
@@ -229,7 +226,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isPaused,
     sceneEditActive: sceneEdit.graceActive,
     states,
-    settings,
     setEngineError,
     resetSession,
     runWarmConnection,

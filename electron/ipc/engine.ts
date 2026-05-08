@@ -255,9 +255,19 @@ export function registerEngineIpc(): void {
           })
           dependenciesSynced = true
           diagLog.info('check-engine-status: dependency validation ok')
-        } catch {
+        } catch (err) {
           dependenciesSynced = false
-          diagLog.info('check-engine-status: dependency validation failed')
+          const e = err as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string; code?: number }
+          const stderr = e.stderr?.toString() ?? ''
+          const stdout = e.stdout?.toString() ?? ''
+          diagLog.info('check-engine-status: dependency validation failed', {
+            fields: {
+              exit_code: e.code ?? -1,
+              stderr: stderr.trim() || undefined,
+              stdout: stdout.trim() || undefined,
+              message: !stderr && !stdout ? (e.message ?? '') : undefined
+            }
+          })
         }
       }
     }

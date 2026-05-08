@@ -1,4 +1,3 @@
-import { DEFAULT_WORLD_ENGINE_MODEL } from '../../types/settings'
 import { TranslatableError } from '../../i18n'
 import type { StreamingLifecycleEffects } from './streamingLifecycleMachine'
 import type { PortalState } from '../portal/portalStateMachine'
@@ -28,9 +27,8 @@ type PortalStatesLike = {
 
 type CreateHandlersArgs = {
   log: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
-  settings: { engine_model?: string | null } | null
   setEngineError: (value: TranslatableError | null) => void
-  /** Clears `warmBootstrapSent` + `lastAppliedModel`; used when the
+  /** Clears `warmBootstrapSent` + `lastAppliedSession`; used when the
    *  reducer needs the next LOADING entry to start from a clean
    *  bootstrap. */
   resetSession: () => void
@@ -58,7 +56,6 @@ type LifecycleEffectHandlers = {
 
 export const createStreamingLifecycleEffectHandlers = ({
   log,
-  settings,
   setEngineError,
   resetSession,
   runWarmConnection,
@@ -94,8 +91,7 @@ export const createStreamingLifecycleEffectHandlers = ({
     clearEngineErrorOnLoadingEntry: () => setEngineError(null),
     runLoadingConnection: () => runWarmConnection(),
     startIntentionalReconnect: () => {
-      const selectedModel = settings?.engine_model || DEFAULT_WORLD_ENGINE_MODEL
-      log.info('Model changed in settings while streaming - reconnecting to start a fresh session:', selectedModel)
+      log.info('Engine settings changed while streaming - reconnecting to start a fresh session')
       resetSession()
       setConnectionLost(false)
       setSettingsOpen(false)

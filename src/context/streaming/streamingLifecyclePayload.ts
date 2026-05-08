@@ -1,14 +1,15 @@
-import { DEFAULT_WORLD_ENGINE_MODEL } from '../../types/settings'
+import type { Settings } from '../../types/settings'
 import type { ConnectionStatus } from '../../hooks/engine/useWebSocket'
 import type { TranslatableError } from '../../i18n'
 import type { PortalState } from '../portal/portalStateMachine'
 import type { StreamingLifecycleSyncPayload } from './streamingLifecycleMachine'
+import { getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 
 type BuildStreamingLifecycleSyncPayloadArgs = {
   portalState: PortalState
   connectionStatus: ConnectionStatus
-  engineModel?: string | null
-  lastAppliedModel: string | null
+  settings: Settings
+  lastApplied: RestartSignatures | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
   initCompleted: boolean
@@ -16,25 +17,16 @@ type BuildStreamingLifecycleSyncPayloadArgs = {
   settingsOpen: boolean
   isPaused: boolean
   sceneEditActive: boolean
-  sceneAuthoringEnabled?: boolean
-  engineQuant?: string
 }
 
 export const buildStreamingLifecycleSyncPayload = (
   args: BuildStreamingLifecycleSyncPayloadArgs
 ): StreamingLifecycleSyncPayload => {
-  // Encode scene_authoring_enabled and quant into the model key so toggling
-  // either triggers the same intentional-reconnect flow as switching models.
-  const baseModel = args.engineModel || DEFAULT_WORLD_ENGINE_MODEL
-  const quant = args.engineQuant ?? 'none'
-  let selectedModel = args.sceneAuthoringEnabled ? `${baseModel}+scene_authoring` : baseModel
-  selectedModel = `${selectedModel}+${quant}`
-
   return {
     portalState: args.portalState,
     connectionStatus: args.connectionStatus,
-    selectedModel,
-    lastAppliedModel: args.lastAppliedModel,
+    currentSignatures: getRestartSignatures(args.settings),
+    lastAppliedSignatures: args.lastApplied,
     engineError: args.engineError,
     hasReceivedFrame: args.hasReceivedFrame,
     initCompleted: args.initCompleted,

@@ -4,6 +4,7 @@ import { buildSessionConfig } from '../../context/streaming/sessionConfig'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
 import { DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../../types/settings'
+import { getLiveSignature, getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Session')
@@ -18,16 +19,17 @@ type SendInit = (params: Omit<InitRequest, 'type' | 'req_id'>) => Promise<InitRe
  *  - `lastSeedRef`: the most-recently-loaded seed (filename + base64)
  *    so we can resume with the same seed across reconnects without
  *    re-loading the IPC blob.
- *  - `lastAppliedModelRef`: the model+quant+scene-authoring key the
- *    server is currently configured for. Surfaced via
- *    `lastAppliedModel` so the lifecycle machine can detect a settings
- *    change that requires an intentional reconnect.
+ *  - `lastApplied`: the session+process signatures the server is
+ *    currently configured for. Surfaced so the lifecycle reducer can
+ *    detect a settings change that requires either an intentional
+ *    reconnect (session diff) or a respawn (process diff).
  *  - `warmBootstrapSentRef`: an idempotency guard so the bootstrap
  *    effect runs once per LOADING → connected transition.
  *
- *  `resetSession()` clears the bootstrap guard and the applied model;
- *  the lifecycle effects fire it on intentional reconnect and on
- *  teardown so the next LOADING entry starts from a clean slate. */
+ *  `resetSession()` clears the bootstrap guard and the applied
+ *  signatures; the lifecycle effects fire it on intentional reconnect
+ *  and on teardown so the next LOADING entry starts from a clean
+ *  slate. */
 export function useSessionInit(opts: {
   portalState: PortalState
   loadingState: PortalState
@@ -40,7 +42,7 @@ export function useSessionInit(opts: {
   setPlaceholderFrame: (frame: Blob | string | null) => void
 }): {
   selectSeed: (filename: string) => Promise<void>
-  lastAppliedModel: string | null
+  lastApplied: RestartSignatures | null
   resetSession: () => void
 } {
   const {
@@ -57,7 +59,7 @@ export function useSessionInit(opts: {
 
   const lastSeedRef = useRef<{ filename: string; imageData: string } | null>(null)
   const warmBootstrapSentRef = useRef(false)
-  const [lastAppliedModel, setLastAppliedModel] = useState<string | null>(null)
+  const [lastApplied, setLastApplied] = useState<RestartSignatures | null>(null)
 
   // Read-latest settings without depending on the whole settings object —
   // the live re-apply effect is keyed on a small subset and reads the
@@ -96,12 +98,10 @@ export function useSessionInit(opts: {
         setPlaceholderFrame(new Blob([bytes], { type: 'image/jpeg' }))
       }
 
-      // Set lastAppliedModel before await so the lifecycle machine doesn't
-      // see a model mismatch during the re-render triggered by applyInitResponse.
-      const quant = settings.engine_quant ?? 'none'
-      setLastAppliedModel(
-        settings.scene_authoring_enabled ? `${selectedModel}+scene_authoring+${quant}` : `${selectedModel}+${quant}`
-      )
+      // Set lastApplied before await so the lifecycle machine doesn't
+      // see a stale mismatch during the re-render triggered by
+      // applyInitResponse.
+      setLastApplied(getRestartSignatures(settings))
 
       // App version — embedded into recording metadata so MP4s carry a
       // self-describing record of what Biome build produced them. Best-effort;
@@ -142,13 +142,13 @@ export function useSessionInit(opts: {
   }, [isConnected, setPlaceholderFrame])
 
   // Live re-apply of the session config during streaming. Any change to
-  // a live-toggleable SessionConfig field (action logging, video
-  // recording, inference cap) re-sends the full config; the server diffs
+  // a `live`-class setting (action_logging, video recording fields,
+  // cap_inference_fps, …) re-sends the full config; the server diffs
   // against current state and applies whatever differs without tearing
-  // the session down. Model / quant / scene-authoring changes can't be
-  // hot-swapped — those trigger a full lifecycle reconnect instead, so
-  // they're deliberately not in this dep list to avoid racing the
-  // reconnect with a stale-state init send.
+  // the session down. `SETTING_CLASSES` in `types/settings.ts` is the
+  // single source of truth for which fields belong here — adding one to
+  // the `live` bucket auto-wires it through `liveSignature`.
+  const liveSignature = getLiveSignature(settings)
   useEffect(() => {
     if (!isStreaming || !isConnected) return
     const run = async () => {
@@ -160,16 +160,7 @@ export function useSessionInit(opts: {
       })
     }
     run().catch((err) => log.error('Failed to re-apply session config:', err))
-  }, [
-    isStreaming,
-    isConnected,
-    isStandaloneMode,
-    settings.debug_overlays?.action_logging,
-    settings.recording?.enabled,
-    settings.recording?.output_dir,
-    settings.cap_inference_fps,
-    sendInit
-  ])
+  }, [isStreaming, isConnected, isStandaloneMode, liveSignature, sendInit])
 
   const selectSeed = useCallback(
     async (filename: string) => {
@@ -190,8 +181,8 @@ export function useSessionInit(opts: {
 
   const resetSession = useCallback(() => {
     warmBootstrapSentRef.current = false
-    setLastAppliedModel(null)
+    setLastApplied(null)
   }, [])
 
-  return { selectSeed, lastAppliedModel, resetSession }
+  return { selectSeed, lastApplied, resetSession }
 }

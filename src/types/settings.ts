@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { SUPPORTED_LOCALES } from '../i18n/locales'
+import type { AllPaths } from '../utils/settingsClassifier'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
 export const LOCALE_OPTIONS = ['system', ...SUPPORTED_LOCALES] as const
@@ -61,6 +62,10 @@ export const DEFAULT_AUDIO = {
   music_volume: 0.3
 } as const
 
+// Adding a field? Classify it in `SETTING_CLASSES` below if the server
+// cares — anything unlisted silently defaults to `'none'` (no restart on
+// change), which is the wrong default for any field that touches the
+// engine.
 export const settingsSchema = z.object({
   locale: z.enum(LOCALE_OPTIONS).default('system'),
   server_url: z.string().default(''),
@@ -130,3 +135,35 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>
 export type EngineMode = Settings['engine_mode']
 export type Keybindings = Settings['keybindings']
+
+/** How a change to a `Settings` field affects the running session.
+ *
+ *  - `none`: no server impact.
+ *  - `live`: re-sent in a mid-stream `InitRequest`; server diffs and
+ *    applies in place. No modal.
+ *  - `session`: disconnect + warm reconnect + new InitRequest. Modal.
+ *  - `process`: server respawn (standalone) or retarget (server mode). Modal. */
+export type SettingClass = 'none' | 'live' | 'session' | 'process'
+
+/** Interior + leaf paths into `Settings` (`recording`, `recording.enabled`). */
+export type SettingPath = AllPaths<Settings>
+
+/** Restart class per setting. Top-level keys cover the whole subtree;
+ *  dot-paths split when siblings differ. Unlisted paths are `'none'`. */
+export const SETTING_CLASSES: Partial<Record<SettingPath, SettingClass>> = {
+  // Process: env vars / URL only apply at process spawn time.
+  engine_mode: 'process',
+  offline_mode: 'process',
+  server_url: 'process',
+
+  // Session: model / engine / world identity.
+  engine_model: 'session',
+  engine_backend: 'session',
+  engine_quant: 'session',
+  scene_authoring_enabled: 'session',
+
+  // Live: server reconfigures in place.
+  cap_inference_fps: 'live',
+  recording: 'live',
+  'debug_overlays.action_logging': 'live'
+}

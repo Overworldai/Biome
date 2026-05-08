@@ -168,9 +168,15 @@ export function readSettingsSync(): Settings {
 }
 
 /** Env vars injected into any uv / python subprocess when offline mode is on.
- *  Single source of truth — both engine setup and the server spawn consume this. */
+ *  Single source of truth — both engine setup and the server spawn consume this.
+ *  `UV_NO_SYNC` (implies `--frozen`) skips uv's resolve + sync passes on
+ *  `uv run`; in offline mode any fetch attempt would fail anyway, and the venv
+ *  is presumed correct from the last online sync.  In online mode it's omitted
+ *  so `uv run` continues to auto-install new deps when pyproject changes. */
 export function getOfflineEnv(): Record<string, string> {
-  return readSettingsSync().offline_mode ? { UV_OFFLINE: '1', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' } : {}
+  return readSettingsSync().offline_mode
+    ? { UV_OFFLINE: '1', UV_NO_SYNC: '1', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' }
+    : {}
 }
 
 export function registerSettingsIpc(): void {

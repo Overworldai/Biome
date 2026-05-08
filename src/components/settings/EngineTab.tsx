@@ -48,10 +48,6 @@ export type EngineTabHandle = {
   /** Check whether the current draft is savable. If not, surfaces an error modal
    *  internally and returns false so the parent can abort the save flow. */
   validateBeforeSave: () => boolean
-  /** True when engine-mode / world-model / backend / quantization differ from
-   *  persisted settings — parent uses this (alongside `isStreaming`) to decide
-   *  whether a mid-session restart confirmation modal is needed. */
-  hasChangesRequiringRestart: () => boolean
 }
 
 type EngineTabProps = {
@@ -68,7 +64,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const engine = useEngine()
   const checkEngine = engine.check
 
-  const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
   const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
@@ -138,14 +133,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
           return false
         }
         return true
-      },
-      hasChangesRequiringRestart: () => {
-        const configMode = configEngineMode === ENGINE_MODES.SERVER ? 'server' : 'standalone'
-        if (menuEngineMode !== configMode) return true
-        if (menuWorldModel !== configWorldModel) return true
-        if (menuQuant !== (settings.engine_quant ?? 'none')) return true
-        if (menuEngineBackend !== (settings.engine_backend ?? 'world_engine')) return true
-        return false
       }
     }),
     [
@@ -156,11 +143,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       menuEngineBackend,
       menuCapInferenceFps,
       serverUrlStatus,
-      configEngineMode,
-      configServerUrl,
-      configWorldModel,
-      settings.engine_quant,
-      settings.engine_backend
+      configServerUrl
     ]
   )
 

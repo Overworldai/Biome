@@ -13,6 +13,7 @@ import type { ConnectionStatus } from '../engine/useWebSocket'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { TranslatableError } from '../../i18n'
 import type { Settings } from '../../types/settings'
+import type { RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Lifecycle')
@@ -34,10 +35,8 @@ export function useStreamingLifecycle(opts: {
   // Payload inputs
   portalState: PortalState
   connectionStatus: ConnectionStatus
-  engineModel: string | null | undefined
-  engineQuant: string | undefined
-  sceneAuthoringEnabled: boolean | undefined
-  lastAppliedModel: string | null
+  settings: Settings
+  lastApplied: RestartSignatures | null
   engineError: TranslatableError | null
   hasReceivedFrame: boolean
   initCompleted: boolean
@@ -48,7 +47,6 @@ export function useStreamingLifecycle(opts: {
 
   // Handler inputs
   states: PortalStates
-  settings: Settings
   setEngineError: (err: TranslatableError | null) => void
   resetSession: () => void
   runWarmConnection: () => void
@@ -72,25 +70,21 @@ export function useStreamingLifecycle(opts: {
       payload: buildStreamingLifecycleSyncPayload({
         portalState: opts.portalState,
         connectionStatus: opts.connectionStatus,
-        engineModel: opts.engineModel,
-        lastAppliedModel: opts.lastAppliedModel,
+        settings: opts.settings,
+        lastApplied: opts.lastApplied,
         engineError: opts.engineError,
         hasReceivedFrame: opts.hasReceivedFrame,
         initCompleted: opts.initCompleted,
         isPointerLocked: opts.isPointerLocked,
         settingsOpen: opts.settingsOpen,
         isPaused: opts.isPaused,
-        sceneEditActive: opts.sceneEditActive,
-        sceneAuthoringEnabled: opts.sceneAuthoringEnabled,
-        engineQuant: opts.engineQuant
+        sceneEditActive: opts.sceneEditActive
       })
     })
   }, [
     opts.portalState,
     opts.connectionStatus,
-    opts.engineModel,
-    opts.engineQuant,
-    opts.sceneAuthoringEnabled,
+    opts.settings,
     opts.engineError,
     opts.hasReceivedFrame,
     opts.initCompleted,
@@ -98,14 +92,13 @@ export function useStreamingLifecycle(opts: {
     opts.settingsOpen,
     opts.isPaused,
     opts.sceneEditActive,
-    opts.lastAppliedModel
+    opts.lastApplied
   ])
 
   // Run the effects emitted by the latest reducer pass.
   useEffect(() => {
     const handlers = createStreamingLifecycleEffectHandlers({
       log,
-      settings: opts.settings,
       setEngineError: opts.setEngineError,
       resetSession: opts.resetSession,
       runWarmConnection: opts.runWarmConnection,
