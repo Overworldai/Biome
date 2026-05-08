@@ -183,12 +183,14 @@ const en = {
           ready: 'ready',
           starting: 'starting...',
           notInstalled: 'not installed',
-          failed: 'failed: {{error}}',
+          notInstalledNote:
+            "The engine will be automatically installed once you start playing, but you can install it now if you'd like to configure settings first.",
+          failed: 'failed',
           install: 'Install',
           reinstall: 'Reinstall',
           fixInPlace: 'Fix In Place',
           totalReinstall: 'Total Reinstall',
-          installFirstTooltip: 'Install World Engine to use this'
+          installFirstTooltip: 'Install World Engine to change this'
         },
         performance: {
           title: 'Performance Settings',

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useStartup } from '../../context/startup/startupContextValue'
+import { SETTINGS_MUTED_TEXT } from '../../styles'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsButton from '../ui/SettingsButton'
 
@@ -67,7 +68,7 @@ const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstal
       case 'not_installed':
         return t('app.settings.worldEngine.notInstalled')
       case 'failed':
-        return t('app.settings.worldEngine.failed', { error: state.error })
+        return t('app.settings.worldEngine.failed')
     }
   })()
 
@@ -81,9 +82,9 @@ const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstal
         </span>
       }
     >
-      <div className="flex justify-start gap-[1.2cqh]">
+      <div className="flex flex-col gap-[0.25cqh]">
         {state.kind === 'ready' && (
-          <>
+          <div className="flex justify-start gap-[1.2cqh]">
             <SettingsButton
               variant="secondary"
               label="app.settings.worldEngine.fixInPlace"
@@ -94,13 +95,43 @@ const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstal
               label="app.settings.worldEngine.totalReinstall"
               onClick={onTotalReinstallClick}
             />
-          </>
+          </div>
         )}
         {state.kind === 'not_installed' && (
-          <SettingsButton variant="primary" label="app.settings.worldEngine.install" onClick={onInstallClick} />
+          <>
+            <SettingsButton
+              variant="primary"
+              label="app.settings.worldEngine.install"
+              onClick={onInstallClick}
+              className="w-full"
+            />
+            <p
+              className={`
+                ${SETTINGS_MUTED_TEXT}
+                m-0
+              `}
+            >
+              {t('app.settings.worldEngine.notInstalledNote')}
+            </p>
+          </>
         )}
         {state.kind === 'failed' && (
-          <SettingsButton variant="primary" label="app.settings.worldEngine.reinstall" onClick={onInstallClick} />
+          <>
+            <SettingsButton
+              variant="primary"
+              label="app.settings.worldEngine.reinstall"
+              onClick={onInstallClick}
+              className="w-full"
+            />
+            <p
+              className={`
+                ${SETTINGS_MUTED_TEXT}
+                m-0
+              `}
+            >
+              {state.error}
+            </p>
+          </>
         )}
       </div>
     </SettingsSection>

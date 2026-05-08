@@ -184,12 +184,14 @@ const goose = {
           ready: 'in fine feather',
           starting: 'ruffling feathers...',
           notInstalled: 'no goose yet',
-          failed: 'feathers ruffled wrong: {{error}}',
+          notInstalledNote:
+            "The goose will be hatched automatically once you start playing, but you can hatch it now if you'd like to fluff your settings first.",
+          failed: 'feathers ruffled wrong',
           install: 'Hatch',
           reinstall: 'Re-hatch',
           fixInPlace: 'Preen In Place',
           totalReinstall: 'Full Molt',
-          installFirstTooltip: 'Hatch the World Engine to use this'
+          installFirstTooltip: 'Hatch the World Engine to change this'
         },
         performance: {
           title: 'Performance Settings',

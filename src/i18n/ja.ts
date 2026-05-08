@@ -182,12 +182,14 @@ const ja = {
           ready: '準備完了',
           starting: '起動中...',
           notInstalled: '未インストール',
-          failed: '失敗: {{error}}',
+          notInstalledNote:
+            'プレイを開始するとエンジンが自動的にインストールされますが、先に設定を調整したい場合は今すぐインストールできます。',
+          failed: '失敗',
           install: 'インストール',
           reinstall: '再インストール',
           fixInPlace: 'その場で修復',
           totalReinstall: '完全再インストール',
-          installFirstTooltip: 'ワールドエンジンをインストールしてください'
+          installFirstTooltip: '変更するにはワールドエンジンをインストールしてください'
         },
         performance: {
           title: 'パフォーマンス設定',

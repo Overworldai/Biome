@@ -177,12 +177,13 @@ const he = {
           ready: 'מוכן',
           starting: 'מפעיל...',
           notInstalled: 'לא מותקן',
-          failed: 'נכשל: {{error}}',
+          notInstalledNote: 'המנוע יותקן אוטומטית כשתתחיל לשחק, אבל אפשר להתקין עכשיו אם תרצה להגדיר דברים קודם.',
+          failed: 'נכשל',
           install: 'התקן',
           reinstall: 'התקן מחדש',
           fixInPlace: 'תקן במקום',
           totalReinstall: 'התקנה מחדש מלאה',
-          installFirstTooltip: 'התקן את World Engine כדי להשתמש בזה'
+          installFirstTooltip: 'התקן את World Engine כדי לשנות את זה'
         },
         performance: {
           title: 'הגדרות ביצועים',

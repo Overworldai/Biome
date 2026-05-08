@@ -368,7 +368,6 @@ const AppShell = () => {
             </div>
           </div>
         )}
-        {showMenuHome && <ViewLabel>{t('app.name')}</ViewLabel>}
         <AnimatePresence mode="wait">
           {activeMenuView === MENU_VIEW.HOME && (
             <motion.div
@@ -380,6 +379,8 @@ const AppShell = () => {
               exit="exit"
             >
               <SocialCtaRow />
+
+              <ViewLabel>{t('app.name')}</ViewLabel>
 
               <MenuButton
                 variant="secondary"

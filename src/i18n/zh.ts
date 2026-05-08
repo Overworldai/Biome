@@ -175,12 +175,13 @@ const zh = {
           ready: '就绪',
           starting: '启动中...',
           notInstalled: '未安装',
-          failed: '失败：{{error}}',
+          notInstalledNote: '开始游玩时引擎会自动安装，但如果你想先调整设置，可以现在就安装。',
+          failed: '失败',
           install: '安装',
           reinstall: '重新安装',
           fixInPlace: '原地修复',
           totalReinstall: '全部重装',
-          installFirstTooltip: '安装世界引擎以使用此项'
+          installFirstTooltip: '安装世界引擎以更改此项'
         },
         performance: {
           title: '性能设置',
