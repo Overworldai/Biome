@@ -33,14 +33,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const categoryLabel = (key: string): string => CATEGORY_LABELS[key] ?? slugToSubject(key)
 
-/** Inline SVG `feColorMatrix` filter that maps luminance ≈ 1 (white) to
- *  alpha 0, leaving everything else opaque. Applied to tile thumbnails
- *  so the model-baked white studio backdrop blends out against the dark
- *  glassmorphic panel. The matrix multiplies (R+G+B) by -10/3 and adds
- *  10 to the alpha channel — a sharp ramp around lum 0.9 that preserves
- *  the prop's colours. */
-const REMOVE_WHITE_FILTER_ID = 'scene-edit-remove-white-bg'
-
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
   const res = await fetch(url)
   if (!res.ok) {
@@ -210,29 +202,6 @@ const SceneEditOverlay = () => {
           animate={{ opacity: 1, x: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
           exit={{ opacity: 0, x: -20, transition: { duration: 0.15, ease: 'easeIn' } }}
         >
-          {/* Inline SVG hosting the white→alpha luma-key filter referenced
-              by the tile thumbnails below. The colour matrix gives a soft
-              ramp (alpha 1 at lum 0.8 → alpha 0 at lum 1.0) so anti-
-              aliased edges feather smoothly into the panel; a small post-
-              key Gaussian blur on the alpha channel softens the transition
-              further. Width/height 0 keeps the SVG invisible while the
-              filter remains addressable by id. */}
-          <svg aria-hidden="true" focusable="false" className="absolute size-0" xmlns="http://www.w3.org/2000/svg">
-            <filter id={REMOVE_WHITE_FILTER_ID} colorInterpolationFilters="sRGB">
-              <feColorMatrix
-                type="matrix"
-                values="
-                  1 0 0 0 0
-                  0 1 0 0 0
-                  0 0 1 0 0
-                  -1.667 -1.667 -1.667 0 5
-                "
-                result="keyed"
-              />
-              <feGaussianBlur in="keyed" stdDeviation="0.4" />
-            </filter>
-          </svg>
-
           <div className="relative flex h-full flex-col gap-[1.2cqh] bg-black/60 p-[1.4cqh_1.2cqw] backdrop-blur-md">
             {/* Top: title (left) + spawn-position toggle (right). */}
             <div className="flex shrink-0 items-center justify-between gap-[0.6cqw]">
@@ -315,7 +284,6 @@ const SceneEditOverlay = () => {
                       src={propImageUrl(prop.image)}
                       alt={slugToSubject(prop.slug)}
                       className="size-full object-contain"
-                      style={{ filter: `url(#${REMOVE_WHITE_FILTER_ID})` }}
                       draggable={false}
                     />
                   </button>

@@ -676,7 +676,7 @@ class SceneAuthoringManager:
         target_h, target_w = self._aligned_size(h_orig, w_orig)
 
         scene_pil = Image.fromarray(frame_numpy).resize((target_w, target_h))
-        reference_pil = reference.convert("RGB").resize((target_w, target_h))
+        reference_pil = _flatten_to_white(reference).resize((target_w, target_h))
 
         prompt = _build_prop_edit_prompt(kind=kind, target=target, subject=subject)
 
@@ -806,6 +806,18 @@ def run_generate_scene(
         sanitized_prompt=sanitized_prompt,
         image_model=EDIT_MODEL_ID,
     )
+
+
+def _flatten_to_white(image: Image.Image) -> Image.Image:
+    """Composite an RGBA prop reference (alpha-cut PNG from the gallery)
+    onto a clean white background. Klein's image processor would otherwise
+    just drop the alpha channel and expose whatever near-white pixels
+    sit beneath the mask, defeating the rembg cleanup."""
+    if image.mode != "RGBA":
+        return image.convert("RGB")
+    bg = Image.new("RGB", image.size, (255, 255, 255))
+    bg.paste(image, mask=image.split()[3])
+    return bg
 
 
 def _build_prop_edit_prompt(kind: str, target: str, subject: str) -> str:

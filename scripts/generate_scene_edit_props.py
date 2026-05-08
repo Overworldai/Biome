@@ -9,22 +9,30 @@
 #     "pydantic>=2",
 #     "tqdm",
 #     "gguf>=0.10.0",
+#     "rembg[cpu]>=2.0.50",
 #     "diffusers @ git+https://github.com/huggingface/diffusers",
 # ]
 # ///
 """Generate Scene Edit prop gallery images.
 
 Dev-only authoring tool. Renders a curated catalogue of FPS-game-staple props
-on a white background using a two-phase pipeline:
+using a two-phase pipeline plus a background-removal post-pass:
 
   Phase 1 (studio thumbnails) — a fast text-to-image model.
   Phase 2 (held viewmodels)   — a quantised image-conditioned edit model
                                  (Q8 GGUF transformer + 4-bit text encoder)
                                  that reframes each studio shot into a grip.
+  Post-pass                   — every render is run through rembg
+                                 (BiRefNet-general-lite) to alpha-cut the
+                                 model-baked white backdrop. Outputs are
+                                 saved as PNG with transparency so the
+                                 renderer can drop them on any panel
+                                 colour without halos / shadow bleed.
 
 Each holdable's held variant is derived from its studio image, so prop identity
 is preserved across the pair. The phases are run sequentially and the GPU is
-flushed between them to avoid loading both models simultaneously.
+flushed between them to avoid loading both models simultaneously. The rembg
+post-pass runs on CPU and slots in after each render synchronously.
 
 A pydantic-validated manifest.json is (re)written alongside the images.
 """
@@ -49,6 +57,7 @@ from diffusers import (  # pyright: ignore[reportMissingTypeStubs, reportUnknown
 )
 from PIL import Image
 from pydantic import BaseModel, ConfigDict
+from rembg import new_session, remove  # pyright: ignore[reportMissingTypeStubs]
 from tqdm import tqdm
 from transformers import (  # pyright: ignore[reportMissingTypeStubs]
     AutoModelForCausalLM,
@@ -59,6 +68,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = REPO_ROOT / "assets" / "scene_edit"
 MANIFEST_PATH = ASSETS_DIR / "manifest.json"
 STUDIO_MODEL_ID = "Tongyi-MAI/Z-Image-Turbo"
+# rembg session model. birefnet-general-lite handles foliage and other
+# fine/feathery edges cleanly while staying ~half the size of the full
+# birefnet-general model. Runs on CPU at ~7-9 s/image.
+REMBG_MODEL = "birefnet-general-lite"
 EDIT_PIPELINE_REPO = "black-forest-labs/FLUX.2-klein-9B"
 EDIT_TRANSFORMER_GGUF_URL = "https://huggingface.co/unsloth/FLUX.2-klein-9B-GGUF/blob/main/flux-2-klein-9b-Q8_0.gguf"
 EDIT_NUM_STEPS = 4
@@ -559,12 +572,12 @@ def build_manifest(catalogue: list[Prop]) -> Manifest:
     by_category: dict[str, list[ManifestEntry]] = {}
     for prop in catalogue:
         held = (
-            f"{prop.category}/{prop.slug}_held.jpg" if prop.kind == "holdable" else None
+            f"{prop.category}/{prop.slug}_held.png" if prop.kind == "holdable" else None
         )
         entry = ManifestEntry(
             slug=prop.slug,
             kind=prop.kind,
-            image=f"{prop.category}/{prop.slug}.jpg",
+            image=f"{prop.category}/{prop.slug}.png",
             held_image=held,
         )
         by_category.setdefault(prop.category, []).append(entry)
@@ -583,7 +596,7 @@ def write_manifest(catalogue: list[Prop]) -> None:
 
 def output_path(prop: Prop, variant: Variant) -> Path:
     suffix = "_held" if variant == "held" else ""
-    return ASSETS_DIR / prop.category / f"{prop.slug}{suffix}.jpg"
+    return ASSETS_DIR / prop.category / f"{prop.slug}{suffix}.png"
 
 
 VariantArg = Literal["studio", "held", "both"]
@@ -667,6 +680,31 @@ def load_studio_pipeline() -> ZImagePipeline:
     return pipe
 
 
+_REMBG_SESSION: object | None = None
+
+
+def _get_rembg_session() -> object:
+    """Lazy singleton for the rembg session — first access downloads the
+    BiRefNet ONNX weights (~500 MB) into ~/.u2net/."""
+    global _REMBG_SESSION
+    if _REMBG_SESSION is None:
+        print(f"loading rembg session ({REMBG_MODEL})…", file=sys.stderr)
+        _REMBG_SESSION = new_session(REMBG_MODEL)
+    return _REMBG_SESSION
+
+
+def _save_with_alpha_cut(image: Image.Image, dest: Path) -> None:
+    """Run the rembg post-pass on a freshly-rendered RGB image and save
+    the result as a transparent PNG. Server-side compositing reconstructs
+    the white background when this image is later sent to Klein as a
+    reference, so the alpha cut buys us cleaner edges (no shadows /
+    halos / bleed) on both sides."""
+    rgb = image.convert("RGB")
+    cut = remove(rgb, session=_get_rembg_session())  # pyright: ignore[reportUnknownVariableType]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cut.save(dest, format="PNG")  # pyright: ignore[reportUnknownMemberType]
+
+
 def render_studio(pipe: ZImagePipeline, prop: Prop, seed: int, dest: Path) -> None:
     generator = torch.Generator("cuda").manual_seed(seed)
     result = pipe(  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
@@ -678,8 +716,7 @@ def render_studio(pipe: ZImagePipeline, prop: Prop, seed: int, dest: Path) -> No
         generator=generator,
     )
     image = result.images[0]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    image.save(dest, format="JPEG", quality=92)  # pyright: ignore[reportUnknownMemberType]
+    _save_with_alpha_cut(image, dest)
 
 
 def load_edit_pipeline() -> Flux2KleinPipeline:
@@ -721,7 +758,14 @@ def _aligned(h: int, w: int) -> tuple[int, int]:
 
 
 def render_held(pipe: Flux2KleinPipeline, prop: Prop, source: Path, dest: Path) -> None:
-    image = Image.open(source).convert("RGB")
+    # The studio source is a transparent PNG; Klein needs RGB input, so
+    # composite onto white before passing it in. (Same compositing the
+    # server does at runtime — keeps the reference Klein sees consistent.)
+    studio_pil = Image.open(source).convert("RGBA")
+    bg = Image.new("RGB", studio_pil.size, (255, 255, 255))
+    bg.paste(studio_pil, mask=studio_pil.split()[3])
+    image = bg
+
     h, w = _aligned(image.height, image.width)
     if (image.height, image.width) != (h, w):
         image = image.resize((w, h), Image.Resampling.LANCZOS)
@@ -733,8 +777,7 @@ def render_held(pipe: Flux2KleinPipeline, prop: Prop, source: Path, dest: Path) 
         width=w,
     )
     out = result.images[0]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    out.save(dest, format="JPEG", quality=92)  # pyright: ignore[reportUnknownMemberType]
+    _save_with_alpha_cut(out, dest)
 
 
 def _free_gpu() -> None:
