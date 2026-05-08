@@ -4,8 +4,9 @@ import { createContext, useContext } from 'react'
  * The state of the local-server boot pipeline.
  *
  *   preparing      → anything between launch and ready: unpack-files, deps
- *                    check, install, port-scan, spawn, health-poll. UI shows
- *                    a single yellow "Starting World Engine…" indicator.
+ *                    check, install, port-scan, spawn, health-poll. The
+ *                    pipeline runs in the background — the menu mounts
+ *                    immediately and the user can navigate while we wait.
  *   ready          → server is up and reachable.
  *   not_installed  → engine deps missing; awaiting an explicit install action.
  *   failed         → install crashed or server died; carries the error so UI
@@ -22,13 +23,9 @@ export type StartupState =
   | { kind: 'not_installed' }
   | { kind: 'failed'; error: string }
 
-/** True for states where the splash overlay / "Starting…" indicator should
- *  show. Currently only `preparing`; tied to the splash dismissal logic in
- *  AppShell and to the WorldEngineSection's "starting" affordance. */
-export const isStartupBlocking = (state: StartupState): boolean => state.kind === 'preparing'
-
 /** True for states where the local server is up and engine-dependent
- *  controls (model picker, cache deletion, …) should be enabled. */
+ *  controls (model picker, Launch click, cache deletion, …) should be
+ *  enabled. */
 export const isStartupReady = (state: StartupState): boolean => state.kind === 'ready'
 
 export type StartupContextValue = {
