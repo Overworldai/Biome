@@ -27,15 +27,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   weapons: 'Weapons',
   containers: 'Containers',
   furniture: 'Furniture',
-  appliances: 'Appliances',
-  electronics: 'Electronics',
-  lighting: 'Lighting',
+  electronics: 'Electronics & appliances',
   street: 'Street',
   vehicles: 'Vehicles',
   foliage_and_rocks: 'Foliage & rocks',
-  food_and_drink: 'Food & drink',
-  tools: 'Tools',
-  industrial_debris: 'Industrial debris',
+  industrial: 'Industrial',
   npcs: 'NPCs'
 }
 
