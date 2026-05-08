@@ -4,9 +4,7 @@ import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
-import { useEngine } from '../../context/streaming/engine'
-import { useStartup } from '../../context/startup/startupContextValue'
-import { isStartupReady } from '../../context/startup/startupContextValue'
+import { useEngineLifecycle } from '../../context/engineLifecycle/engineLifecycleContextValue'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -62,10 +60,9 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
   const { saveSettings } = useSettings()
-  const engine = useEngine()
-  const checkEngine = engine.check
-  const startup = useStartup()
-  const engineReady = isStartupReady(startup.state)
+  const lifecycle = useEngineLifecycle()
+  const checkEngine = lifecycle.check
+  const engineReady = lifecycle.state.kind === 'ready'
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
@@ -359,7 +356,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   // the engine-log IPC stream the modal already tails.
   const runReinstallAndAutoClose = async (mode: 'fix' | 'nuke') => {
     setShowLocalInstallLog(true)
-    const result = await startup.reinstallEngine(mode)
+    const result = await lifecycle.reinstallEngine(mode)
     if (result.kind === 'ready') setShowLocalInstallLog(false)
   }
 

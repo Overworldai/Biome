@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useStartup } from '../../context/startup/startupContextValue'
+import { useEngineLifecycle } from '../../context/engineLifecycle/engineLifecycleContextValue'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsButton from '../ui/SettingsButton'
@@ -14,7 +14,7 @@ type WorldEngineSectionProps = {
 }
 
 /** Status indicator + install/repair affordance for the standalone-managed
- *  engine. The visible CTA depends on the current StartupState:
+ *  engine. The visible CTA depends on the current LifecycleState:
  *
  *    preparing      → "Starting…", yellow dot, no buttons.
  *    ready          → "Ready", green dot, Fix In Place + Total Reinstall.
@@ -25,7 +25,7 @@ type WorldEngineSectionProps = {
  *  by design now), so the dot acts as the at-a-glance state signal. */
 const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstallClick }: WorldEngineSectionProps) => {
   const { t } = useTranslation()
-  const { state } = useStartup()
+  const { state } = useEngineLifecycle()
 
   const dot = (() => {
     switch (state.kind) {
