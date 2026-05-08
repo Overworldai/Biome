@@ -5,6 +5,8 @@ import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { useEngine } from '../../context/streaming/engine'
+import { useStartup } from '../../context/startup/startupContextValue'
+import { isStartupReady } from '../../context/startup/startupContextValue'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -62,6 +64,8 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { saveSettings } = useSettings()
   const engine = useEngine()
   const checkEngine = engine.check
+  const startup = useStartup()
+  const engineReady = isStartupReady(startup.state)
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
@@ -95,10 +99,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const serverUrlUsesSecureTransport = /^\s*wss?:\/\//i.test(menuServerUrl)
     ? /^\s*wss:\/\//i.test(menuServerUrl)
     : /^\s*https:\/\//i.test(menuServerUrl)
-
-  const engineReady = engine.status
-    ? engine.status.uv_installed && engine.status.repo_cloned && engine.status.dependencies_synced
-    : null
 
   useImperativeHandle(
     ref,
@@ -344,23 +344,24 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const handleConfirmFixEngine = async () => {
     setShowFixModal(false)
     setShowLocalInstallLog(true)
-    try {
-      await engine.setup.run()
-      await engine.check()
-    } catch {
-      // Error is surfaced by engine.setup.error and server logs.
-    }
+    // `reinstallEngine` orchestrates stop → install → start as one unit;
+    // any error surfaces via the StartupContext state (failed kind) and
+    // through the engine-log IPC stream the install modal already tails.
+    await startup.reinstallEngine('fix')
   }
 
   const handleConfirmNukeEngine = async () => {
     setShowNukeModal(false)
     setShowLocalInstallLog(true)
-    try {
-      await engine.setup.nukeAndReinstall()
-      await engine.check()
-    } catch {
-      // Error is surfaced by engine.setup.error and server logs.
-    }
+    await startup.reinstallEngine('nuke')
+  }
+
+  // First-time install (and recovery from `failed`) goes through the same
+  // pipeline; `reinstallEngine('fix')` is identical to a fresh install
+  // when there's nothing to nuke.
+  const handleInstallEngine = async () => {
+    setShowLocalInstallLog(true)
+    await startup.reinstallEngine('fix')
   }
 
   return (
@@ -435,9 +436,9 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
       {menuEngineMode === 'standalone' && (
         <WorldEngineSection
-          engineReady={engineReady}
           onFixInPlaceClick={() => setShowFixModal(true)}
           onTotalReinstallClick={() => setShowNukeModal(true)}
+          onInstallClick={() => void handleInstallEngine()}
         />
       )}
 
@@ -475,7 +476,14 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
           onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
           onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
           hideSelectedInDropdown
-          disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
+          disabled={
+            menuModelsLoading ||
+            (menuEngineMode === 'standalone' && !engineReady) ||
+            (menuEngineMode === 'server' && serverUrlStatus !== 'valid')
+          }
+          disabledTooltip={
+            menuEngineMode === 'standalone' && !engineReady ? 'app.settings.worldEngine.installFirstTooltip' : undefined
+          }
           allowCustom
           onCustomBlur={(modelId) => void handleCustomModelBlur(modelId)}
           customLabel="app.settings.worldModel.custom"
@@ -514,6 +522,8 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
               }))}
               value={menuQuant}
               onChange={(v) => setMenuQuant(v as QuantOption)}
+              disabled={menuEngineMode === 'standalone' && !engineReady}
+              disabledTooltip="app.settings.worldEngine.installFirstTooltip"
             />
           </SettingsRow>
           <SettingsCheckbox

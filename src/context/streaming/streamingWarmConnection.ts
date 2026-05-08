@@ -184,6 +184,16 @@ const bootStandalone = async (opts: WarmConnectionOptions): Promise<string> => {
     opts.onFreshInstall(true)
     opts.onStage('setup.engine')
     opts.log.info('Engine not fully set up, running auto-setup...')
+    // FIXME: this path runs install via `engine.setup.run` rather than the
+    // canonical StartupContext.reinstallEngine, so the StartupContext
+    // state can transiently disagree with reality (it'll still report
+    // `not_installed` while warm-connect is mid-install). Settings opens
+    // after streaming will see the stale state until the next orchestrate
+    // pass picks it up. Worth wiring through StartupContext when we
+    // refactor warm-connect, but the impact is bounded — warm-connect
+    // only fires when the user clicks Launch from a `not_installed`
+    // state without visiting settings first, which the install-gated UI
+    // makes a less common path.
     await opts.setupEngine(opts.onStage)
     if (opts.isCancelled()) throw new CancelledError()
   }

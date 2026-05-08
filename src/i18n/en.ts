@@ -179,12 +179,16 @@ const en = {
         },
         worldEngine: {
           title: 'World Engine',
-          description: 'is the local engine healthy?',
-          checking: 'checking...',
-          yes: 'yes',
-          no: 'no',
+          description: 'the engine that runs your sessions ·',
+          ready: 'ready',
+          starting: 'starting...',
+          notInstalled: 'not installed',
+          failed: 'failed: {{error}}',
+          install: 'Install',
+          reinstall: 'Reinstall',
           fixInPlace: 'Fix In Place',
-          totalReinstall: 'Total Reinstall'
+          totalReinstall: 'Total Reinstall',
+          installFirstTooltip: 'Install World Engine to use this'
         },
         performance: {
           title: 'Performance Settings',

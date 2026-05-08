@@ -178,12 +178,16 @@ const ja = {
         },
         worldEngine: {
           title: 'ワールドエンジン',
-          description: 'ローカルエンジンは正常ですか？',
-          checking: '確認中...',
-          yes: 'はい',
-          no: 'いいえ',
+          description: 'セッションを実行するエンジン ·',
+          ready: '準備完了',
+          starting: '起動中...',
+          notInstalled: '未インストール',
+          failed: '失敗: {{error}}',
+          install: 'インストール',
+          reinstall: '再インストール',
           fixInPlace: 'その場で修復',
-          totalReinstall: '完全再インストール'
+          totalReinstall: '完全再インストール',
+          installFirstTooltip: 'ワールドエンジンをインストールしてください'
         },
         performance: {
           title: 'パフォーマンス設定',

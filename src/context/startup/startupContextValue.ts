@@ -1,36 +1,51 @@
 import { createContext, useContext } from 'react'
 
 /**
- * The phases the local-server boot pipeline moves through on app launch.
+ * The state of the local-server boot pipeline.
  *
- *   unpacking      → mirroring bundled server-component files into the engine dir
- *   checking       → verifying uv / repo / dependencies are installed
- *   starting       → server process spawned; polling /health until ready
- *   ready          → server is up (or remote-server mode skips local boot)
- *   not_installed  → engine deps missing; menu opens with install affordance
- *   failed         → start crashed or health poll exhausted; menu opens with reinstall affordance
+ *   preparing      → anything between launch and ready: unpack-files, deps
+ *                    check, install, port-scan, spawn, health-poll. UI shows
+ *                    a single yellow "Starting World Engine…" indicator.
+ *   ready          → server is up and reachable.
+ *   not_installed  → engine deps missing; awaiting an explicit install action.
+ *   failed         → install crashed or server died; carries the error so UI
+ *                    can surface it alongside a recovery action.
  *
- * `not_installed` and `failed` both unblock the menu — they're "we won't
- * be running a session, but the user can still navigate" terminal states.
- * Only `unpacking`, `checking`, and `starting` show the splash loader.
+ * These four states are exhaustive — there is no "intentionally offline" or
+ * "stale" state. In standalone mode the server is always preparing-or-ready-
+ * or-broken. Server-mode collapses to `ready` immediately (no local
+ * orchestration runs).
  */
-export type StartupPhase = 'unpacking' | 'checking' | 'starting' | 'ready' | 'not_installed' | 'failed'
+export type StartupState =
+  | { kind: 'preparing' }
+  | { kind: 'ready' }
+  | { kind: 'not_installed' }
+  | { kind: 'failed'; error: string }
 
-/** True for the phases that should keep the splash loader covering the menu. */
-export const isStartupBlocking = (phase: StartupPhase): boolean =>
-  phase === 'unpacking' || phase === 'checking' || phase === 'starting'
+/** True for states where the splash overlay / "Starting…" indicator should
+ *  show. Currently only `preparing`; tied to the splash dismissal logic in
+ *  AppShell and to the WorldEngineSection's "starting" affordance. */
+export const isStartupBlocking = (state: StartupState): boolean => state.kind === 'preparing'
+
+/** True for states where the local server is up and engine-dependent
+ *  controls (model picker, cache deletion, …) should be enabled. */
+export const isStartupReady = (state: StartupState): boolean => state.kind === 'ready'
 
 export type StartupContextValue = {
-  phase: StartupPhase
-  /** Populated when `phase === 'failed'` (start-engine-server threw or the
-   *  server exited mid-health-poll). Consumers render this in the reinstall
-   *  affordance; the same string is also written to the renderer log via
-   *  the orchestrator's logger. */
-  error: string | null
-  /** Reinstall the engine and start the server. Used for both the
-   *  first-time install (from `not_installed`) and recovery (from `failed`).
-   *  Resets `phase` to `unpacking` and runs the full pipeline. */
-  installAndStart: () => Promise<void>
+  state: StartupState
+  /** Stop the running server (if any), reinstall the engine deps, and
+   *  start a fresh server.
+   *
+   *    - `'fix'`  → re-runs `uv sync` against the existing engine dir;
+   *                 cheap, fixes most "deps drifted" issues.
+   *    - `'nuke'` → wipes the engine + UV directories first; expensive,
+   *                 fixes stubborn cases that `'fix'` can't.
+   *
+   *  Used by the WorldEngineSection install/reinstall buttons and as
+   *  the recovery path from `not_installed` / `failed`. The state moves
+   *  through `preparing` for the duration and lands on `ready` (success)
+   *  or `failed` (install or start broke). */
+  reinstallEngine: (mode?: 'fix' | 'nuke') => Promise<void>
 }
 
 export const StartupContext = createContext<StartupContextValue | null>(null)

@@ -101,14 +101,14 @@ const AppShell = () => {
   } = usePortal()
   const { isStreaming, isUIActive, status: connectionStatus, prepareReturnToMainMenu } = useConnection()
   const sceneEditState = useSession().sceneEdit.state
-  const { phase: startupPhase } = useStartup()
+  const { state: startupState } = useStartup()
   // While the local-server boot pipeline is mid-flight (unpacking files,
   // checking install, spawning + health-polling), suppress every menu
   // chrome element so the splash overlay doesn't sit on top of an
   // interactive portal / settings button. The slideshow + window
   // controls keep mounting underneath — that's the intentional
   // "splash on top of resting menu state" handoff.
-  const isStartupBlocked = isStartupBlocking(startupPhase)
+  const isStartupBlocked = isStartupBlocking(startupState)
   useGamepadNavigation(isUIActive)
   const {
     getBackgroundVideoElement,

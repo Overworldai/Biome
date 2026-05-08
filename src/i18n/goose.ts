@@ -180,12 +180,16 @@ const goose = {
         },
         worldEngine: {
           title: 'World Engine',
-          description: 'is the local engine in good feather?',
-          checking: 'checking...',
-          yes: 'yes',
-          no: 'no',
+          description: 'the goose that powers your sessions ·',
+          ready: 'in fine feather',
+          starting: 'ruffling feathers...',
+          notInstalled: 'no goose yet',
+          failed: 'feathers ruffled wrong: {{error}}',
+          install: 'Hatch',
+          reinstall: 'Re-hatch',
           fixInPlace: 'Preen In Place',
-          totalReinstall: 'Full Molt'
+          totalReinstall: 'Full Molt',
+          installFirstTooltip: 'Hatch the World Engine to use this'
         },
         performance: {
           title: 'Performance Settings',

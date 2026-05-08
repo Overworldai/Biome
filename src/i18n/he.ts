@@ -173,12 +173,16 @@ const he = {
         },
         worldEngine: {
           title: 'מנוע העולם',
-          description: 'האם המנוע המקומי תקין?',
-          checking: 'בודק...',
-          yes: 'כן',
-          no: 'לא',
+          description: 'המנוע שמריץ את ההפעלות שלך ·',
+          ready: 'מוכן',
+          starting: 'מפעיל...',
+          notInstalled: 'לא מותקן',
+          failed: 'נכשל: {{error}}',
+          install: 'התקן',
+          reinstall: 'התקן מחדש',
           fixInPlace: 'תקן במקום',
-          totalReinstall: 'התקנה מחדש מלאה'
+          totalReinstall: 'התקנה מחדש מלאה',
+          installFirstTooltip: 'התקן את World Engine כדי להשתמש בזה'
         },
         performance: {
           title: 'הגדרות ביצועים',

@@ -171,12 +171,16 @@ const zh = {
         },
         worldEngine: {
           title: '世界引擎',
-          description: '本地引擎状态正常吗？',
-          checking: '检查中...',
-          yes: '是',
-          no: '否',
+          description: '运行会话的引擎 ·',
+          ready: '就绪',
+          starting: '启动中...',
+          notInstalled: '未安装',
+          failed: '失败：{{error}}',
+          install: '安装',
+          reinstall: '重新安装',
           fixInPlace: '原地修复',
-          totalReinstall: '全部重装'
+          totalReinstall: '全部重装',
+          installFirstTooltip: '安装世界引擎以使用此项'
         },
         performance: {
           title: '性能设置',

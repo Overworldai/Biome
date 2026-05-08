@@ -22,6 +22,10 @@ type SettingsSelectProps = {
   onDelete?: (value: string) => void
   onCacheDelete?: (value: string) => void
   disabled?: boolean
+  /** Native HTML tooltip shown on hover when `disabled` is true. Used to
+   *  explain *why* the control is greyed out (e.g. "install the engine
+   *  first"). Ignored when the control is enabled. */
+  disabledTooltip?: TranslationKey
   allowCustom?: boolean
   onCustomBlur?: (value: string) => void
   rawCustomPrefix?: string
@@ -45,6 +49,7 @@ const SettingsSelect = ({
   onDelete,
   onCacheDelete,
   disabled,
+  disabledTooltip,
   allowCustom,
   onCustomBlur,
   rawCustomPrefix,
@@ -341,6 +346,7 @@ const SettingsSelect = ({
           }
         }}
         disabled={disabled}
+        title={disabled && disabledTooltip ? t(disabledTooltip) : undefined}
       >
         <span
           className={`

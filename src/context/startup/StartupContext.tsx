@@ -3,7 +3,7 @@ import { invoke } from '../../bridge'
 import { STANDALONE_PORT } from '../../types/settings'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { createLogger } from '../../utils/logger'
-import { StartupContext, type StartupContextValue, type StartupPhase } from './startupContextValue'
+import { StartupContext, type StartupContextValue, type StartupState } from './startupContextValue'
 
 const log = createLogger('Startup')
 
@@ -18,9 +18,7 @@ const HEALTH_POLL_INTERVAL_MS = 250
 const HEALTH_PROBE_TIMEOUT_MS = 2500
 
 /** Range of ports we'll try when scanning for an open one. Mirrors
- *  STANDALONE_PORT_SCAN_LIMIT in `streamingWarmConnection.ts`; if every
- *  port from STANDALONE_PORT through STANDALONE_PORT + 1336 is taken,
- *  something's badly wrong on the box. */
+ *  STANDALONE_PORT_SCAN_LIMIT in `streamingWarmConnection.ts`. */
 const PORT_SCAN_LIMIT = 1337
 
 const findOpenPort = async (): Promise<number | null> => {
@@ -34,116 +32,123 @@ const findOpenPort = async (): Promise<number | null> => {
 
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
+/** Run the spawn + health-poll pipeline and return the resulting state.
+ *  Pure — doesn't touch React state — so it can be reused across the
+ *  initial-startup and reinstall paths. */
+const startServer = async (): Promise<StartupState> => {
+  log.info('Scanning for open port')
+  const port = await findOpenPort()
+  if (port === null) {
+    const msg = `No open port in range ${STANDALONE_PORT}-${STANDALONE_PORT + PORT_SCAN_LIMIT - 1}`
+    log.error(msg)
+    return { kind: 'failed', error: msg }
+  }
+
+  log.info('Starting server on port', port)
+  try {
+    await invoke('start-engine-server', port)
+  } catch (e) {
+    const msg = errorMessage(e)
+    log.error('start-engine-server failed:', msg)
+    return { kind: 'failed', error: msg }
+  }
+
+  const healthUrl = `http://localhost:${port}/health`
+  log.info('Polling /health at', healthUrl)
+  while (true) {
+    const probe = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
+    if (probe.reachable) {
+      log.info('Server ready on port', port)
+      return { kind: 'ready' }
+    }
+    const running = await invoke('is-server-running')
+    if (!running) {
+      // Capture the exit tail so the user sees a real error instead of a
+      // generic "didn't become ready" — same path the warm-connect flow
+      // uses for crash diagnostics.
+      const tail = await invoke('get-last-server-exit-tail')
+      const msg = tail || 'Server exited before becoming ready'
+      log.error('Server died during health poll:', msg)
+      return { kind: 'failed', error: msg }
+    }
+    await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS))
+  }
+}
+
 export const StartupProvider = ({ children }: { children: ReactNode }) => {
   const { isStandaloneMode } = useSettings()
-  const [phase, setPhase] = useState<StartupPhase>('unpacking')
-  const [error, setError] = useState<string | null>(null)
+  const [state, setState] = useState<StartupState>(() => ({ kind: 'preparing' }))
   // The orchestration must run exactly once per mount. React StrictMode in
   // dev double-invokes effects on the first commit, which would otherwise
   // double-spawn the server.
   const ranOnceRef = useRef(false)
 
-  const runStartServerWithHealthPoll = useCallback(async (): Promise<void> => {
-    const port = await findOpenPort()
-    if (port === null) {
-      const msg = `No open port in range ${STANDALONE_PORT}–${STANDALONE_PORT + PORT_SCAN_LIMIT - 1}`
-      log.error(msg)
-      setError(msg)
-      setPhase('failed')
-      return
-    }
-
-    log.info('Starting server on port', port)
-    try {
-      await invoke('start-engine-server', port)
-    } catch (e) {
-      const msg = errorMessage(e)
-      log.error('start-engine-server failed:', msg)
-      setError(msg)
-      setPhase('failed')
-      return
-    }
-
-    const healthUrl = `http://localhost:${port}/health`
-    log.info('Polling /health at', healthUrl)
-    while (true) {
-      const probe = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
-      if (probe.reachable) {
-        log.info('Server ready on port', port)
-        setPhase('ready')
-        return
-      }
-      const running = await invoke('is-server-running')
-      if (!running) {
-        // Capture the exit tail so the user sees a real error instead of
-        // a generic "didn't become ready" — same path the warm-connect
-        // flow uses for crash diagnostics.
-        const tail = await invoke('get-last-server-exit-tail')
-        const msg = tail || 'Server exited before becoming ready'
-        log.error('Server died during health poll:', msg)
-        setError(msg)
-        setPhase('failed')
-        return
-      }
-      await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS))
-    }
-  }, [])
-
   const orchestrate = useCallback(async (): Promise<void> => {
     if (!isStandaloneMode) {
-      // Remote-server mode: no local boot, no splash. The renderer talks
-      // to the configured `server_url`; reachability is handled by the
-      // existing serverUrlStatus probe on the settings panel.
+      // Server mode: no local boot, no splash. The renderer talks to the
+      // configured `server_url`; reachability is handled by the existing
+      // serverUrlStatus probe on the settings panel.
       log.info('Server mode: skipping local startup orchestration')
-      setPhase('ready')
+      setState({ kind: 'ready' })
       return
     }
 
-    setPhase('unpacking')
+    setState({ kind: 'preparing' })
+    log.info('Unpacking server files')
     try {
       await invoke('unpack-server-files', false)
     } catch (e) {
       // Unpack is best-effort — a failed copy doesn't gate the rest of
-      // the pipeline, since `check-engine-status` downstream will catch
-      // a missing pyproject.toml / main.py and route us to `not_installed`.
+      // the pipeline, since the next check-engine-status will catch a
+      // missing pyproject.toml / main.py and route us to `not_installed`.
       log.warn('Server file unpack failed:', errorMessage(e))
     }
 
-    setPhase('checking')
+    log.info('Checking engine status')
     const status = await invoke('check-engine-status', 'startup')
     if (!status.uv_installed || !status.repo_cloned || !status.dependencies_synced) {
-      log.info('Engine not installed; menu will open with install affordance')
-      setPhase('not_installed')
+      log.info('Engine not installed; awaiting user install')
+      setState({ kind: 'not_installed' })
       return
     }
 
     if (status.server_running) {
       // A previous Biome instance left a managed server alive (most likely
       // a hot-reload during development). Adopt it instead of double-booting.
-      log.info('Server already running; skipping start')
-      setPhase('ready')
+      log.info('Server already running; adopting')
+      setState({ kind: 'ready' })
       return
     }
 
-    setPhase('starting')
-    await runStartServerWithHealthPoll()
-  }, [isStandaloneMode, runStartServerWithHealthPoll])
+    setState(await startServer())
+  }, [isStandaloneMode])
 
-  const installAndStart = useCallback(async (): Promise<void> => {
-    setError(null)
-    setPhase('unpacking')
+  const reinstallEngine = useCallback(async (mode: 'fix' | 'nuke' = 'fix'): Promise<void> => {
+    setState({ kind: 'preparing' })
+
+    // Stop the running server (if any) so the freshly-installed deps run
+    // against a fresh process. No-op when the server isn't running; the
+    // IPC handler is idempotent.
+    log.info('Stopping server before reinstall')
     try {
-      await invoke('reinstall-engine')
+      await invoke('stop-engine-server')
+    } catch (e) {
+      log.warn('stop-engine-server failed (likely already stopped):', errorMessage(e))
+    }
+
+    const command = mode === 'nuke' ? 'nuke-and-reinstall-engine' : 'reinstall-engine'
+    log.info('Running', command)
+    try {
+      await invoke(command)
     } catch (e) {
       const msg = errorMessage(e)
-      log.error('reinstall-engine failed:', msg)
-      setError(msg)
-      setPhase('failed')
+      log.error(`${command} failed:`, msg)
+      setState({ kind: 'failed', error: msg })
       return
     }
-    setPhase('starting')
-    await runStartServerWithHealthPoll()
-  }, [runStartServerWithHealthPoll])
+
+    setState(await startServer())
+  }, [])
 
   useEffect(() => {
     if (ranOnceRef.current) return
@@ -151,7 +156,7 @@ export const StartupProvider = ({ children }: { children: ReactNode }) => {
     void orchestrate()
   }, [orchestrate])
 
-  const value: StartupContextValue = { phase, error, installAndStart }
+  const value: StartupContextValue = { state, reinstallEngine }
 
   return <StartupContext.Provider value={value}>{children}</StartupContext.Provider>
 }
