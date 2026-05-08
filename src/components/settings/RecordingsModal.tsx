@@ -30,6 +30,7 @@ const RecordingsModal = ({ configuredDir, onClose }: RecordingsModalProps) => {
   const [entries, setEntries] = useState<RecordingEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState<RecordingEntry | null>(null)
+  const scrollRootRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -67,6 +68,7 @@ const RecordingsModal = ({ configuredDir, onClose }: RecordingsModalProps) => {
           key={entry.path}
           entry={entry}
           locale={i18n.language}
+          scrollRootRef={scrollRootRef}
           onOpen={() => handleOpenExternally(entry)}
           onDelete={() => setConfirmDelete(entry)}
         />
@@ -105,7 +107,10 @@ const RecordingsModal = ({ configuredDir, onClose }: RecordingsModalProps) => {
           </div>
         </div>
 
-        <div className="styled-scrollbar mt-[1.4cqh] max-h-[52cqh] min-h-[20cqh] overflow-y-auto pr-[0.4cqh]">
+        <div
+          ref={scrollRootRef}
+          className="styled-scrollbar mt-[1.4cqh] max-h-[52cqh] min-h-[20cqh] overflow-y-auto pr-[0.4cqh]"
+        >
           {loading ? (
             <p
               className={`
@@ -158,6 +163,7 @@ const RecordingsModal = ({ configuredDir, onClose }: RecordingsModalProps) => {
 type RecordingRowProps = {
   entry: RecordingEntry
   locale: string
+  scrollRootRef: React.RefObject<HTMLDivElement | null>
   onOpen: () => void
   onDelete: () => void
 }
@@ -169,13 +175,40 @@ const shortModelName = (model: string | null | undefined): string | null => {
   return slash >= 0 ? model.slice(slash + 1) : model
 }
 
-const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) => {
+const RecordingRow = ({ entry, locale, scrollRootRef, onOpen, onDelete }: RecordingRowProps) => {
   const src = `biome-recording://serve/${encodeURIComponent(entry.filename)}`
   const model = shortModelName(entry.properties?.model)
   const date = formatDate(entry.mtime_ms, locale)
   const subtitle = model ? `${model} · ${date}` : date
 
+  const containerRef = useRef<HTMLLIElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [isVisible, setIsVisible] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+
+  // Lazy-mount the <video> only when the row is in (or near) the scroll
+  // viewport. Each mounted <video preload="auto" autoPlay loop> spins up a
+  // decoder, so unmounting offscreen rows keeps CPU bounded regardless of how
+  // many recordings exist.
+  useEffect(() => {
+    const el = containerRef.current
+    const root = scrollRootRef.current
+    if (!el || !root) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) setIsVisible(e.isIntersecting)
+      },
+      { root, rootMargin: '200px 0px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [scrollRootRef])
+
+  // Reset readiness whenever the video unmounts so the spinner reappears if
+  // the row is scrolled out and back in.
+  useEffect(() => {
+    if (!isVisible) setIsReady(false)
+  }, [isVisible])
 
   // Nudge currentTime past 0 once metadata loads — some browsers (including
   // Chromium under certain codecs/containers) won't decode the first frame
@@ -195,24 +228,42 @@ const RecordingRow = ({ entry, locale, onOpen, onDelete }: RecordingRowProps) =>
     (e: React.SyntheticEvent<HTMLVideoElement>) => {
       const el = e.currentTarget
       console.error(`Recording preview failed for ${entry.filename}:`, el.error)
+      setIsReady(true)
     },
     [entry.filename]
   )
 
   return (
-    <li className="flex items-stretch gap-[1.2cqh] border border-border-medium bg-white/5 p-[0.8cqh]">
-      <video
-        ref={videoRef}
-        src={src}
-        className="h-[11cqh] w-[19.5cqh] shrink-0 self-center bg-black object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        onLoadedMetadata={handleLoadedMetadata}
-        onError={handleError}
-      />
+    <li
+      ref={containerRef}
+      className="flex items-stretch gap-[1.2cqh] border border-border-medium bg-white/5 p-[0.8cqh]"
+    >
+      <div className="relative h-[11cqh] w-[19.5cqh] shrink-0 self-center bg-black">
+        {isVisible && (
+          <video
+            ref={videoRef}
+            src={src}
+            className="size-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            onLoadedData={() => setIsReady(true)}
+            onLoadedMetadata={handleLoadedMetadata}
+            onError={handleError}
+          />
+        )}
+        {(!isVisible || !isReady) && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div
+              className="
+                h-[2cqh] w-[2cqh] animate-spin rounded-full border-[0.3cqh] border-text-muted border-t-text-primary
+              "
+            />
+          </div>
+        )}
+      </div>
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-[0.4cqh]">
         <div className="flex min-w-0 flex-col">
           <div className="flex min-w-0 items-baseline gap-[0.8cqh]">
