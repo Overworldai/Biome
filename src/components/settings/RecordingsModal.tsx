@@ -79,7 +79,7 @@ const RecordingsModal = ({ configuredDir, onClose }: RecordingsModalProps) => {
   return (
     <>
       <Modal title="app.dialogs.recordings.title" onCancel={onClose} onBackdropClick={onClose}>
-        <div className="mt-[1.2cqh] flex items-center justify-between gap-[1cqh]">
+        <div className="flex items-center justify-between gap-[1cqh]">
           <p
             className={`
               m-0
