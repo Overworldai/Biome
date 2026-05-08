@@ -97,6 +97,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const {
     preConnectionStage,
     isFreshInstall,
+    serverCapabilities,
     run: runWarmConnection,
     cancel: cancelWarmFlow,
     isCancelled: isWarmFlowCancelled
@@ -161,6 +162,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isStreaming,
     isStandaloneMode,
     settings,
+    serverCapabilities,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -285,6 +287,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       isUIActive: !inputEnabled,
       isFreshInstall,
       server,
+      serverCapabilities,
       dismissConnectionLost,
       reconnectAfterConnectionLost,
       cancelConnection,
@@ -301,6 +304,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       inputEnabled,
       isFreshInstall,
       server,
+      serverCapabilities,
       dismissConnectionLost,
       reconnectAfterConnectionLost,
       cancelConnection,

@@ -1,17 +1,20 @@
 import { z } from 'zod'
 import { SUPPORTED_LOCALES } from '../i18n/locales'
+import { EngineBackendSchema, QuantSchema, type EngineBackend, type Quant } from './protocol.generated'
 import type { AllPaths } from '../utils/settingsClassifier'
 
 export const ENGINE_MODES = { STANDALONE: 'standalone', SERVER: 'server' } as const
 export const LOCALE_OPTIONS = ['system', ...SUPPORTED_LOCALES] as const
-export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
-export type QuantOption = (typeof QUANT_OPTIONS)[number]
-// Inference backend. `world_engine` is the legacy upstream package (CUDA only);
-// `quark` is the unified backend that dispatches to CUDA or Metal at runtime
-// and is the only option on Apple Silicon. Default stays on `world_engine`
-// until quark has soaked enough to flip.
-export const ENGINE_BACKEND_OPTIONS = ['world_engine', 'quark'] as const
-export type EngineBackend = (typeof ENGINE_BACKEND_OPTIONS)[number]
+
+// `EngineBackend` / `Quant` are the canonical wire enums defined in
+// `server.protocol`; the codegen ships them as Zod schemas, and we
+// derive the option tuples and types here so the renderer never
+// re-declares the values. Adding a new enum member: edit the StrEnum
+// in `protocol.py`, regenerate, every call site picks it up.
+export const ENGINE_BACKEND_OPTIONS = EngineBackendSchema.options
+export const QUANT_OPTIONS = QuantSchema.options
+export type { EngineBackend }
+export type QuantOption = Quant
 
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
@@ -71,8 +74,8 @@ export const settingsSchema = z.object({
   server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
-  engine_backend: z.enum(ENGINE_BACKEND_OPTIONS).default('world_engine'),
-  engine_quant: z.enum(QUANT_OPTIONS).default('none'),
+  engine_backend: EngineBackendSchema.default('world_engine'),
+  engine_quant: QuantSchema.default('none'),
   cap_inference_fps: z.boolean().default(true),
   offline_mode: z.boolean().default(false),
   custom_models: z.array(z.string()).default([]),

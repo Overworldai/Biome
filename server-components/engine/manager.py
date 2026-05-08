@@ -15,7 +15,6 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 import torch
@@ -30,8 +29,8 @@ except ImportError:
 import structlog
 
 from engine import devices
-from engine.devices import WORLD_ENGINE_DEVICE
-from server.protocol import StageId
+from engine.devices import IS_DARWIN_ARM64, WORLD_ENGINE_DEVICE
+from server.protocol import EngineBackend, Quant, ServerCapabilities, StageId
 
 logger = structlog.stdlib.get_logger(__name__)
 
@@ -40,15 +39,35 @@ logger = structlog.stdlib.get_logger(__name__)
 # Backend selection
 # ============================================================================
 
-# Inference backend identifier — wire-aligned with the renderer's
-# `EngineBackend` setting (`SessionConfig.engine_backend`). ``'quark'``
-# routes through ``quark.Engine`` (CUDA + Apple — quark's
-# ``Engine.__new__`` factory dispatches to ``EngineCUDA`` or
-# ``EngineMetal`` based on platform). ``'world_engine'`` uses the
-# legacy upstream ``world_engine`` package (CUDA only); on Apple
-# Silicon the renderer must pick ``'quark'`` since legacy
-# ``world_engine`` doesn't import there.
-EngineBackend = Literal["world_engine", "quark"]
+
+# `EngineBackend` / `Quant` and the matching `ENGINE_BACKENDS` / `QUANTS`
+# value tuples live in `server.protocol` — the wire schema is the source
+# of truth, and `supported_capabilities` below derives its full-set
+# branches from those tuples so a new option lands in one place.
+#
+# `quark` routes through `quark.Engine` (CUDA + Apple — quark's
+# `Engine.__new__` factory dispatches to `EngineCUDA` or `EngineMetal`
+# based on platform). `world_engine` uses the legacy upstream
+# `world_engine` package (CUDA only); on Apple Silicon the renderer
+# must pick `quark` since legacy `world_engine` doesn't import there.
+def supported_capabilities() -> ServerCapabilities:
+    """Resolve the server's capability matrix from the running host's
+    platform. Used by the `/health` endpoint. The shape itself lives
+    in `server.protocol` so the codegen ships a matching Zod schema
+    + TS type to the renderer; the resolution logic stays here next
+    to the platform query.
+
+    The branches are keyed on `IS_DARWIN_ARM64` rather than
+    `WORLD_ENGINE_DEVICE`-as-proxy so the intent is explicit: this is
+    a *platform* gate (Apple Silicon vs. everything else), not a device
+    gate. A CPU-only Linux/Windows host falls through to the CUDA
+    branch — its capabilities are still the CUDA set even though the
+    actual load will fail when no GPU is present, which is the right
+    failure mode (the renderer offers the real options; load_engine
+    surfaces the no-GPU error)."""
+    if IS_DARWIN_ARM64:
+        return ServerCapabilities(backends=[EngineBackend.QUARK], quants=[Quant.NONE])
+    return ServerCapabilities(backends=list(EngineBackend), quants=list(Quant))
 
 
 def _resolve_backend(backend: EngineBackend) -> tuple[type, type]:
@@ -399,7 +418,7 @@ class WorldEngineManager:
         self,
         model_uri: str,
         quant: str | None = None,
-        backend: EngineBackend = "world_engine",
+        backend: EngineBackend = EngineBackend.WORLD_ENGINE,
     ):
         """Initialize or switch the WorldEngine model.
 

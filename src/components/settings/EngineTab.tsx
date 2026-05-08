@@ -11,6 +11,7 @@ import {
   type Settings
 } from '../../types/settings'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
+import { useConnection } from '../../context/streaming/connection'
 import { useEngine } from '../../context/streaming/engine'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
@@ -32,11 +33,19 @@ type MenuModelOption = {
 type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error'
 
 const isMac = navigator.platform.startsWith('Mac')
-/** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
-const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8a8')
-/** On macOS the legacy `world_engine` package doesn't import (CUDA-only),
- *  so quark is the only viable backend. On Windows/Linux both are available. */
-const availableEngineBackendOptions = ENGINE_BACKEND_OPTIONS.filter((b) => !isMac || b !== 'world_engine')
+
+/** Client-side prediction of the host's capability matrix, mirroring the
+ *  server's `supported_capabilities()` helper. Used until the warm-flow
+ *  `/health` probe lands the authoritative `serverCapabilities`, and as
+ *  the standalone fallback for older servers / failed probes. CUDA gets
+ *  the full set on both axes; Apple Silicon gets quark-only and `none`-only
+ *  because the legacy `world_engine` package doesn't import there and
+ *  quark's Metal subclass forces all-bf16 (INT8 / FP8 selections are
+ *  silently overridden, so we hide them). */
+const predictedCapabilities = (): { backends: EngineBackend[]; quants: QuantOption[] } => {
+  if (isMac) return { backends: ['quark'], quants: ['none'] }
+  return { backends: [...ENGINE_BACKEND_OPTIONS], quants: [...QUANT_OPTIONS] }
+}
 
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
@@ -63,6 +72,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { saveSettings } = useSettings()
   const engine = useEngine()
   const checkEngine = engine.check
+  const { serverCapabilities } = useConnection()
 
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
@@ -74,10 +84,41 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const [menuEngineBackend, setMenuEngineBackend] = useState<EngineBackend>(() => {
     const saved = settings.engine_backend ?? 'world_engine'
     // On Mac, `world_engine` isn't a runnable choice — coerce to `quark`
-    // so the dropdown always reflects something that can actually load.
+    // at init so the dropdown reflects something that can actually load
+    // before the server's capability probe lands. Server-driven clamps
+    // below take over once `serverCapabilities` arrives.
     return isMac && saved === 'world_engine' ? 'quark' : saved
   })
   const [menuCapInferenceFps, setMenuCapInferenceFps] = useState(() => settings.cap_inference_fps ?? true)
+
+  // Effective option sets for the backend / quant dropdowns. The server
+  // is the source of truth — anywhere `serverCapabilities` is populated,
+  // use it directly. Pre-probe (or on probe failure / older servers
+  // without the field) fall back to the client-side platform prediction
+  // in `predictedCapabilities`.
+  const { effectiveBackendOptions, effectiveQuantOptions } = useMemo(() => {
+    const fallback = predictedCapabilities()
+    return {
+      effectiveBackendOptions: serverCapabilities ? [...serverCapabilities.backends] : fallback.backends,
+      effectiveQuantOptions: serverCapabilities ? [...serverCapabilities.quants] : fallback.quants
+    }
+  }, [serverCapabilities])
+
+  // Snap each dropdown to a valid value when its effective set changes —
+  // covers initial probe (where the server may report a tighter set than
+  // the saved value), engine-mode toggles (server vs standalone), and
+  // server-mode reconnects to a remote on a different platform.
+  useEffect(() => {
+    if (effectiveBackendOptions.length > 0 && !effectiveBackendOptions.includes(menuEngineBackend)) {
+      setMenuEngineBackend(effectiveBackendOptions[0])
+    }
+  }, [effectiveBackendOptions, menuEngineBackend])
+
+  useEffect(() => {
+    if (effectiveQuantOptions.length > 0 && !effectiveQuantOptions.includes(menuQuant)) {
+      setMenuQuant(effectiveQuantOptions[0])
+    }
+  }, [effectiveQuantOptions, menuQuant])
 
   const [menuModelOptions, setMenuModelOptions] = useState<MenuModelOption[]>([
     { id: configWorldModel, isLocal: false, sizeBytes: null }
@@ -491,7 +532,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
             hint={t('app.settings.experience.backendDescription')}
           >
             <SettingsSelect
-              options={availableEngineBackendOptions.map((b) => ({
+              options={effectiveBackendOptions.map((b) => ({
                 value: b,
                 label: `app.settings.engineBackend.${b}` as const
               }))}
@@ -509,7 +550,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
             hint={t('app.settings.performance.quantizationDescription')}
           >
             <SettingsSelect
-              options={availableQuantOptions.map((q) => ({
+              options={effectiveQuantOptions.map((q) => ({
                 value: q,
                 label: `app.settings.quantization.${q}` as const
               }))}

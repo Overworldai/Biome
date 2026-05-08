@@ -1,10 +1,31 @@
 import type { EngineStatus, SeedFileRecord, SeedSource } from './app'
 import type { Settings } from './settings'
+import type { ServerCapabilities } from './protocol.generated'
 import type { PortalSparksTuning } from '../lib/portalSparksTuning'
+
+// `ServerCapabilities` is the Pydantic model in `server.protocol`,
+// shipped through codegen. Re-exported here so consumers reach for it
+// alongside the other IPC types without having to know about the
+// codegen file. Adding a new capability axis means extending the
+// Pydantic model, regenerating, and extending the renderer's clamp
+// logic — the IPC envelope stays unchanged.
+export type { ServerCapabilities }
 
 export type ModelAvailability = {
   id: string
   is_local: boolean
+}
+
+/** Result of a `/health` probe. `ok` covers reachability; `capabilities`
+ *  comes from the response body and is the server's source-of-truth
+ *  view of what it can run (matters in server mode where the remote
+ *  may be on a different platform than the client). `capabilities` is
+ *  absent on failed probes and on responses without the field (older
+ *  servers, JSON-parse failures); the renderer falls back to
+ *  client-side platform prediction in that case. */
+export type ServerHealthResult = {
+  ok: boolean
+  capabilities?: ServerCapabilities
 }
 
 export type ModelInfo = {
@@ -281,7 +302,7 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
-  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: ServerHealthResult }
   'get-last-server-exit-tail': { args: []; return: string | null }
 
   // Seeds

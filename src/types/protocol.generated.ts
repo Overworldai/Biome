@@ -60,6 +60,12 @@ export const MessageIdSchema = z.enum([
 ])
 export type MessageId = z.infer<typeof MessageIdSchema>
 
+export const EngineBackendSchema = z.enum(['world_engine', 'quark'])
+export type EngineBackend = z.infer<typeof EngineBackendSchema>
+
+export const QuantSchema = z.enum(['none', 'fp8w8a8', 'intw8a8'])
+export type Quant = z.infer<typeof QuantSchema>
+
 // ─── Models ───────────────────────────────────────────────────────────
 
 /** Static hardware/runtime identity, snapshot once at startup. */
@@ -84,6 +90,40 @@ export const ErrorSnapshotSchema = z.object({
   gpu_util_percent: z.number().optional()
 })
 export type ErrorSnapshot = z.infer<typeof ErrorSnapshotSchema>
+
+/**
+ * Per-config support sets the server can honour, surfaced through
+ * `/health` so the renderer can clamp its in-flight selections to
+ * options that will actually run. The server is the source of truth —
+ * anywhere the renderer has a dropdown that maps to a wire-level
+ * config, this is the canonical set to filter against. Client-side
+ * platform guesses are wrong in server mode where the remote may be
+ * on a different platform than the client.
+ *
+ * Today the matrix is fully determined by the host platform:
+ *
+ *   - CUDA (Linux / Windows): both backends, all three quant modes.
+ *   - Apple Silicon: quark only — the legacy `world_engine` package
+ *     is CUDA-only and doesn't import on Apple. quark's Metal
+ *     subclass internally forces all-bf16 (no native fp8 in MSL, no
+ *     int8 KV path), so `none` is the only meaningful quant choice;
+ *     anything else is silently overridden.
+ *
+ * The shape is a flat pair of lists rather than a per-backend map
+ * because the current matrix doesn't vary across backends on a given
+ * platform. If a future backend ships with different quant support
+ * on the same host, the schema can split `quants` into a per-backend
+ * dict without touching call sites — the renderer's filter logic
+ * only cares about the final flat set per axis. Surfaced through
+ * HTTP rather than WS (lives in `routes.HealthResponse`), but kept
+ * here so the codegen mirrors it to a Zod schema + TS type the
+ * renderer reuses for both shape parsing and the connection slice.
+ */
+export const ServerCapabilitiesSchema = z.object({
+  backends: z.array(EngineBackendSchema),
+  quants: z.array(QuantSchema)
+})
+export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>
 
 /**
  * Per-frame input snapshot from the renderer. `buttons` carries
@@ -131,7 +171,7 @@ export type PromptNotif = z.infer<typeof PromptNotifSchema>
  */
 export const SessionConfigSchema = z.object({
   quant: z.enum(['fp8w8a8', 'intw8a8']).optional(),
-  engine_backend: z.enum(['world_engine', 'quark']),
+  engine_backend: EngineBackendSchema.optional(),
   scene_authoring: z.boolean(),
   action_logging: z.boolean(),
   video_recording: z.boolean(),

@@ -47,22 +47,22 @@ logger = structlog.stdlib.get_logger(__name__)
 # strings to ``"cpu"`` keeps every existing
 # ``frame.to(device=WORLD_ENGINE_DEVICE)`` call site as a no-op
 # without per-call branching.
-_IS_DARWIN_ARM64 = sys.platform == "darwin" and _platform_mod.machine() == "arm64"
+IS_DARWIN_ARM64 = sys.platform == "darwin" and _platform_mod.machine() == "arm64"
 
 # Device assignment per purpose. They all happen to be the same GPU today,
 # but split here so we can move pieces around — e.g. safety on CPU while
 # the world engine stays on GPU, or scene authoring on a second GPU —
 # without rewriting every call site.
-WORLD_ENGINE_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
-SCENE_AUTHORING_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
-SAFETY_DEVICE = "cpu" if _IS_DARWIN_ARM64 else "cuda"
+WORLD_ENGINE_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
+SCENE_AUTHORING_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
+SAFETY_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
 
 # Torch's OOM exception, re-exported under a backend-neutral name.
 # On Apple Silicon there's no ``torch.cuda.OutOfMemoryError`` to alias —
 # fall back to the plain ``MemoryError`` so the type still exists for
 # ``except devices.OutOfMemoryError`` blocks (which never trigger on
 # Apple anyway since there's no CUDA allocator pressure).
-OutOfMemoryError: type[BaseException] = MemoryError if _IS_DARWIN_ARM64 else torch.cuda.OutOfMemoryError
+OutOfMemoryError: type[BaseException] = MemoryError if IS_DARWIN_ARM64 else torch.cuda.OutOfMemoryError
 
 # Opaque NVML device handle — pynvml lacks proper stubs.
 NvmlHandle = object

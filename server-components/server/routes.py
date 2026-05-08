@@ -41,6 +41,7 @@ from pydantic import BaseModel
 from structlog.contextvars import bound_contextvars
 
 from engine import Engines
+from engine.manager import ServerCapabilities, supported_capabilities
 from server.protocol import PROTOCOL_VERSION, MessageId, StageId, SystemInfoMessage, rpc_ok
 from server.session.connection import Connection
 from server.session.handlers import build_init_response_data, prepare_session, run_preinit_handshake
@@ -70,13 +71,16 @@ class SafetyHealth(BaseModel):
 
 class HealthResponse(BaseModel):
     """Body of `GET /health`. The renderer uses this to gate "engine ready"
-    UI; the frontend checks reachability via the request itself, so the
-    response shape is for the engine-status panel only."""
+    UI and to clamp dropdowns (backend, quant) against what the server
+    can actually run; the frontend checks reachability via the request
+    itself, so the response shape is for the engine-status panel +
+    `ServerCapabilities` only."""
 
     status: Literal["ok"] = "ok"
     startup_complete: bool
     world_engine: WorldEngineHealth
     safety: SafetyHealth
+    capabilities: ServerCapabilities
 
 
 class ModelInfoResponse(BaseModel):
@@ -139,6 +143,7 @@ async def health(request: Request, startup: Annotated[ServerStartup, Depends(get
             has_seed=we is not None and we.seed_frame is not None,
         ),
         safety=SafetyHealth(loaded=engines is not None),
+        capabilities=supported_capabilities(),
     )
 
 

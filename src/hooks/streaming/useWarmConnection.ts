@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StageId } from '../../stages'
 import type { TranslatableError } from '../../i18n'
+import type { ServerCapabilities } from '../../types/ipc'
 import { runWarmConnectionFlow, toTranslatableError } from '../../context/streaming/streamingWarmConnection'
 import type { UseEngineResult } from '../engine/useEngineApi'
 import { createLogger } from '../../utils/logger'
@@ -58,6 +59,13 @@ export function useWarmConnection(opts: {
 }): {
   preConnectionStage: StageId | null
   isFreshInstall: boolean
+  /** Per-config support sets the server reports it can run, gleaned
+   *  from the post-connect `/health` probe. `null` until the probe
+   *  succeeds, or after the warm flow restarts (e.g. engine-mode
+   *  toggle). The settings UI consults this to filter dropdowns
+   *  (backend, quant) against real server capability rather than
+   *  client-side platform guesses (which are wrong in server mode). */
+  serverCapabilities: ServerCapabilities | null
   /** Trigger a fresh warm-connection attempt. The lifecycle effects
    *  call this on LOADING-state entry. */
   run: () => void
@@ -69,6 +77,7 @@ export function useWarmConnection(opts: {
   const [trigger, setTrigger] = useState(0)
   const [preConnectionStage, setPreConnectionStage] = useState<StageId | null>(null)
   const [isFreshInstall, setIsFreshInstall] = useState(false)
+  const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null)
   const cancelledRef = useRef(false)
 
   // Once the WS starts reporting its own stages, the warm-flow stage is stale.
@@ -111,6 +120,9 @@ export function useWarmConnection(opts: {
       onFreshInstall: (isFresh) => {
         if (!cancelledRef.current) setIsFreshInstall(isFresh)
       },
+      onServerHealth: (result) => {
+        if (!cancelledRef.current) setServerCapabilities(result.capabilities ?? null)
+      },
       isCancelled: () => cancelledRef.current,
       log
     }).catch((err) => {
@@ -122,6 +134,7 @@ export function useWarmConnection(opts: {
       cancelledRef.current = true
       setPreConnectionStage(null)
       setIsFreshInstall(false)
+      setServerCapabilities(null)
     }
     // Only restart on a new trigger — every other input is read latest-
     // at-call-time on purpose so a settings change mid-flow doesn't
@@ -135,5 +148,5 @@ export function useWarmConnection(opts: {
   }
   const isCancelled = () => cancelledRef.current
 
-  return { preConnectionStage, isFreshInstall, run, cancel, isCancelled }
+  return { preConnectionStage, isFreshInstall, serverCapabilities, run, cancel, isCancelled }
 }

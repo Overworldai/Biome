@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { invoke } from '../../bridge'
 import type { EngineStatus } from '../../types/app'
+import type { ServerHealthResult } from '../../types/ipc'
 import type { StageId } from '../../stages'
 
 export type UseEngineResult = {
@@ -18,7 +19,7 @@ export type UseEngineResult = {
   checkServerRunning: () => Promise<boolean>
   checkServerReady: () => Promise<boolean>
   checkPortInUse: (port: number) => Promise<boolean>
-  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<boolean>
+  probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>
   getLastServerExitTail: () => Promise<string | null>
   isReady: boolean
   isServerRunning: boolean
@@ -163,11 +164,11 @@ export const useEngineApi = (): UseEngineResult => {
     }
   }, [])
 
-  const probeServerHealth = useCallback(async (healthUrl: string, timeoutMs?: number) => {
+  const probeServerHealth = useCallback(async (healthUrl: string, timeoutMs?: number): Promise<ServerHealthResult> => {
     try {
       return await invoke('probe-server-health', healthUrl, timeoutMs)
     } catch {
-      return false
+      return { ok: false }
     }
   }, [])
 

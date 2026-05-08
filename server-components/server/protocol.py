@@ -125,6 +125,26 @@ _FrozenStrict = ConfigDict(frozen=True, extra="forbid")
 _FrozenLenient = ConfigDict(frozen=True, extra="ignore")
 
 
+# Wire-level enums for the engine-config axes the server reports through
+# `ServerCapabilities`. Modelled as `StrEnum` (not bare Literal aliases)
+# so the codegen ships them as standalone Zod schemas — the renderer
+# imports `EngineBackendSchema` / `QuantSchema` and reads `.options` for
+# the value tuple, which means the renderer-side `ENGINE_BACKEND_OPTIONS`
+# / `QUANT_OPTIONS` arrays in `src/types/settings.ts` are derived rather
+# than re-declared. Adding a value: edit one enum, regenerate, every
+# consumer (Pydantic field types, manager helpers, settings schema,
+# UI dropdowns) picks it up.
+class EngineBackend(StrEnum):
+    WORLD_ENGINE = "world_engine"
+    QUARK = "quark"
+
+
+class Quant(StrEnum):
+    NONE = "none"
+    FP8W8A8 = "fp8w8a8"
+    INTW8A8 = "intw8a8"
+
+
 class SystemInfo(BaseModel):
     """Static hardware/runtime identity, snapshot once at startup."""
 
@@ -150,6 +170,40 @@ class ErrorSnapshot(BaseModel):
     vram_used_bytes: int | None = None
     vram_reserved_bytes: int | None = None
     gpu_util_percent: int | None = None
+
+
+class ServerCapabilities(BaseModel):
+    """Per-config support sets the server can honour, surfaced through
+    `/health` so the renderer can clamp its in-flight selections to
+    options that will actually run. The server is the source of truth —
+    anywhere the renderer has a dropdown that maps to a wire-level
+    config, this is the canonical set to filter against. Client-side
+    platform guesses are wrong in server mode where the remote may be
+    on a different platform than the client.
+
+    Today the matrix is fully determined by the host platform:
+
+      - CUDA (Linux / Windows): both backends, all three quant modes.
+      - Apple Silicon: quark only — the legacy `world_engine` package
+        is CUDA-only and doesn't import on Apple. quark's Metal
+        subclass internally forces all-bf16 (no native fp8 in MSL, no
+        int8 KV path), so `none` is the only meaningful quant choice;
+        anything else is silently overridden.
+
+    The shape is a flat pair of lists rather than a per-backend map
+    because the current matrix doesn't vary across backends on a given
+    platform. If a future backend ships with different quant support
+    on the same host, the schema can split `quants` into a per-backend
+    dict without touching call sites — the renderer's filter logic
+    only cares about the final flat set per axis. Surfaced through
+    HTTP rather than WS (lives in `routes.HealthResponse`), but kept
+    here so the codegen mirrors it to a Zod schema + TS type the
+    renderer reuses for both shape parsing and the connection slice."""
+
+    model_config = _FrozenStrict
+
+    backends: list[EngineBackend]
+    quants: list[Quant]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -213,8 +267,8 @@ class SessionConfig(BaseModel):
 
     model_config = _FrozenStrict
 
-    quant: Literal["fp8w8a8", "intw8a8"] | None = None
-    engine_backend: Literal["world_engine", "quark"] = "world_engine"
+    quant: Literal[Quant.FP8W8A8, Quant.INTW8A8] | None = None
+    engine_backend: EngineBackend = EngineBackend.WORLD_ENGINE
     scene_authoring: bool
     action_logging: bool
     video_recording: bool

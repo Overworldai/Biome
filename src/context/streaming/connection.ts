@@ -1,6 +1,7 @@
 import type { TranslatableError } from '../../i18n'
 import type { StageId } from '../../stages'
 import type { ConnectionStatus, ServerConnection } from '../../hooks/engine/useWebSocket'
+import type { ServerCapabilities } from '../../types/ipc'
 import { createStreamingContext } from './createStreamingContext'
 
 export type ConnectionContextValue = {
@@ -24,6 +25,13 @@ export type ConnectionContextValue = {
   /** Server identity + runtime metrics (system info, model, runtime
    *  metrics, last-error snapshot). */
   server: ServerConnection
+  /** Per-config support sets the server reports it can run, from the
+   *  warm-flow `/health` probe. `null` until the probe completes (or
+   *  on failed probes / older servers without the field). The settings
+   *  UI uses this to filter dropdowns (backend, quant) against real
+   *  server capability — important in server mode where the remote
+   *  may be on a different platform than the client. */
+  serverCapabilities: ServerCapabilities | null
   /** Session lifecycle transitions consumers can fire. */
   dismissConnectionLost: () => Promise<void>
   reconnectAfterConnectionLost: () => Promise<void>
