@@ -382,25 +382,26 @@ HOLDABLE_STUDIO_WRAPPER = (
 # (rifles, sledgehammer, axe, bat, chainsaw). {subject} is the bare prop
 # noun derived from the slug; the studio image carries the visual identity.
 HELD_EDIT_PROMPT_ONE_HANDED = (
-    "Reframe this image as a first-person shooter video game viewmodel. "
-    "The player's right hand and forearm enter from the lower-right corner "
-    "of the frame and grip the {subject}. The {subject} is held forward at "
-    "arm's length, pointed forward away from the camera. The entire "
-    "{subject} is visible in the frame. Keep the {subject}'s exact shape, "
-    "finish, and details unchanged. Keep the background completely empty "
-    "pure white with no environment, no HUD, no UI, no lens artifacts."
+    "Reframe this image as a first-person shooter video game viewmodel "
+    "with a right-handed grip. The player's right hand and forearm enter "
+    "from the lower-right corner of the frame and grip the {subject}. "
+    "The {subject} is held forward at arm's length, pointed forward away "
+    "from the camera. The entire {subject} is visible in the frame. Keep "
+    "the {subject}'s exact shape, finish, and details unchanged. Keep the "
+    "background completely empty pure white with no environment, no HUD, "
+    "no UI, no lens artifacts."
 )
 
 HELD_EDIT_PROMPT_TWO_HANDED = (
-    "Reframe this image as a first-person shooter video game viewmodel. "
-    "The player holds the {subject} with both hands — the right hand at the "
-    "handle or trigger, the left hand supporting the {subject} further "
-    "forward — both arms entering the frame from below. The {subject} is "
-    "held forward at chest level, pointed forward away from the camera. "
-    "The entire {subject} is visible in the frame. Keep the {subject}'s "
-    "exact shape, finish, and details unchanged. Keep the background "
-    "completely empty pure white with no environment, no HUD, no UI, no "
-    "lens artifacts."
+    "Reframe this image as a first-person shooter video game viewmodel "
+    "with a right-handed grip. The player's right hand grips the primary "
+    "handle, trigger, or rear of the {subject} and enters the frame from "
+    "the lower-right corner; the left hand supports the {subject} further "
+    "forward. Both arms enter the frame from below. The {subject} is held "
+    "forward at chest level, pointed forward away from the camera. The "
+    "entire {subject} is visible in the frame. Keep the {subject}'s exact "
+    "shape, finish, and details unchanged. Keep the background completely "
+    "empty pure white with no environment, no HUD, no UI, no lens artifacts."
 )
 
 
