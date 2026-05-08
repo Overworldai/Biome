@@ -26,7 +26,7 @@ export function useSceneEdit(): {
   graceActive: boolean
 } {
   const [state, dispatch] = useReducer(sceneEditReducer, initialSceneEditState)
-  const isActive = state.phase !== 'inactive'
+  const isActive = state.mode !== 'inactive'
 
   const [graceActive, setGraceActive] = useState(false)
   useEffect(() => {

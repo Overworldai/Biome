@@ -156,6 +156,23 @@ export const SceneEditRequestSchema = z.object({
 })
 export type SceneEditRequest = z.infer<typeof SceneEditRequestSchema>
 
+/**
+ * Tile-driven prop spawn / weapon swap. The renderer sends a
+ * base64-encoded reference jpeg (the studio thumbnail for spawnable
+ * props, the held viewmodel for holdables) along with the prop's kind
+ * and slug; the server runs Klein with [scene, reference] as a
+ * multi-image edit, no VLM involved.
+ */
+export const ScenePropEditRequestSchema = z.object({
+  type: z.literal('scene_prop_edit'),
+  req_id: z.string(),
+  reference_jpeg_b64: z.string(),
+  kind: z.enum(['spawnable', 'holdable']),
+  target: z.enum(['centre', 'appropriate']),
+  subject: z.string()
+})
+export type ScenePropEditRequest = z.infer<typeof ScenePropEditRequestSchema>
+
 export const GenerateSceneRequestSchema = z.object({
   type: z.literal('generate_scene'),
   req_id: z.string(),
@@ -268,6 +285,16 @@ export const SceneEditResponseDataSchema = z.object({
 })
 export type SceneEditResponseData = z.infer<typeof SceneEditResponseDataSchema>
 
+/**
+ * Reply for `scene_prop_edit`. No VLM-authored prompt because the
+ * edit instruction is built deterministically server-side.
+ */
+export const ScenePropEditResponseDataSchema = z.object({
+  original_jpeg_b64: z.string(),
+  preview_jpeg_b64: z.string()
+})
+export type ScenePropEditResponseData = z.infer<typeof ScenePropEditResponseDataSchema>
+
 export const GenerateSceneResponseDataSchema = z.object({
   elapsed_ms: z.number(),
   image_jpeg_base64: z.string(),
@@ -337,6 +364,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   PromptNotifSchema,
   InitRequestSchema,
   SceneEditRequestSchema,
+  ScenePropEditRequestSchema,
   GenerateSceneRequestSchema,
   CheckSeedSafetyRequestSchema
 ])
@@ -356,6 +384,7 @@ export type ServerPushMessage = z.infer<typeof ServerPushMessageSchema>
 export type RpcRequestMap = {
   init: { request: InitRequest; response: InitResponseData }
   scene_edit: { request: SceneEditRequest; response: SceneEditResponseData }
+  scene_prop_edit: { request: ScenePropEditRequest; response: ScenePropEditResponseData }
   generate_scene: { request: GenerateSceneRequest; response: GenerateSceneResponseData }
   check_seed_safety: { request: CheckSeedSafetyRequest; response: CheckSeedSafetyResponseData }
 }

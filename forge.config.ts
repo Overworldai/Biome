@@ -21,6 +21,7 @@ const config: ForgeConfig = {
       './licensing',
       './backgrounds',
       './assets/9SALERNO.TTF',
+      './assets/scene_edit',
       './app-icon.ico',
       './app-icon.png'
     ]

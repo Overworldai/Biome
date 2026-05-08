@@ -20,13 +20,14 @@ workers live in `workers.py`. This module owns connection state only.
 # pyright: reportMissingTypeArgument=none, reportUnknownMemberType=none, reportUnknownParameterType=none, reportUnknownVariableType=none
 
 import asyncio
+import concurrent.futures
 import contextlib
 import struct
 import threading
 from dataclasses import dataclass, field
 from queue import Full as QueueFull
 from queue import Queue
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import structlog
 from fastapi import WebSocket
@@ -62,6 +63,20 @@ class ControlState:
     mouse_dy: float = 0.0
     client_ts: float = 0.0
     dirty: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ScenePropEditHandoff:
+    """Receiver → generator handoff for a tile-driven prop edit. The
+    generator drains this at the next clean frame boundary, runs the
+    Klein multi-image edit, and resolves `future` with a
+    `ScenePropEditResponseData` (or an exception)."""
+
+    reference_jpeg_b64: str
+    kind: Literal["spawnable", "holdable"]
+    target: Literal["centre", "appropriate"]
+    subject: str
+    future: concurrent.futures.Future
 
 
 @dataclass
@@ -109,6 +124,7 @@ class Connection:
     # Receiver posts a {"prompt": str, "future": Future}; generator
     # picks it up at a clean frame boundary and resolves the future.
     scene_edit_request: dict | None = None
+    scene_prop_edit_request: ScenePropEditHandoff | None = None
     generate_scene_request: dict | None = None
 
     # Most recent CPU numpy frames, kept so a scene_edit can inpaint

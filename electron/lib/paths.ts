@@ -105,3 +105,16 @@ export function getBundledFontPath(filename: string): string {
   }
   return path.join(app.getAppPath(), 'assets', filename)
 }
+
+/**
+ * Get the directory holding the Scene Edit prop gallery (manifest +
+ * studio/held jpgs). In packaged builds, extraResource places the
+ * `scene_edit/` directory directly under resources/; in dev, it lives
+ * under `assets/scene_edit/` at the repo root.
+ */
+export function getScenePropDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'scene_edit')
+  }
+  return path.join(app.getAppPath(), 'assets', 'scene_edit')
+}

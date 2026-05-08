@@ -37,7 +37,7 @@ from PIL import Image
 
 from engine import devices
 from engine.devices import SCENE_AUTHORING_DEVICE
-from server.protocol import GenerateSceneResponseData, SceneEditResponseData
+from server.protocol import GenerateSceneResponseData, SceneEditResponseData, ScenePropEditResponseData
 
 if TYPE_CHECKING:
     from engine import Engines
@@ -653,6 +653,50 @@ class SceneAuthoringManager:
 
         return self._to_seed_tensor(result, seed_target_size), generation_prompt
 
+    def inpaint_with_prop(
+        self,
+        frame_numpy: np.ndarray,
+        reference: Image.Image,
+        kind: str,
+        target: str,
+        subject: str,
+        seed_target_size: tuple[int, int],
+    ) -> tuple[torch.Tensor, str]:
+        """Edit a reference frame by compositing in a known prop.
+
+        Bypasses the VLM: builds a deterministic edit instruction from
+        `kind` ("spawnable" / "holdable") and `target` ("centre" /
+        "appropriate"), then runs Klein with [scene, prop] as a
+        multi-image edit. Returns the edited frame as a uint8 device
+        tensor + the prompt that was used."""
+        if self.pipeline is None:
+            raise KleinPipelineNotLoadedError
+
+        h_orig, w_orig = frame_numpy.shape[:2]
+        target_h, target_w = self._aligned_size(h_orig, w_orig)
+
+        scene_pil = Image.fromarray(frame_numpy).resize((target_w, target_h))
+        reference_pil = reference.convert("RGB").resize((target_w, target_h))
+
+        prompt = _build_prop_edit_prompt(kind=kind, target=target, subject=subject)
+
+        t0 = time.perf_counter()
+        result = self.pipeline(
+            image=[scene_pil, reference_pil],
+            prompt=prompt,
+            num_inference_steps=EDIT_NUM_STEPS,
+            height=target_h,
+            width=target_w,
+        ).images[0]
+        logger.info(
+            "Klein prop edit complete",
+            elapsed_ms=round((time.perf_counter() - t0) * 1000),
+            kind=kind,
+            target=target,
+        )
+
+        return self._to_seed_tensor(result, seed_target_size), prompt
+
 
 # ─── Free orchestration functions (called from the generator thread) ──
 
@@ -761,4 +805,95 @@ def run_generate_scene(
         user_prompt=user_request,
         sanitized_prompt=sanitized_prompt,
         image_model=EDIT_MODEL_ID,
+    )
+
+
+def _build_prop_edit_prompt(kind: str, target: str, subject: str) -> str:
+    """Construct a deterministic edit instruction for the multi-image
+    prop edit. The reference image is always the second of two; we
+    instruct the model to integrate it into the scene (the first)."""
+    if kind == "holdable":
+        return (
+            f"Replace whatever the player is currently holding in their "
+            f"hands with the {subject} from the second image, keeping the "
+            f"first-person held viewmodel pose: gripped by the player's "
+            f"right hand entering from the lower-right of the frame. If "
+            f"the player's hands are empty, add the {subject} in this "
+            f"held pose. Match scene lighting and perspective. Keep the "
+            f"rest of the environment unchanged."
+        )
+    if target == "appropriate":
+        return (
+            f"Add the {subject} from the second image into this scene. "
+            f"Place it at a natural, plausible location somewhere in the "
+            f"visible scene — on a sensible surface or floor. Integrate "
+            f"it with matching lighting and perspective. Keep the rest "
+            f"of the scene unchanged."
+        )
+    return (
+        f"Add the {subject} from the second image into this scene. "
+        f"Place it at the centre of the camera's view, directly in "
+        f"front of the player, on a sensible surface or floor. "
+        f"Integrate it with matching lighting and perspective. Keep "
+        f"the rest of the scene unchanged."
+    )
+
+
+def run_scene_prop_edit(
+    engines: "Engines",
+    *,
+    reference_jpeg_b64: str,
+    kind: str,
+    target: str,
+    subject: str,
+    cpu_frames: list,
+) -> ScenePropEditResponseData:
+    """Run a tile-driven prop edit on the last subframe and apply the
+    result to the engine. Bypasses the VLM (the edit instruction is
+    built deterministically from `kind` / `target` / `subject`); feeds
+    Klein both the scene and the decoded reference image."""
+    world_engine = engines.world_engine
+    scene_authoring = engines.scene_authoring
+    safety_checker = engines.safety_checker
+
+    last_frame_np = cpu_frames[-1]
+
+    # Encode original for client-side preview
+    original_jpeg = world_engine.numpy_to_jpeg(last_frame_np)
+    original_b64 = base64.b64encode(original_jpeg).decode("ascii")
+
+    # Decode the reference jpeg the renderer uploaded.
+    reference_pil = Image.open(io.BytesIO(base64.b64decode(reference_jpeg_b64)))
+
+    inpainted, _prompt = scene_authoring.inpaint_with_prop(
+        frame_numpy=last_frame_np,
+        reference=reference_pil,
+        kind=kind,
+        target=target,
+        subject=subject,
+        seed_target_size=world_engine.seed_target_size,
+    )
+
+    inpainted_np = world_engine.tensor_to_numpy(inpainted)
+    preview_jpeg = world_engine.numpy_to_jpeg(inpainted_np)
+    preview_b64 = base64.b64encode(preview_jpeg).decode("ascii")
+
+    inpainted_pil = Image.fromarray(inpainted_np)
+    verdict = safety_checker.check_pil_image(inpainted_pil)
+    if not verdict.is_safe:
+        logger.warning(
+            "Safety checker rejected prop-edit result",
+            operation="scene_prop_edit",
+            scores=verdict.scores,
+        )
+        raise SafetyRejectionError()
+
+    if EDIT_RESET_WITH_FRAME:
+        world_engine.set_seed_and_reset(inpainted)
+    else:
+        world_engine.append_frame_repeatedly(inpainted, EDIT_APPEND_COUNT)
+
+    return ScenePropEditResponseData(
+        original_jpeg_b64=original_b64,
+        preview_jpeg_b64=preview_b64,
     )

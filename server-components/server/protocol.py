@@ -238,6 +238,25 @@ class SceneEditRequest(BaseModel):
     prompt: str
 
 
+class ScenePropEditRequest(BaseModel):
+    """Tile-driven prop spawn / weapon swap. The renderer sends a
+    base64-encoded reference jpeg (the studio thumbnail for spawnable
+    props, the held viewmodel for holdables) along with the prop's kind
+    and slug; the server runs Klein with [scene, reference] as a
+    multi-image edit, no VLM involved."""
+
+    model_config = _FrozenStrict
+    type: Literal["scene_prop_edit"] = "scene_prop_edit"
+    req_id: str
+    reference_jpeg_b64: str
+    kind: Literal["spawnable", "holdable"]
+    # For spawnables: where to place the prop. Ignored for holdables.
+    target: Literal["centre", "appropriate"] = "centre"
+    # Human-readable prop noun (e.g. "pistol", "soda can") used to
+    # build the Klein edit instruction.
+    subject: str
+
+
 class GenerateSceneRequest(BaseModel):
     model_config = _FrozenStrict
     type: Literal["generate_scene"] = "generate_scene"
@@ -266,6 +285,7 @@ ClientMessage = Annotated[
     | PromptNotif
     | InitRequest
     | SceneEditRequest
+    | ScenePropEditRequest
     | GenerateSceneRequest
     | CheckSeedSafetyRequest,
     Field(discriminator="type"),
@@ -397,6 +417,15 @@ class SceneEditResponseData(BaseModel):
     original_jpeg_b64: str
     preview_jpeg_b64: str
     edit_prompt: str
+
+
+class ScenePropEditResponseData(BaseModel):
+    """Reply for `scene_prop_edit`. No VLM-authored prompt because the
+    edit instruction is built deterministically server-side."""
+
+    model_config = _FrozenStrict
+    original_jpeg_b64: str
+    preview_jpeg_b64: str
 
 
 class GenerateSceneResponseData(BaseModel):

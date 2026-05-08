@@ -414,7 +414,7 @@ const AppShell = () => {
             {SCENE_EDIT_DEBUG_PREVIEW &&
               editPromptVisible &&
               sceneEditState.lastEditPrompt &&
-              sceneEditState.phase === 'inactive' && (
+              sceneEditState.mode === 'inactive' && (
                 <div
                   key={editPromptKeyRef.current}
                   className="pointer-events-none absolute bottom-[3.2cqh] left-1/2 z-180 max-w-[80cqw] -translate-x-1/2"

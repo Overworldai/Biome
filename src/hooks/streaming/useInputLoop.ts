@@ -30,6 +30,9 @@ export function useInputLoop(opts: {
    *  ignored (its slot can be reused for a different action without a
    *  conflict warning). */
   onSceneEdit: (() => void) | null
+  /** Fires on the keyup of the sceneEdit binding. Same null semantics
+   *  as `onSceneEdit`. */
+  onSceneEditUp: (() => void) | null
   onExitPointerLock: () => void
 }): {
   pressedKeys: Set<InputCode>
@@ -47,6 +50,7 @@ export function useInputLoop(opts: {
     sendControl,
     onReset,
     onSceneEdit,
+    onSceneEditUp,
     onExitPointerLock
   } = opts
 
@@ -56,7 +60,8 @@ export function useInputLoop(opts: {
     onReset,
     keybindings,
     onSceneEdit,
-    onExitPointerLock
+    onExitPointerLock,
+    onSceneEditUp
   )
 
   const [scrollActive, setScrollActive] = useState<ScrollActive>({ up: false, down: false })

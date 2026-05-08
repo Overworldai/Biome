@@ -262,7 +262,11 @@ export const useGameInput = (
   onReset: (() => void) | null = null,
   keybindings: Keybindings = DEFAULT_KEYBINDINGS,
   onSceneEdit?: (() => void) | null,
-  onPauseMenu?: (() => void) | null
+  onPauseMenu?: (() => void) | null,
+  /** Fires on the keyup of the sceneEdit binding. Paired with `onSceneEdit`
+   *  (which fires on the *initial* keydown, browser auto-repeats suppressed)
+   *  so callers can implement tap-vs-hold semantics. */
+  onSceneEditUp?: (() => void) | null
 ): UseGameInputResult => {
   const [pressedKeys, setPressedKeys] = useState<Set<InputCode>>(new Set())
   const [mouseButtons, setMouseButtons] = useState<Set<InputCode>>(new Set())
@@ -324,6 +328,13 @@ export const useGameInput = (
         // whatever the user actually bound to that code.
         if (!handler) continue
         if (e.code !== keybindings[bindKey]) continue
+        // For sceneEdit we run tap-vs-hold timing in the state machine, so
+        // we must suppress the browser's auto-repeat keydown (which would
+        // otherwise fire onSceneEdit repeatedly while Q is held).
+        if (bindKey === 'sceneEdit' && e.repeat) {
+          e.preventDefault()
+          return
+        }
         handler()
         // Don't preventDefault Escape — the browser still exits pointer lock natively,
         // which is the expected path when pauseMenu is kept at its default.
@@ -350,6 +361,14 @@ export const useGameInput = (
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
+      // sceneEdit's keyup needs to fire even when game input is disabled —
+      // opening the menu disables game input, but we still need to detect
+      // Q release to close a transient hold.
+      if (onSceneEditUp && e.code === keybindings.sceneEdit) {
+        onSceneEditUp()
+        e.preventDefault()
+        return
+      }
       if (!enabled) return
       if (effectiveCodeMap[e.code]) {
         e.preventDefault()
@@ -360,7 +379,7 @@ export const useGameInput = (
         })
       }
     },
-    [enabled, effectiveCodeMap]
+    [enabled, effectiveCodeMap, keybindings.sceneEdit, onSceneEditUp]
   )
 
   const handleMouseDown = useCallback(
@@ -573,6 +592,7 @@ export const useGameInput = (
       if (startDown && !prevStartDown) onPauseMenu?.()
       if (backDown && !prevBackDown) onReset?.()
       if (yDown && !prevYDown) onSceneEdit?.()
+      if (!yDown && prevYDown) onSceneEditUp?.()
       prevStartDown = startDown
       prevBackDown = backDown
       prevYDown = yDown
@@ -589,7 +609,7 @@ export const useGameInput = (
     return () => {
       cancelAnimationFrame(rafId)
     }
-  }, [enabled, onPauseMenu, onReset, onSceneEdit])
+  }, [enabled, onPauseMenu, onReset, onSceneEdit, onSceneEditUp])
 
   return {
     pressedKeys,

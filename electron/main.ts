@@ -5,6 +5,7 @@ import { registerAllIpc } from './ipc/index.js'
 import { stopServerSync } from './lib/serverState.js'
 import { getBackgroundsDir } from './ipc/backgrounds.js'
 import { getCurrentRecordingsDir } from './ipc/recordings.js'
+import { getScenePropDir } from './lib/paths.js'
 import { getLogger } from './lib/logger.js'
 
 const log = getLogger('electron.main')
@@ -18,6 +19,10 @@ protocol.registerSchemesAsPrivileged([
   },
   {
     scheme: 'biome-recording',
+    privileges: { standard: true, supportFetchAPI: true, stream: true, bypassCSP: true }
+  },
+  {
+    scheme: 'biome-prop',
     privileges: { standard: true, supportFetchAPI: true, stream: true, bypassCSP: true }
   }
 ])
@@ -162,6 +167,30 @@ app
         return new Response('Not found', { status: 404 })
       }
 
+      return net.fetch(`file://${filePath}`)
+    })
+
+    // biome-prop://serve/<...> serves the Scene Edit prop gallery
+    // (manifest.json + <category>/<slug>(_held).jpg). The prop dir
+    // lives at <repo>/assets/scene_edit/ in dev and <resources>/scene_edit/
+    // in packaged builds. Nested paths (category/slug.jpg) are allowed;
+    // any path traversal attempt (../, absolute) is rejected.
+    protocol.handle('biome-prop', (request) => {
+      const url = new URL(request.url)
+      const relative = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+      if (!relative || relative.includes('..') || path.isAbsolute(relative)) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      const baseDir = getScenePropDir()
+      const filePath = path.join(baseDir, relative)
+      const resolved = path.resolve(filePath)
+      const baseResolved = path.resolve(baseDir)
+      if (resolved !== baseResolved && !resolved.startsWith(baseResolved + path.sep)) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        return new Response('Not found', { status: 404 })
+      }
       return net.fetch(`file://${filePath}`)
     })
 

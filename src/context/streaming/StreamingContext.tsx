@@ -178,10 +178,14 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     requestPointerLock()
   }, [resetScene, requestPointerLock])
 
-  const handleSceneEdit = useCallback(() => {
+  const handleSceneEditDown = useCallback(() => {
     exitPointerLock()
-    sceneEdit.dispatch({ type: 'OPEN' })
+    sceneEdit.dispatch({ type: 'Q_DOWN', at: Date.now() })
   }, [exitPointerLock, sceneEdit])
+
+  const handleSceneEditUp = useCallback(() => {
+    sceneEdit.dispatch({ type: 'Q_UP', at: Date.now() })
+  }, [sceneEdit])
 
   const { pressedKeys, mouseButtons, pressedGamepad, scrollActive, isPointerLocked } = useInputLoop({
     enabled: inputEnabled,
@@ -191,7 +195,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     gamepadSensitivity: settings.gamepad_sensitivity,
     sendControl,
     onReset: handleReset,
-    onSceneEdit: settings.scene_authoring_enabled ? handleSceneEdit : null,
+    onSceneEdit: settings.scene_authoring_enabled ? handleSceneEditDown : null,
+    onSceneEditUp: settings.scene_authoring_enabled ? handleSceneEditUp : null,
     onExitPointerLock: exitPointerLock
   })
 

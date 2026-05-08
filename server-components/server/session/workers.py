@@ -31,7 +31,7 @@ from world_engine import CtrlInput
 
 from engine import devices
 from engine.keymap import BUTTON_CODES
-from engine.scene_authoring import run_generate_scene, run_scene_edit
+from engine.scene_authoring import run_generate_scene, run_scene_edit, run_scene_prop_edit
 from server.protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -47,12 +47,13 @@ from server.protocol import (
     RpcError,
     RpcSuccess,
     SceneEditRequest,
+    ScenePropEditRequest,
     StageId,
     StatusMessage,
     rpc_err,
     rpc_ok,
 )
-from server.session.connection import Connection
+from server.session.connection import Connection, ScenePropEditHandoff
 from server.session.handlers import build_init_response_data, handle_check_seed_safety, handle_init
 
 if TYPE_CHECKING:
@@ -182,7 +183,7 @@ async def run_receiver(
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
                     elif not scene_authoring.is_loaded:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
-                    elif conn.scene_edit_request is not None:
+                    elif conn.scene_edit_request is not None or conn.scene_prop_edit_request is not None:
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
                     else:
                         fut = concurrent.futures.Future()
@@ -198,6 +199,37 @@ async def run_receiver(
                                 edit_response = rpc_err(req.req_id, error=str(e))
                     conn.queue_send(edit_response)
 
+                case ScenePropEditRequest() as req:
+                    # Tile-driven prop spawn: skips the VLM, hands the
+                    # scene + reference image directly to Klein. Same
+                    # frame-boundary handoff as scene_edit.
+                    prop_response: RpcSuccess | RpcError
+                    if not req.subject.strip():
+                        prop_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
+                    elif not scene_authoring.is_loaded:
+                        prop_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
+                    elif conn.scene_edit_request is not None or conn.scene_prop_edit_request is not None:
+                        prop_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
+                    else:
+                        fut = concurrent.futures.Future()
+                        conn.scene_prop_edit_request = ScenePropEditHandoff(
+                            reference_jpeg_b64=req.reference_jpeg_b64,
+                            kind=req.kind,
+                            target=req.target,
+                            subject=req.subject.strip(),
+                            future=fut,
+                        )
+                        try:
+                            preview = await asyncio.wrap_future(fut)
+                            prop_response = rpc_ok(req.req_id, preview)
+                        except Exception as e:  # noqa: BLE001  -- worker exception forwarding mirrors scene_edit
+                            error_id = getattr(e, "message_id", None)
+                            if error_id is not None:
+                                prop_response = rpc_err(req.req_id, error_id=MessageId(error_id))
+                            else:
+                                prop_response = rpc_err(req.req_id, error=str(e))
+                    conn.queue_send(prop_response)
+
                 case GenerateSceneRequest() as req:
                     # generate_scene: like scene_edit but with a blank
                     # canvas — generates a new seed from a text prompt.
@@ -207,7 +239,11 @@ async def run_receiver(
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_EMPTY_PROMPT)
                     elif not scene_authoring.is_loaded:
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_MODEL_NOT_LOADED)
-                    elif conn.scene_edit_request is not None or conn.generate_scene_request is not None:
+                    elif (
+                        conn.scene_edit_request is not None
+                        or conn.scene_prop_edit_request is not None
+                        or conn.generate_scene_request is not None
+                    ):
                         gen_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
                     else:
                         fut = concurrent.futures.Future()
@@ -428,6 +464,30 @@ def run_generator(
                 except Exception as e:
                     logger.exception("Scene edit failed", operation="scene_edit")
                     req["future"].set_exception(e)
+
+            # Handle pending tile-driven prop edit — same frame-boundary
+            # handoff as scene_edit but skips the VLM and feeds Klein a
+            # reference image alongside the scene.
+            if conn.scene_prop_edit_request is not None and conn.last_generated_cpu_frames is not None:
+                prop_req = conn.scene_prop_edit_request
+                conn.scene_prop_edit_request = None
+                _flush_pending()
+                try:
+                    prop_preview = run_scene_prop_edit(
+                        engines,
+                        reference_jpeg_b64=prop_req.reference_jpeg_b64,
+                        kind=prop_req.kind,
+                        target=prop_req.target,
+                        subject=prop_req.subject,
+                        cpu_frames=conn.last_generated_cpu_frames,
+                    )
+                    conn.perceptual_frame_count = 0
+                    if conn.video_recorder is not None:
+                        conn.video_recorder.note_edit(f"[prop:{prop_req.subject}]")
+                    prop_req.future.set_result(prop_preview)
+                except Exception as e:
+                    logger.exception("Scene prop edit failed", operation="scene_prop_edit")
+                    prop_req.future.set_exception(e)
 
             # Handle pending generate_scene — creates a new seed from
             # a text prompt (blank canvas + inpainting pipeline).
