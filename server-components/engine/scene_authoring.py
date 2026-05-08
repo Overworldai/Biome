@@ -244,18 +244,22 @@ VLM_SYSTEM_PROMPT = (
     "visual context.\n\n"
     "This is a first-person game screenshot. Follow these rules:\n\n"
     "1. DEFAULT: ADD elements to the scene unless told to replace/remove.\n"
-    "2. HANDHELD OBJECTS (weapons, tools, items): Place in a right hand "
-    "at the bottom-right of the frame, as in a first-person shooter. "
-    "If a hand is already visible, put the object in it. If not, add "
-    "a hand holding the object in the bottom-right corner.\n"
-    "3. SCENE ELEMENTS (buildings, creatures, weather): Place naturally "
-    "in the environment.\n"
+    "2. HANDHELD OBJECTS (weapons, tools, items): The player must hold "
+    "ONLY the new object in the bottom-right of the frame, as in a "
+    "first-person shooter. If a hand currently holds anything, REMOVE "
+    "that item and replace it with the new one — never have the player "
+    "holding multiple items at once. If the hands are empty, add a hand "
+    "holding the object in the bottom-right corner.\n"
+    "3. SCENE ELEMENTS (buildings, creatures, weather): Place ON TOP of "
+    "or alongside existing scene content — do not erase or overwrite "
+    "existing buildings, terrain, or props in the scene.\n"
     "4. STYLE/MOOD changes: Describe the transformation clearly.\n"
     f"5. {VLM_CONTENT_POLICY}\n\n"
     "EXAMPLES:\n"
-    '- User: "sword" → "Add a glowing sword held in a right hand in '
-    "the bottom-right corner of the frame, as in a first-person game. "
-    'Keep everything else unchanged."\n'
+    '- User: "sword" → "Remove any item currently in the player\'s '
+    "hands and replace it with a glowing sword, held in a right hand "
+    "in the bottom-right corner of the frame, as in a first-person "
+    'game. Keep the background scene unchanged."\n'
     '- User: "dragon" → "Add a large dragon flying in the sky above '
     'the scene. Keep everything else unchanged."\n'
     '- User: "make it night" → "Change the lighting to nighttime with '
@@ -263,10 +267,12 @@ VLM_SYSTEM_PROMPT = (
     '- User: "remove the tree" → "Remove the tree from the scene and '
     "fill the area with the surrounding environment. Keep everything "
     'else unchanged."\n'
-    '- User: "shotgun" → "Add a pump-action shotgun held in a right '
+    '- User: "shotgun" → "Remove any item currently in the player\'s '
+    "hands and replace it with a pump-action shotgun, held in a right "
     "hand in the bottom-right corner of the frame, as in a first-person "
-    'shooter. Keep everything else unchanged."\n\n'
-    "Always end with 'Keep everything else unchanged.'\n\n"
+    'shooter. Keep the background scene unchanged."\n\n'
+    "Always end with 'Keep everything else unchanged.' (or 'Keep the "
+    "background scene unchanged.' for handheld replacements).\n\n"
     "IMPORTANT: Be concise. Think briefly (2-3 sentences max), then "
     "immediately submit your instruction via the submit_edit_instruction "
     "tool. Do not deliberate at length. If the request is entirely unsafe "
@@ -853,13 +859,17 @@ def _build_prop_edit_prompt(kind: str, target: str, subject: str) -> str:
     instruct the model to integrate it into the scene (the first)."""
     if kind == "holdable":
         return (
-            f"Replace whatever the player is currently holding in their "
-            f"hands with the {subject} from the second image, keeping the "
-            f"first-person held viewmodel pose: gripped by the player's "
-            f"right hand entering from the lower-right of the frame. If "
-            f"the player's hands are empty, add the {subject} in this "
-            f"held pose. Match scene lighting and perspective. Keep the "
-            f"rest of the environment unchanged."
+            f"Remove any item currently held in the player's hands and "
+            f"replace it with the {subject} from the second image. The "
+            f"{subject} must occupy the same lower-right grip space as "
+            f"the previously held item -- nothing else should remain in "
+            f"the player's hands. Show the {subject} in first-person "
+            f"held viewmodel pose, gripped by the player's right hand "
+            f"entering from the lower-right of the frame. If the hands "
+            f"were already empty, simply add the {subject} in this held "
+            f"pose. Match scene lighting and perspective. Keep the "
+            f"background scene (everything other than the held item) "
+            f"unchanged."
         )
     if target == "appropriate":
         return (
