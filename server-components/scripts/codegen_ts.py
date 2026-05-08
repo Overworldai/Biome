@@ -214,19 +214,25 @@ def render_docstring(obj: Any) -> list[str]:
 
 
 def render_enum(enum_cls: type[StrEnum]) -> str:
-    """Emit the Zod schema and a `z.infer`-derived type alias. Output is
-    shaped to be Prettier-clean against the project's config (single
-    quotes, no trailing semicolons, 120-char width). The project's
-    `.prettierrc` sets `trailingComma: "none"`, so the last enum member
-    doesn't get a trailing comma."""
+    """Emit the Zod schema and a `z.infer`-derived type alias. Output
+    is shaped to match what Prettier would produce against the project's
+    config (single quotes, `trailingComma: "none"`, 120-char width):
+    short enums collapse onto one line; long ones break across lines
+    with two-space indent. Mirroring the layout means `codegen --check`
+    and `prettier --check` agree on the on-disk file."""
     name = ts_name(enum_cls.__name__)
     members = list(enum_cls)
+    inline_members = ", ".join(render_literal(m.value) for m in members)
+    inline = f"export const {name}Schema = z.enum([{inline_members}])"
     out: list[str] = list(render_docstring(enum_cls))
-    out.append(f"export const {name}Schema = z.enum([")
-    for i, m in enumerate(members):
-        terminator = "" if i == len(members) - 1 else ","
-        out.append(f"  {render_literal(m.value)}{terminator}")
-    out.append("])")
+    if len(inline) <= _PRINT_WIDTH:
+        out.append(inline)
+    else:
+        out.append(f"export const {name}Schema = z.enum([")
+        for i, m in enumerate(members):
+            terminator = "" if i == len(members) - 1 else ","
+            out.append(f"  {render_literal(m.value)}{terminator}")
+        out.append("])")
     out.append(f"export type {name} = z.infer<typeof {name}Schema>")
     return "\n".join(out)
 
@@ -327,6 +333,11 @@ def render_union_alias(name: str, members: list[type[BaseModel]]) -> str:
 
 
 _CONST_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+# Mirrors `printWidth` in `.prettierrc`. Used by `render_enum` to decide
+# when to inline `z.enum([...])` vs. break it across lines so the codegen
+# output round-trips through `prettier --check`.
+_PRINT_WIDTH = 120
 
 
 def collect_module_decls(
@@ -595,7 +606,7 @@ def main() -> int:
         return 0
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(output, encoding="utf-8")
+    args.output.write_text(output, encoding="utf-8", newline="\n")
     print(f"[codegen] wrote {args.output}")
     return 0
 
