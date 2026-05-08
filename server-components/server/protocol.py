@@ -236,6 +236,11 @@ class SceneEditRequest(BaseModel):
     type: Literal["scene_edit"] = "scene_edit"
     req_id: str
     prompt: str
+    # When True, the prompt is sent to Klein verbatim and the VLM
+    # authoring step is skipped. Used for pre-curated edit presets
+    # (environment / time / weather) where a tool-call round-trip
+    # would be wasted latency.
+    direct: bool = False
 
 
 class ScenePropEditRequest(BaseModel):

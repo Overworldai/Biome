@@ -8,14 +8,22 @@ import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, STYLED_SCROLLBAR } from '
 import { RpcError } from '../../lib/wsRpc'
 import { propImageUrl, usePropManifest, type PropEntry } from '../../hooks/scene/usePropManifest'
 import Checkbox from '../ui/Checkbox'
+import EnvironmentPresetList from './EnvironmentPresetList'
+import PropTileGrid from './PropTileGrid'
 
 const slugToSubject = (slug: string): string => slug.replace(/_/g, ' ')
+
+/** Sentinel category id used in the sidebar for the whole-scene
+ *  environment edits (time, weather, dramatic events). Picked so it
+ *  cannot collide with a real manifest category slug. */
+const ENVIRONMENT_CATEGORY = '__environment__'
 
 /** Hardcoded human-readable labels for the category tab strip — the
  *  manifest keys are snake_case slugs (e.g. `foliage_and_rocks`) which
  *  read awkwardly in title case. Falls back to the slug-with-spaces
  *  for any category not listed (e.g. newly-added ones). */
 const CATEGORY_LABELS: Record<string, string> = {
+  [ENVIRONMENT_CATEGORY]: 'Environment',
   weapons: 'Weapons',
   containers: 'Containers',
   furniture: 'Furniture',
@@ -131,7 +139,7 @@ const SceneEditOverlay = () => {
     [t]
   )
 
-  // ─── Submit: text prompt → existing scene_edit RPC (VLM + Klein) ────
+  // ─── Submit: typed prompt → existing scene_edit RPC (VLM + Klein) ────
   const submitPrompt = useCallback(async () => {
     const trimmed = prompt.trim()
     if (!trimmed || mode !== 'open') return
@@ -150,6 +158,24 @@ const SceneEditOverlay = () => {
       dispatch({ type: 'ERROR', message: formatError(err) })
     }
   }, [prompt, mode, wsRequest, dispatch, formatError])
+
+  // ─── Submit: environment preset → scene_edit with `direct: true` ─────
+  // Same RPC as the typed-prompt flow but skips the VLM authoring step,
+  // saving the tool-call round-trip for these pre-curated prompts.
+  const submitDirectPrompt = useCallback(
+    async (presetPrompt: string) => {
+      if (mode !== 'open') return
+      dispatch({ type: 'SUBMIT' })
+      try {
+        await wsRequest('scene_edit', { prompt: presetPrompt, direct: true }, 30_000)
+        // Silent close — the user already knows what they sent.
+        dispatch({ type: 'SUCCESS' })
+      } catch (err) {
+        dispatch({ type: 'ERROR', message: formatError(err) })
+      }
+    },
+    [mode, wsRequest, dispatch, formatError]
+  )
 
   // ─── Submit: tile click → new scene_prop_edit RPC (Klein, no VLM) ───
   const submitProp = useCallback(
@@ -237,7 +263,7 @@ const SceneEditOverlay = () => {
                   flex w-[10cqw] shrink-0 flex-col gap-[0.3cqh] overflow-y-auto bg-black/30 p-[0.5cqh_0.25cqw]
                 `}
               >
-                {categoryEntries.map(([cat]) => {
+                {[ENVIRONMENT_CATEGORY, ...categoryEntries.map(([cat]) => cat)].map((cat) => {
                   const tabActive = activeCategory === cat
                   return (
                     <button
@@ -263,49 +289,19 @@ const SceneEditOverlay = () => {
                 })}
               </div>
 
-              {/* Right: tile grid — 3 columns, image-only. Each tile is a
-                  faintly-darker square (with internal padding so the prop
-                  doesn't ride the edges) so the transparent (post-luma-key)
-                  prop sits visibly against the panel. */}
-              <div
-                className={`
-                  ${STYLED_SCROLLBAR}
-                  grid min-w-0 flex-1 auto-rows-min grid-cols-3 content-start gap-[0.8cqh] overflow-y-auto pr-[0.3cqw]
-                `}
-              >
-                {visibleProps.map((prop) => (
-                  <button
-                    key={prop.slug}
-                    type="button"
-                    onClick={() => submitProp(prop)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="
-                      group relative aspect-square overflow-hidden bg-black/40 p-[0.6cqh] transition-colors
-                      hover:bg-black/60
-                      disabled:cursor-not-allowed disabled:opacity-50
-                    "
-                    disabled={mode !== 'open'}
-                    title={slugToSubject(prop.slug)}
-                  >
-                    <img
-                      src={propImageUrl(prop.image)}
-                      alt={slugToSubject(prop.slug)}
-                      className="size-full object-contain"
-                      draggable={false}
-                    />
-                  </button>
-                ))}
-                {manifestState.status === 'loading' && (
-                  <span className="col-span-3 py-[2cqh] text-center font-serif text-[1.8cqh] text-text-muted">
-                    {t('app.sceneEdit.loadingProps', { defaultValue: 'Loading props…' })}
-                  </span>
-                )}
-                {manifestState.status === 'error' && (
-                  <span className="col-span-3 py-[2cqh] text-center font-serif text-[1.8cqh] text-red-400">
-                    {manifestState.message}
-                  </span>
-                )}
-              </div>
+              {/* Right: either the prop tile grid (default) or the
+                  environment preset list when the Environment category
+                  is selected. */}
+              {activeCategory === ENVIRONMENT_CATEGORY ? (
+                <EnvironmentPresetList disabled={mode !== 'open'} onSelect={submitDirectPrompt} />
+              ) : (
+                <PropTileGrid
+                  visibleProps={visibleProps}
+                  manifestState={manifestState}
+                  disabled={mode !== 'open'}
+                  onSelect={submitProp}
+                />
+              )}
             </div>
 
             {/* Bottom: prompt input. Spans the full panel width; the

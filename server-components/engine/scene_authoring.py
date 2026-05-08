@@ -620,14 +620,18 @@ class SceneAuthoringManager:
         frame_numpy: np.ndarray,
         user_request: str,
         seed_target_size: tuple[int, int],
+        *,
+        direct: bool = False,
     ) -> tuple[torch.Tensor, str]:
-        """Edit a reference frame: VLM writes the prompt, Klein generates,
-        result is resized to the engine's seed target size. Returns the
-        edited frame as a uint8 device tensor + the VLM-authored prompt."""
+        """Edit a reference frame: VLM writes the prompt (unless `direct`,
+        in which case `user_request` is sent to Klein verbatim), Klein
+        generates, result is resized to the engine's seed target size.
+        Returns the edited frame as a uint8 device tensor + the prompt
+        that was actually used."""
         h_orig, w_orig = frame_numpy.shape[:2]
         frame_pil = Image.fromarray(frame_numpy)
 
-        edit_prompt = self._build_edit_prompt(frame_pil, user_request)
+        edit_prompt = user_request if direct else self._build_edit_prompt(frame_pil, user_request)
 
         target_h, target_w = self._aligned_size(h_orig, w_orig)
         frame_resized = frame_pil.resize((target_w, target_h))
@@ -705,13 +709,17 @@ def run_scene_edit(
     engines: "Engines",
     user_request: str,
     cpu_frames: list,
+    *,
+    direct: bool = False,
 ) -> SceneEditResponseData:
     """Run inpainting on the last subframe and apply the result to the engine.
 
     Takes the last subframe from the most recent gen_frame output, asks the
-    VLM + Klein to inpaint it, safety-checks the result, and either resets
-    the engine with the edit as the new seed or appends it repeatedly to
-    strengthen it in the KV cache. Returns preview data for the RPC."""
+    VLM + Klein to inpaint it (or skips the VLM when `direct` is True and
+    sends `user_request` to Klein verbatim), safety-checks the result, and
+    either resets the engine with the edit as the new seed or appends it
+    repeatedly to strengthen it in the KV cache. Returns preview data for
+    the RPC."""
     world_engine = engines.world_engine
     scene_authoring = engines.scene_authoring
     safety_checker = engines.safety_checker
@@ -722,7 +730,9 @@ def run_scene_edit(
     original_jpeg = world_engine.numpy_to_jpeg(last_frame_np)
     original_b64 = base64.b64encode(original_jpeg).decode("ascii")
 
-    inpainted, edit_prompt = scene_authoring.inpaint(last_frame_np, user_request, world_engine.seed_target_size)
+    inpainted, edit_prompt = scene_authoring.inpaint(
+        last_frame_np, user_request, world_engine.seed_target_size, direct=direct
+    )
 
     # Encode inpainted for client-side preview
     inpainted_np = world_engine.tensor_to_numpy(inpainted)

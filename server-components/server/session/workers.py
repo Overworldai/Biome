@@ -187,7 +187,11 @@ async def run_receiver(
                         edit_response = rpc_err(req.req_id, error_id=MessageId.SCENE_AUTHORING_ALREADY_IN_PROGRESS)
                     else:
                         fut = concurrent.futures.Future()
-                        conn.scene_edit_request = {"prompt": prompt, "future": fut}
+                        conn.scene_edit_request = {
+                            "prompt": prompt,
+                            "direct": req.direct,
+                            "future": fut,
+                        }
                         try:
                             preview = await asyncio.wrap_future(fut)
                             edit_response = rpc_ok(req.req_id, preview)
@@ -450,13 +454,21 @@ def run_generator(
                 next_frame_time = 0.0
 
             # Handle pending scene edit — runs inpainting on the last
-            # subframe from the most recent gen_frame, then appends.
+            # subframe from the most recent gen_frame, then appends. The
+            # `direct` flag toggles whether the VLM authors the prompt
+            # (False) or Klein receives the caller's prompt verbatim
+            # (True, used by the environment / weather presets).
             if conn.scene_edit_request is not None and conn.last_generated_cpu_frames is not None:
                 req = conn.scene_edit_request
                 conn.scene_edit_request = None
                 _flush_pending()
                 try:
-                    preview = run_scene_edit(engines, req["prompt"], conn.last_generated_cpu_frames)
+                    preview = run_scene_edit(
+                        engines,
+                        req["prompt"],
+                        conn.last_generated_cpu_frames,
+                        direct=req.get("direct", False),
+                    )
                     conn.perceptual_frame_count = 0
                     if conn.video_recorder is not None:
                         conn.video_recorder.note_edit(req["prompt"])

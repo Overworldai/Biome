@@ -152,7 +152,8 @@ export type InitRequest = z.infer<typeof InitRequestSchema>
 export const SceneEditRequestSchema = z.object({
   type: z.literal('scene_edit'),
   req_id: z.string(),
-  prompt: z.string()
+  prompt: z.string(),
+  direct: z.boolean().optional()
 })
 export type SceneEditRequest = z.infer<typeof SceneEditRequestSchema>
 
