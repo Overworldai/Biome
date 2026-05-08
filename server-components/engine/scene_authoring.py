@@ -863,19 +863,18 @@ def _build_prop_edit_prompt(kind: str, target: str, subject: str) -> str:
         )
     if target == "appropriate":
         return (
-            f"Place the {subject} from the second image on top of an "
-            f"existing surface, floor, or object at a natural, plausible "
-            f"spot in the visible scene. Stack it on top of the scene -- "
-            f"do not remove, hide, or replace anything already present. "
-            f"Match scene lighting and perspective."
+            f"Add the {subject} from the second image into this scene. "
+            f"Place it at a natural, plausible location somewhere in the "
+            f"visible scene — on a sensible surface or floor. Integrate "
+            f"it with matching lighting and perspective. Keep the rest "
+            f"of the scene unchanged."
         )
     return (
-        f"Place the {subject} from the second image on top of an "
-        f"existing surface, floor, or object at the centre of the "
-        f"camera's view, directly in front of the player. Stack it "
-        f"on top of the scene -- do not remove, hide, or replace "
-        f"anything already present. Match scene lighting and "
-        f"perspective."
+        f"Add the {subject} from the second image into this scene. "
+        f"Place it at the centre of the camera's view, directly in "
+        f"front of the player, on a sensible surface or floor. "
+        f"Integrate it with matching lighting and perspective. Keep "
+        f"the rest of the scene unchanged."
     )
 
 
