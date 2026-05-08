@@ -208,14 +208,21 @@ const SceneEditOverlay = () => {
               <h2 className="font-serif text-[2.4cqh] text-text-primary">
                 {t('app.sceneEdit.menuTitle', { defaultValue: 'Spawn Menu' })}
               </h2>
-              <label className="flex cursor-pointer items-center gap-[0.6cqw] font-serif text-[2.1cqh] text-text-muted">
-                <span>{t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}</span>
+              {/* Don't wrap the Checkbox in a `<label>` — the label's
+                  auto-forwarding to its labeled control double-fires the
+                  click on a `<button role="checkbox">`, cancelling out
+                  the toggle. Putting the click handler on the text span
+                  alone avoids the conflict. */}
+              <div className="flex items-center gap-[0.6cqw] font-serif text-[2.1cqh] text-text-muted">
+                <span className="cursor-pointer" onClick={() => setSpawnAtCenter(!spawnAtCenter)}>
+                  {t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
+                </span>
                 <Checkbox
                   checked={spawnAtCenter}
                   onChange={setSpawnAtCenter}
                   ariaLabel={t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
                 />
-              </label>
+              </div>
             </div>
 
             {/* Middle row: vertical category tabs + tile grid. The gap
