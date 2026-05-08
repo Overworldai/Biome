@@ -66,6 +66,13 @@ export function useWarmConnection(opts: {
    *  (backend, quant) against real server capability rather than
    *  client-side platform guesses (which are wrong in server mode). */
   serverCapabilities: ServerCapabilities | null
+  /** Settings-side override. The settings UI probes the typed server
+   *  URL for live validation; that probe yields the same payload as
+   *  the warm-flow probe, and we want it to populate the dropdown
+   *  filters before the user enters a session. The warm-flow cleanup
+   *  still resets to `null` on each restart, so a saved-and-reconnect
+   *  flow goes through the canonical path. */
+  setServerCapabilities: (capabilities: ServerCapabilities | null) => void
   /** Trigger a fresh warm-connection attempt. The lifecycle effects
    *  call this on LOADING-state entry. */
   run: () => void
@@ -148,5 +155,13 @@ export function useWarmConnection(opts: {
   }
   const isCancelled = () => cancelledRef.current
 
-  return { preConnectionStage, isFreshInstall, serverCapabilities, run, cancel, isCancelled }
+  return {
+    preConnectionStage,
+    isFreshInstall,
+    serverCapabilities,
+    setServerCapabilities,
+    run,
+    cancel,
+    isCancelled
+  }
 }

@@ -72,7 +72,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { saveSettings } = useSettings()
   const engine = useEngine()
   const checkEngine = engine.check
-  const { serverCapabilities } = useConnection()
+  const { serverCapabilities, setServerCapabilities } = useConnection()
 
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
@@ -206,11 +206,12 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setServerUrlStatus('loading')
       try {
         const normalizedUrl = normalizeServerUrl(menuServerUrl)
-        const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+        const result = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
         if (cancelled) return
-        if (ok) {
+        if (result.ok) {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
+          setServerCapabilities(result.capabilities ?? null)
         } else {
           setServerUrlStatus('error')
         }
@@ -222,7 +223,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     return () => {
       cancelled = true
     }
-  }, [menuEngineMode, menuServerUrl])
+  }, [menuEngineMode, menuServerUrl, setServerCapabilities])
 
   const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
   useEffect(() => {
@@ -308,10 +309,11 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
     setServerUrlStatus('loading')
     try {
-      const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
-      if (ok) {
+      const result = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+      if (result.ok) {
         setServerUrlStatus('valid')
         setLastValidatedServerUrl(normalizedUrl)
+        setServerCapabilities(result.capabilities ?? null)
       } else {
         setServerUrlStatus('error')
         setShowServerErrorModal(true)
@@ -320,7 +322,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setServerUrlStatus('error')
       setShowServerErrorModal(true)
     }
-  }, [menuServerUrl, lastValidatedServerUrl, serverUrlStatus])
+  }, [menuServerUrl, lastValidatedServerUrl, serverUrlStatus, setServerCapabilities])
 
   const handleCustomModelBlur = useCallback(
     async (modelId: string) => {

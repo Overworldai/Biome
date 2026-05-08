@@ -98,6 +98,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     preConnectionStage,
     isFreshInstall,
     serverCapabilities,
+    setServerCapabilities,
     run: runWarmConnection,
     cancel: cancelWarmFlow,
     isCancelled: isWarmFlowCancelled
@@ -288,6 +289,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       isFreshInstall,
       server,
       serverCapabilities,
+      setServerCapabilities,
       dismissConnectionLost,
       reconnectAfterConnectionLost,
       cancelConnection,
@@ -305,6 +307,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
       isFreshInstall,
       server,
       serverCapabilities,
+      setServerCapabilities,
       dismissConnectionLost,
       reconnectAfterConnectionLost,
       cancelConnection,

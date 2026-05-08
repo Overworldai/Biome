@@ -26,12 +26,18 @@ export type ConnectionContextValue = {
    *  metrics, last-error snapshot). */
   server: ServerConnection
   /** Per-config support sets the server reports it can run, from the
-   *  warm-flow `/health` probe. `null` until the probe completes (or
-   *  on failed probes / older servers without the field). The settings
+   *  warm-flow `/health` probe. `null` until a probe completes (or on
+   *  failed probes / older servers without the field). The settings
    *  UI uses this to filter dropdowns (backend, quant) against real
    *  server capability — important in server mode where the remote
    *  may be on a different platform than the client. */
   serverCapabilities: ServerCapabilities | null
+  /** Setter for `serverCapabilities`. The warm-flow probe populates
+   *  this once a session enters LOADING, but the settings UI also
+   *  probes the typed server URL for live validation — that probe
+   *  has the same payload, so call this to feed its result into the
+   *  context and the dropdowns react before streaming starts. */
+  setServerCapabilities: (capabilities: ServerCapabilities | null) => void
   /** Session lifecycle transitions consumers can fire. */
   dismissConnectionLost: () => Promise<void>
   reconnectAfterConnectionLost: () => Promise<void>
