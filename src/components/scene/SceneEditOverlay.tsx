@@ -233,36 +233,32 @@ const SceneEditOverlay = () => {
             </filter>
           </svg>
 
-          <div
-            className="
-              relative flex h-full flex-col gap-[1.2cqh] border border-border-medium bg-black/60 p-[1.4cqh_1.2cqw]
-              backdrop-blur-md
-            "
-          >
-            {/* Top: spawn-position toggle, anchored to the right edge of
-                the panel (label sits immediately left of the checkbox). */}
-            <label
-              className="
-                flex shrink-0 cursor-pointer items-center justify-end gap-[0.6cqw] font-serif text-[1.9cqh]
-                text-text-muted
-              "
-            >
-              <span>{t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}</span>
-              <Checkbox
-                checked={spawnAtCenter}
-                onChange={setSpawnAtCenter}
-                ariaLabel={t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
-              />
-            </label>
+          <div className="relative flex h-full flex-col gap-[1.2cqh] bg-black/60 p-[1.4cqh_1.2cqw] backdrop-blur-md">
+            {/* Top: title (left) + spawn-position toggle (right). */}
+            <div className="flex shrink-0 items-center justify-between gap-[0.6cqw]">
+              <h2 className="font-serif text-[2.4cqh] text-text-primary">
+                {t('app.sceneEdit.menuTitle', { defaultValue: 'Spawn Menu' })}
+              </h2>
+              <label className="flex cursor-pointer items-center gap-[0.6cqw] font-serif text-[2.1cqh] text-text-muted">
+                <span>{t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}</span>
+                <Checkbox
+                  checked={spawnAtCenter}
+                  onChange={setSpawnAtCenter}
+                  ariaLabel={t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
+                />
+              </label>
+            </div>
 
-            {/* Middle row: vertical category tabs + tile grid */}
-            <div className="flex min-h-0 flex-1 gap-[1cqw]">
+            {/* Middle row: vertical category tabs + tile grid. The gap
+                between the two columns matches the inter-tile gap so the
+                vertical seam reads as part of the same grid rhythm. */}
+            <div className="flex min-h-0 flex-1 gap-[0.8cqh]">
               {/* Left: category tab strip — slightly darker than the panel
                   for visual gradation. */}
               <div
                 className={`
                   ${STYLED_SCROLLBAR}
-                  flex w-[10cqw] shrink-0 flex-col gap-[0.3cqh] overflow-y-auto bg-black/30 p-[0.6cqh_0.4cqw]
+                  flex w-[10cqw] shrink-0 flex-col gap-[0.3cqh] overflow-y-auto bg-black/30 p-[0.5cqh_0.25cqw]
                 `}
               >
                 {categoryEntries.map(([cat]) => {
@@ -274,7 +270,7 @@ const SceneEditOverlay = () => {
                       onClick={() => setActiveCategory(cat)}
                       onMouseDown={(e) => e.preventDefault()}
                       className={`
-                        shrink-0 px-[0.7cqw] py-[0.6cqh] text-left font-serif text-[1.9cqh] transition-colors
+                        shrink-0 px-[0.5cqw] py-[0.6cqh] text-left font-serif text-[2.1cqh] transition-colors
                         ${
                           tabActive
                             ? 'bg-surface-btn-secondary text-text-primary'
@@ -292,7 +288,8 @@ const SceneEditOverlay = () => {
               </div>
 
               {/* Right: tile grid — 3 columns, image-only. Each tile is a
-                  faintly-darker square so the transparent (post-luma-key)
+                  faintly-darker square (with internal padding so the prop
+                  doesn't ride the edges) so the transparent (post-luma-key)
                   prop sits visibly against the panel. */}
               <div
                 className={`
@@ -307,7 +304,7 @@ const SceneEditOverlay = () => {
                     onClick={() => submitProp(prop)}
                     onMouseDown={(e) => e.preventDefault()}
                     className="
-                      group relative aspect-square overflow-hidden bg-black/40 transition-colors
+                      group relative aspect-square overflow-hidden bg-black/40 p-[0.6cqh] transition-colors
                       hover:bg-black/60
                       disabled:cursor-not-allowed disabled:opacity-50
                     "
@@ -337,7 +334,9 @@ const SceneEditOverlay = () => {
             </div>
 
             {/* Bottom: prompt input. Spans the full panel width; the
-                categories column above stops short. */}
+                categories column above stops short. The placeholder is
+                sized down to roughly match the category tabs; the
+                Enter/Esc hint is bumped up so it reads at a glance. */}
             <div className="flex shrink-0 flex-col gap-[0.6cqh]">
               <input
                 ref={inputRef}
@@ -352,12 +351,12 @@ const SceneEditOverlay = () => {
                 className={`
                   ${SETTINGS_CONTROL_BASE}
                   ${SETTINGS_CONTROL_TEXT}
-                  w-full outline-none
+                  w-full text-[2.1cqh] outline-none
                   focus:ring-1 focus:ring-border-medium
                   disabled:cursor-not-allowed disabled:opacity-50
                 `}
               />
-              <span className="font-serif text-[1.3cqh] text-text-muted">{t('app.sceneEdit.instructions')}</span>
+              <span className="font-serif text-[1.7cqh] text-text-muted">{t('app.sceneEdit.instructions')}</span>
             </div>
 
             {/* Spinner overlay during submitting */}
