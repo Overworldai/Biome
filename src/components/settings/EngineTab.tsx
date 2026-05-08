@@ -194,6 +194,17 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setMenuModelsLoading(false)
       return
     }
+    // In standalone mode the metadata calls hit the local managed server,
+    // so they only succeed once the engine is up. While preparing /
+    // not_installed / failed, fall back to a single-default placeholder
+    // so the picker isn't empty; this effect re-fires on the engineReady
+    // transition and refetches when the server comes online (e.g. after
+    // an Install click finishes).
+    if (menuEngineMode === 'standalone' && !engineReady) {
+      setMenuModelOptions([{ id: menuWorldModel, isLocal: false, sizeBytes: null }])
+      setMenuModelsLoading(false)
+      return
+    }
 
     let cancelled = false
 
@@ -240,7 +251,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels, t])
+  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels, t, engineReady])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
