@@ -7,6 +7,7 @@ import { useWebsocket } from '../../context/streaming/websocket'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, STYLED_SCROLLBAR } from '../../styles'
 import { RpcError } from '../../lib/wsRpc'
 import { propImageUrl, usePropManifest, type PropEntry } from '../../hooks/scene/usePropManifest'
+import Checkbox from '../ui/Checkbox'
 
 const slugToSubject = (slug: string): string => slug.replace(/_/g, ' ')
 
@@ -238,7 +239,23 @@ const SceneEditOverlay = () => {
               backdrop-blur-md
             "
           >
-            {/* Top row: vertical category tabs + tile grid */}
+            {/* Top: spawn-position toggle, anchored to the right edge of
+                the panel (label sits immediately left of the checkbox). */}
+            <label
+              className="
+                flex shrink-0 cursor-pointer items-center justify-end gap-[0.6cqw] font-serif text-[1.9cqh]
+                text-text-muted
+              "
+            >
+              <span>{t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}</span>
+              <Checkbox
+                checked={spawnAtCenter}
+                onChange={setSpawnAtCenter}
+                ariaLabel={t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
+              />
+            </label>
+
+            {/* Middle row: vertical category tabs + tile grid */}
             <div className="flex min-h-0 flex-1 gap-[1cqw]">
               {/* Left: category tab strip — slightly darker than the panel
                   for visual gradation. */}
@@ -319,18 +336,9 @@ const SceneEditOverlay = () => {
               </div>
             </div>
 
-            {/* Bottom: spawn-position checkbox + prompt input. Spans the
-                full panel width; the categories column above stops short. */}
+            {/* Bottom: prompt input. Spans the full panel width; the
+                categories column above stops short. */}
             <div className="flex shrink-0 flex-col gap-[0.6cqh]">
-              <label className="flex cursor-pointer items-center gap-[0.5cqw] font-serif text-[1.7cqh] text-text-muted">
-                <input
-                  type="checkbox"
-                  checked={spawnAtCenter}
-                  onChange={(e) => setSpawnAtCenter(e.target.checked)}
-                  className="h-[1.4cqh] w-[1.4cqh] accent-text-primary"
-                />
-                {t('app.sceneEdit.spawnAtCenter', { defaultValue: 'Spawn at centre of view' })}
-              </label>
               <input
                 ref={inputRef}
                 type="text"
