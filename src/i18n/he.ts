@@ -93,6 +93,9 @@ const he = {
             'HTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.'
         }
       },
+      startup: {
+        startingEngine: 'מפעיל את World Engine...'
+      },
       loading: {
         error: 'שגיאה',
         connecting: 'מתחבר...',

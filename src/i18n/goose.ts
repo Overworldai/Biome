@@ -97,6 +97,9 @@ const goose = {
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
         }
       },
+      startup: {
+        startingEngine: 'Honking the World Engine awake...'
+      },
       loading: {
         error: 'Error',
         connecting: 'Waddling over...',

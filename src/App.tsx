@@ -10,7 +10,9 @@ import { VortexProvider } from './context/vortex/VortexContext'
 import { AudioProvider } from './context/audio/AudioContext'
 import { useAudio } from './context/audio/audioContextValue'
 import AudioController from './components/audio/AudioController'
-import { useAppStartup } from './hooks/useAppStartup'
+import { StartupProvider } from './context/startup/StartupContext'
+import { isStartupBlocking, useStartup } from './context/startup/startupContextValue'
+import StartupLoader from './components/startup/StartupLoader'
 import { invoke } from './bridge'
 import type { AppUpdateInfo } from './types/ipc'
 import VideoContainer from './components/streaming/VideoContainer'
@@ -99,6 +101,14 @@ const AppShell = () => {
   } = usePortal()
   const { isStreaming, isUIActive, status: connectionStatus, prepareReturnToMainMenu } = useConnection()
   const sceneEditState = useSession().sceneEdit.state
+  const { phase: startupPhase } = useStartup()
+  // While the local-server boot pipeline is mid-flight (unpacking files,
+  // checking install, spawning + health-polling), suppress every menu
+  // chrome element so the splash overlay doesn't sit on top of an
+  // interactive portal / settings button. The slideshow + window
+  // controls keep mounting underneath — that's the intentional
+  // "splash on top of resting menu state" handoff.
+  const isStartupBlocked = isStartupBlocking(startupPhase)
   useGamepadNavigation(isUIActive)
   const {
     getBackgroundVideoElement,
@@ -130,11 +140,24 @@ const AppShell = () => {
   const backgroundReadyRef = useRef(false)
 
   const showWindowIfReady = useCallback(() => {
-    if (!portalReadyRef.current || !backgroundReadyRef.current) return
+    // During the startup splash, the portal preview never mounts (it's
+    // gated on `isMainUi`, which the splash suppresses). The splash itself
+    // is synchronous on mount, so the visual readiness gate degrades to
+    // "background slideshow has its first frame".
+    const portalGateOk = isStartupBlocked || portalReadyRef.current
+    if (!portalGateOk || !backgroundReadyRef.current) return
     if (rendererReadySentRef.current) return
     rendererReadySentRef.current = true
     invoke('renderer-ready')
-  }, [])
+  }, [isStartupBlocked])
+
+  // Re-evaluate the show-window gate when the startup phase flips into
+  // blocking — the background may already be ready by then, in which case
+  // the gate's other half is satisfied and we can show the window now
+  // rather than wait for the 5 s safety fallback.
+  useEffect(() => {
+    if (isStartupBlocked) showWindowIfReady()
+  }, [isStartupBlocked, showWindowIfReady])
 
   const handleInitialPreviewReady = useCallback(() => {
     portalReadyRef.current = true
@@ -151,7 +174,10 @@ const AppShell = () => {
   // `isMainUi` needs the explicit guard — we're still on MAIN_MENU state but
   // visually the loading layer is covering the portal.
   const isLoadingUi = portalState === portalStates.LOADING
-  const isMainUi = !isLoadingUi && !isStreamingUi && transitionPhase !== 'launch-reveal'
+  // `isStartupBlocked` keeps menu chrome (portal, settings button, settings
+  // panel, social CTAs) hidden while the splash overlay is up, so they don't
+  // peek through during the boot pipeline.
+  const isMainUi = !isLoadingUi && !isStreamingUi && transitionPhase !== 'launch-reveal' && !isStartupBlocked
   const useMainBackground = !isStreamingUi
   const backgroundBlurCqh = isMainUi ? (isSettingsOpen ? 1.94 : 0.14) : 0
   const portalGlowRgb = usePortalGlowSample(portalVisible, nextVideoElement)
@@ -485,6 +511,7 @@ const AppShell = () => {
           </div>
         )}
       </div>
+      {isStartupBlocked && <StartupLoader />}
       {PORTAL_SPARKS_DEBUG && <PortalSparksConfigurator />}
       <FocusReticle />
       {availableUpdate && (
@@ -512,23 +539,22 @@ const AppShell = () => {
 }
 
 const App = () => {
-  // Run startup tasks (unpack server files, etc.)
-  useAppStartup()
-
   return (
     <SettingsProvider>
-      <AudioProvider>
-        <PortalProvider>
-          <StreamingProvider>
-            <VortexProvider>
-              <I18nSync />
-              {import.meta.env.DEV && <DevLocaleCycler />}
-              <AudioController />
-              <AppShell />
-            </VortexProvider>
-          </StreamingProvider>
-        </PortalProvider>
-      </AudioProvider>
+      <StartupProvider>
+        <AudioProvider>
+          <PortalProvider>
+            <StreamingProvider>
+              <VortexProvider>
+                <I18nSync />
+                {import.meta.env.DEV && <DevLocaleCycler />}
+                <AudioController />
+                <AppShell />
+              </VortexProvider>
+            </StreamingProvider>
+          </PortalProvider>
+        </AudioProvider>
+      </StartupProvider>
     </SettingsProvider>
   )
 }

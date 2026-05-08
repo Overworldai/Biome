@@ -96,6 +96,9 @@ const en = {
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
         }
       },
+      startup: {
+        startingEngine: 'Starting World Engine...'
+      },
       loading: {
         error: 'Error',
         connecting: 'Connecting...',

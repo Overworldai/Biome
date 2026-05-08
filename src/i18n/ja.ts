@@ -96,6 +96,9 @@ const ja = {
             'HTTPS と WSS は既定ではサポートされていません。Biome サーバーへ直接接続する場合は HTTP または WS を試してください。'
         }
       },
+      startup: {
+        startingEngine: 'ワールドエンジンを起動中...'
+      },
       loading: {
         error: 'エラー',
         connecting: '接続中...',

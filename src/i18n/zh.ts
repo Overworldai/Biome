@@ -91,6 +91,9 @@ const zh = {
           secureTransportHint: '默认不支持 HTTPS 和 WSS；如果你是直接连接 Biome 服务器，请尝试使用 HTTP 或 WS。'
         }
       },
+      startup: {
+        startingEngine: '正在启动世界引擎...'
+      },
       loading: {
         error: '错误',
         connecting: '连接中...',
