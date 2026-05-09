@@ -27,6 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   weapons: 'Weapons',
   containers: 'Containers',
   furniture: 'Furniture',
+  paintings: 'Paintings',
   electronics: 'Electronics & appliances',
   street: 'Street',
   vehicles: 'Vehicles',

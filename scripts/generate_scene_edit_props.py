@@ -6,6 +6,8 @@
 #     "accelerate",
 #     "bitsandbytes",
 #     "pillow",
+#     "numpy",
+#     "scipy",
 #     "pydantic>=2",
 #     "tqdm",
 #     "gguf>=0.10.0",
@@ -48,6 +50,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import torch  # pyright: ignore[reportMissingTypeStubs]  -- torch ships partial stubs
 from diffusers import (  # pyright: ignore[reportMissingTypeStubs, reportUnknownVariableType]  -- diffusers stubs are partial
     Flux2KleinPipeline,
@@ -58,6 +61,7 @@ from diffusers import (  # pyright: ignore[reportMissingTypeStubs, reportUnknown
 from PIL import Image
 from pydantic import BaseModel, ConfigDict
 from rembg import new_session, remove  # pyright: ignore[reportMissingTypeStubs]
+from scipy import ndimage  # pyright: ignore[reportMissingTypeStubs]  -- scipy ships partial stubs
 from tqdm import tqdm
 from transformers import (  # pyright: ignore[reportMissingTypeStubs]
     AutoModelForCausalLM,
@@ -92,6 +96,13 @@ class Prop:
     # Spawnables only: when true, render with a character/full-body studio
     # wrapper instead of the object wrapper (which says "no people").
     is_character: bool = False
+    # When true, the rembg post-pass is replaced with an edge-only
+    # flood-fill chroma cut: near-white pixels reachable from the image
+    # edge become transparent, but interior near-white pixels (e.g. a
+    # sky depicted inside a painting) stay opaque. Used for paintings,
+    # where rembg's foreground segmentation otherwise latches onto the
+    # depicted figure and strips the frame.
+    chroma_cut: bool = False
 
     @property
     def id(self) -> str:
@@ -120,6 +131,21 @@ def _n(category: str, slug: str, prompt: str) -> Prop:
         kind="spawnable",
         prompt=prompt,
         is_character=True,
+    )
+
+
+def _pa(slug: str, subject: str) -> Prop:
+    """Painting helper: spawnable that bakes in the shared 'framed oil
+    painting in an ornate gilded frame' phrasing and uses the edge-
+    flooded chroma cut instead of rembg — rembg's BiRefNet treats the
+    depicted figure as the foreground and strips the frame, which we
+    want to keep."""
+    return Prop(
+        category="paintings",
+        slug=slug,
+        kind="spawnable",
+        prompt=f"a framed oil painting in an ornate gilded frame depicting {subject}",
+        chroma_cut=True,
     )
 
 
@@ -195,6 +221,28 @@ CATALOGUE: list[Prop] = [
     _s(
         "furniture", "ambulance_gurney", "a wheeled ambulance gurney with safety straps"
     ),
+    # ─── Paintings ────────────────────────────────────────────────────
+    # All share the "framed oil painting in an ornate gilded frame"
+    # presentation; only the depicted subject varies. The `_pa` helper
+    # bakes in that phrasing and skips the rembg post-pass (rembg
+    # over-segments paintings, treating the depicted subject as the
+    # foreground and stripping the frame).
+    _pa("stormy_seascape", "a stormy seascape with a sailing ship being battered by towering waves"),
+    _pa("pastoral_windmill", "a pastoral landscape of rolling green hills, a stone windmill, and grazing sheep"),
+    _pa(
+        "victorian_portrait",
+        "a stern Victorian woman in a high-collar black dress and pearl earrings, three-quarter length portrait",
+    ),
+    _pa("fruit_still_life", "a still life of fruit, bread, a wine bottle, and a goblet on a draped table"),
+    _pa("cavalry_battle", "a Napoleonic cavalry charge with drifting gunsmoke and tattered flags"),
+    _pa("mountain_sunset", "an alpine mountain vista at sunset, peaks bathed in orange and purple light"),
+    _pa(
+        "gaslit_street_night",
+        "a 19th-century gaslit cobblestone street at night, a horse-drawn carriage on rain-slicked stones",
+    ),
+    _pa("forest_stag", "a forest interior with a stag standing alert in a shaft of dawn sunlight"),
+    _pa("descending_angels", "a baroque religious scene of angels descending from cloud-broken golden light"),
+    _pa("hunters_marsh", "two 18th-century hunters with hounds at the edge of a misty marsh at dawn"),
     _s("electronics", "refrigerator", "a stainless steel double-door refrigerator"),
     _s("electronics", "gas_stove", "a freestanding white gas stove with oven"),
     _s("electronics", "washing_machine", "a white front-loading washing machine"),
@@ -621,6 +669,36 @@ def _save_with_alpha_cut(image: Image.Image, dest: Path) -> None:
     cut.save(dest, format="PNG")  # pyright: ignore[reportUnknownMemberType]
 
 
+def _save_with_chroma_cut(image: Image.Image, dest: Path) -> None:
+    """Edge-only flood-fill chroma key, then save as transparent PNG.
+
+    Near-white pixels are detected (RGB ≥ 240); connected components
+    that touch any image edge become alpha=0, while interior near-white
+    pixels (sky inside a painting, white shirt, etc.) stay opaque. This
+    is deterministic and frame-preserving, unlike rembg's saliency
+    segmentation which can strip a painting's frame in favour of the
+    depicted figure."""
+    rgba = image.convert("RGBA")
+    arr = np.array(rgba)
+    rgb = arr[:, :, :3]
+    white = (rgb >= 240).all(axis=2)
+
+    labeled, _ = ndimage.label(white)  # pyright: ignore[reportUnknownArgumentType]
+
+    edge_labels: set[int] = set()
+    edge_labels.update(int(v) for v in np.unique(labeled[0, :]))
+    edge_labels.update(int(v) for v in np.unique(labeled[-1, :]))
+    edge_labels.update(int(v) for v in np.unique(labeled[:, 0]))
+    edge_labels.update(int(v) for v in np.unique(labeled[:, -1]))
+    edge_labels.discard(0)
+
+    edge_connected = np.isin(labeled, list(edge_labels))
+    arr[edge_connected, 3] = 0
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(arr).save(dest, format="PNG")
+
+
 def render_studio(pipe: ZImagePipeline, prop: Prop, seed: int, dest: Path) -> None:
     generator = torch.Generator("cuda").manual_seed(seed)
     result = pipe(  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
@@ -632,7 +710,10 @@ def render_studio(pipe: ZImagePipeline, prop: Prop, seed: int, dest: Path) -> No
         generator=generator,
     )
     image = result.images[0]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    _save_with_alpha_cut(image, dest)
+    if prop.chroma_cut:
+        _save_with_chroma_cut(image, dest)
+    else:
+        _save_with_alpha_cut(image, dest)
 
 
 def load_edit_pipeline() -> Flux2KleinPipeline:
