@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
 import structlog
 from fastapi import WebSocketDisconnect
 from pydantic import ValidationError
@@ -31,7 +32,7 @@ from world_engine import CtrlInput
 
 from engine import devices
 from engine.keymap import BUTTON_CODES
-from engine.scene_authoring import run_generate_scene, run_scene_edit, run_scene_prop_edit
+from engine.scene_authoring import ANIM_PLAYBACK_FPS, run_generate_scene, run_scene_edit, run_scene_prop_edit
 from server.protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -327,6 +328,38 @@ async def run_sender(conn: Connection) -> None:
             break
 
 
+def _stream_tween_frames(
+    conn: Connection,
+    world_engine: "WorldEngineManager",
+    frames: list[np.ndarray],
+) -> None:
+    """Pace-stream a pre-baked tween sequence (e.g. an edit fall animation)
+    out to the client at `ANIM_PLAYBACK_FPS`. JPEG-encodes each frame, queues
+    it via `build_frame_envelope`, and bumps `perceptual_frame_count` per
+    frame so the auto-reset limit accounts for them. Blocks the generator
+    thread for the duration of the sequence — the caller is expected to be
+    holding the scene-edit lock so no new edit can land mid-stream."""
+    if not frames:
+        return
+    interval = 1.0 / ANIM_PLAYBACK_FPS
+    next_send = time.perf_counter()
+    for frame in frames:
+        conn.perceptual_frame_count += 1
+        jpeg = world_engine.numpy_to_jpeg(frame)
+        conn.queue_send(
+            conn.build_frame_envelope(
+                jpeg,
+                conn.perceptual_frame_count,
+                0.0,
+                0.0,
+            )
+        )
+        next_send += interval
+        sleep_time = next_send - time.perf_counter()
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+
 def run_generator(
     conn: Connection,
     engines: "Engines",
@@ -454,38 +487,52 @@ def run_generator(
                 next_frame_time = 0.0
 
             # Handle pending scene edit — runs inpainting on the last
-            # subframe from the most recent gen_frame, then appends. The
+            # subframe from the most recent gen_frame, then either reseeds
+            # the engine or animates the change tween-by-tween into the
+            # KV cache (per the per-class mode in `scene_authoring`). The
             # `direct` flag toggles whether the VLM authors the prompt
             # (False) or Klein receives the caller's prompt verbatim
             # (True, used by the environment / weather presets).
             if conn.scene_edit_request is not None and conn.last_generated_cpu_frames is not None:
                 req = conn.scene_edit_request
-                conn.scene_edit_request = None
                 _flush_pending()
                 try:
-                    preview = run_scene_edit(
+                    preview, tween_frames = run_scene_edit(
                         engines,
                         req["prompt"],
                         conn.last_generated_cpu_frames,
                         direct=req.get("direct", False),
                     )
-                    conn.perceptual_frame_count = 0
-                    if conn.video_recorder is not None:
-                        conn.video_recorder.note_edit(req["prompt"])
-                    req["future"].set_result(preview)
                 except Exception as e:
                     logger.exception("Scene edit failed", operation="scene_edit")
                     req["future"].set_exception(e)
+                    conn.scene_edit_request = None
+                else:
+                    if conn.video_recorder is not None:
+                        conn.video_recorder.note_edit(req["prompt"])
+                    req["future"].set_result(preview)
+                    # Streaming/recording errors must NOT leak into the
+                    # future (already resolved); they only abort the
+                    # animation playback for this edit.
+                    try:
+                        if tween_frames:
+                            if conn.video_recorder is not None:
+                                conn.video_recorder.write_frames(tween_frames)
+                            _stream_tween_frames(conn, world_engine, tween_frames)
+                        else:
+                            conn.perceptual_frame_count = 0
+                    except Exception:
+                        logger.exception("Scene edit tween playback failed", operation="scene_edit")
+                    conn.scene_edit_request = None
 
             # Handle pending tile-driven prop edit — same frame-boundary
             # handoff as scene_edit but skips the VLM and feeds Klein a
             # reference image alongside the scene.
             if conn.scene_prop_edit_request is not None and conn.last_generated_cpu_frames is not None:
                 prop_req = conn.scene_prop_edit_request
-                conn.scene_prop_edit_request = None
                 _flush_pending()
                 try:
-                    prop_preview = run_scene_prop_edit(
+                    prop_preview, prop_tween_frames = run_scene_prop_edit(
                         engines,
                         reference_jpeg_b64=prop_req.reference_jpeg_b64,
                         kind=prop_req.kind,
@@ -493,13 +540,24 @@ def run_generator(
                         subject=prop_req.subject,
                         cpu_frames=conn.last_generated_cpu_frames,
                     )
-                    conn.perceptual_frame_count = 0
-                    if conn.video_recorder is not None:
-                        conn.video_recorder.note_edit(f"[prop:{prop_req.subject}]")
-                    prop_req.future.set_result(prop_preview)
                 except Exception as e:
                     logger.exception("Scene prop edit failed", operation="scene_prop_edit")
                     prop_req.future.set_exception(e)
+                    conn.scene_prop_edit_request = None
+                else:
+                    if conn.video_recorder is not None:
+                        conn.video_recorder.note_edit(f"[prop:{prop_req.subject}]")
+                    prop_req.future.set_result(prop_preview)
+                    try:
+                        if prop_tween_frames:
+                            if conn.video_recorder is not None:
+                                conn.video_recorder.write_frames(prop_tween_frames)
+                            _stream_tween_frames(conn, world_engine, prop_tween_frames)
+                        else:
+                            conn.perceptual_frame_count = 0
+                    except Exception:
+                        logger.exception("Scene prop edit tween playback failed", operation="scene_prop_edit")
+                    conn.scene_prop_edit_request = None
 
             # Handle pending generate_scene — creates a new seed from
             # a text prompt (blank canvas + inpainting pipeline).

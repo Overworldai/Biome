@@ -542,6 +542,19 @@ class WorldEngineManager:
 
         self._device_executor.submit(_append).result()
 
+    def append_frames_sequence(self, frames: list[torch.Tensor]) -> None:
+        """Append a pre-baked sequence of frames in order — used by edit
+        animations that want to inject tween frames into the KV cache
+        without resetting. Each frame is auto-expanded for multiframe
+        models. Synchronous — runs on the device thread."""
+        engine = self._require_engine()
+
+        def _append():
+            for f in frames:
+                engine.append_frame(self._maybe_expand_to_multiframe(f))
+
+        self._device_executor.submit(_append).result()
+
     def reset_state(self) -> None:
         """Reset engine state. Synchronous — submits work to the device thread
         and waits. Safe to call from the generator thread (the only caller).

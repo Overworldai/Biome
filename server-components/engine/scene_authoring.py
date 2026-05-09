@@ -28,12 +28,12 @@ import re
 import time
 from dataclasses import asdict, dataclass, field
 from io import BytesIO
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import structlog
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from engine import devices
 from engine.devices import SCENE_AUTHORING_DEVICE
@@ -174,8 +174,41 @@ def parse_tool_calls(text: str) -> list[ToolCall]:
 
 EDIT_MODEL_ID = "black-forest-labs/FLUX.2-klein-4B"
 EDIT_NUM_STEPS = 4
-EDIT_APPEND_COUNT = 32  # Times to append the edited frame to strengthen it
-EDIT_RESET_WITH_FRAME = True  # Reset engine with edited frame as new seed (vs append)
+
+# ─── Edit application mode ───────────────────────────────────────────
+# "reset" replays the edited frame as the new seed (clean KV — robust but
+# discontinuous). "fall" diffs the changed region, animates it tweening in
+# from the top of the frame, and appends the resulting tween frames to the
+# engine so prior context survives. The fall path keeps the model "in
+# distribution" by showing the edit as a gradual change rather than a sudden
+# pop. One mode per edit class so each can be A/B tuned independently —
+# whole-scene edits and held-item edits don't generally make sense as a
+# vertical drop, but we keep them switchable for testing.
+
+SceneEditMode = Literal["reset", "fall"]
+
+SCENE_EDIT_PROMPTED_MODE: SceneEditMode = "reset"  # VLM-authored full-frame edit
+SCENE_EDIT_DIRECT_MODE: SceneEditMode = "reset"  # environment / weather presets
+PROP_EDIT_SPAWNABLE_MODE: SceneEditMode = "fall"  # placed-in-world prop
+PROP_EDIT_HOLDABLE_MODE: SceneEditMode = "reset"  # first-person held item
+
+# Tween animation tuning (used when mode == "fall"). The fall portion is the
+# visible drop-in; the hold portion locks the landed image so the user (and
+# the model's KV cache) settle on the new state before control resumes.
+ANIM_FALL_FRAMES = 30
+ANIM_HOLD_FRAMES = 15
+ANIM_PLAYBACK_FPS = 30.0  # rate at which tween frames are paced out to the client
+ANIM_FALLBACK_APPEND_COUNT = 32  # appends used when fall is requested but no bbox is detectable
+
+# Bbox-isolation tuning (see `_compute_edit_bbox`). Klein re-encodes the
+# whole frame, so a naïve per-pixel threshold mask spans everything; we
+# need to filter for *spatially-coherent* change rather than scattered
+# noise. Tunables are kept as constants so we can iterate on them without
+# code churn.
+ANIM_DELTA_THRESHOLD = 18  # luma-weighted Euclidean diff threshold (post-blur)
+ANIM_BLUR_RADIUS = 3.0  # Gaussian blur radius used to suppress per-pixel Klein noise
+ANIM_OPENING_KERNEL = 11  # PIL MinFilter / MaxFilter kernel for morphological opening (must be odd)
+ANIM_MAX_BBOX_FRACTION = 0.7  # if the bbox covers more than this fraction of the frame, treat as whole-scene
 
 # ─── VLM configuration ────────────────────────────────────────────────
 
@@ -708,6 +741,140 @@ class SceneAuthoringManager:
         return self._to_seed_tensor(result, seed_target_size), prompt
 
 
+# ─── Edit application helpers (mode dispatch + fall animation) ──────
+
+
+def _compute_edit_bbox(original: np.ndarray, edited: np.ndarray) -> tuple[int, int, int, int] | None:
+    """Bounding box (y0, x0, y1, x1) of the substantively-changed region.
+
+    Klein re-encodes the entire frame on every pass, so a naïve `abs_diff
+    > threshold` picks up low-amplitude noise everywhere — the bbox ends up
+    covering the whole image. This pipeline favours spatially-coherent
+    change over scattered specks:
+
+      1. Luma-weighted Euclidean diff (Rec. 601 weights) — closer to
+         perceived brightness change than per-channel max.
+      2. Gaussian blur (`ANIM_BLUR_RADIUS`) to wash out per-pixel JPEG /
+         re-encode noise that the threshold would otherwise pick up.
+      3. Threshold (`ANIM_DELTA_THRESHOLD`) → boolean mask.
+      4. Morphological opening (PIL MinFilter then MaxFilter, kernel
+         `ANIM_OPENING_KERNEL`) — drops blobs smaller than the kernel
+         while preserving the prop-sized regions we care about.
+      5. Treat as None if the surviving bbox covers more than
+         `ANIM_MAX_BBOX_FRACTION` of the frame — the edit is effectively
+         whole-scene and a fall animation would look silly.
+
+    ML alternatives we considered: LPIPS yields a single perceptual
+    distance scalar (no per-pixel localisation), and SAM-style
+    segmentation would pinpoint the new object but adds a heavyweight
+    model load. The pure-CPU pipeline above runs in ~tens of ms on a
+    1280x720 frame and avoids loading anything new."""
+    original_f = original.astype(np.float32)
+    edited_f = edited.astype(np.float32)
+    luma_weights = np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    diff = np.sqrt((((original_f - edited_f) ** 2) * luma_weights).sum(axis=2))
+
+    diff_pil = Image.fromarray(np.clip(diff, 0, 255).astype(np.uint8), mode="L")
+    blurred = diff_pil.filter(ImageFilter.GaussianBlur(radius=ANIM_BLUR_RADIUS))
+    raw_mask = np.array(blurred) > ANIM_DELTA_THRESHOLD
+    mask_pil = Image.fromarray(raw_mask.astype(np.uint8) * 255, mode="L")
+    opened = mask_pil.filter(ImageFilter.MinFilter(ANIM_OPENING_KERNEL)).filter(
+        ImageFilter.MaxFilter(ANIM_OPENING_KERNEL)
+    )
+    mask = np.array(opened) > 128
+
+    if not mask.any():
+        return None
+
+    rows = np.where(mask.any(axis=1))[0]
+    cols = np.where(mask.any(axis=0))[0]
+    y0, y1 = int(rows[0]), int(rows[-1]) + 1
+    x0, x1 = int(cols[0]), int(cols[-1]) + 1
+    h, w = original.shape[:2]
+    if (y1 - y0) * (x1 - x0) > ANIM_MAX_BBOX_FRACTION * h * w:
+        return None
+    return (y0, x0, y1, x1)
+
+
+def _ease_out_cubic(t: float) -> float:
+    return 1.0 - (1.0 - t) ** 3
+
+
+def _generate_fall_animation(
+    original: np.ndarray,
+    edited: np.ndarray,
+    bbox: tuple[int, int, int, int],
+    fall_frames: int,
+    hold_frames: int,
+) -> list[np.ndarray]:
+    """Tween frames where the edited bbox region drops from above the frame
+    onto its final position via ease-out-cubic, then locks the fully-edited
+    frame for `hold_frames`. During the fall, areas outside the bbox come
+    from `original`; on landing we switch to `edited` so any out-of-bbox
+    side-effects (shadows, lighting tweaks) appear together with the prop."""
+    y0, x0, y1, x1 = bbox
+    bbox_h = y1 - y0
+    region = edited[y0:y1, x0:x1, :]
+    frame_h = original.shape[0]
+
+    frames: list[np.ndarray] = []
+    for i in range(fall_frames):
+        t = (i + 1) / fall_frames
+        eased = _ease_out_cubic(t)
+        # Map eased ∈ [0, 1] to top-of-region position ∈ [-bbox_h, y0].
+        top_y = round(-bbox_h + eased * (y0 + bbox_h))
+        canvas = original.copy()
+        # Clip the region against the canvas so partial off-screen pastes work.
+        src_y0 = max(0, -top_y)
+        src_y1 = min(bbox_h, frame_h - top_y)
+        if src_y1 > src_y0:
+            dst_y0 = top_y + src_y0
+            dst_y1 = top_y + src_y1
+            canvas[dst_y0:dst_y1, x0:x1, :] = region[src_y0:src_y1, :, :]
+        frames.append(canvas)
+
+    landed = edited.copy()
+    frames.extend([landed] * hold_frames)
+    return frames
+
+
+def _np_to_seed_tensor(frame: np.ndarray) -> torch.Tensor:
+    """uint8 numpy HxWxC → uint8 device tensor on SCENE_AUTHORING_DEVICE,
+    laid out the way the engine expects edited frames to be."""
+    return torch.from_numpy(frame).to(dtype=torch.uint8, device=SCENE_AUTHORING_DEVICE).contiguous()
+
+
+def _apply_edit(
+    world_engine: "WorldEngineManager",
+    original_np: np.ndarray,
+    edited_np: np.ndarray,
+    edited_tensor: torch.Tensor,
+    mode: SceneEditMode,
+) -> list[np.ndarray]:
+    """Apply an edit to the engine according to `mode` and return the visible
+    tween frames (numpy uint8 HxWx3, in playback order). For "reset" the
+    engine is reseeded with `edited_tensor` and the returned list is empty.
+    For "fall" we diff `original_np` vs `edited_np` to find the changed
+    bbox, generate a fall-in animation, and append every tween to the engine
+    so the prior KV context survives. If the diff is below threshold (no
+    visible change), we fall back to a plain repeated-append without
+    animation — still no reset, since the user explicitly opted out of one
+    by selecting "fall"."""
+    if mode == "reset":
+        world_engine.set_seed_and_reset(edited_tensor)
+        return []
+
+    bbox = _compute_edit_bbox(original_np, edited_np)
+    if bbox is None:
+        world_engine.append_frame_repeatedly(edited_tensor, ANIM_FALLBACK_APPEND_COUNT)
+        return []
+
+    frames = _generate_fall_animation(original_np, edited_np, bbox, ANIM_FALL_FRAMES, ANIM_HOLD_FRAMES)
+    tensors = [_np_to_seed_tensor(f) for f in frames]
+    world_engine.append_frames_sequence(tensors)
+    return frames
+
+
 # ─── Free orchestration functions (called from the generator thread) ──
 
 
@@ -717,15 +884,16 @@ def run_scene_edit(
     cpu_frames: list,
     *,
     direct: bool = False,
-) -> SceneEditResponseData:
+) -> tuple[SceneEditResponseData, list[np.ndarray]]:
     """Run inpainting on the last subframe and apply the result to the engine.
 
     Takes the last subframe from the most recent gen_frame output, asks the
     VLM + Klein to inpaint it (or skips the VLM when `direct` is True and
-    sends `user_request` to Klein verbatim), safety-checks the result, and
-    either resets the engine with the edit as the new seed or appends it
-    repeatedly to strengthen it in the KV cache. Returns preview data for
-    the RPC."""
+    sends `user_request` to Klein verbatim), safety-checks the result, then
+    applies it via the per-class mode (`SCENE_EDIT_PROMPTED_MODE` /
+    `SCENE_EDIT_DIRECT_MODE`). Returns the preview data for the RPC plus
+    any tween frames (empty for "reset" mode, populated for "fall") that
+    the caller should stream out paced."""
     world_engine = engines.world_engine
     scene_authoring = engines.scene_authoring
     safety_checker = engines.safety_checker
@@ -751,15 +919,16 @@ def run_scene_edit(
         logger.warning("Safety checker rejected inpainted image", operation="scene_edit", scores=verdict.scores)
         raise SafetyRejectionError()
 
-    if EDIT_RESET_WITH_FRAME:
-        world_engine.set_seed_and_reset(inpainted)
-    else:
-        world_engine.append_frame_repeatedly(inpainted, EDIT_APPEND_COUNT)
+    mode: SceneEditMode = SCENE_EDIT_DIRECT_MODE if direct else SCENE_EDIT_PROMPTED_MODE
+    tween_frames = _apply_edit(world_engine, last_frame_np, inpainted_np, inpainted, mode)
 
-    return SceneEditResponseData(
-        original_jpeg_b64=original_b64,
-        preview_jpeg_b64=preview_b64,
-        edit_prompt=edit_prompt,
+    return (
+        SceneEditResponseData(
+            original_jpeg_b64=original_b64,
+            preview_jpeg_b64=preview_b64,
+            edit_prompt=edit_prompt,
+        ),
+        tween_frames,
     )
 
 
@@ -896,11 +1065,13 @@ def run_scene_prop_edit(
     target: str,
     subject: str,
     cpu_frames: list,
-) -> ScenePropEditResponseData:
+) -> tuple[ScenePropEditResponseData, list[np.ndarray]]:
     """Run a tile-driven prop edit on the last subframe and apply the
     result to the engine. Bypasses the VLM (the edit instruction is
     built deterministically from `kind` / `target` / `subject`); feeds
-    Klein both the scene and the decoded reference image."""
+    Klein both the scene and the decoded reference image. Mode is selected
+    per-`kind` (`PROP_EDIT_SPAWNABLE_MODE` / `PROP_EDIT_HOLDABLE_MODE`).
+    Returns the RPC preview plus tween frames the caller should stream."""
     world_engine = engines.world_engine
     scene_authoring = engines.scene_authoring
     safety_checker = engines.safety_checker
@@ -937,12 +1108,13 @@ def run_scene_prop_edit(
         )
         raise SafetyRejectionError()
 
-    if EDIT_RESET_WITH_FRAME:
-        world_engine.set_seed_and_reset(inpainted)
-    else:
-        world_engine.append_frame_repeatedly(inpainted, EDIT_APPEND_COUNT)
+    mode: SceneEditMode = PROP_EDIT_SPAWNABLE_MODE if kind == "spawnable" else PROP_EDIT_HOLDABLE_MODE
+    tween_frames = _apply_edit(world_engine, last_frame_np, inpainted_np, inpainted, mode)
 
-    return ScenePropEditResponseData(
-        original_jpeg_b64=original_b64,
-        preview_jpeg_b64=preview_b64,
+    return (
+        ScenePropEditResponseData(
+            original_jpeg_b64=original_b64,
+            preview_jpeg_b64=preview_b64,
+        ),
+        tween_frames,
     )
