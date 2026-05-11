@@ -77,6 +77,7 @@ class ScenePropEditHandoff:
     target: Literal["centre", "appropriate"]
     subject: str
     video_prompt: str | None
+    edit_mode: Literal["reset", "fall", "video"] | None
     future: concurrent.futures.Future
 
 

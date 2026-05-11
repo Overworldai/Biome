@@ -278,7 +278,13 @@ const en = {
             'Generate new scenes or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
           saveGenerated: 'Save Generated Scenes',
           saveGeneratedDescription:
-            'Keep every generated scene in your Scenes list so you can revisit or delete it later.'
+            'Keep every generated scene in your Scenes list so you can revisit or delete it later.',
+          editMode: 'Edit Transition',
+          editModeDescription:
+            'How edits are applied to the running world: reset the world model with the new frame (fast, jarring), animate the changed region falling into place (no inference cost), or generate a video transition between the old and new state (slow, cinematic).',
+          editModeReset: 'Reset',
+          editModeFall: 'Fall',
+          editModeTransition: 'Transition'
         },
         recording: {
           title: 'Video Recording',

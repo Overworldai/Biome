@@ -6,6 +6,14 @@ export const LOCALE_OPTIONS = ['system', ...SUPPORTED_LOCALES] as const
 export const QUANT_OPTIONS = ['none', 'fp8w8a8', 'intw8a8'] as const
 export type QuantOption = (typeof QUANT_OPTIONS)[number]
 
+/** Scene-edit transition modes. `reset` reseeds the world model with
+ *  the post-edit frame (cheapest, most jarring). `fall` animates the
+ *  changed region dropping in via tweening (no inference). `transition`
+ *  runs a full FLF video transition through the video model (slowest,
+ *  most cinematic). Maps to the server's `SceneEditMode` literal. */
+export const EDIT_MODE_OPTIONS = ['reset', 'fall', 'transition'] as const
+export type EditMode = (typeof EDIT_MODE_OPTIONS)[number]
+
 export type AppLocale = (typeof LOCALE_OPTIONS)[number]
 
 export const DEFAULT_WORLD_ENGINE_MODEL = 'Overworld/Waypoint-1.5-1B'
@@ -96,6 +104,7 @@ export const settingsSchema = z.object({
     .default(DEFAULT_AUDIO),
   scene_authoring_enabled: z.boolean().default(false),
   scene_authoring_save_generated: z.boolean().default(true),
+  scene_authoring_edit_mode: z.enum(EDIT_MODE_OPTIONS).default('transition'),
   debug_overlays: z
     .object({
       performance_stats: z.boolean().default(false),

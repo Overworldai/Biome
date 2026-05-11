@@ -279,7 +279,13 @@ const goose = {
             'Honk up a fresh pond or edit the current one with a text prompt, powered by a local image model. Requires 8-10 GB additional VRAM.',
           saveGenerated: 'Save Generated Ponds',
           saveGeneratedDescription:
-            'Keep every generated pond in your Ponds list so you can revisit or waddle away from it later.'
+            'Keep every generated pond in your Ponds list so you can revisit or waddle away from it later.',
+          editMode: 'Edit Honk',
+          editModeDescription:
+            'How edits flap into the running pond: reset the world model with the new frame (fast, honkish), animate the changed region waddling into place (no inference cost), or generate a video transition between the old and new state (slow, cinematic — like a goose nature documentary).',
+          editModeReset: 'Reset',
+          editModeFall: 'Waddle',
+          editModeTransition: 'Honk'
         },
         recording: {
           title: 'Pond Footage',

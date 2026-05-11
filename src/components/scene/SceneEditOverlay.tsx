@@ -4,12 +4,19 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useInput } from '../../context/streaming/input'
 import { useSession } from '../../context/streaming/session'
 import { useWebsocket } from '../../context/streaming/websocket'
+import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { SETTINGS_CONTROL_BASE, SETTINGS_CONTROL_TEXT, STYLED_SCROLLBAR } from '../../styles'
 import { RpcError } from '../../lib/wsRpc'
 import { propImageUrl, usePropManifest, type PropEntry } from '../../hooks/scene/usePropManifest'
+import type { EditMode } from '../../types/settings'
 import Checkbox from '../ui/Checkbox'
 import EnvironmentPresetList from './EnvironmentPresetList'
 import PropTileGrid from './PropTileGrid'
+
+/** Map the user-facing edit-mode setting (`reset`/`fall`/`transition`)
+ *  to the wire-format value the server expects (`reset`/`fall`/`video`).
+ *  Only the "transition" label differs; the rest pass through. */
+const toWireEditMode = (mode: EditMode): 'reset' | 'fall' | 'video' => (mode === 'transition' ? 'video' : mode)
 
 const slugToSubject = (slug: string): string => slug.replace(/_/g, ' ')
 
@@ -66,6 +73,8 @@ const SceneEditOverlay = () => {
   const requestPointerLock = useInput().pointerLock.request
   const wsRequest = useWebsocket().request
   const { state: sceneEditState, dispatch } = useSession().sceneEdit
+  const { settings } = useSettings()
+  const editMode = toWireEditMode(settings.scene_authoring_edit_mode ?? 'transition')
   const { mode, errorMessage } = sceneEditState
   const isActive = mode !== 'inactive'
 
@@ -142,7 +151,7 @@ const SceneEditOverlay = () => {
     if (!trimmed || mode !== 'open') return
     dispatch({ type: 'SUBMIT' })
     try {
-      const result = await wsRequest('scene_edit', { prompt: trimmed }, 600_000)
+      const result = await wsRequest('scene_edit', { prompt: trimmed, edit_mode: editMode }, 600_000)
       dispatch({
         type: 'SUCCESS',
         preview:
@@ -154,7 +163,7 @@ const SceneEditOverlay = () => {
     } catch (err) {
       dispatch({ type: 'ERROR', message: formatError(err) })
     }
-  }, [prompt, mode, wsRequest, dispatch, formatError])
+  }, [prompt, mode, wsRequest, dispatch, formatError, editMode])
 
   // ─── Submit: environment preset → scene_edit with `direct: true` ─────
   // Same RPC as the typed-prompt flow but skips the VLM authoring step,
@@ -164,14 +173,18 @@ const SceneEditOverlay = () => {
       if (mode !== 'open') return
       dispatch({ type: 'SUBMIT' })
       try {
-        await wsRequest('scene_edit', { prompt: presetPrompt, direct: true, video_prompt: videoPrompt }, 600_000)
+        await wsRequest(
+          'scene_edit',
+          { prompt: presetPrompt, direct: true, video_prompt: videoPrompt, edit_mode: editMode },
+          600_000
+        )
         // Silent close — the user already knows what they sent.
         dispatch({ type: 'SUCCESS' })
       } catch (err) {
         dispatch({ type: 'ERROR', message: formatError(err) })
       }
     },
-    [mode, wsRequest, dispatch, formatError]
+    [mode, wsRequest, dispatch, formatError, editMode]
   )
 
   // ─── Submit: tile click → new scene_prop_edit RPC (Klein, no VLM) ───
@@ -189,7 +202,8 @@ const SceneEditOverlay = () => {
             kind: prop.kind,
             target: spawnAtCenter ? 'centre' : 'appropriate',
             subject: slugToSubject(prop.slug),
-            video_prompt: prop.video_prompt ?? undefined
+            video_prompt: prop.video_prompt ?? undefined,
+            edit_mode: editMode
           },
           600_000
         )
@@ -199,7 +213,7 @@ const SceneEditOverlay = () => {
         dispatch({ type: 'ERROR', message: formatError(err) })
       }
     },
-    [mode, spawnAtCenter, wsRequest, dispatch, formatError]
+    [mode, spawnAtCenter, wsRequest, dispatch, formatError, editMode]
   )
 
   const categoryEntries = useMemo(

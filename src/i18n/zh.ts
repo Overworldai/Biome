@@ -267,7 +267,13 @@ const zh = {
           enabled: '启用场景创作',
           enabledDescription: '使用本地图像模型通过文字提示生成新场景或编辑当前场景。需要额外 8-10GB 显存。',
           saveGenerated: '保存生成的场景',
-          saveGeneratedDescription: '将生成的每个场景保留在场景列表中，以便日后重新使用或删除。'
+          saveGeneratedDescription: '将生成的每个场景保留在场景列表中，以便日后重新使用或删除。',
+          editMode: '编辑过渡',
+          editModeDescription:
+            '编辑如何应用到运行中的世界：用新画面重置世界模型（快速但生硬）、将变化区域以下落动画呈现（无推理开销）、或生成旧状态与新状态之间的视频过渡（缓慢但具电影感）。',
+          editModeReset: '重置',
+          editModeFall: '下落',
+          editModeTransition: '过渡'
         },
         recording: {
           title: '视频录制',

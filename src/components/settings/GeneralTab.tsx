@@ -4,7 +4,8 @@ import { invoke } from '../../bridge'
 import { LOCALE_DISPLAY_NAMES, SUPPORTED_LOCALES } from '../../i18n'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { useVolumeControls } from '../../hooks/audio/useVolumeControls'
-import { type AppLocale } from '../../types/settings'
+import type { TranslationKey } from '../../i18n'
+import { type AppLocale, type EditMode } from '../../types/settings'
 import { SETTINGS_CONTROL_VMETRICS } from '../../styles'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsSelect from '../ui/SettingsSelect'
@@ -14,6 +15,14 @@ import SettingsRow from '../ui/SettingsRow'
 import SettingsTextInput from '../ui/SettingsTextInput'
 import Button from '../ui/Button'
 import RecordingsModal from './RecordingsModal'
+
+/** Order matters: matches `EDIT_MODE_OPTIONS` from `types/settings`,
+ *  rendered top-to-bottom in the dropdown. */
+const EDIT_MODE_LABELS: { value: EditMode; label: TranslationKey }[] = [
+  { value: 'reset', label: 'app.settings.sceneAuthoring.editModeReset' },
+  { value: 'fall', label: 'app.settings.sceneAuthoring.editModeFall' },
+  { value: 'transition', label: 'app.settings.sceneAuthoring.editModeTransition' }
+]
 
 type GeneralTabProps = {
   active: boolean
@@ -147,6 +156,16 @@ const GeneralTab = ({
             checked={settings.scene_authoring_save_generated ?? true}
             onChange={(v) => void saveSettings({ ...settings, scene_authoring_save_generated: v })}
           />
+          <SettingsRow
+            label={t('app.settings.sceneAuthoring.editMode')}
+            hint={t('app.settings.sceneAuthoring.editModeDescription')}
+          >
+            <SettingsSelect
+              options={EDIT_MODE_LABELS}
+              value={settings.scene_authoring_edit_mode ?? 'transition'}
+              onChange={(value) => void saveSettings({ ...settings, scene_authoring_edit_mode: value as EditMode })}
+            />
+          </SettingsRow>
         </div>
       </SettingsSection>
 

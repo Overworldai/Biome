@@ -276,7 +276,13 @@ const ja = {
           enabledDescription:
             'ローカル画像モデルを利用して、テキストプロンプトから新しいシーンを生成したり、現在のシーンを編集したりできます。追加で8〜10GBのVRAMが必要です。',
           saveGenerated: '生成したシーンを保存',
-          saveGeneratedDescription: '生成したシーンをすべてシーン一覧に残し、後から再利用・削除できるようにします。'
+          saveGeneratedDescription: '生成したシーンをすべてシーン一覧に残し、後から再利用・削除できるようにします。',
+          editMode: '編集の演出',
+          editModeDescription:
+            '編集を世界モデルに適用する方法：新しいフレームでリセット（高速・急峻）、変化領域を落とし込むアニメーション（推論コストなし）、または旧状態と新状態の間の動画トランジションを生成（低速・映画的）。',
+          editModeReset: 'リセット',
+          editModeFall: '落下',
+          editModeTransition: 'トランジション'
         },
         recording: {
           title: '動画録画',

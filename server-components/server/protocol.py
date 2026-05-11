@@ -247,6 +247,12 @@ class SceneEditRequest(BaseModel):
     # (e.g. "snow begins falling, accumulating on every surface").
     # When None, the server falls back to the Klein prompt.
     video_prompt: str | None = None
+    # Per-request override for how the edit gets applied to the WM
+    # (`reset` reseeds, `fall` animates a bbox drop-in, `video` runs
+    # the FLF video pipeline). When None, the server uses the class
+    # default (`SCENE_EDIT_*_MODE`). Settable from the renderer's
+    # Scene Authoring settings.
+    edit_mode: Literal["reset", "fall", "video"] | None = None
 
 
 class ScenePropEditRequest(BaseModel):
@@ -271,6 +277,10 @@ class ScenePropEditRequest(BaseModel):
     # edit mode is `video`. None if the manifest doesn't define one,
     # in which case video mode falls back to the fall animation.
     video_prompt: str | None = None
+    # Per-request override for how the edit gets applied to the WM —
+    # see `SceneEditRequest.edit_mode`. Same semantics here, scoped to
+    # the prop-spawn flow's mode dispatch (`PROP_EDIT_*_MODE`).
+    edit_mode: Literal["reset", "fall", "video"] | None = None
 
 
 class GenerateSceneRequest(BaseModel):

@@ -1322,16 +1322,18 @@ def run_scene_edit(
     *,
     direct: bool = False,
     video_prompt: str | None = None,
+    edit_mode: SceneEditMode | None = None,
 ) -> tuple[SceneEditResponseData, list[np.ndarray]]:
     """Run inpainting on the last subframe and apply the result to the engine.
 
     Takes the last subframe from the most recent gen_frame output, asks the
     VLM + Klein to inpaint it (or skips the VLM when `direct` is True and
     sends `user_request` to Klein verbatim), safety-checks the result, then
-    applies it via the per-class mode (`SCENE_EDIT_PROMPTED_MODE` /
-    `SCENE_EDIT_DIRECT_MODE`). Returns the preview data for the RPC plus
-    any tween frames (empty for "reset" mode, populated for "fall" or
-    "video") that the caller should stream out paced.
+    applies it via `edit_mode` (or the per-class default
+    `SCENE_EDIT_PROMPTED_MODE` / `SCENE_EDIT_DIRECT_MODE` when omitted).
+    Returns the preview data for the RPC plus any tween frames (empty
+    for "reset" mode, populated for "fall" or "video") that the caller
+    should stream out paced.
 
     `video_prompt` is the motion description forwarded to the video
     model when the edit's mode is `video`. When None (typed prompts),
@@ -1363,7 +1365,8 @@ def run_scene_edit(
         logger.warning("Safety checker rejected inpainted image", operation="scene_edit", scores=verdict.scores)
         raise SafetyRejectionError()
 
-    mode: SceneEditMode = SCENE_EDIT_DIRECT_MODE if direct else SCENE_EDIT_PROMPTED_MODE
+    default_mode: SceneEditMode = SCENE_EDIT_DIRECT_MODE if direct else SCENE_EDIT_PROMPTED_MODE
+    mode: SceneEditMode = edit_mode if edit_mode is not None else default_mode
     # Use the explicit video_prompt when supplied (env presets carry
     # motion-oriented prompts distinct from the detailed Klein prompt);
     # otherwise fall back to the Klein prompt for typed user input.
@@ -1515,13 +1518,15 @@ def run_scene_prop_edit(
     target: str,
     subject: str,
     video_prompt: str | None,
+    edit_mode: SceneEditMode | None,
     cpu_frames: list,
 ) -> tuple[ScenePropEditResponseData, list[np.ndarray]]:
     """Run a tile-driven prop edit on the last subframe and apply the
     result to the engine. Bypasses the VLM (the edit instruction is
     built deterministically from `kind` / `target` / `subject`); feeds
-    Klein both the scene and the decoded reference image. Mode is selected
-    per-`kind` (`PROP_EDIT_SPAWNABLE_MODE` / `PROP_EDIT_HOLDABLE_MODE`).
+    Klein both the scene and the decoded reference image. Mode is taken
+    from `edit_mode` if supplied, otherwise the per-`kind` default
+    (`PROP_EDIT_SPAWNABLE_MODE` / `PROP_EDIT_HOLDABLE_MODE`).
     `video_prompt` is forwarded to the video model when mode == "video".
     Returns the RPC preview plus tween frames the caller should stream."""
     world_engine = engines.world_engine
@@ -1560,7 +1565,8 @@ def run_scene_prop_edit(
         )
         raise SafetyRejectionError()
 
-    mode: SceneEditMode = PROP_EDIT_SPAWNABLE_MODE if kind == "spawnable" else PROP_EDIT_HOLDABLE_MODE
+    default_mode: SceneEditMode = PROP_EDIT_SPAWNABLE_MODE if kind == "spawnable" else PROP_EDIT_HOLDABLE_MODE
+    mode: SceneEditMode = edit_mode if edit_mode is not None else default_mode
     tween_frames = _apply_edit(
         world_engine, scene_authoring, last_frame_np, inpainted_np, inpainted, mode, video_prompt
     )
