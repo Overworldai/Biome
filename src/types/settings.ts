@@ -78,7 +78,6 @@ export const settingsSchema = z.object({
   engine_quant: QuantSchema.default('none'),
   cap_inference_fps: z.boolean().default(true),
   offline_mode: z.boolean().default(false),
-  custom_models: z.array(z.string()).default([]),
   mouse_sensitivity: sensitivitySchema,
   gamepad_sensitivity: sensitivitySchema,
   // Ordered list of scene filenames as shown in the pause-menu grid. Users

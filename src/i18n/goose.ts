@@ -95,7 +95,15 @@ const goose = {
             'Could not connect to {{url}}. The server may be down, the address may be wrong, or a fox may be blocking the path.\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.',
           secureTransportHint:
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
+        },
+        serverOwnManaged: {
+          title: "That's Biome's home pond",
+          description:
+            'It only fills up while Biome is in standalone mode. Waddle back to standalone, or point at an independent pond.'
         }
+      },
+      startup: {
+        startingEngine: 'Honking the World Engine awake...'
       },
       loading: {
         error: 'Error',
@@ -167,16 +175,26 @@ const goose = {
           checking: 'checking...',
           connected: 'connected',
           unreachable: 'unreachable',
+          ownManaged: "Biome's home pond",
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
           title: 'World Engine',
-          description: 'is the local engine in good feather?',
-          checking: 'checking...',
-          yes: 'yes',
-          no: 'no',
+          description: 'the goose that powers your sessions ·',
+          ready: 'in fine feather',
+          starting: 'ruffling feathers...',
+          notInstalled: 'no goose yet',
+          notInstalledNote:
+            "The goose will be hatched automatically once you start playing, but you can hatch it now if you'd like to fluff your settings first.",
+          failed: 'feathers ruffled wrong',
+          install: 'Hatch',
+          reinstall: 'Re-hatch',
           fixInPlace: 'Preen In Place',
-          totalReinstall: 'Full Molt'
+          totalReinstall: 'Full Molt',
+          notInstalledTooltip: 'Hatch the World Engine to change this',
+          startingTooltip: 'Wait for the World Engine to finish hatching',
+          failedTooltip: 'Preen the World Engine to change this',
+          viewLogs: 'peek at the nest'
         },
         performance: {
           title: 'Performance',
@@ -208,14 +226,10 @@ const goose = {
             'Which inference backend will drive the flock.\nWorld Engine is the trusty old waddler; Quark is our new fledgling with macOS feathers and then some.'
         },
         worldModel: {
-          local: 'local',
+          title: 'World Model',
+          description: 'which Overworld model will shape your pond?',
           download: 'download',
-          removeCustomModel: 'Remove custom model',
-          custom: 'Custom...',
-          checking: 'checking...',
-          modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
-          couldNotCheckModel: 'Could not check model',
           deleteLocalCache: 'Delete the model'
         },
         volume: {
@@ -298,7 +312,7 @@ const goose = {
           description: 'want to record your flight?',
           enabled: 'Record Gameplay',
           enabledDescription: "Saves smooth filmstrips at the model's full framerate.",
-          outputFolder: 'Nesting folder',
+          outputFolder: 'Nesting Folder',
           outputFolderHint: 'Leave blank to use the usual migration route.',
           browse: 'Waddle to folder...',
           manage: 'Manage Footage',

@@ -10,7 +10,8 @@ import { VortexProvider } from './context/vortex/VortexContext'
 import { AudioProvider } from './context/audio/AudioContext'
 import { useAudio } from './context/audio/audioContextValue'
 import AudioController from './components/audio/AudioController'
-import { useAppStartup } from './hooks/useAppStartup'
+import { EngineLifecycleProvider } from './context/engineLifecycle/EngineLifecycleContext'
+import { useEngineLifecycle } from './context/engineLifecycle/engineLifecycleContextValue'
 import { invoke } from './bridge'
 import type { AppUpdateInfo } from './types/ipc'
 import VideoContainer from './components/streaming/VideoContainer'
@@ -99,6 +100,14 @@ const AppShell = () => {
   } = usePortal()
   const { isStreaming, isUIActive, status: connectionStatus, prepareReturnToMainMenu } = useConnection()
   const sceneEditState = useSession().sceneEdit.state
+  const { state: lifecycleState } = useEngineLifecycle()
+  // The local-server boot pipeline runs in the background — the menu
+  // mounts immediately and the user can navigate while the engine
+  // finishes coming up. Engine-dependent controls (model picker,
+  // Launch click) gate on `lifecycleState.kind === 'ready'` rather than
+  // hiding the menu chrome; settings surfaces the live phase via
+  // WorldEngineSection's status dot.
+  const isLifecyclePreparing = lifecycleState.kind === 'preparing'
   useGamepadNavigation(isUIActive)
   const {
     getBackgroundVideoElement,
@@ -252,6 +261,13 @@ const AppShell = () => {
   }, [transitionPhase])
 
   const handleLaunch = () => {
+    // While the local server is still coming up, swallow the click rather
+    // than racing the warm-connect flow with the lifecycle's own start —
+    // both paths port-scan + spawn, and the Electron-side single-server
+    // guard would surface the conflict as an error if the second spawn
+    // arrives before the first lands. Settings shows the live phase via
+    // WorldEngineSection's status dot; the user can wait or check there.
+    if (isLifecyclePreparing) return
     if (
       portalState === portalStates.MAIN_MENU &&
       connectionStatus.kind !== 'connecting' &&
@@ -512,23 +528,22 @@ const AppShell = () => {
 }
 
 const App = () => {
-  // Run startup tasks (unpack server files, etc.)
-  useAppStartup()
-
   return (
     <SettingsProvider>
-      <AudioProvider>
-        <PortalProvider>
-          <StreamingProvider>
-            <VortexProvider>
-              <I18nSync />
-              {import.meta.env.DEV && <DevLocaleCycler />}
-              <AudioController />
-              <AppShell />
-            </VortexProvider>
-          </StreamingProvider>
-        </PortalProvider>
-      </AudioProvider>
+      <EngineLifecycleProvider>
+        <AudioProvider>
+          <PortalProvider>
+            <StreamingProvider>
+              <VortexProvider>
+                <I18nSync />
+                {import.meta.env.DEV && <DevLocaleCycler />}
+                <AudioController />
+                <AppShell />
+              </VortexProvider>
+            </StreamingProvider>
+          </PortalProvider>
+        </AudioProvider>
+      </EngineLifecycleProvider>
     </SettingsProvider>
   )
 }

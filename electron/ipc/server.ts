@@ -99,8 +99,20 @@ export function registerServerIpc(): void {
 
     // Base args for the server. Note that we use localhost for the host to prevent
     // the Windows firewall for asking for permissions to expose the server to
-    // the world
-    const baseServerArgs = ['run', 'python', '-u', 'main.py', '--host', '127.0.0.1', '--port', String(port)]
+    // the world. `--launched-from-standalone` flags this process as belonging
+    // to a Biome standalone install — the renderer reads the bit back from
+    // /health and uses it to refuse an own-managed URL in server mode.
+    const baseServerArgs = [
+      'run',
+      'python',
+      '-u',
+      'main.py',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--launched-from-standalone'
+    ]
 
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
     const serverArgs =
@@ -220,6 +232,22 @@ export function registerServerIpc(): void {
     })
   })
 
+  // Probe a Biome server's /health endpoint.
+  //
+  //   - `ok` mirrors reachability — true on 2xx, false on any error or
+  //     non-OK response.
+  //   - `capabilities` is parsed through the codegen'd
+  //     `ServerCapabilitiesSchema` so the option lists the server can
+  //     report stay in lockstep with the Pydantic source. Missing /
+  //     malformed / empty-axis capabilities degrade to `ok: true`
+  //     without `capabilities`, and the renderer falls back to its
+  //     client-side platform prediction.
+  //   - `launched_from_standalone` is the server's own
+  //     `launched_from_standalone` flag (set when Electron spawns the
+  //     server in standalone mode). The settings panel uses it to refuse
+  //     a server-mode URL that resolves to any standalone-managed
+  //     server, since saving that pairing invites the next mode switch
+  //     to tear the server down underneath the user.
   ipcMain.handle(
     'probe-server-health',
     async (_event, healthUrl: string, timeoutMs?: number): Promise<ServerHealthResult> => {
@@ -232,7 +260,7 @@ export function registerServerIpc(): void {
           method: 'GET',
           signal: controller.signal
         })
-        if (!response.ok) return { ok: false }
+        if (!response.ok) return { ok: false, launched_from_standalone: false }
 
         // Mark local managed server ready only when probe matches the running local server.
         try {
@@ -246,25 +274,27 @@ export function registerServerIpc(): void {
           // Ignore URL parse issues for readiness marking; fetch result is still returned.
         }
 
-        // Pull capabilities from the response body. Validation goes
-        // through the codegen'd `ServerCapabilitiesSchema` so the option
-        // lists the server can report stay in lockstep with the Pydantic
-        // source. Any failure mode — malformed JSON, missing `capabilities`,
-        // unrecognized enum values, empty axes — degrades to `ok: true`
-        // without `capabilities`, and the renderer falls back to its
-        // client-side platform prediction.
         try {
-          const body = (await response.json()) as { capabilities?: unknown }
+          const body = (await response.json()) as {
+            capabilities?: unknown
+            launched_from_standalone?: boolean
+          }
+          const launchedFromStandalone = body.launched_from_standalone === true
           const parsed = ServerCapabilitiesSchema.safeParse(body.capabilities)
           if (parsed.success && parsed.data.backends.length > 0 && parsed.data.quants.length > 0) {
-            return { ok: true, capabilities: parsed.data }
+            return {
+              ok: true,
+              capabilities: parsed.data,
+              launched_from_standalone: launchedFromStandalone
+            }
           }
+          return { ok: true, launched_from_standalone: launchedFromStandalone }
         } catch {
-          // Non-fatal — server reachable, no capability data.
+          // Non-fatal — server reachable, body unparseable.
         }
-        return { ok: true }
+        return { ok: true, launched_from_standalone: false }
       } catch {
-        return { ok: false }
+        return { ok: false, launched_from_standalone: false }
       } finally {
         clearTimeout(timer)
       }

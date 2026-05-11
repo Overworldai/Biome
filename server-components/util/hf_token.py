@@ -36,7 +36,7 @@ def resolve_hf_token() -> str | None:
     if token_path_env:
         p = Path(token_path_env)
         if p.is_file():
-            t = p.read_text().strip()
+            t = p.read_text(encoding="utf-8").strip()
             if t:
                 return t
     # 4. File at real user HF_HOME/token (use XDG_CACHE_HOME or ~/.cache,
@@ -45,13 +45,13 @@ def resolve_hf_token() -> str | None:
     if xdg:
         p = Path(xdg) / "huggingface" / "token"
         if p.is_file():
-            t = p.read_text().strip()
+            t = p.read_text(encoding="utf-8").strip()
             if t:
                 return t
     # 5. Default fallback: ~/.cache/huggingface/token
     p = Path.home() / ".cache" / "huggingface" / "token"
     if p.is_file():
-        t = p.read_text().strip()
+        t = p.read_text(encoding="utf-8").strip()
         if t:
             return t
     return None

@@ -7,7 +7,7 @@ import useWebSocket, {
   connectionError as wsConnectionError
 } from '../../hooks/engine/useWebSocket'
 import { useSettings } from '../../hooks/settings/settingsContextValue'
-import useEngineApi from '../../hooks/engine/useEngineApi'
+import { useEngineLifecycle } from '../engineLifecycle/engineLifecycleContextValue'
 import useSeedsDir from '../../hooks/seeds/useSeedsDir'
 import { createLogger } from '../../utils/logger'
 import { useConnectionActions } from '../../hooks/streaming/useConnectionActions'
@@ -21,8 +21,8 @@ import { useSceneEdit } from '../../hooks/streaming/useSceneEdit'
 import { useSessionInit } from '../../hooks/streaming/useSessionInit'
 import { useStreamingLifecycle } from '../../hooks/streaming/useStreamingLifecycle'
 import { useWarmConnection } from '../../hooks/streaming/useWarmConnection'
+import type { ServerCapabilities } from '../../types/ipc'
 import type { ConnectionContextValue } from './connection'
-import type { EngineContextValue } from './engine'
 import type { SessionContextValue } from './session'
 import type { FramesContextValue } from './frames'
 import type { InputContextValue } from './input'
@@ -38,27 +38,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const { settings, isStandaloneMode } = useSettings()
-  const {
-    status: engineStatus,
-    startServer,
-    stopServer,
-    isServerRunning,
-    serverPort,
-    isReady: engineReady,
-    checkStatus: checkEngineStatus,
-    checkServerReady,
-    checkServerRunning,
-    checkPortInUse,
-    probeServerHealth,
-    getLastServerExitTail,
-    serverLogPath,
-    setupEngine,
-    nukeAndReinstallEngine,
-    abortEngineInstall,
-    setupProgress,
-    isLoading: engineSetupInProgress,
-    error: engineSetupError
-  } = useEngineApi()
+  const lifecycle = useEngineLifecycle()
+  const { stopServer, isRunning: isServerRunning, check: checkEngineStatus, probeServerHealth } = lifecycle
   const {
     status: connectionStatus,
     statusStage,
@@ -93,12 +74,16 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const sceneEdit = useSceneEdit()
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
+  // Server-reported capability matrix. Populated by the URL-validation
+  // probe in the settings panel (via `setServerCapabilities` on the
+  // connection context) so the backend / quant dropdowns filter against
+  // what the active server can actually run before streaming starts. In
+  // standalone mode the client-side `predictedCapabilities()` fallback
+  // is good enough until the user fiddles with the URL field.
+  const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null)
 
   const {
     preConnectionStage,
-    isFreshInstall,
-    serverCapabilities,
-    setServerCapabilities,
     run: runWarmConnection,
     cancel: cancelWarmFlow,
     isCancelled: isWarmFlowCancelled
@@ -108,21 +93,22 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     offlineMode: settings.offline_mode ?? false,
     serverUrl: settings.server_url,
     engine: {
-      serverPort,
-      isServerRunning,
-      startServer,
-      checkServerReady,
-      checkServerRunning,
-      checkPortInUse,
       probeServerHealth,
-      getLastServerExitTail,
-      checkStatus: checkEngineStatus,
-      setupEngine
+      checkStatus: checkEngineStatus
     },
+    ensureReady: lifecycle.ensureReady,
     connect,
     clearWsLogs,
     onServerError: setEngineError
   })
+
+  // Loading-screen "First-time setup, takes 10-30 minutes" overlay flag.
+  // True while the lifecycle is mid-prepare — TerminalDisplay only mounts
+  // during the LOADING portal state, which the user reaches by clicking
+  // Launch, so a `preparing` state observed there means warm-connect's
+  // `ensureReady` triggered a reinstall. Initial-mount preparing happens
+  // before the user can click Launch and so never lands in TerminalDisplay.
+  const isFreshInstall = lifecycle.state.kind === 'preparing'
 
   const effectiveStatusStage = useMemo(() => statusStage ?? preConnectionStage, [statusStage, preConnectionStage])
 
@@ -335,37 +321,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     [frameId, latentGenMs, temporalCompression, inputLatency, frameTimelineRef]
   )
 
-  const engineValue = useMemo<EngineContextValue>(
-    () => ({
-      status: engineStatus,
-      isReady: engineReady,
-      isRunning: isServerRunning,
-      serverLogPath,
-      check: checkEngineStatus,
-      setup: {
-        inProgress: engineSetupInProgress,
-        progress: setupProgress,
-        error: engineSetupError,
-        run: setupEngine,
-        nukeAndReinstall: nukeAndReinstallEngine,
-        abort: abortEngineInstall
-      }
-    }),
-    [
-      engineStatus,
-      engineReady,
-      isServerRunning,
-      serverLogPath,
-      checkEngineStatus,
-      engineSetupInProgress,
-      setupProgress,
-      engineSetupError,
-      setupEngine,
-      nukeAndReinstallEngine,
-      abortEngineInstall
-    ]
-  )
-
   const seedsValue = useMemo<SeedsContextValue>(
     () => ({
       dir: seedsDir,
@@ -423,7 +378,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     <StreamingProviders
       values={{
         connection: connectionValue,
-        engine: engineValue,
         session: sessionValue,
         frames: framesValue,
         input: inputValue,

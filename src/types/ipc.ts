@@ -11,28 +11,26 @@ import type { PortalSparksTuning } from '../lib/portalSparksTuning'
 // logic — the IPC envelope stays unchanged.
 export type { ServerCapabilities }
 
-export type ModelAvailability = {
-  id: string
-  is_local: boolean
-}
-
 /** Result of a `/health` probe. `ok` covers reachability; `capabilities`
  *  comes from the response body and is the server's source-of-truth
  *  view of what it can run (matters in server mode where the remote
  *  may be on a different platform than the client). `capabilities` is
  *  absent on failed probes and on responses without the field (older
  *  servers, JSON-parse failures); the renderer falls back to
- *  client-side platform prediction in that case. */
+ *  client-side platform prediction in that case. `launched_from_standalone`
+ *  is true when the responding server is one Biome started itself
+ *  (used to refuse a "server" mode URL that points back at the
+ *  built-in standalone server). */
 export type ServerHealthResult = {
   ok: boolean
   capabilities?: ServerCapabilities
+  launched_from_standalone: boolean
 }
 
-export type ModelInfo = {
+export type PickerModel = {
   id: string
   size_bytes: number | null
-  exists: boolean
-  error: string | null
+  is_local: boolean
 }
 
 export type RuntimeDiagnosticsMeta = {
@@ -283,11 +281,14 @@ export type IpcCommandMap = {
   'get-settings-path-str': { args: []; return: string }
   'open-settings': { args: []; return: void }
 
-  // Models
-  'list-waypoint-models': { args: []; return: string[] }
-  'list-model-availability': { args: [modelIds: string[]]; return: ModelAvailability[] }
-  'get-models-info': { args: [modelIds: string[], serverUrl?: string]; return: ModelInfo[] }
-  'delete-cached-model': { args: [modelId: string]; return: void }
+  // Models — thin proxies to the WorldEngine server. `list-models`
+  // returns the canonical picker list (Waypoint collection ∪ cached,
+  // with size + cache-presence baked in); `delete-cached-model` mutates
+  // the active server's cache. The renderer doesn't talk to HuggingFace
+  // directly — the server is the single source of truth for what's
+  // available.
+  'list-models': { args: [serverUrl?: string]; return: PickerModel[] }
+  'delete-cached-model': { args: [modelId: string, serverUrl?: string]; return: void }
 
   // Engine
   'check-engine-status': { args: [source?: string]; return: EngineStatus }

@@ -46,7 +46,7 @@ const Modal = ({ title, children, onBackdropClick, onCancel }: ModalProps) => {
         "
       >
         <div onClick={onBackdropClick ? (e) => e.stopPropagation() : undefined}>
-          <h3 className="m-0 mb-[0.24cqh] font-serif text-[4.69cqh] font-medium wrap-break-word">{t(title)}</h3>
+          <h3 className="m-0 font-serif text-[4.69cqh] font-medium wrap-break-word">{t(title)}</h3>
           {children}
         </div>
       </FocusScope>

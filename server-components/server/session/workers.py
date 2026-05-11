@@ -27,11 +27,9 @@ from typing import TYPE_CHECKING
 import structlog
 from fastapi import WebSocketDisconnect
 from pydantic import ValidationError
-from world_engine import CtrlInput
 
 from engine import devices
 from engine.keymap import BUTTON_CODES
-from engine.scene_authoring import run_generate_scene, run_scene_edit
 from server.protocol import (
     CheckSeedSafetyRequest,
     ClientMessage,
@@ -298,6 +296,14 @@ def run_generator(
     scene futures at clean frame boundaries, applies frame pacing, and
     recovers from device errors via WorldEngineManager.recover_from_device_error.
     """
+    # Local imports: keep `world_engine` and `engine.scene_authoring` off the
+    # module-load path. By the time we get here the lazy engine init has
+    # already pulled the heavy stack in (it's a precondition for `engines`
+    # to exist), so these are cheap re-imports against `sys.modules`.
+    from world_engine import CtrlInput
+
+    from engine.scene_authoring import run_generate_scene, run_scene_edit
+
     world_engine = engines.world_engine
     pending: _PendingFlush | None = None
 

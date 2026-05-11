@@ -6,7 +6,11 @@
 *.toml text eol=lf
 *.json text eol=lf
 *.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
 *.ts text eol=lf
+*.cts text eol=lf
+*.mts text eol=lf
 *.tsx text eol=lf
 *.jsx text eol=lf
 *.css text eol=lf
@@ -15,6 +19,12 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.sh text eol=lf
+
+# Dotfile configs (no extension, fall through `* text=auto`)
+.prettierrc text eol=lf
+.prettierignore text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
 
 # Windows-specific files should use CRLF
 *.bat text eol=crlf
