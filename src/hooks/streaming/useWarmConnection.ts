@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StageId } from '../../stages'
 import type { TranslatableError } from '../../i18n'
+import type { ServerHealthResult } from '../../types/ipc'
 import { runWarmConnectionFlow, toTranslatableError } from '../../context/streaming/streamingWarmConnection'
 import type { UseEngineResult } from '../engine/useEngineApi'
 import type { LifecycleState } from '../../context/engineLifecycle/engineLifecycleContextValue'
@@ -47,6 +48,12 @@ export function useWarmConnection(opts: {
   clearWsLogs: () => void
   /** Sink for errors raised by the flow (or its outer catch). */
   onServerError: (err: TranslatableError) => void
+  /** Fired with the post-connect probe result so the provider can
+   *  feed server-reported capabilities into the connection slice
+   *  before the WS attaches. The settings UI's URL-validation probe
+   *  is the other write site for the same state — both share
+   *  `setServerCapabilities` on the connection context. */
+  onServerHealth: (result: ServerHealthResult) => void
 }): {
   preConnectionStage: StageId | null
   /** Trigger a fresh warm-connection attempt. The lifecycle effects
@@ -64,7 +71,8 @@ export function useWarmConnection(opts: {
     ensureReady,
     connect,
     clearWsLogs,
-    onServerError
+    onServerError,
+    onServerHealth
   } = opts
 
   const [trigger, setTrigger] = useState(0)
@@ -100,6 +108,9 @@ export function useWarmConnection(opts: {
       onServerError: handleServerError,
       onStage: (stageId) => {
         if (!cancelledRef.current) setPreConnectionStage(stageId)
+      },
+      onServerHealth: (result) => {
+        if (!cancelledRef.current) onServerHealth(result)
       },
       isCancelled: () => cancelledRef.current,
       log

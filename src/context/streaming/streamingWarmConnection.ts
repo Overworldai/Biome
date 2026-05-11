@@ -36,6 +36,11 @@ type WarmConnectionOptions = {
   connect: (wsUrl: string) => void
   onServerError: (error: TranslatableError) => void
   onStage: (stageId: StageId) => void
+  /** Fired with the post-connect probe result so the caller can feed
+   *  server-reported state (currently `capabilities`) into app state.
+   *  Called only on a successful probe; the failure path goes through
+   *  `onServerError` instead. */
+  onServerHealth: (result: ServerHealthResult) => void
   isCancelled: () => boolean
   log: { info: (...args: unknown[]) => void }
 }
@@ -102,6 +107,7 @@ export const runWarmConnectionFlow = async (opts: WarmConnectionOptions): Promis
     opts.onServerError(new TranslatableError('app.server.notResponding', { url: toHealthUrl(wsUrl) }))
     return
   }
+  opts.onServerHealth(health)
 
   if (opts.isCancelled()) return
   opts.log.info('Connecting to WebSocket endpoint:', wsUrl)

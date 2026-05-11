@@ -6,6 +6,7 @@ import {
   ENGINE_BACKEND_OPTIONS,
   ENGINE_MODES,
   QUANT_OPTIONS,
+  localhostUrl,
   type EngineBackend,
   type QuantOption,
   type Settings
@@ -39,18 +40,33 @@ type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error' | 'ownManaged'
 
 const isMac = navigator.platform.startsWith('Mac')
 
-/** Client-side prediction of the host's capability matrix, mirroring the
- *  server's `supported_capabilities()` helper. Used until the warm-flow
- *  `/health` probe lands the authoritative `serverCapabilities`, and as
- *  the standalone fallback for older servers / failed probes. CUDA gets
- *  the full set on both axes; Apple Silicon gets quark-only and `none`-only
- *  because the legacy `world_engine` package doesn't import there and
- *  quark's Metal subclass forces all-bf16 (INT8 / FP8 selections are
- *  silently overridden, so we hide them). */
-const predictedCapabilities = (): { backends: EngineBackend[]; quants: QuantOption[] } => {
-  if (isMac) return { backends: ['quark'], quants: ['none'] }
-  return { backends: [...ENGINE_BACKEND_OPTIONS], quants: [...QUANT_OPTIONS] }
-}
+/** Client-side prediction of the host's capability matrix, mirroring
+ *  `supported_capabilities()` on the server. Used until the `/health`
+ *  probe lands the authoritative `serverCapabilities`, and as the
+ *  fallback for older servers without the field.
+ *
+ *    - Apple Silicon: only `quark`, only `none`. The legacy `world_engine`
+ *      package is CUDA-only and doesn't import; `quark.EngineMetal`
+ *      internally forces all-bf16, so INT8 / FP8 are silently overridden.
+ *    - CUDA: both backends, with `quark` excluding `intw8a8` (no INT8
+ *      weight-only path on CUDA-quark today). `world_engine` keeps the
+ *      full set.
+ *
+ *  The quant map is keyed by backend so the dropdown reacts to an
+ *  in-flight backend toggle without a save + reconnect — same shape as
+ *  the server-reported `ServerCapabilities.quants`. `Partial` mirrors
+ *  the server's contract: entries exist only for backends listed in
+ *  `backends`, so a lookup for a non-advertised backend is `undefined`
+ *  rather than an empty array. */
+const PREDICTED_CAPABILITIES: {
+  backends: EngineBackend[]
+  quants: Partial<Record<EngineBackend, QuantOption[]>>
+} = isMac
+  ? { backends: ['quark'], quants: { quark: ['none'] } }
+  : {
+      backends: [...ENGINE_BACKEND_OPTIONS],
+      quants: { world_engine: [...QUANT_OPTIONS], quark: ['none', 'fp8w8a8'] }
+    }
 
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
@@ -116,19 +132,26 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   // is the source of truth — anywhere `serverCapabilities` is populated,
   // use it directly. Pre-probe (or on probe failure / older servers
   // without the field) fall back to the client-side platform prediction
-  // in `predictedCapabilities`.
-  const { effectiveBackendOptions, effectiveQuantOptions } = useMemo(() => {
-    const fallback = predictedCapabilities()
-    return {
-      effectiveBackendOptions: serverCapabilities ? [...serverCapabilities.backends] : fallback.backends,
-      effectiveQuantOptions: serverCapabilities ? [...serverCapabilities.quants] : fallback.quants
-    }
+  // in `predictedCapabilities`. The quant set is keyed by the in-flight
+  // backend selection so the dropdown reacts immediately when the user
+  // toggles between backends with different quant support (e.g. CUDA
+  // quark which excludes INT8 vs CUDA world_engine which supports it).
+  const effectiveBackendOptions = useMemo<EngineBackend[]>(() => {
+    if (serverCapabilities) return [...serverCapabilities.backends]
+    return PREDICTED_CAPABILITIES.backends
   }, [serverCapabilities])
+
+  const effectiveQuantOptions = useMemo<QuantOption[]>(() => {
+    const fromServer = serverCapabilities?.quants[menuEngineBackend]
+    if (fromServer && fromServer.length > 0) return [...fromServer]
+    return PREDICTED_CAPABILITIES.quants[menuEngineBackend] ?? []
+  }, [serverCapabilities, menuEngineBackend])
 
   // Snap each dropdown to a valid value when its effective set changes —
   // covers initial probe (where the server may report a tighter set than
-  // the saved value), engine-mode toggles (server vs standalone), and
-  // server-mode reconnects to a remote on a different platform.
+  // the saved value), engine-mode toggles (server vs standalone),
+  // server-mode reconnects to a remote on a different platform, and
+  // backend changes (when the new backend doesn't support the saved quant).
   useEffect(() => {
     if (effectiveBackendOptions.length > 0 && !effectiveBackendOptions.includes(menuEngineBackend)) {
       setMenuEngineBackend(effectiveBackendOptions[0])
@@ -261,6 +284,35 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       cancelled = true
     }
   }, [menuEngineMode, menuServerUrl, setServerCapabilities])
+
+  // Standalone counterpart: probe the local managed server's `/health`
+  // once the lifecycle reports it's up, so the backend / quant dropdowns
+  // clamp to what the local platform actually supports as soon as the
+  // user opens settings — without waiting for them to click Launch and
+  // run the warm flow. The warm flow remains the canonical write site
+  // when streaming starts; this is just an earlier population so the
+  // settings UI reflects truth pre-launch.
+  const standalonePort = lifecycle.status?.server_port ?? null
+  useEffect(() => {
+    if (menuEngineMode !== 'standalone') return
+    if (!engineReady) return
+    if (standalonePort === null) return
+
+    let cancelled = false
+    const probe = async () => {
+      try {
+        const result = await invoke('probe-server-health', toHealthUrl(localhostUrl(standalonePort)), 5000)
+        if (cancelled || !result.ok) return
+        setServerCapabilities(result.capabilities ?? null)
+      } catch {
+        // Non-fatal — leave existing capabilities (or fallback) in place.
+      }
+    }
+    void probe()
+    return () => {
+      cancelled = true
+    }
+  }, [menuEngineMode, engineReady, standalonePort, setServerCapabilities])
 
   const serverUrlForModels = menuEngineMode === 'server' ? menuServerUrl : undefined
   useEffect(() => {

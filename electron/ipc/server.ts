@@ -281,7 +281,14 @@ export function registerServerIpc(): void {
           }
           const launchedFromStandalone = body.launched_from_standalone === true
           const parsed = ServerCapabilitiesSchema.safeParse(body.capabilities)
-          if (parsed.success && parsed.data.backends.length > 0 && parsed.data.quants.length > 0) {
+          // Each backend the server advertises must carry at least one
+          // honourable quant; a half-populated matrix is worse than none
+          // since the renderer can't tell which backend got dropped.
+          const hasUsableMatrix =
+            parsed.success &&
+            parsed.data.backends.length > 0 &&
+            parsed.data.backends.every((b) => (parsed.data.quants[b] ?? []).length > 0)
+          if (hasUsableMatrix) {
             return {
               ok: true,
               capabilities: parsed.data,

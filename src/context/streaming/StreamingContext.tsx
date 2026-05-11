@@ -99,7 +99,8 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     ensureReady: lifecycle.ensureReady,
     connect,
     clearWsLogs,
-    onServerError: setEngineError
+    onServerError: setEngineError,
+    onServerHealth: (result) => setServerCapabilities(result.capabilities ?? null)
   })
 
   // Loading-screen "First-time setup, takes 10-30 minutes" overlay flag.

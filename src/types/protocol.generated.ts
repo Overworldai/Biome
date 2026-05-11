@@ -100,28 +100,30 @@ export type ErrorSnapshot = z.infer<typeof ErrorSnapshotSchema>
  * platform guesses are wrong in server mode where the remote may be
  * on a different platform than the client.
  *
- * Today the matrix is fully determined by the host platform:
+ * `quants` is keyed by `EngineBackend` because the supported quant
+ * set genuinely differs across backends on the same host:
  *
- *   - CUDA (Linux / Windows): both backends, all three quant modes.
- *   - Apple Silicon: quark only — the legacy `world_engine` package
- *     is CUDA-only and doesn't import on Apple. quark's Metal
- *     subclass internally forces all-bf16 (no native fp8 in MSL, no
- *     int8 KV path), so `none` is the only meaningful quant choice;
- *     anything else is silently overridden.
+ *   - CUDA + `world_engine`: all three modes (`none`, `fp8w8a8`,
+ *     `intw8a8`).
+ *   - CUDA + `quark`: `none` and `fp8w8a8`. Quark's CUDA path does
+ *     not implement INT8 weight-only quantisation today.
+ *   - Apple Silicon + `quark`: `none` only — `quark.EngineMetal`
+ *     internally forces all-bf16 (no native fp8 in MSL, no int8
+ *     KV path), so anything else is silently overridden. (Apple
+ *     Silicon doesn't offer `world_engine` at all — the legacy
+ *     package is CUDA-only.)
  *
- * The shape is a flat pair of lists rather than a per-backend map
- * because the current matrix doesn't vary across backends on a given
- * platform. If a future backend ships with different quant support
- * on the same host, the schema can split `quants` into a per-backend
- * dict without touching call sites — the renderer's filter logic
- * only cares about the final flat set per axis. Surfaced through
- * HTTP rather than WS (lives in `routes.HealthResponse`), but kept
- * here so the codegen mirrors it to a Zod schema + TS type the
- * renderer reuses for both shape parsing and the connection slice.
+ * The dict only contains entries for backends in `backends`; the
+ * renderer indexes by the in-flight backend selection so the quant
+ * dropdown reacts instantly to a backend toggle without a save +
+ * reconnect round-trip. Surfaced through HTTP rather than WS (lives
+ * in `routes.HealthResponse`), but kept here so the codegen mirrors
+ * it to a Zod schema + TS type the renderer reuses for both shape
+ * parsing and the connection slice.
  */
 export const ServerCapabilitiesSchema = z.object({
   backends: z.array(EngineBackendSchema),
-  quants: z.array(QuantSchema)
+  quants: z.record(EngineBackendSchema, z.array(QuantSchema))
 })
 export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>
 

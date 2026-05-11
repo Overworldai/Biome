@@ -27,16 +27,17 @@ export const buildSessionConfig = async (
   const videoOutputDir = recordingEnabled
     ? ((await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')) ?? null)
     : null
-  const savedQuant = settings.engine_quant ?? 'none'
-  const quant: QuantOption =
-    serverCapabilities && !serverCapabilities.quants.includes(savedQuant)
-      ? (serverCapabilities.quants[0] ?? 'none')
-      : savedQuant
+  // Backend clamp first, then quant — the quant set is keyed off the
+  // post-clamp backend, since `capabilities.quants` is per-backend.
   const savedBackend = settings.engine_backend ?? 'world_engine'
   const engine_backend: EngineBackend =
     serverCapabilities && !serverCapabilities.backends.includes(savedBackend)
       ? (serverCapabilities.backends[0] ?? 'world_engine')
       : savedBackend
+  const savedQuant = settings.engine_quant ?? 'none'
+  const backendQuants = serverCapabilities?.quants[engine_backend]
+  const quant: QuantOption =
+    backendQuants && !backendQuants.includes(savedQuant) ? (backendQuants[0] ?? 'none') : savedQuant
   return {
     quant: quant !== 'none' ? quant : undefined,
     engine_backend,

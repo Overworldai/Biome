@@ -64,10 +64,25 @@ def supported_capabilities() -> ServerCapabilities:
     branch — its capabilities are still the CUDA set even though the
     actual load will fail when no GPU is present, which is the right
     failure mode (the renderer offers the real options; load_engine
-    surfaces the no-GPU error)."""
+    surfaces the no-GPU error).
+
+    Per-backend asymmetry on CUDA: `quark` doesn't currently implement
+    INT8 weight-only quantisation on the CUDA path, so it advertises
+    `none` + `fp8w8a8` only. `world_engine` keeps the full set. The
+    `ServerCapabilities` docstring is the canonical reference for the
+    matrix — keep both in sync if the support story changes."""
     if IS_DARWIN_ARM64:
-        return ServerCapabilities(backends=[EngineBackend.QUARK], quants=[Quant.NONE])
-    return ServerCapabilities(backends=list(EngineBackend), quants=list(Quant))
+        return ServerCapabilities(
+            backends=[EngineBackend.QUARK],
+            quants={EngineBackend.QUARK: [Quant.NONE]},
+        )
+    return ServerCapabilities(
+        backends=list(EngineBackend),
+        quants={
+            EngineBackend.WORLD_ENGINE: list(Quant),
+            EngineBackend.QUARK: [Quant.NONE, Quant.FP8W8A8],
+        },
+    )
 
 
 def _resolve_backend(backend: EngineBackend) -> tuple[type, type]:
