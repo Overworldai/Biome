@@ -192,7 +192,8 @@ const en = {
           totalReinstall: 'Total Reinstall',
           notInstalledTooltip: 'Install World Engine to change this',
           startingTooltip: 'Wait for World Engine to finish starting',
-          failedTooltip: 'Fix World Engine to change this'
+          failedTooltip: 'Fix World Engine to change this',
+          viewLogs: 'view logs'
         },
         performance: {
           title: 'Performance Settings',

@@ -193,7 +193,8 @@ const goose = {
           totalReinstall: 'Full Molt',
           notInstalledTooltip: 'Hatch the World Engine to change this',
           startingTooltip: 'Wait for the World Engine to finish hatching',
-          failedTooltip: 'Preen the World Engine to change this'
+          failedTooltip: 'Preen the World Engine to change this',
+          viewLogs: 'peek at the nest'
         },
         performance: {
           title: 'Performance Settings',

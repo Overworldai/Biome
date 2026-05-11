@@ -191,7 +191,8 @@ const ja = {
           totalReinstall: '完全再インストール',
           notInstalledTooltip: '変更するにはワールドエンジンをインストールしてください',
           startingTooltip: 'ワールドエンジンの起動が完了するまでお待ちください',
-          failedTooltip: '変更するにはワールドエンジンを修復してください'
+          failedTooltip: '変更するにはワールドエンジンを修復してください',
+          viewLogs: 'ログを表示'
         },
         performance: {
           title: 'パフォーマンス設定',

@@ -334,31 +334,32 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
   }, [showDeleteCacheModal, serverUrlForModels])
 
-  // `reinstallEngine` orchestrates stop → install → start as one unit; the
-  // returned terminal state lets us auto-close the install-log modal on
-  // success while leaving it open on `failed` so the user can read the
-  // crash output and decide whether to retry. Errors also surface through
-  // the engine-log IPC stream the modal already tails.
-  const runReinstallAndAutoClose = async (mode: 'fix' | 'nuke') => {
+  // `reinstallEngine` orchestrates stop → install → start as one unit.
+  // The modal stays open across the whole pipeline — including the
+  // terminal `ready` state — so the user sees the green "Complete." dot
+  // and dismisses on their own. The "view logs" affordance on
+  // WorldEngineSection opens the same modal mid-flight, so closing on
+  // `ready` would race with anyone who tabbed away and came back to
+  // check status.
+  const runReinstall = async (mode: 'fix' | 'nuke') => {
     setShowLocalInstallLog(true)
-    const result = await lifecycle.reinstallEngine(mode)
-    if (result.kind === 'ready') setShowLocalInstallLog(false)
+    await lifecycle.reinstallEngine(mode)
   }
 
   const handleConfirmFixEngine = async () => {
     setShowFixModal(false)
-    await runReinstallAndAutoClose('fix')
+    await runReinstall('fix')
   }
 
   const handleConfirmNukeEngine = async () => {
     setShowNukeModal(false)
-    await runReinstallAndAutoClose('nuke')
+    await runReinstall('nuke')
   }
 
   // First-time install (and recovery from `failed`) goes through the same
   // pipeline; `reinstallEngine('fix')` is identical to a fresh install
   // when there's nothing to nuke.
-  const handleInstallEngine = () => runReinstallAndAutoClose('fix')
+  const handleInstallEngine = () => runReinstall('fix')
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>
@@ -435,6 +436,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
           onFixInPlaceClick={() => setShowFixModal(true)}
           onTotalReinstallClick={() => setShowNukeModal(true)}
           onInstallClick={() => void handleInstallEngine()}
+          onViewStartupLogsClick={() => setShowLocalInstallLog(true)}
         />
       )}
 

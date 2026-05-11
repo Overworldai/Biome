@@ -183,7 +183,8 @@ const zh = {
           totalReinstall: '全部重装',
           notInstalledTooltip: '安装世界引擎以更改此项',
           startingTooltip: '等待世界引擎启动完成',
-          failedTooltip: '修复世界引擎以更改此项'
+          failedTooltip: '修复世界引擎以更改此项',
+          viewLogs: '查看日志'
         },
         performance: {
           title: '性能设置',

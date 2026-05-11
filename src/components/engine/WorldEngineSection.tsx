@@ -11,6 +11,9 @@ type WorldEngineSectionProps = {
   onFixInPlaceClick: () => void
   onTotalReinstallClick: () => void
   onInstallClick: () => void
+  /** Open the startup-log modal so the user can watch the engine come up
+   *  while the lifecycle is still `preparing`. EngineTab owns the modal. */
+  onViewStartupLogsClick: () => void
 }
 
 /** Status indicator + install/repair affordance for the standalone-managed
@@ -23,7 +26,12 @@ type WorldEngineSectionProps = {
  *
  *  The user can reach this view at any phase (the splash is dismissable
  *  by design now), so the dot acts as the at-a-glance state signal. */
-const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstallClick }: WorldEngineSectionProps) => {
+const WorldEngineSection = ({
+  onFixInPlaceClick,
+  onTotalReinstallClick,
+  onInstallClick,
+  onViewStartupLogsClick
+}: WorldEngineSectionProps) => {
   const { t } = useTranslation()
   const { state } = useEngineLifecycle()
 
@@ -76,9 +84,17 @@ const WorldEngineSection = ({ onFixInPlaceClick, onTotalReinstallClick, onInstal
     <SettingsSection
       title="app.settings.worldEngine.title"
       rawDescription={
-        <span className="inline-flex items-center gap-[0.71cqh]">
+        <span className="inline-flex flex-wrap items-center gap-[0.71cqh]">
           {t('app.settings.worldEngine.description')} {statusLabel}
           {dot}
+          {state.kind === 'preparing' && (
+            <>
+              {'·'}
+              <a className="cursor-pointer text-inherit underline" onClick={onViewStartupLogsClick}>
+                {t('app.settings.worldEngine.viewLogs')}
+              </a>
+            </>
+          )}
         </span>
       }
     >
