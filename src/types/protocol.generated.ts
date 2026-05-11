@@ -13,7 +13,7 @@ import { z } from 'zod'
 
 // ─── Constants ────────────────────────────────────────────────────────
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 // ─── Enums ────────────────────────────────────────────────────────────
 

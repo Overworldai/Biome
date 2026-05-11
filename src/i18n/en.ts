@@ -94,7 +94,15 @@ const en = {
             'Could not connect to {{url}}. The server may be down, the URL may be wrong, or a firewall may be blocking the connection.\n\nHTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.',
           secureTransportHint:
             'HTTPS and WSS are not supported by default; if you are connecting directly to the Biome server, try using HTTP or WS instead.'
+        },
+        serverOwnManaged: {
+          title: "That's Biome's built-in server",
+          description:
+            'It only runs while Biome is in standalone mode. Switch back to standalone, or point at an independent server.'
         }
+      },
+      startup: {
+        startingEngine: 'Starting World Engine...'
       },
       loading: {
         error: 'Error',
@@ -166,16 +174,26 @@ const en = {
           checking: 'checking...',
           connected: 'connected',
           unreachable: 'unreachable',
+          ownManaged: "Biome's built-in server",
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
           title: 'World Engine',
-          description: 'is the local engine healthy?',
-          checking: 'checking...',
-          yes: 'yes',
-          no: 'no',
+          description: 'the engine that runs your sessions ·',
+          ready: 'ready',
+          starting: 'starting...',
+          notInstalled: 'not installed',
+          notInstalledNote:
+            "The engine will be automatically installed once you start playing, but you can install it now if you'd like to configure settings first.",
+          failed: 'failed',
+          install: 'Install',
+          reinstall: 'Reinstall',
           fixInPlace: 'Fix In Place',
-          totalReinstall: 'Total Reinstall'
+          totalReinstall: 'Total Reinstall',
+          notInstalledTooltip: 'Install World Engine to change this',
+          startingTooltip: 'Wait for World Engine to finish starting',
+          failedTooltip: 'Fix World Engine to change this',
+          viewLogs: 'view logs'
         },
         performance: {
           title: 'Performance Settings',
@@ -195,14 +213,8 @@ const en = {
         worldModel: {
           title: 'World Model',
           description: 'which Overworld model will simulate your world?',
-          local: 'local',
           download: 'download',
-          removeCustomModel: 'Remove custom model',
-          custom: 'Custom...',
-          checking: 'checking...',
-          modelNotFound: 'Model not found',
           couldNotLoadModelList: 'Could not load model list',
-          couldNotCheckModel: 'Could not check model',
           deleteLocalCache: 'Delete the model'
         },
         volume: {

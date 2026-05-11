@@ -94,7 +94,15 @@ const ja = {
             '{{url}} に接続できませんでした。サーバー停止、URL の誤り、またはファイアウォールが原因の可能性があります。\n\nHTTPS と WSS は既定ではサポートされていません。Biome サーバーへ直接接続する場合は HTTP または WS を試してください。',
           secureTransportHint:
             'HTTPS と WSS は既定ではサポートされていません。Biome サーバーへ直接接続する場合は HTTP または WS を試してください。'
+        },
+        serverOwnManaged: {
+          title: 'Biome の組み込みサーバーです',
+          description:
+            'スタンドアロンモードでのみ動作します。スタンドアロンモードに戻すか、独立したサーバーを指定してください。'
         }
+      },
+      startup: {
+        startingEngine: 'ワールドエンジンを起動中...'
       },
       loading: {
         error: 'エラー',
@@ -165,16 +173,26 @@ const ja = {
           checking: '確認中...',
           connected: '接続済み',
           unreachable: '接続不可',
+          ownManaged: 'Biome の組み込みサーバー',
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
           title: 'ワールドエンジン',
-          description: 'ローカルエンジンは正常ですか？',
-          checking: '確認中...',
-          yes: 'はい',
-          no: 'いいえ',
+          description: 'セッションを実行するエンジン ·',
+          ready: '準備完了',
+          starting: '起動中...',
+          notInstalled: '未インストール',
+          notInstalledNote:
+            'プレイを開始するとエンジンが自動的にインストールされますが、先に設定を調整したい場合は今すぐインストールできます。',
+          failed: '失敗',
+          install: 'インストール',
+          reinstall: '再インストール',
           fixInPlace: 'その場で修復',
-          totalReinstall: '完全再インストール'
+          totalReinstall: '完全再インストール',
+          notInstalledTooltip: '変更するにはワールドエンジンをインストールしてください',
+          startingTooltip: 'ワールドエンジンの起動が完了するまでお待ちください',
+          failedTooltip: '変更するにはワールドエンジンを修復してください',
+          viewLogs: 'ログを表示'
         },
         performance: {
           title: 'パフォーマンス設定',
@@ -194,14 +212,8 @@ const ja = {
         worldModel: {
           title: 'ワールドモデル',
           description: 'どの Overworld モデルで世界をシミュレートしますか？',
-          local: 'ローカル',
           download: 'ダウンロード',
-          removeCustomModel: 'カスタムモデルを削除',
-          custom: 'カスタム...',
-          checking: '確認中...',
-          modelNotFound: 'モデルが見つかりません',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
-          couldNotCheckModel: 'モデルを確認できませんでした',
           deleteLocalCache: 'モデルを削除'
         },
         volume: {

@@ -91,7 +91,14 @@ const he = {
             'לא ניתן להתחבר אל {{url}}. ייתכן שהשרת כבוי, שהכתובת שגויה, או שחומת אש חוסמת את החיבור.\n\nHTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.',
           secureTransportHint:
             'HTTPS ו-WSS אינם נתמכים כברירת מחדל; אם אתה מתחבר ישירות לשרת Biome, נסה להשתמש ב-HTTP או WS במקום.'
+        },
+        serverOwnManaged: {
+          title: 'זה השרת המובנה של Biome',
+          description: 'הוא פועל רק כש-Biome במצב standalone. חזור למצב standalone, או הצבע על שרת עצמאי.'
         }
+      },
+      startup: {
+        startingEngine: 'מפעיל את World Engine...'
       },
       loading: {
         error: 'שגיאה',
@@ -161,16 +168,25 @@ const he = {
           checking: 'בודק...',
           connected: 'מחובר',
           unreachable: 'לא זמין',
+          ownManaged: 'השרת המובנה של Biome',
           placeholder: 'http://localhost:7987'
         },
         worldEngine: {
           title: 'מנוע העולם',
-          description: 'האם המנוע המקומי תקין?',
-          checking: 'בודק...',
-          yes: 'כן',
-          no: 'לא',
+          description: 'המנוע שמריץ את ההפעלות שלך ·',
+          ready: 'מוכן',
+          starting: 'מפעיל...',
+          notInstalled: 'לא מותקן',
+          notInstalledNote: 'המנוע יותקן אוטומטית כשתתחיל לשחק, אבל אפשר להתקין עכשיו אם תרצה להגדיר דברים קודם.',
+          failed: 'נכשל',
+          install: 'התקן',
+          reinstall: 'התקן מחדש',
           fixInPlace: 'תקן במקום',
-          totalReinstall: 'התקנה מחדש מלאה'
+          totalReinstall: 'התקנה מחדש מלאה',
+          notInstalledTooltip: 'התקן את World Engine כדי לשנות את זה',
+          startingTooltip: 'המתן עד ש-World Engine יסיים לעלות',
+          failedTooltip: 'תקן את World Engine כדי לשנות את זה',
+          viewLogs: 'הצג לוגים'
         },
         performance: {
           title: 'הגדרות ביצועים',
@@ -190,14 +206,8 @@ const he = {
         worldModel: {
           title: 'מודל עולם',
           description: 'איזה מודל Overworld ידמה את העולם שלך?',
-          local: 'מקומי',
           download: 'הורדה',
-          removeCustomModel: 'הסר מודל מותאם אישית',
-          custom: 'מותאם אישית...',
-          checking: 'בודק...',
-          modelNotFound: 'המודל לא נמצא',
           couldNotLoadModelList: 'לא ניתן לטעון את רשימת המודלים',
-          couldNotCheckModel: 'לא ניתן לבדוק את המודל',
           deleteLocalCache: 'מחק את המודל'
         },
         volume: {

@@ -141,8 +141,17 @@ export const useBackgroundCycle = (pauseTransitions = false): BackgroundCycleSta
           setCurrentIndex(0)
           setPortalIndex(urls.length > 1 ? 1 : 0)
           setPortalVisible(true)
-          // Don't trigger enter yet — usePortalMediaMount will call
-          // triggerPortalEnter once the video has decoded its first frame.
+          // Spawn-in animation runs the first time the portal mounts.
+          // Setting `isPortalEntering` here (rather than later, on
+          // `usePortalMediaMount`'s onInitialPreviewReady) ensures the
+          // `.entering` class is on the first frame the portal renders,
+          // so the keyframe runs from its starting state instead of
+          // snapping in at full size for one frame. The startup splash
+          // gates the portal mount until after this effect commits, so
+          // the timing is reliable in standalone mode; in remote-server
+          // mode the portal still sees the flag from frame 1 because
+          // this load effect runs before any portal-bearing render.
+          setIsPortalEntering(true)
         }
       } catch (err) {
         console.error('Failed to load background videos:', err)

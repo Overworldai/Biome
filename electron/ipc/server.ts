@@ -97,8 +97,20 @@ export function registerServerIpc(): void {
 
     // Base args for the server. Note that we use localhost for the host to prevent
     // the Windows firewall for asking for permissions to expose the server to
-    // the world
-    const baseServerArgs = ['run', 'python', '-u', 'main.py', '--host', '127.0.0.1', '--port', String(port)]
+    // the world. `--launched-from-standalone` flags this process as belonging
+    // to a Biome standalone install — the renderer reads the bit back from
+    // /health and uses it to refuse an own-managed URL in server mode.
+    const baseServerArgs = [
+      'run',
+      'python',
+      '-u',
+      'main.py',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--launched-from-standalone'
+    ]
 
     // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
     const serverArgs =
@@ -218,6 +230,15 @@ export function registerServerIpc(): void {
     })
   })
 
+  // Probe a Biome server's /health endpoint.
+  //
+  //   - `reachable` mirrors the previous boolean return — true on 2xx, false
+  //     on any error / non-OK response.
+  //   - `launched_from_standalone` is the server's `launched_from_standalone`
+  //     flag (set when Electron spawns the server in standalone mode). The
+  //     settings panel uses it to refuse a server-mode URL that resolves to
+  //     any standalone-managed server, since saving that pairing invites the
+  //     next mode switch to tear the server down underneath the user.
   ipcMain.handle('probe-server-health', async (_event, healthUrl: string, timeoutMs?: number) => {
     const timeout = Math.max(500, Math.min(10000, Number(timeoutMs ?? 2500)))
     const controller = new AbortController()
@@ -228,22 +249,24 @@ export function registerServerIpc(): void {
         method: 'GET',
         signal: controller.signal
       })
-      if (response.ok) {
-        // Mark local managed server ready only when probe matches the running local server.
-        try {
-          const parsed = new URL(healthUrl)
-          const parsedPort = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
-          const state = getServerState()
-          if (state.process && state.port === parsedPort && isLocalhost(parsed.hostname)) {
-            setServerReady()
-          }
-        } catch {
-          // Ignore URL parse issues for readiness marking; fetch result is still returned.
+      if (!response.ok) return { reachable: false, launched_from_standalone: false }
+
+      // Mark local managed server ready only when the probe matches our running local server.
+      try {
+        const parsed = new URL(healthUrl)
+        const parsedPort = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
+        const state = getServerState()
+        if (state.process && state.port === parsedPort && isLocalhost(parsed.hostname)) {
+          setServerReady()
         }
+      } catch {
+        // Ignore URL parse issues for readiness marking; the rest of the response is still useful.
       }
-      return response.ok
+
+      const body = (await response.json()) as { launched_from_standalone?: boolean }
+      return { reachable: true, launched_from_standalone: body.launched_from_standalone === true }
     } catch {
-      return false
+      return { reachable: false, launched_from_standalone: false }
     } finally {
       clearTimeout(timer)
     }

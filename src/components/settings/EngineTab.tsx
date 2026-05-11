@@ -1,10 +1,11 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '../../bridge'
 import { SETTINGS_MUTED_TEXT } from '../../styles'
 import { ENGINE_MODES, QUANT_OPTIONS, type QuantOption, type Settings } from '../../types/settings'
-import { useSettings } from '../../hooks/settings/settingsContextValue'
-import { useEngine } from '../../context/streaming/engine'
+import type { TranslationKey } from '../../i18n'
+import { useEngineLifecycle, type LifecycleState } from '../../context/engineLifecycle/engineLifecycleContextValue'
+import { useConnection } from '../../context/streaming/connection'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -18,11 +19,16 @@ import EngineInstallModal from '../engine/EngineInstallModal'
 
 type MenuModelOption = {
   id: string
-  isLocal: boolean | null
+  isLocal: boolean
   sizeBytes: number | null
 }
 
-type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error'
+/** Outcome of the server-URL validation probe. `error` covers
+ *  unreachable / 4xx / 5xx; `ownManaged` is the special case where the
+ *  URL resolves to *this* Biome's local managed standalone server —
+ *  saving server-mode with that URL would teardown the server during
+ *  the mode switch and immediately disconnect the user. */
+type ServerUrlStatus = 'idle' | 'loading' | 'valid' | 'error' | 'ownManaged'
 
 const isMac = navigator.platform.startsWith('Mac')
 /** On macOS only INT8 is supported; on Windows/Linux both FP8 and INT8 are available. */
@@ -31,6 +37,23 @@ const availableQuantOptions = QUANT_OPTIONS.filter((q) => !isMac || q !== 'fp8w8
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+/** Tooltip explaining why a standalone-mode-gated control is disabled.
+ *  Mirrors the lifecycle's terminal-vs-transient states so the user
+ *  knows whether to wait, fix, or install. Returns undefined for
+ *  `ready` since enabled controls don't need a tooltip. */
+const standaloneTooltip = (kind: LifecycleState['kind']): TranslationKey | undefined => {
+  switch (kind) {
+    case 'not_installed':
+      return 'app.settings.worldEngine.notInstalledTooltip'
+    case 'preparing':
+      return 'app.settings.worldEngine.startingTooltip'
+    case 'failed':
+      return 'app.settings.worldEngine.failedTooltip'
+    case 'ready':
+      return undefined
+  }
 }
 
 export type EngineTabHandle = {
@@ -54,14 +77,14 @@ type EngineTabProps = {
 const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
-  const { saveSettings } = useSettings()
-  const engine = useEngine()
-  const checkEngine = engine.check
+  const lifecycle = useEngineLifecycle()
+  const { isStreaming } = useConnection()
+  const checkEngine = lifecycle.check
+  const engineReady = lifecycle.state.kind === 'ready'
 
   const configEngineMode = settings.engine_mode
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
-  const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
 
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
@@ -73,10 +96,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   ])
   const [menuModelsLoading, setMenuModelsLoading] = useState(false)
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
-  const [customModelStatus, setCustomModelStatus] = useState<{
-    state: 'idle' | 'loading' | 'error'
-    error: string | null
-  }>({ state: 'idle', error: null })
 
   const [serverUrlStatus, setServerUrlStatus] = useState<ServerUrlStatus>('idle')
   const [lastValidatedServerUrl, setLastValidatedServerUrl] = useState('')
@@ -90,10 +109,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const serverUrlUsesSecureTransport = /^\s*wss?:\/\//i.test(menuServerUrl)
     ? /^\s*wss:\/\//i.test(menuServerUrl)
     : /^\s*https:\/\//i.test(menuServerUrl)
-
-  const engineReady = engine.status
-    ? engine.status.uv_installed && engine.status.repo_cloned && engine.status.dependencies_synced
-    : null
 
   useImperativeHandle(
     ref,
@@ -150,6 +165,28 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     }
   }, [menuEngineMode, checkEngine])
 
+  // Speculatively drive the engine lifecycle from the menu's draft toggle so
+  // the model picker has a working server to query before the user clicks
+  // Save. Skipped while streaming — flipping the toggle mid-session would
+  // tear down the active engine; the existing restart-confirm modal in
+  // MenuSettingsView still gates that case at save-time.
+  const setDraftStandalone = lifecycle.setDraftStandalone
+  useEffect(() => {
+    if (isStreaming) return
+    setDraftStandalone(menuEngineMode === 'standalone')
+  }, [menuEngineMode, isStreaming, setDraftStandalone])
+
+  // Clear the override on unmount so the lifecycle reverts to the saved
+  // setting — handles the back-out-without-saving path. Separated from the
+  // sync-effect above so toggling within the menu doesn't briefly null the
+  // override between cleanup and re-set.
+  useEffect(
+    () => () => {
+      setDraftStandalone(null)
+    },
+    [setDraftStandalone]
+  )
+
   const serverUrlStatusRef = useRef(serverUrlStatus)
   serverUrlStatusRef.current = serverUrlStatus
   useEffect(() => {
@@ -162,13 +199,15 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setServerUrlStatus('loading')
       try {
         const normalizedUrl = normalizeServerUrl(menuServerUrl)
-        const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+        const identity = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
         if (cancelled) return
-        if (ok) {
+        if (!identity.reachable) {
+          setServerUrlStatus('error')
+        } else if (identity.launched_from_standalone) {
+          setServerUrlStatus('ownManaged')
+        } else {
           setServerUrlStatus('valid')
           setLastValidatedServerUrl(normalizedUrl)
-        } else {
-          setServerUrlStatus('error')
         }
       } catch {
         if (!cancelled) setServerUrlStatus('error')
@@ -187,6 +226,17 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setMenuModelsLoading(false)
       return
     }
+    // In standalone mode the metadata calls hit the local managed server,
+    // so they only succeed once the engine is up. While preparing /
+    // not_installed / failed, fall back to a single-default placeholder
+    // so the picker isn't empty; this effect re-fires on the engineReady
+    // transition and refetches when the server comes online (e.g. after
+    // an Install click finishes).
+    if (menuEngineMode === 'standalone' && !engineReady) {
+      setMenuModelOptions([{ id: menuWorldModel, isLocal: false, sizeBytes: null }])
+      setMenuModelsLoading(false)
+      return
+    }
 
     let cancelled = false
 
@@ -194,30 +244,24 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
       setMenuModelsLoading(true)
       setMenuModelsError(null)
       try {
-        const remoteModels = await invoke('list-waypoint-models')
+        const models = await invoke('list-models', serverUrlForModels)
         if (cancelled) return
 
-        const ids = [
-          ...new Set([menuWorldModel, ...(Array.isArray(remoteModels) ? remoteModels : []), ...savedCustomModels])
-        ]
-          .map((id) => id.trim())
-          .filter((id) => id.length > 0)
-
-        const [availability, modelsInfo] = await Promise.all([
-          invoke('list-model-availability', ids),
-          invoke('get-models-info', ids, serverUrlForModels)
-        ])
-        if (cancelled) return
-
-        const availabilityMap = new Map((availability || []).map((entry) => [entry.id, !!entry.is_local]))
-        const infoMap = new Map((modelsInfo || []).map((entry) => [entry.id, entry]))
-        setMenuModelOptions(
-          ids.map((id) => ({
-            id,
-            isLocal: availabilityMap.get(id) ?? false,
-            sizeBytes: infoMap.get(id)?.size_bytes ?? null
-          }))
-        )
+        // Pin the currently-selected model into the list even if the
+        // server doesn't report it (e.g. user has a stale config from
+        // before the model was retired from the Waypoint collection and
+        // they've since cleared their cache). Without this the picker
+        // would render with no selected option.
+        const haveSelected = models.some((m) => m.id === menuWorldModel)
+        const options: MenuModelOption[] = models.map((m) => ({
+          id: m.id,
+          isLocal: m.is_local,
+          sizeBytes: m.size_bytes
+        }))
+        if (!haveSelected && menuWorldModel.trim()) {
+          options.unshift({ id: menuWorldModel, isLocal: false, sizeBytes: null })
+        }
+        setMenuModelOptions(options)
       } catch {
         if (cancelled) return
         setMenuModelsError(t('app.settings.worldModel.couldNotLoadModelList'))
@@ -233,7 +277,7 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, savedCustomModels, t])
+  }, [menuWorldModel, menuEngineMode, serverUrlForModels, serverUrlStatus, t, engineReady])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
@@ -243,7 +287,6 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
   const handleWorldModelChange = (model: string) => {
     setMenuWorldModel(model.trim())
-    setCustomModelStatus({ state: 'idle', error: null })
   }
 
   const handleServerUrlBlur = useCallback(async () => {
@@ -264,13 +307,16 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
     setServerUrlStatus('loading')
     try {
-      const ok = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
-      if (ok) {
-        setServerUrlStatus('valid')
-        setLastValidatedServerUrl(normalizedUrl)
-      } else {
+      const identity = await invoke('probe-server-health', toHealthUrl(normalizedUrl), 5000)
+      if (!identity.reachable) {
         setServerUrlStatus('error')
         setShowServerErrorModal(true)
+      } else if (identity.launched_from_standalone) {
+        setServerUrlStatus('ownManaged')
+        setShowServerErrorModal(true)
+      } else {
+        setServerUrlStatus('valid')
+        setLastValidatedServerUrl(normalizedUrl)
       }
     } catch {
       setServerUrlStatus('error')
@@ -278,72 +324,42 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     }
   }, [menuServerUrl, lastValidatedServerUrl, serverUrlStatus])
 
-  const handleCustomModelBlur = useCallback(
-    async (modelId: string) => {
-      if (menuModelOptions.some((m) => m.id === modelId)) return
-      setCustomModelStatus({ state: 'loading', error: null })
-      try {
-        const results = await invoke('get-models-info', [modelId], serverUrlForModels)
-        const info = results?.[0]
-        if (info && !info.exists) {
-          setCustomModelStatus({ state: 'error', error: info.error ?? t('app.settings.worldModel.modelNotFound') })
-        } else if (info?.error) {
-          setCustomModelStatus({ state: 'error', error: info.error })
-        } else {
-          setCustomModelStatus({ state: 'idle', error: null })
-          setMenuModelOptions((prev) => [...prev, { id: modelId, isLocal: null, sizeBytes: info?.size_bytes ?? null }])
-          if (!savedCustomModels.includes(modelId)) {
-            void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
-          }
-        }
-      } catch {
-        setCustomModelStatus({ state: 'error', error: t('app.settings.worldModel.couldNotCheckModel') })
-      }
-    },
-    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
-  )
-
   const handleConfirmDeleteCache = useCallback(async () => {
     if (!showDeleteCacheModal) return
     const modelId = showDeleteCacheModal
     setShowDeleteCacheModal(null)
-    await invoke('delete-cached-model', modelId)
-    if (savedCustomModels.includes(modelId)) {
-      // Custom model: remove from cache AND from custom list
-      const updated = savedCustomModels.filter((m) => m !== modelId)
-      void saveSettings({ ...settings, custom_models: updated })
-      setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
-      if (menuWorldModel === modelId) {
-        const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
-        setMenuWorldModel(fallback)
-      }
-    } else {
-      // Default model: just update local status
-      setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
-    }
-  }, [showDeleteCacheModal, savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel])
+    await invoke('delete-cached-model', modelId, serverUrlForModels)
+    // The next list-models refetch will re-classify the row as not_local.
+    // Update locally first so the UI reflects the action immediately.
+    setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
+  }, [showDeleteCacheModal, serverUrlForModels])
+
+  // `reinstallEngine` orchestrates stop → install → start as one unit.
+  // The modal stays open across the whole pipeline — including the
+  // terminal `ready` state — so the user sees the green "Complete." dot
+  // and dismisses on their own. The "view logs" affordance on
+  // WorldEngineSection opens the same modal mid-flight, so closing on
+  // `ready` would race with anyone who tabbed away and came back to
+  // check status.
+  const runReinstall = async (mode: 'fix' | 'nuke') => {
+    setShowLocalInstallLog(true)
+    await lifecycle.reinstallEngine(mode)
+  }
 
   const handleConfirmFixEngine = async () => {
     setShowFixModal(false)
-    setShowLocalInstallLog(true)
-    try {
-      await engine.setup.run()
-      await engine.check()
-    } catch {
-      // Error is surfaced by engine.setup.error and server logs.
-    }
+    await runReinstall('fix')
   }
 
   const handleConfirmNukeEngine = async () => {
     setShowNukeModal(false)
-    setShowLocalInstallLog(true)
-    try {
-      await engine.setup.nukeAndReinstall()
-      await engine.check()
-    } catch {
-      // Error is surfaced by engine.setup.error and server logs.
-    }
+    await runReinstall('nuke')
   }
+
+  // First-time install (and recovery from `failed`) goes through the same
+  // pipeline; `reinstallEngine('fix')` is identical to a fresh install
+  // when there's nothing to nuke.
+  const handleInstallEngine = () => runReinstall('fix')
 
   return (
     <div className={active ? 'flex flex-col gap-[2.3cqh]' : 'hidden'}>
@@ -388,9 +404,13 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
                   />
                 </>
               )}
-              {serverUrlStatus === 'error' && (
+              {(serverUrlStatus === 'error' || serverUrlStatus === 'ownManaged') && (
                 <>
-                  {` · ${t('app.settings.serverUrl.unreachable')}`}
+                  {` · ${t(
+                    serverUrlStatus === 'ownManaged'
+                      ? 'app.settings.serverUrl.ownManaged'
+                      : 'app.settings.serverUrl.unreachable'
+                  )}`}
                   <span
                     className="
                       inline-block h-[0.98cqh] w-[0.98cqh] rounded-full bg-[rgba(255,120,80,0.95)]
@@ -413,59 +433,40 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
       {menuEngineMode === 'standalone' && (
         <WorldEngineSection
-          engineReady={engineReady}
           onFixInPlaceClick={() => setShowFixModal(true)}
           onTotalReinstallClick={() => setShowNukeModal(true)}
+          onInstallClick={() => void handleInstallEngine()}
+          onViewStartupLogsClick={() => setShowLocalInstallLog(true)}
         />
       )}
 
       <SettingsSection title="app.settings.worldModel.title" description="app.settings.worldModel.description">
         <SettingsSelect
-          options={[...menuModelOptions]
-            .filter((model) => !savedCustomModels.includes(model.id) || model.isLocal === true)
-            .sort((a, b) => {
-              // 1. Downloaded before undownloaded
-              if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1
-              // 2. Default models before custom
-              if (savedCustomModels.includes(a.id) !== savedCustomModels.includes(b.id))
-                return savedCustomModels.includes(a.id) ? 1 : -1
-              // 3. Alphabetical
-              return a.id.localeCompare(b.id)
-            })
-            .map((model) => {
-              const isCustom = savedCustomModels.includes(model.id)
-              return {
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal === false ? t('app.settings.worldModel.download') : null
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                deletable: isCustom && model.isLocal === true && menuEngineMode === 'standalone',
-                cacheDeletable: !isCustom && model.isLocal === true && menuEngineMode === 'standalone',
-                dimmed: model.isLocal === false
-              }
-            })}
+          options={menuModelOptions.map((model) => ({
+            value: model.id,
+            rawLabel: model.id.replace(/^Overworld\//, ''),
+            prefix: [
+              model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+              model.isLocal ? null : t('app.settings.worldModel.download')
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            cacheDeletable: model.isLocal,
+            dimmed: !model.isLocal
+          }))}
           value={menuWorldModel}
           onChange={handleWorldModelChange}
-          onDelete={(modelId) => setShowDeleteCacheModal(modelId)}
           onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
           hideSelectedInDropdown
-          disabled={menuModelsLoading || (menuEngineMode === 'server' && serverUrlStatus !== 'valid')}
-          allowCustom
-          onCustomBlur={(modelId) => void handleCustomModelBlur(modelId)}
-          customLabel="app.settings.worldModel.custom"
-          deleteLabel="app.settings.worldModel.deleteLocalCache"
-          cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
-          rawCustomPrefix={
-            customModelStatus.state === 'loading'
-              ? t('app.settings.worldModel.checking')
-              : customModelStatus.state === 'error'
-                ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
-                : undefined
+          disabled={
+            menuModelsLoading ||
+            (menuEngineMode === 'standalone' && !engineReady) ||
+            (menuEngineMode === 'server' && serverUrlStatus !== 'valid')
           }
+          disabledTooltip={
+            menuEngineMode === 'standalone' && !engineReady ? standaloneTooltip(lifecycle.state.kind) : undefined
+          }
+          cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
         />
         {menuModelsError && (
           <p
@@ -492,6 +493,10 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
               }))}
               value={menuQuant}
               onChange={(v) => setMenuQuant(v as QuantOption)}
+              disabled={menuEngineMode === 'standalone' && !engineReady}
+              disabledTooltip={
+                menuEngineMode === 'standalone' && !engineReady ? standaloneTooltip(lifecycle.state.kind) : undefined
+              }
             />
           </SettingsRow>
           <SettingsCheckbox
@@ -537,13 +542,19 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
       {showServerErrorModal && (
         <ConfirmModal
-          title="app.dialogs.serverUnreachable.title"
+          title={
+            serverUrlStatus === 'ownManaged'
+              ? 'app.dialogs.serverOwnManaged.title'
+              : 'app.dialogs.serverUnreachable.title'
+          }
           description={
-            !menuServerUrl.trim()
-              ? 'app.dialogs.serverUnreachable.noUrl'
-              : serverUrlUsesSecureTransport
-                ? 'app.dialogs.serverUnreachable.withUrlSecure'
-                : 'app.dialogs.serverUnreachable.withUrl'
+            serverUrlStatus === 'ownManaged'
+              ? 'app.dialogs.serverOwnManaged.description'
+              : !menuServerUrl.trim()
+                ? 'app.dialogs.serverUnreachable.noUrl'
+                : serverUrlUsesSecureTransport
+                  ? 'app.dialogs.serverUnreachable.withUrlSecure'
+                  : 'app.dialogs.serverUnreachable.withUrl'
           }
           descriptionParams={{ url: menuServerUrl }}
           onConfirm={() => setShowServerErrorModal(false)}

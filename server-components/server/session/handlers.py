@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING
 import structlog
 from pydantic import ValidationError
 
-from engine.manager import QuantUnsupportedError
 from recording.action_logger import ActionLogger
 from server.protocol import (
     CheckSeedSafetyRequest,
@@ -328,6 +327,12 @@ async def prepare_session(
         # is mapped from a raw torch error to a typed exception inside
         # `WorldEngineManager.warmup`, so this catch site stays clean.
         if not world_engine.engine_warmed_up:
+            # Local import: keeps the heavy `engine.manager` (→ world_engine)
+            # off the module-load path. Routes import this file at boot, but
+            # we only reach this catch site after the lazy engine init has
+            # already pulled the heavy stack in.
+            from engine.manager import QuantUnsupportedError
+
             try:
                 await world_engine.warmup()
             except QuantUnsupportedError:

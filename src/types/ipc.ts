@@ -2,16 +2,10 @@ import type { EngineStatus, SeedFileRecord, SeedSource } from './app'
 import type { Settings } from './settings'
 import type { PortalSparksTuning } from '../lib/portalSparksTuning'
 
-export type ModelAvailability = {
-  id: string
-  is_local: boolean
-}
-
-export type ModelInfo = {
+export type PickerModel = {
   id: string
   size_bytes: number | null
-  exists: boolean
-  error: string | null
+  is_local: boolean
 }
 
 export type RuntimeDiagnosticsMeta = {
@@ -262,11 +256,14 @@ export type IpcCommandMap = {
   'get-settings-path-str': { args: []; return: string }
   'open-settings': { args: []; return: void }
 
-  // Models
-  'list-waypoint-models': { args: []; return: string[] }
-  'list-model-availability': { args: [modelIds: string[]]; return: ModelAvailability[] }
-  'get-models-info': { args: [modelIds: string[], serverUrl?: string]; return: ModelInfo[] }
-  'delete-cached-model': { args: [modelId: string]; return: void }
+  // Models — thin proxies to the WorldEngine server. `list-models`
+  // returns the canonical picker list (Waypoint collection ∪ cached,
+  // with size + cache-presence baked in); `delete-cached-model` mutates
+  // the active server's cache. The renderer doesn't talk to HuggingFace
+  // directly — the server is the single source of truth for what's
+  // available.
+  'list-models': { args: [serverUrl?: string]; return: PickerModel[] }
+  'delete-cached-model': { args: [modelId: string, serverUrl?: string]; return: void }
 
   // Engine
   'check-engine-status': { args: [source?: string]; return: EngineStatus }
@@ -281,7 +278,10 @@ export type IpcCommandMap = {
   'is-server-running': { args: []; return: boolean }
   'is-server-ready': { args: []; return: boolean }
   'is-port-in-use': { args: [port: number]; return: boolean }
-  'probe-server-health': { args: [healthUrl: string, timeoutMs?: number]; return: boolean }
+  'probe-server-health': {
+    args: [healthUrl: string, timeoutMs?: number]
+    return: { reachable: boolean; launched_from_standalone: boolean }
+  }
   'get-last-server-exit-tail': { args: []; return: string | null }
 
   // Seeds

@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 # ──────────────────────────────────────────────────────────────────────
 
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 
 # ──────────────────────────────────────────────────────────────────────
