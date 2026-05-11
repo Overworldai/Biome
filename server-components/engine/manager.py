@@ -113,6 +113,20 @@ DEFAULT_INFERENCE_FPS = 60
 LOAD_ENGINE_TOTAL_STEPS = 3  # 1: load model, 2: seed frame, 3: ready
 WARMUP_TOTAL_STEPS = 3  # 1: reset, 2: append seed, 3: generate first frame
 
+# Biome's wire-level `Quant` → quark's `Engine(quant=...)` literal.
+# world_engine accepts the wire enum directly; quark only speaks
+# `"fp8"` / `"bf16"` / None, so the load path translates through this
+# table just before constructing the engine. `None` covers the
+# "no quant arg passed" path so the explicit-None branch falls through
+# cleanly into quark's all-bf16 default. `Quant.INTW8A8` is omitted
+# deliberately — `supported_capabilities()` doesn't advertise it for
+# quark, so a missing key here means the capability filter was bypassed.
+_QUARK_QUANT_MAP: dict[Quant | None, str | None] = {
+    None: None,
+    Quant.NONE: None,
+    Quant.FP8W8A8: "fp8",
+}
+
 
 class QuantUnsupportedError(RuntimeError):
     """Warmup detected that the active quantization mode is unsupported on
@@ -526,6 +540,25 @@ class WorldEngineManager:
             if requested_backend == "quark":
                 backend_kwargs["taehv_cache_dir"] = os.environ.get("BIOME_TAEHV_CACHE_DIR") or None
 
+            # Translate Biome's wire-level Quant enum into the literal each
+            # backend's `Engine(...)` accepts. world_engine takes the
+            # `fp8w8a8` / `intw8a8` / `none` strings directly; quark only
+            # speaks `"fp8"` / `"bf16"` / None (None falls through to its
+            # all-bf16 default). `Quant.INTW8A8` is filtered out of the
+            # quark column by `supported_capabilities()` upstream, so an
+            # unmapped value here means the filter was bypassed.
+            backend_quant: str | None
+            if requested_backend == "quark":
+                try:
+                    backend_quant = _QUARK_QUANT_MAP[requested_quant]
+                except KeyError as e:
+                    raise ValueError(
+                        f"quark backend does not support quant {requested_quant!r}; "
+                        f"capability filter should have rejected this upstream"
+                    ) from e
+            else:
+                backend_quant = requested_quant
+
             dtype_attempts = [torch.bfloat16, torch.float16]
             for dtype in dtype_attempts:
                 try:
@@ -535,7 +568,7 @@ class WorldEngineManager:
                         return cls(
                             requested_model,
                             device=WORLD_ENGINE_DEVICE,
-                            quant=requested_quant,
+                            quant=backend_quant,
                             dtype=dtype,
                             **backend_kwargs,
                         )
