@@ -241,6 +241,12 @@ class SceneEditRequest(BaseModel):
     # (environment / time / weather) where a tool-call round-trip
     # would be wasted latency.
     direct: bool = False
+    # Optional motion-oriented prompt forwarded to the video pipeline
+    # when the edit's mode is `video`. The detailed Klein prompt above
+    # describes the static end-state; this describes the transition
+    # (e.g. "snow begins falling, accumulating on every surface").
+    # When None, the server falls back to the Klein prompt.
+    video_prompt: str | None = None
 
 
 class ScenePropEditRequest(BaseModel):
@@ -260,6 +266,11 @@ class ScenePropEditRequest(BaseModel):
     # Human-readable prop noun (e.g. "pistol", "soda can") used to
     # build the Klein edit instruction.
     subject: str
+    # Pre-authored animation prompt (e.g. "An ambulance arrives in
+    # the scene.") forwarded to the video pipeline when the prop's
+    # edit mode is `video`. None if the manifest doesn't define one,
+    # in which case video mode falls back to the fall animation.
+    video_prompt: str | None = None
 
 
 class GenerateSceneRequest(BaseModel):

@@ -76,6 +76,7 @@ class ScenePropEditHandoff:
     kind: Literal["spawnable", "holdable"]
     target: Literal["centre", "appropriate"]
     subject: str
+    video_prompt: str | None
     future: concurrent.futures.Future
 
 

@@ -50,6 +50,38 @@ SCENE_EDIT_SAFETY_MESSAGE_ID = "app.server.error.sceneEditSafetyRejected"
 GENERATE_SCENE_SAFETY_MESSAGE_ID = "app.server.error.generateSceneSafetyRejected"
 
 
+# ─── Pageable model identities + VRAM accounting ─────────────────────
+# Three GPU-resident model classes share VRAM with the world engine.
+# `vlm` writes Klein prompts, `ti2i` is the Klein image editor, `ti2v`
+# is the video model used for prop spawn / scene transition animations.
+# Each is loaded / unloaded independently; `SceneAuthoringManager.ensure`
+# is the LRU-with-VRAM-budget policy that brings the right ones into
+# residence for the op at hand. World engine VRAM is a fixed cost the
+# manager doesn't account for — only the pageable bucket below is.
+
+ModelKind = Literal["vlm", "ti2i", "ti2v"]
+
+# Approximate steady-state GPU residency per kind. All three are fully
+# resident on GPU when loaded. The LRU policy in `ensure` is the only
+# control on simultaneous residency; ops that need exclusive use of
+# the pageable bucket pass `exclusive=True` to force-evict everything
+# else.
+MODEL_VRAM_GB: dict[ModelKind, float] = {
+    "vlm": 4.0,  # Gemma 4 E4B GGUF Q4 + mmproj
+    "ti2i": 7.0,  # FLUX.2 Klein 4B Q8 GGUF + UMT5 4-bit
+    "ti2v": 8.0,  # LTX-Video 2B FP8 layerwise + T5-XXL bf16 + VAE
+}
+
+# Hard cap on simultaneously-loaded pageable model weights, sized for
+# 24 GB VRAM target with the world engine taking ~5 GB. Pairs that fit:
+#   vlm(4) + ti2i(7)  = 11 ✓   (default scene-edit ops; baseline pair)
+#   vlm(4) + ti2v(9)  = 13 ✓
+#   ti2i(7) + ti2v(9) = 16 ✗   (forces eviction; the video path requests
+#                                exclusive ti2v anyway, so this is fine)
+# All three (20) never fit; warmup verifies each in sequence.
+VRAM_BUDGET_GB = 15.0
+
+
 # ─── Errors ──────────────────────────────────────────────────────────
 
 
@@ -98,6 +130,30 @@ class KleinPipelineNotLoadedError(RuntimeError):
 
     def __init__(self) -> None:
         super().__init__("Klein pipeline is not loaded")
+
+
+class VideoPipelineNotLoadedError(RuntimeError):
+    """Raised when an operation requires the video pipeline but it
+    isn't loaded. Lazy-loaded on first `video` mode op via
+    `SceneAuthoringManager.ensure`."""
+
+    def __init__(self) -> None:
+        super().__init__("Video pipeline is not loaded")
+
+
+class InsufficientVramError(RuntimeError):
+    """Raised when `SceneAuthoringManager.ensure` cannot honour a request
+    even after evicting every non-required model — i.e. the requested
+    set itself exceeds `VRAM_BUDGET_GB`. Indicates either a misconfigured
+    budget or trying to hold too many models simultaneously."""
+
+    def __init__(self, requested: set[ModelKind], required_gb: float, budget_gb: float) -> None:
+        self.requested = requested
+        self.required_gb = required_gb
+        self.budget_gb = budget_gb
+        super().__init__(
+            f"Cannot fit models {sorted(requested)} ({required_gb:.1f} GB) into VRAM budget {budget_gb:.1f} GB"
+        )
 
 
 class VlmToolCallRetryError(RuntimeError):
@@ -170,6 +226,44 @@ def parse_tool_calls(text: str) -> list[ToolCall]:
     return results
 
 
+# ─── Video editor configuration (LTX-Video 2B FLF) ───────────────────
+# Concrete model: `Lightricks/LTX-Video-0.9.5`. Picked for native FLF
+# support (keyframe conditioning via `LTXConditionPipeline`), small
+# size (~2 B params), and a clean FP8 path via diffusers' layerwise
+# weight casting that cuts the transformer storage to ~3 GB while
+# computing in bf16 — no GGUF dance required. Inference is fast enough
+# (~tens of seconds per spawn) that we can run video transitions on
+# the interactive prop-spawn flow rather than treating them as an
+# offline op.
+
+VIDEO_MODEL_ID = "Lightricks/LTX-Video-0.9.5"
+VIDEO_NUM_INFERENCE_STEPS = 40  # model card default for FLF
+VIDEO_GUIDANCE_SCALE = 3.0  # model card default; raise to 5.0 for higher quality
+# Frame count must satisfy `(N-1) % 8 == 0` (VAE temporal compression
+# of 8 + 1 init frame). Valid: 9, 17, 25, 33, 41, 49, …, 161.
+VIDEO_NUM_FRAMES = 33
+# Sharper FLF endpoint adherence than the diffusers default of 0.15.
+# `decode_*` taken from the official FLF example.
+VIDEO_IMAGE_COND_NOISE_SCALE = 0.025
+VIDEO_DECODE_TIMESTEP = 0.05
+VIDEO_DECODE_NOISE_SCALE = 0.025
+VIDEO_NEGATIVE_PROMPT = "worst quality, inconsistent motion, blurry, jittery, distorted"
+# When True, replace the manifest-supplied `video_prompt` with one the
+# VLM authors at request time from both pre- and post-edit frames. The
+# extra VLM round-trip is non-trivial relative to total spawn latency;
+# flip to True only for iterating on prompt phrasings.
+VIDEO_USE_VLM_PROMPT = False
+# Hold frames appended after the video transition. Lets the WM settle
+# on the new state in its KV cache before normal generation resumes.
+# Streamed at ANIM_PLAYBACK_FPS (60 fps), so 60 frames ≈ 1 s held.
+VIDEO_HOLD_FRAMES = 60
+# Render at 1280x704: pipeline requires h/w divisible by 32, and 704 is
+# the closest valid value below the WM's typical 720-pixel seed height.
+# Output is resized to `seed_target_size` for the engine append.
+VIDEO_HEIGHT = 704
+VIDEO_WIDTH = 1280
+
+
 # ─── Klein editor configuration ──────────────────────────────────────
 
 EDIT_MODEL_ID = "black-forest-labs/FLUX.2-klein-4B"
@@ -185,19 +279,21 @@ EDIT_NUM_STEPS = 4
 # whole-scene edits and held-item edits don't generally make sense as a
 # vertical drop, but we keep them switchable for testing.
 
-SceneEditMode = Literal["reset", "fall"]
+SceneEditMode = Literal["reset", "fall", "video"]
 
-SCENE_EDIT_PROMPTED_MODE: SceneEditMode = "reset"  # VLM-authored full-frame edit
-SCENE_EDIT_DIRECT_MODE: SceneEditMode = "reset"  # environment / weather presets
-PROP_EDIT_SPAWNABLE_MODE: SceneEditMode = "fall"  # placed-in-world prop
+SCENE_EDIT_PROMPTED_MODE: SceneEditMode = "video"  # VLM-authored full-frame edit
+SCENE_EDIT_DIRECT_MODE: SceneEditMode = "video"  # environment / weather presets
+PROP_EDIT_SPAWNABLE_MODE: SceneEditMode = "video"  # placed-in-world prop
 PROP_EDIT_HOLDABLE_MODE: SceneEditMode = "reset"  # first-person held item
 
 # Tween animation tuning (used when mode == "fall"). The fall portion is the
 # visible drop-in; the hold portion locks the landed image so the user (and
 # the model's KV cache) settle on the new state before control resumes.
-ANIM_FALL_FRAMES = 30
-ANIM_HOLD_FRAMES = 15
-ANIM_PLAYBACK_FPS = 30.0  # rate at which tween frames are paced out to the client
+# Frame counts are sized in WM-frame units (~1 s fall + ~0.5 s hold at the
+# WM's 60 fps playback rate).
+ANIM_FALL_FRAMES = 60
+ANIM_HOLD_FRAMES = 30
+ANIM_PLAYBACK_FPS = 60.0  # matches the WM's native frame rate
 ANIM_FALLBACK_APPEND_COUNT = 32  # appends used when fall is requested but no bbox is detectable
 
 # Bbox-isolation tuning (see `_compute_edit_bbox`). Klein re-encodes the
@@ -344,6 +440,31 @@ VLM_GENERATE_SYSTEM_PROMPT = (
     "no salvageable intent, call reject_request instead."
 )
 
+VLM_VIDEO_PROMPT_SYSTEM_PROMPT = (
+    "You write motion descriptions for an AI video generator. The video "
+    "starts at the FIRST image (before) and ends at the SECOND image "
+    "(after). The endpoints are already locked in via latent injection — "
+    "your job is to describe the natural motion that takes the scene "
+    "from before to after, so the in-between frames flow correctly.\n\n"
+    "Look at both images. Identify what's NEW or CHANGED in the after "
+    "image, and describe the action that brings about that change, "
+    "using verbs that fit the actual scene. Match the direction implied "
+    "by the endpoints — don't say 'from the left' if the new element "
+    "ends up on the right. Don't add motion the endpoints don't "
+    "support. Single short sentence, under 25 words.\n\n"
+    "EXAMPLES:\n"
+    '- before: empty street; after: ambulance parked on street → "An '
+    'ambulance pulls up and parks on the side of the street."\n'
+    '- before: forest clearing; after: tree in clearing → "A tall oak '
+    'tree grows up out of the ground in the forest clearing."\n'
+    '- before: empty wall; after: framed painting on wall → "A framed '
+    'oil painting drops down and hangs on the wall."\n'
+    '- before: empty room; after: chair in room → "A wooden chair '
+    'lowers into place in the centre of the room."\n\n'
+    "Submit your description via the submit_edit_instruction tool. Do "
+    "not deliberate at length."
+)
+
 
 def _pil_to_data_uri(image: Image.Image) -> str:
     """Convert a PIL Image to a base64 data URI for llama-cpp-python."""
@@ -371,6 +492,9 @@ class _SceneAuthoringLibs:
     GGUFQuantizationConfig: Any
     AutoModelForCausalLM: Any
     BitsAndBytesConfig: Any
+    LTXConditionPipeline: Any
+    LTXVideoCondition: Any
+    AutoModel: Any
 
 
 def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
@@ -379,7 +503,14 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
     graph; called only when warmup runs (i.e. when a session has scene
     authoring enabled), so disabled-by-default sessions never pay the
     import cost."""
-    from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, GGUFQuantizationConfig
+    from diffusers import (
+        AutoModel,
+        Flux2KleinPipeline,
+        Flux2Transformer2DModel,
+        GGUFQuantizationConfig,
+        LTXConditionPipeline,
+    )
+    from diffusers.pipelines.ltx.pipeline_ltx_condition import LTXVideoCondition
     from huggingface_hub import hf_hub_download
     from llama_cpp import Llama
     from llama_cpp.llama_chat_format import (
@@ -396,6 +527,9 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
         GGUFQuantizationConfig=GGUFQuantizationConfig,
         AutoModelForCausalLM=AutoModelForCausalLM,
         BitsAndBytesConfig=BitsAndBytesConfig,
+        LTXConditionPipeline=LTXConditionPipeline,
+        LTXVideoCondition=LTXVideoCondition,
+        AutoModel=AutoModel,
     )
 
 
@@ -403,66 +537,176 @@ def _import_scene_authoring_libs() -> _SceneAuthoringLibs:
 
 
 class SceneAuthoringManager:
-    """FLUX.2 Klein (image editor) + Gemma 4 E4B (VLM that writes Klein prompts).
+    """FLUX.2 Klein (image editor) + Gemma 4 E4B (VLM that writes Klein
+    prompts) + LTX-Video 2B (video editor for prop spawn / scene
+    transition animations).
 
-    Goes through `WorldEngineManager.submit_to_device_thread` for model
-    loading so all device setup serialises behind in-flight world-engine
-    work — no direct device-executor access. The flows themselves
-    (`inpaint`, `generate`) run on whatever thread calls them; the
-    diffusers pipeline isn't bound to a compiled-graph thread, so it
-    doesn't need the device thread."""
+    The three model classes share a fixed `VRAM_BUDGET_GB` slice of GPU
+    memory; the world engine's footprint is outside that slice and stays
+    resident. `ensure(kinds)` is the LRU-with-budget paging policy: it
+    loads anything in `kinds` that isn't already resident, evicting
+    least-recently-used pageables along the way to stay under budget.
+    Each op (scene_edit, scene_prop_edit, video_gen, …) calls `ensure`
+    with its required kinds before reaching for the underlying instance.
+
+    Loading runs on the world engine's device thread so it serialises
+    behind in-flight gen_frame work — no direct device-executor access.
+    Inference itself runs on whatever thread calls into the flow methods;
+    the diffusers / llama_cpp instances aren't bound to a compiled-graph
+    thread."""
 
     def __init__(self, world_engine: "WorldEngineManager") -> None:
         self._world_engine = world_engine
-        self.pipeline = None
-        self.vlm = None  # llama_cpp.Llama instance
-        self._loaded = False
+        self._libs: _SceneAuthoringLibs | None = None
+        self._last_used: dict[ModelKind, float] = {}
+        self._configured = False
+        # Public per-model handles, set by load + cleared by unload.
+        self.pipeline = None  # FLUX.2 Klein pipeline (ti2i)
+        self.vlm = None  # llama_cpp.Llama instance (vlm)
+        self.video_pipeline = None  # LTX-Video pipeline (ti2v)
 
     @property
     def is_loaded(self) -> bool:
-        return self._loaded
+        """True iff the current session has scene-authoring enabled. The
+        actual VRAM residency varies under LRU paging — this is purely a
+        session-config signal that callers use to gate scene-authoring
+        RPCs."""
+        return self._configured
+
+    def is_kind_loaded(self, kind: ModelKind) -> bool:
+        """True iff `kind`'s underlying instance is currently resident in
+        VRAM. Used internally by `ensure`; exposed for diagnostics."""
+        if kind == "vlm":
+            return self.vlm is not None
+        if kind == "ti2i":
+            return self.pipeline is not None
+        return self.video_pipeline is not None
+
+    @property
+    def _loaded_kinds(self) -> set[ModelKind]:
+        return {k for k in ("vlm", "ti2i", "ti2v") if self.is_kind_loaded(k)}
+
+    def _current_vram_gb(self) -> float:
+        return sum(MODEL_VRAM_GB[k] for k in self._loaded_kinds)
 
     # ─── Lifecycle ────────────────────────────────────────────────
 
     async def configure_for_session(self, *, scene_authoring_requested: bool) -> None:
         """Bring the model state into line with what this session needs.
-        Loads if requested-but-unloaded; unloads if loaded-but-unwanted.
-        Re-raises warmup failures. Callers gate on `is_loaded` before
-        calling if they need to emit a load-in-progress stage."""
-        if not scene_authoring_requested and self.is_loaded:
-            logger.info("Scene authoring disabled — unloading model")
+        At session start, walk every pageable kind (VLM → TI2I → TI2V)
+        so each downloads its weights and instantiates at least once
+        before gameplay — surfaces missing files, broken kernels, and
+        OOM at warmup rather than mid-edit. The LRU paging policy
+        evicts as we go (vlm + ti2i + ti2v together don't fit). Warmup
+        settles on `{ti2i, ti2v}` — the spawn-then-animate baseline —
+        so the first prop click runs Klein → video model with no swap.
+        VLM is reloaded on demand when scene_edit-by-prompt or
+        build_video_prompt fires (~3 s, llama.cpp GGUF)."""
+        if not scene_authoring_requested and self._configured:
+            logger.info("Scene authoring disabled — unloading models")
             await asyncio.to_thread(self.unload)
             return
-        if scene_authoring_requested and not self.is_loaded:
-            await self.warmup()
+        if not (scene_authoring_requested and not self._configured):
+            return
 
-    async def warmup(self) -> None:
-        """Load both the VLM and the editing pipeline onto the device. Each
-        step runs on the world engine's device thread so it serialises behind
-        any in-flight world-engine ops. The heavy lib imports (diffusers,
-        transformers, llama_cpp) are funneled through
-        `_import_scene_authoring_libs` so it's obvious what gets pulled in."""
-        libs = await asyncio.wrap_future(self._world_engine.submit_to_device_thread(_import_scene_authoring_libs))
+        # 1. VLM by itself — verification load, will get evicted by step 3.
+        await asyncio.to_thread(self.ensure, {"vlm"})
+        # 2. Add TI2I (4 + 7 = 11 ≤ budget).
+        await asyncio.to_thread(self.ensure, {"vlm", "ti2i"})
+        # 3. Add TI2V — vlm + ti2i + ti2v = 19 > 15 budget, so LRU
+        #    evicts vlm (oldest). Lands on {ti2i, ti2v} = 15, exactly
+        #    at budget. This is the steady-state for prop-spawn flows.
+        await asyncio.to_thread(self.ensure, {"ti2v"})
 
-        logger.info("Loading VLM", repo=VLM_GGUF_REPO, file=VLM_GGUF_FILE)
-        t0 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_vlm_sync(libs)))
-        logger.info("VLM loaded", duration_s=round(time.perf_counter() - t0, 1))
-
-        logger.info("Loading editing model", model=EDIT_MODEL_ID)
-        t1 = time.perf_counter()
-        await asyncio.wrap_future(self._world_engine.submit_to_device_thread(lambda: self._load_edit_sync(libs)))
-        logger.info("Editing model loaded", duration_s=round(time.perf_counter() - t1, 1))
-
-        self._loaded = True
+        self._configured = True
 
     def unload(self) -> None:
-        """Free device memory used by both models."""
-        if self.vlm is not None:
-            self.vlm.close()
-        self.pipeline = None
-        self.vlm = None
-        self._loaded = False
+        """Free device memory used by every pageable model and clear the
+        session-configured flag."""
+        for kind in tuple(self._loaded_kinds):
+            self._unload_kind(kind)
+        self._configured = False
+        gc.collect()
+        devices.empty_cache()
+
+    # ─── Paging policy ────────────────────────────────────────────
+
+    def ensure(self, kinds: set[ModelKind], *, exclusive: bool = False) -> None:
+        """Synchronously make sure each model in `kinds` is resident,
+        evicting LRU pageables as needed to stay under `VRAM_BUDGET_GB`.
+        Loads / unloads run on the world engine's device thread so they
+        serialise behind in-flight gen_frame work; this method blocks
+        until everything in `kinds` is loaded.
+
+        With `exclusive=True`, eagerly unload every loaded kind that
+        isn't in `kinds` regardless of budget pressure. Used by ops
+        that need the whole pageable bucket — typically heavy video
+        inference paths that would otherwise OOM trying to migrate
+        their text encoder onto a GPU still holding Klein + VLM.
+
+        Safe to call from the generator thread or from async code via
+        `asyncio.to_thread(...)`. Bumps `_last_used` for every kind in
+        `kinds` (including already-resident ones), so frequently-used
+        models keep their slots when newer requests need to evict."""
+        if exclusive:
+            for kind in tuple(self._loaded_kinds - kinds):
+                self._unload_kind(kind)
+
+        needed_load = kinds - self._loaded_kinds
+        pending_gb = sum(MODEL_VRAM_GB[k] for k in needed_load)
+
+        while self._current_vram_gb() + pending_gb > VRAM_BUDGET_GB:
+            evictable = self._loaded_kinds - kinds
+            if not evictable:
+                # Even with everything held-aside-for-eviction unloaded
+                # we still wouldn't fit → caller asked for too much.
+                requested_gb = sum(MODEL_VRAM_GB[k] for k in kinds)
+                raise InsufficientVramError(kinds, requested_gb, VRAM_BUDGET_GB)
+            lru = min(evictable, key=lambda k: self._last_used.get(k, 0.0))
+            self._unload_kind(lru)
+
+        for kind in needed_load:
+            self._load_kind(kind)
+
+        now = time.perf_counter()
+        for kind in kinds:
+            self._last_used[kind] = now
+
+    def _ensure_libs(self) -> _SceneAuthoringLibs:
+        """Lazy-load the heavy import waterfall the first time any kind is
+        loaded; cached for subsequent loads in the same process."""
+        libs = self._libs
+        if libs is None:
+            future = self._world_engine.submit_to_device_thread(_import_scene_authoring_libs)
+            libs = future.result()
+            assert isinstance(libs, _SceneAuthoringLibs)
+            self._libs = libs
+        return libs
+
+    def _load_kind(self, kind: ModelKind) -> None:
+        libs = self._ensure_libs()
+        log = logger.bind(kind=kind)
+        log.info("Loading model")
+        t0 = time.perf_counter()
+        if kind == "vlm":
+            self._world_engine.submit_to_device_thread(lambda: self._load_vlm_sync(libs)).result()
+        elif kind == "ti2i":
+            self._world_engine.submit_to_device_thread(lambda: self._load_ti2i_sync(libs)).result()
+        else:
+            self._world_engine.submit_to_device_thread(lambda: self._load_ti2v_sync(libs)).result()
+        log.info("Model loaded", duration_s=round(time.perf_counter() - t0, 1))
+
+    def _unload_kind(self, kind: ModelKind) -> None:
+        log = logger.bind(kind=kind)
+        log.info("Unloading model")
+        if kind == "vlm":
+            if self.vlm is not None:
+                self.vlm.close()
+            self.vlm = None
+        elif kind == "ti2i":
+            self.pipeline = None
+        else:
+            self.video_pipeline = None
         gc.collect()
         devices.empty_cache()
 
@@ -483,7 +727,7 @@ class SceneAuthoringManager:
             verbose=False,
         )
 
-    def _load_edit_sync(self, libs: _SceneAuthoringLibs) -> None:
+    def _load_ti2i_sync(self, libs: _SceneAuthoringLibs) -> None:
         """Load the FLUX.2 Klein editing pipeline (quantized transformer + text encoder)."""
         # Transformer: Q8 GGUF (~4.3GB)
         gguf_config = libs.GGUFQuantizationConfig(compute_dtype=torch.bfloat16)
@@ -512,6 +756,41 @@ class SceneAuthoringManager:
         ).to(SCENE_AUTHORING_DEVICE)
         pipe.set_progress_bar_config(disable=True)
         self.pipeline = pipe
+
+    def _load_ti2v_sync(self, libs: _SceneAuthoringLibs) -> None:
+        """Load the LTX-Video pipeline: bf16 transformer cast to fp8
+        layerwise (~3 GB storage, bf16 compute) + T5-XXL text encoder
+        + AutoencoderKLLTXVideo (both auto-loaded from
+        `Lightricks/LTX-Video-0.9.5`'s model_index.json)."""
+        # FP8 layerwise weight casting is the officially documented FP8
+        # path — no separate FP8 file needed, just
+        # `enable_layerwise_casting` after `from_pretrained` loads bf16
+        # weights (which are then cast to fp8 storage in place).
+        transformer = libs.AutoModel.from_pretrained(
+            VIDEO_MODEL_ID,
+            subfolder="transformer",
+            torch_dtype=torch.bfloat16,
+        )
+        transformer.enable_layerwise_casting(
+            storage_dtype=torch.float8_e4m3fn,
+            compute_dtype=torch.bfloat16,
+        )
+
+        # Text encoder, VAE, tokenizer, scheduler are auto-loaded from
+        # the repo's model_index.json. T5-XXL is ~9 GB at bf16, but
+        # inference uses it briefly per prompt; if VRAM gets tight we
+        # can add a quantization_config override.
+        pipe = libs.LTXConditionPipeline.from_pretrained(
+            VIDEO_MODEL_ID,
+            transformer=transformer,
+            torch_dtype=torch.bfloat16,
+        ).to(SCENE_AUTHORING_DEVICE)
+        pipe.set_progress_bar_config(disable=True)
+        # VAE tiling + slicing keeps decode memory bounded at higher
+        # resolutions / frame counts.
+        pipe.vae.enable_tiling()
+        pipe.vae.enable_slicing()
+        self.video_pipeline = pipe
 
     # ─── VLM (writes Klein prompts) ──────────────────────────────
 
@@ -622,6 +901,45 @@ class SceneAuthoringManager:
         ]
         return self._run_vlm(messages, "generate_scene", GENERATE_SCENE_SAFETY_MESSAGE_ID)
 
+    def build_video_prompt(self, pre_edit: np.ndarray, post_edit: np.ndarray) -> str:
+        """Ask the VLM to describe the motion that takes the scene from
+        `pre_edit` (the video model's first-frame anchor) to `post_edit`
+        (Klein's end-frame anchor). The VLM sees both endpoints, so it
+        can pick verbs and direction consistent with the actual
+        composition — unlike a static manifest template which has no
+        way to know where Klein placed the prop. Caller is responsible
+        for keeping the VLM resident before calling — typically by
+        running this before the video pipeline load."""
+
+        def _to_uri(arr: np.ndarray) -> str:
+            pil = Image.fromarray(arr)
+            pil.thumbnail((VLM_IMAGE_MAX_SIZE, VLM_IMAGE_MAX_SIZE), Image.Resampling.LANCZOS)
+            return _pil_to_data_uri(pil)
+
+        pre_uri = _to_uri(pre_edit)
+        post_uri = _to_uri(post_edit)
+        messages = [
+            {"role": "system", "content": VLM_VIDEO_PROMPT_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Before image:"},
+                    {"type": "image_url", "image_url": {"url": pre_uri}},
+                    {"type": "text", "text": "After image:"},
+                    {"type": "image_url", "image_url": {"url": post_uri}},
+                    {
+                        "type": "text",
+                        "text": (
+                            "Describe the motion that takes the scene from the before "
+                            "image to the after image, in a single short sentence. "
+                            "Submit via the submit_edit_instruction tool."
+                        ),
+                    },
+                ],
+            },
+        ]
+        return self._run_vlm(messages, "video_prompt", SCENE_EDIT_SAFETY_MESSAGE_ID)
+
     # ─── Klein pipeline (shared building blocks) ─────────────────
 
     @staticmethod
@@ -667,6 +985,9 @@ class SceneAuthoringManager:
         generates, result is resized to the engine's seed target size.
         Returns the edited frame as a uint8 device tensor + the prompt
         that was actually used."""
+        # `direct` mode skips the VLM entirely so we don't need it loaded.
+        self.ensure({"ti2i"} if direct else {"vlm", "ti2i"})
+
         h_orig, w_orig = frame_numpy.shape[:2]
         frame_pil = Image.fromarray(frame_numpy)
 
@@ -687,6 +1008,8 @@ class SceneAuthoringManager:
         Klein generates over a blank canvas, result is resized to the
         engine's seed target size. Returns the generated frame as a uint8
         device tensor + the VLM-authored prompt."""
+        self.ensure({"vlm", "ti2i"})
+
         h, w = seed_target_size
         target_h, target_w = self._aligned_size(h, w)
         blank = Image.new("RGB", (target_w, target_h), (255, 255, 255))
@@ -712,6 +1035,7 @@ class SceneAuthoringManager:
         "appropriate"), then runs Klein with [scene, prop] as a
         multi-image edit. Returns the edited frame as a uint8 device
         tensor + the prompt that was used."""
+        self.ensure({"ti2i"})
         if self.pipeline is None:
             raise KleinPipelineNotLoadedError
 
@@ -739,6 +1063,75 @@ class SceneAuthoringManager:
         )
 
         return self._to_seed_tensor(result, seed_target_size), prompt
+
+    # ─── Video pipeline (native first/last-frame conditioning) ─────
+
+    def generate_flf(
+        self,
+        first_frame: np.ndarray,
+        last_frame: np.ndarray,
+        prompt: str,
+        seed_target_size: tuple[int, int],
+        *,
+        num_frames: int = VIDEO_NUM_FRAMES,
+    ) -> list[np.ndarray]:
+        """Render a video that transitions from `first_frame` to `last_frame`
+        guided by `prompt`. Pins both endpoints via `LTXVideoCondition`
+        keyframes at frame 0 and `num_frames-1` — LTX is trained for
+        arbitrary frame conditioning so endpoint adherence is supervised
+        rather than coaxed via latent injection. Returns frames as a
+        list of uint8 HxWx3 numpy arrays at `seed_target_size`."""
+        if self.video_pipeline is None:
+            raise VideoPipelineNotLoadedError
+        pipe = self.video_pipeline
+        libs = self._ensure_libs()
+
+        target_h, target_w = VIDEO_HEIGHT, VIDEO_WIDTH
+        first_pil = Image.fromarray(first_frame).resize((target_w, target_h), Image.Resampling.LANCZOS)
+        last_pil = Image.fromarray(last_frame).resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+        # The pipeline expresses FLF as a list of conditions at specific frame
+        # indices, not `image=` / `last_image=` kwargs. We pin frame 0
+        # to the pre-edit and the last frame to Klein's post-edit; the
+        # model interpolates the middle.
+        conditions = [
+            libs.LTXVideoCondition(image=first_pil, frame_index=0),
+            libs.LTXVideoCondition(image=last_pil, frame_index=num_frames - 1),
+        ]
+
+        t0 = time.perf_counter()
+        output = pipe(
+            conditions=conditions,
+            prompt=prompt,
+            negative_prompt=VIDEO_NEGATIVE_PROMPT,
+            height=target_h,
+            width=target_w,
+            num_frames=num_frames,
+            num_inference_steps=VIDEO_NUM_INFERENCE_STEPS,
+            guidance_scale=VIDEO_GUIDANCE_SCALE,
+            image_cond_noise_scale=VIDEO_IMAGE_COND_NOISE_SCALE,
+            decode_timestep=VIDEO_DECODE_TIMESTEP,
+            decode_noise_scale=VIDEO_DECODE_NOISE_SCALE,
+            output_type="pil",
+        )
+        logger.info(
+            "Video FLF generation complete",
+            prompt=prompt,
+            elapsed_ms=round((time.perf_counter() - t0) * 1000),
+            num_frames=num_frames,
+            steps=VIDEO_NUM_INFERENCE_STEPS,
+            size=(target_h, target_w),
+        )
+
+        # `output.frames[0]` is a list of PIL Images (default `output_type='pil'`).
+        pil_frames = output.frames[0]
+        target_size = (seed_target_size[1], seed_target_size[0])  # PIL wants (W, H)
+        return [
+            np.asarray(frame.convert("RGB").resize(target_size, Image.Resampling.LANCZOS))
+            if frame.size != target_size
+            else np.asarray(frame.convert("RGB"))
+            for frame in pil_frames
+        ]
 
 
 # ─── Edit application helpers (mode dispatch + fall animation) ──────
@@ -846,23 +1239,67 @@ def _np_to_seed_tensor(frame: np.ndarray) -> torch.Tensor:
 
 def _apply_edit(
     world_engine: "WorldEngineManager",
+    scene_authoring: "SceneAuthoringManager",
     original_np: np.ndarray,
     edited_np: np.ndarray,
     edited_tensor: torch.Tensor,
     mode: SceneEditMode,
+    video_prompt: str | None,
 ) -> list[np.ndarray]:
-    """Apply an edit to the engine according to `mode` and return the visible
-    tween frames (numpy uint8 HxWx3, in playback order). For "reset" the
-    engine is reseeded with `edited_tensor` and the returned list is empty.
-    For "fall" we diff `original_np` vs `edited_np` to find the changed
-    bbox, generate a fall-in animation, and append every tween to the engine
-    so the prior KV context survives. If the diff is below threshold (no
-    visible change), we fall back to a plain repeated-append without
-    animation — still no reset, since the user explicitly opted out of one
-    by selecting "fall"."""
+    """Apply an edit to the engine per `mode` and return the visible tween
+    frames (numpy uint8 HxWx3, in playback order). Modes:
+
+      - "reset": reseed the engine with `edited_tensor`. Empty tween list.
+      - "fall": diff old vs edited, animate the changed bbox falling in,
+        append every tween to the engine so prior KV context survives.
+      - "video": render an FLF transition video from `original_np` to
+        `edited_np` using `video_prompt`, append every frame to the
+        engine. Falls back to "fall" if `video_prompt` is None (e.g. a
+        prop without a manifest entry). Triggers `ensure({TI2V})` which
+        may LRU-evict VLM / TI2I.
+
+    "video" mode is the longest path (~tens of seconds for inference);
+    "reset" is fastest but most disruptive to model context; "fall"
+    sits between."""
     if mode == "reset":
         world_engine.set_seed_and_reset(edited_tensor)
         return []
+
+    if mode == "video" and video_prompt is not None:
+        # Optionally rewrite the manifest prompt with a fresh VLM-authored
+        # one based on both pre- and post-edit frames. The VLM call
+        # may evict TI2V via LRU (4+7+8 > 15 GB budget); the subsequent
+        # `ensure({"ti2v"})` reloads it. With VIDEO_USE_VLM_PROMPT=False
+        # the warmup-loaded TI2V stays hot across spawns — recommended
+        # for the iteration loop.
+        if VIDEO_USE_VLM_PROMPT:
+            scene_authoring.ensure({"vlm"})
+            inference_prompt = scene_authoring.build_video_prompt(original_np, edited_np)
+        else:
+            inference_prompt = video_prompt
+        # Non-exclusive ensure: with `ti2v` at ~8 GB it coexists with
+        # Klein (7 GB) at exactly the 15 GB budget. The warmup leaves
+        # us on `{ti2i, ti2v}`, so when the prompt path didn't need
+        # VLM this is a no-op and the spawn flow runs with zero swap
+        # overhead.
+        scene_authoring.ensure({"ti2v"})
+        transition = scene_authoring.generate_flf(
+            original_np, edited_np, inference_prompt, world_engine.seed_target_size
+        )
+        if not transition:
+            return []
+        # Sharp hold at native resolution: `edited_np` is the Klein
+        # output at seed-target resolution, so swapping in
+        # `VIDEO_HOLD_FRAMES` copies of it both gives the WM time to
+        # settle on the new state in its KV cache and ensures the last
+        # frames the user sees are at the WM's native sharpness.
+        frames = transition + [edited_np] * VIDEO_HOLD_FRAMES
+        tensors = [_np_to_seed_tensor(f) for f in frames]
+        world_engine.append_frames_sequence(tensors)
+        return frames
+
+    if mode == "video":
+        logger.info("Video mode requested without prompt; falling back to fall animation")
 
     bbox = _compute_edit_bbox(original_np, edited_np)
     if bbox is None:
@@ -884,6 +1321,7 @@ def run_scene_edit(
     cpu_frames: list,
     *,
     direct: bool = False,
+    video_prompt: str | None = None,
 ) -> tuple[SceneEditResponseData, list[np.ndarray]]:
     """Run inpainting on the last subframe and apply the result to the engine.
 
@@ -892,8 +1330,14 @@ def run_scene_edit(
     sends `user_request` to Klein verbatim), safety-checks the result, then
     applies it via the per-class mode (`SCENE_EDIT_PROMPTED_MODE` /
     `SCENE_EDIT_DIRECT_MODE`). Returns the preview data for the RPC plus
-    any tween frames (empty for "reset" mode, populated for "fall") that
-    the caller should stream out paced."""
+    any tween frames (empty for "reset" mode, populated for "fall" or
+    "video") that the caller should stream out paced.
+
+    `video_prompt` is the motion description forwarded to the video
+    model when the edit's mode is `video`. When None (typed prompts),
+    falls back to `edit_prompt` — the Klein prompt itself. For env
+    presets the client should pass a transition-oriented prompt
+    distinct from the detailed static-end-state Klein prompt."""
     world_engine = engines.world_engine
     scene_authoring = engines.scene_authoring
     safety_checker = engines.safety_checker
@@ -920,7 +1364,13 @@ def run_scene_edit(
         raise SafetyRejectionError()
 
     mode: SceneEditMode = SCENE_EDIT_DIRECT_MODE if direct else SCENE_EDIT_PROMPTED_MODE
-    tween_frames = _apply_edit(world_engine, last_frame_np, inpainted_np, inpainted, mode)
+    # Use the explicit video_prompt when supplied (env presets carry
+    # motion-oriented prompts distinct from the detailed Klein prompt);
+    # otherwise fall back to the Klein prompt for typed user input.
+    effective_video_prompt = video_prompt if video_prompt is not None else edit_prompt
+    tween_frames = _apply_edit(
+        world_engine, scene_authoring, last_frame_np, inpainted_np, inpainted, mode, effective_video_prompt
+    )
 
     return (
         SceneEditResponseData(
@@ -1064,6 +1514,7 @@ def run_scene_prop_edit(
     kind: str,
     target: str,
     subject: str,
+    video_prompt: str | None,
     cpu_frames: list,
 ) -> tuple[ScenePropEditResponseData, list[np.ndarray]]:
     """Run a tile-driven prop edit on the last subframe and apply the
@@ -1071,6 +1522,7 @@ def run_scene_prop_edit(
     built deterministically from `kind` / `target` / `subject`); feeds
     Klein both the scene and the decoded reference image. Mode is selected
     per-`kind` (`PROP_EDIT_SPAWNABLE_MODE` / `PROP_EDIT_HOLDABLE_MODE`).
+    `video_prompt` is forwarded to the video model when mode == "video".
     Returns the RPC preview plus tween frames the caller should stream."""
     world_engine = engines.world_engine
     scene_authoring = engines.scene_authoring
@@ -1109,7 +1561,9 @@ def run_scene_prop_edit(
         raise SafetyRejectionError()
 
     mode: SceneEditMode = PROP_EDIT_SPAWNABLE_MODE if kind == "spawnable" else PROP_EDIT_HOLDABLE_MODE
-    tween_frames = _apply_edit(world_engine, last_frame_np, inpainted_np, inpainted, mode)
+    tween_frames = _apply_edit(
+        world_engine, scene_authoring, last_frame_np, inpainted_np, inpainted, mode, video_prompt
+    )
 
     return (
         ScenePropEditResponseData(

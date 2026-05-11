@@ -142,7 +142,7 @@ const SceneEditOverlay = () => {
     if (!trimmed || mode !== 'open') return
     dispatch({ type: 'SUBMIT' })
     try {
-      const result = await wsRequest('scene_edit', { prompt: trimmed }, 30_000)
+      const result = await wsRequest('scene_edit', { prompt: trimmed }, 600_000)
       dispatch({
         type: 'SUCCESS',
         preview:
@@ -160,11 +160,11 @@ const SceneEditOverlay = () => {
   // Same RPC as the typed-prompt flow but skips the VLM authoring step,
   // saving the tool-call round-trip for these pre-curated prompts.
   const submitDirectPrompt = useCallback(
-    async (presetPrompt: string) => {
+    async (presetPrompt: string, videoPrompt: string) => {
       if (mode !== 'open') return
       dispatch({ type: 'SUBMIT' })
       try {
-        await wsRequest('scene_edit', { prompt: presetPrompt, direct: true }, 30_000)
+        await wsRequest('scene_edit', { prompt: presetPrompt, direct: true, video_prompt: videoPrompt }, 600_000)
         // Silent close — the user already knows what they sent.
         dispatch({ type: 'SUCCESS' })
       } catch (err) {
@@ -188,9 +188,10 @@ const SceneEditOverlay = () => {
             reference_jpeg_b64: referenceB64,
             kind: prop.kind,
             target: spawnAtCenter ? 'centre' : 'appropriate',
-            subject: slugToSubject(prop.slug)
+            subject: slugToSubject(prop.slug),
+            video_prompt: prop.video_prompt ?? undefined
           },
-          60_000
+          600_000
         )
         // Silent close — no preview / editPrompt for the tile path.
         dispatch({ type: 'SUCCESS' })

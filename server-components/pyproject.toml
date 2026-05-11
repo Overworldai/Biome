@@ -29,6 +29,13 @@ dependencies = [
   "gguf>=0.10.0",
   "imageio-ffmpeg==0.6.0",
   "structlog==25.5.0",
+  # LTX-Video's T5 tokenizer ships as a SentencePiece model
+  # (spiece.model). transformers tries `sentencepiece` first, then
+  # falls back to `tiktoken` — neither is a transitive of our other
+  # deps, so list explicitly. `protobuf` is required by
+  # `SentencePieceExtractor` to deserialize the .model file.
+  "sentencepiece==0.2.0",
+  "protobuf==6.33.6",
 ]
 
 [dependency-groups]

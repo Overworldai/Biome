@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { STYLED_SCROLLBAR } from '../../styles'
 
-type EnvironmentOption = { label: string; icon: ReactNode; prompt: string }
+type EnvironmentOption = { label: string; icon: ReactNode; prompt: string; videoPrompt: string }
 type EnvironmentSection = { title: string; options: EnvironmentOption[] }
 
 /** Shared SVG attribute set so the icons match in stroke width / cap
@@ -191,37 +191,43 @@ const ENVIRONMENT_SECTIONS: EnvironmentSection[] = [
         label: 'Dawn',
         icon: SunOnHorizonRising,
         prompt:
-          'Change the time of day to dawn — soft pink and orange light at the horizon, the sun low, long shadows reaching across the scene.'
+          'Change the time of day to dawn — soft pink and orange light at the horizon, the sun low, long shadows reaching across the scene.',
+        videoPrompt: 'Dawn light spreads across the sky, soft pink and orange tones replacing darkness.'
       },
       {
         label: 'Morning',
         icon: SunWithCloud,
         prompt:
-          'Change the time of day to mid-morning — bright clean sunlight, blue sky with a few high clouds, warm tones.'
+          'Change the time of day to mid-morning — bright clean sunlight, blue sky with a few high clouds, warm tones.',
+        videoPrompt: 'The sky brightens to clean morning blue, sunlight filling the scene with warm tones.'
       },
       {
         label: 'Noon',
         icon: SunWithRays,
         prompt:
-          'Change the time of day to noon — bright overhead sun, sharp contrast, short shadows directly under objects.'
+          'Change the time of day to noon — bright overhead sun, sharp contrast, short shadows directly under objects.',
+        videoPrompt: 'The sun rises overhead, shadows shrinking, light becoming bright and sharp.'
       },
       {
         label: 'Afternoon',
         icon: SunLowAngle,
         prompt:
-          'Change the time of day to late afternoon — warm golden-hour light raking across the scene, long shadows.'
+          'Change the time of day to late afternoon — warm golden-hour light raking across the scene, long shadows.',
+        videoPrompt: 'The light turns warm and golden as the sun lowers, shadows stretching across the scene.'
       },
       {
         label: 'Dusk',
         icon: SunOnHorizonSetting,
         prompt:
-          'Change the time of day to dusk — deep orange and purple sky, the sun just at the horizon, long warm shadows.'
+          'Change the time of day to dusk — deep orange and purple sky, the sun just at the horizon, long warm shadows.',
+        videoPrompt: 'The sky deepens to orange and purple as the sun sets, shadows lengthening across the scene.'
       },
       {
         label: 'Night',
         icon: Moon,
         prompt:
-          'Change the time of day to night — dark sky scattered with stars, cool blue moonlight casting deep shadows, any artificial lights now visibly glowing.'
+          'Change the time of day to night — dark sky scattered with stars, cool blue moonlight casting deep shadows, any artificial lights now visibly glowing.',
+        videoPrompt: 'The scene darkens to night, stars emerging in the sky, cool moonlight replacing the sun.'
       }
     ]
   },
@@ -231,37 +237,43 @@ const ENVIRONMENT_SECTIONS: EnvironmentSection[] = [
       {
         label: 'Clear',
         icon: SunBright,
-        prompt: 'Set the weather to clear — bright sun, blue sky, no clouds, crisp visibility, no precipitation.'
+        prompt: 'Set the weather to clear — bright sun, blue sky, no clouds, crisp visibility, no precipitation.',
+        videoPrompt: 'Clouds part and dissolve, leaving a bright clear sky and crisp visibility.'
       },
       {
         label: 'Overcast',
         icon: Cloud,
         prompt:
-          'Set the weather to overcast — uniform grey clouds covering the sky, soft diffuse light, no harsh shadows.'
+          'Set the weather to overcast — uniform grey clouds covering the sky, soft diffuse light, no harsh shadows.',
+        videoPrompt: 'Grey clouds roll in and cover the sky, the light flattening into soft diffuse overcast.'
       },
       {
         label: 'Rain',
         icon: CloudRain,
         prompt:
-          'Set the weather to rainy — wet glistening surfaces, puddles forming on the ground, raindrops streaking through the air, low grey overcast sky.'
+          'Set the weather to rainy — wet glistening surfaces, puddles forming on the ground, raindrops streaking through the air, low grey overcast sky.',
+        videoPrompt: 'Rain begins falling across the scene, surfaces growing wet and reflective, the sky turning grey.'
       },
       {
         label: 'Thunderstorm',
         icon: CloudLightning,
         prompt:
-          'Set the weather to a heavy thunderstorm — dark roiling clouds, lightning flashing in the distance, torrential rain, dramatic lighting.'
+          'Set the weather to a heavy thunderstorm — dark roiling clouds, lightning flashing in the distance, torrential rain, dramatic lighting.',
+        videoPrompt: 'A thunderstorm rolls in — dark clouds gather, lightning flashes, torrential rain begins.'
       },
       {
         label: 'Snow',
         icon: CloudSnow,
         prompt:
-          'Set the weather to snowy — snow accumulated on the ground and on every surface, snowflakes drifting through the air, pale grey sky.'
+          'Set the weather to snowy — snow accumulated on the ground and on every surface, snowflakes drifting through the air, pale grey sky.',
+        videoPrompt: 'Snow begins to fall, drifting through the air and slowly accumulating on every surface.'
       },
       {
         label: 'Fog',
         icon: Fog,
         prompt:
-          'Set the weather to dense fog — soft white haze across the scene, distant features dissolving into mist, low visibility.'
+          'Set the weather to dense fog — soft white haze across the scene, distant features dissolving into mist, low visibility.',
+        videoPrompt: 'Dense fog rolls in across the scene, distant features dissolving into white haze.'
       }
     ]
   },
@@ -272,37 +284,44 @@ const ENVIRONMENT_SECTIONS: EnvironmentSection[] = [
         label: 'Flooded',
         icon: Wave,
         prompt:
-          'Flood the scene — water covering the ground up to roughly knee height, debris floating on the surface, reflections in the water.'
+          'Flood the scene — water covering the ground up to roughly knee height, debris floating on the surface, reflections in the water.',
+        videoPrompt:
+          'Water rises across the scene, flooding the ground up to knee height with debris floating on its surface.'
       },
       {
         label: 'On fire',
         icon: Flame,
         prompt:
-          'Parts of the scene are on fire — orange and red flames, plumes of dark smoke rising, glowing embers in the air, scorch marks on nearby surfaces.'
+          'Parts of the scene are on fire — orange and red flames, plumes of dark smoke rising, glowing embers in the air, scorch marks on nearby surfaces.',
+        videoPrompt: 'Flames erupt across the scene, dark smoke rising and embers drifting through the air.'
       },
       {
         label: 'Heavy smoke',
         icon: Smoke,
         prompt:
-          'Fill the scene with thick smoke — grey-brown haze obscuring distance, particulate floating in the air, washed-out colours.'
+          'Fill the scene with thick smoke — grey-brown haze obscuring distance, particulate floating in the air, washed-out colours.',
+        videoPrompt: 'Thick smoke rolls into the scene, grey-brown haze filling the air and obscuring distance.'
       },
       {
         label: 'Sandstorm',
         icon: SandstormStreaks,
         prompt:
-          'Engulf the scene in a sandstorm — orange-tan dust filling the air, fine sand drifting across surfaces, dramatically reduced visibility.'
+          'Engulf the scene in a sandstorm — orange-tan dust filling the air, fine sand drifting across surfaces, dramatically reduced visibility.',
+        videoPrompt: 'A sandstorm sweeps in, orange dust filling the air and visibility dropping dramatically.'
       },
       {
         label: 'Ruined',
         icon: RuinedHouse,
         prompt:
-          'Make the scene look post-apocalyptic — rusted, abandoned, overgrown with weeds, scattered debris, cracked and broken surfaces.'
+          'Make the scene look post-apocalyptic — rusted, abandoned, overgrown with weeds, scattered debris, cracked and broken surfaces.',
+        videoPrompt: 'The scene decays into ruin — surfaces crack and rust, debris scatters, weeds overgrow everything.'
       },
       {
         label: 'Snow buried',
         icon: SnowMound,
         prompt:
-          'Bury the scene in deep snow — surfaces and objects partially covered in snowdrifts, icicles, pale wintery light.'
+          'Bury the scene in deep snow — surfaces and objects partially covered in snowdrifts, icicles, pale wintery light.',
+        videoPrompt: 'Heavy snow accumulates rapidly, burying surfaces in deep drifts as the light turns wintery pale.'
       }
     ]
   }
@@ -310,7 +329,7 @@ const ENVIRONMENT_SECTIONS: EnvironmentSection[] = [
 
 type EnvironmentPresetListProps = {
   disabled: boolean
-  onSelect: (prompt: string) => void
+  onSelect: (prompt: string, videoPrompt: string) => void
 }
 
 /** Vertical stack of subcategory headings + 3-column button grids,
@@ -330,7 +349,7 @@ const EnvironmentPresetList = ({ disabled, onSelect }: EnvironmentPresetListProp
             <button
               key={opt.label}
               type="button"
-              onClick={() => onSelect(opt.prompt)}
+              onClick={() => onSelect(opt.prompt, opt.videoPrompt)}
               onMouseDown={(e) => e.preventDefault()}
               className="
                 flex aspect-square flex-col items-center justify-center gap-[1cqh] bg-black/40 p-[0.5cqh_0.4cqw]

@@ -103,10 +103,53 @@ class Prop:
     # where rembg's foreground segmentation otherwise latches onto the
     # depicted figure and strips the frame.
     chroma_cut: bool = False
+    # Spawnables only: per-prop override for the video animation prompt
+    # (forwarded to the video pipeline when the prop is spawned in
+    # `video` mode). When None, falls back to the category template in
+    # `DEFAULT_VIDEO_TEMPLATES`. Always None for holdables.
+    video_prompt: str | None = None
 
     @property
     def id(self) -> str:
         return f"{self.category}/{self.slug}"
+
+
+# Category-default video prompts. The video model needs motion to
+# describe, but we want motion that's *direction-agnostic* — the FLF
+# pipeline pins the endpoint composition, so a prompt like "speeds
+# onto the scene from the left" specifies a direction the endpoints
+# don't necessarily support and biases the model away from the
+# constraint. Neutral arrival verbs ("arrives", "appears", "drops
+# down") let the trained-FLF interpolation pick the path. The
+# VIDEO_USE_VLM_PROMPT path (in `scene_authoring.py`) overrides these
+# at request time with a VLM-authored description that sees both
+# actual endpoints; these are the fallback when that flag is off.
+DEFAULT_VIDEO_TEMPLATES: dict[str, str] = {
+    "vehicles": "{subject} arrives in the scene.",
+    "furniture": "{subject} appears in the scene.",
+    "containers": "{subject} drops into the scene.",
+    "paintings": "{subject} appears, hanging on a wall in the scene.",
+    "electronics": "{subject} appears in the scene.",
+    "foliage_and_rocks": "{subject} grows up out of the ground in the scene.",
+    "industrial": "{subject} drops into the scene.",
+    "npcs": "{subject} arrives in the scene.",
+    "street": "{subject} drops into the scene.",
+}
+
+
+def derive_video_prompt(prop: Prop) -> str | None:
+    """Resolve a prop's video animation prompt: use the per-prop override
+    if provided, else fall back to the category template (interpolating
+    `prop.prompt` as `{subject}`). Returns None for holdables — they're
+    spawned into the player's hands, not animated into the world."""
+    if prop.kind != "spawnable":
+        return None
+    if prop.video_prompt is not None:
+        return prop.video_prompt
+    template = DEFAULT_VIDEO_TEMPLATES.get(prop.category)
+    if template is None:
+        return None
+    return template.format(subject=prop.prompt)
 
 
 def _h(category: str, slug: str, prompt: str, *, two_handed: bool = False) -> Prop:
@@ -119,11 +162,11 @@ def _h(category: str, slug: str, prompt: str, *, two_handed: bool = False) -> Pr
     )
 
 
-def _s(category: str, slug: str, prompt: str) -> Prop:
-    return Prop(category=category, slug=slug, kind="spawnable", prompt=prompt)
+def _s(category: str, slug: str, prompt: str, *, video_prompt: str | None = None) -> Prop:
+    return Prop(category=category, slug=slug, kind="spawnable", prompt=prompt, video_prompt=video_prompt)
 
 
-def _n(category: str, slug: str, prompt: str) -> Prop:
+def _n(category: str, slug: str, prompt: str, *, video_prompt: str | None = None) -> Prop:
     """NPC/character: spawnable that uses the character studio wrapper."""
     return Prop(
         category=category,
@@ -131,10 +174,11 @@ def _n(category: str, slug: str, prompt: str) -> Prop:
         kind="spawnable",
         prompt=prompt,
         is_character=True,
+        video_prompt=video_prompt,
     )
 
 
-def _pa(slug: str, subject: str) -> Prop:
+def _pa(slug: str, subject: str, *, video_prompt: str | None = None) -> Prop:
     """Painting helper: spawnable that bakes in the shared 'framed oil
     painting in an ornate gilded frame' phrasing and uses the edge-
     flooded chroma cut instead of rembg — rembg's BiRefNet treats the
@@ -146,6 +190,7 @@ def _pa(slug: str, subject: str) -> Prop:
         kind="spawnable",
         prompt=f"a framed oil painting in an ornate gilded frame depicting {subject}",
         chroma_cut=True,
+        video_prompt=video_prompt,
     )
 
 
@@ -292,7 +337,9 @@ CATALOGUE: list[Prop] = [
     _s("vehicles", "atv_quad", "a green four-wheeled ATV quad bike"),
     _s("vehicles", "forklift", "a yellow industrial forklift truck"),
     _s(
-        "vehicles", "ambulance", "a white emergency ambulance with red and blue stripes"
+        "vehicles",
+        "ambulance",
+        "a white emergency ambulance with red and blue stripes",
     ),
     _s(
         "vehicles",
@@ -524,6 +571,10 @@ class ManifestEntry(BaseModel):
     kind: Kind
     image: str
     held_image: str | None
+    # Resolved video animation prompt (per-prop override or category
+    # template). Null for holdables and any spawnable category that
+    # doesn't have a template.
+    video_prompt: str | None
 
 
 class Manifest(BaseModel):
@@ -543,6 +594,7 @@ def build_manifest(catalogue: list[Prop]) -> Manifest:
             kind=prop.kind,
             image=f"{prop.category}/{prop.slug}.png",
             held_image=held,
+            video_prompt=derive_video_prompt(prop),
         )
         by_category.setdefault(prop.category, []).append(entry)
     for entries in by_category.values():

@@ -153,7 +153,8 @@ export const SceneEditRequestSchema = z.object({
   type: z.literal('scene_edit'),
   req_id: z.string(),
   prompt: z.string(),
-  direct: z.boolean().optional()
+  direct: z.boolean().optional(),
+  video_prompt: z.string().optional()
 })
 export type SceneEditRequest = z.infer<typeof SceneEditRequestSchema>
 
@@ -170,7 +171,8 @@ export const ScenePropEditRequestSchema = z.object({
   reference_jpeg_b64: z.string(),
   kind: z.enum(['spawnable', 'holdable']),
   target: z.enum(['centre', 'appropriate']),
-  subject: z.string()
+  subject: z.string(),
+  video_prompt: z.string().optional()
 })
 export type ScenePropEditRequest = z.infer<typeof ScenePropEditRequestSchema>
 

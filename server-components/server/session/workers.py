@@ -191,6 +191,7 @@ async def run_receiver(
                         conn.scene_edit_request = {
                             "prompt": prompt,
                             "direct": req.direct,
+                            "video_prompt": req.video_prompt,
                             "future": fut,
                         }
                         try:
@@ -222,6 +223,7 @@ async def run_receiver(
                             kind=req.kind,
                             target=req.target,
                             subject=req.subject.strip(),
+                            video_prompt=req.video_prompt,
                             future=fut,
                         )
                         try:
@@ -502,6 +504,7 @@ def run_generator(
                         req["prompt"],
                         conn.last_generated_cpu_frames,
                         direct=req.get("direct", False),
+                        video_prompt=req.get("video_prompt"),
                     )
                 except Exception as e:
                     logger.exception("Scene edit failed", operation="scene_edit")
@@ -538,6 +541,7 @@ def run_generator(
                         kind=prop_req.kind,
                         target=prop_req.target,
                         subject=prop_req.subject,
+                        video_prompt=prop_req.video_prompt,
                         cpu_frames=conn.last_generated_cpu_frames,
                     )
                 except Exception as e:

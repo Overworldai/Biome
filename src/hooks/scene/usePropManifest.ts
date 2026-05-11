@@ -5,7 +5,8 @@ const PropEntrySchema = z.object({
   slug: z.string(),
   kind: z.enum(['spawnable', 'holdable']),
   image: z.string(),
-  held_image: z.string().nullable()
+  held_image: z.string().nullable(),
+  video_prompt: z.string().nullable().optional()
 })
 
 const PropManifestSchema = z.object({

@@ -42,6 +42,7 @@ from server.protocol import (
     RpcError,
     RpcSuccess,
     SceneEditRequest,
+    ScenePropEditRequest,
     StageId,
     SystemInfo,
     rpc_err,
@@ -275,7 +276,7 @@ async def run_preinit_handshake(
                         rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
                     )
                     conn.init_req_id = None
-            case SceneEditRequest() | GenerateSceneRequest():
+            case SceneEditRequest() | ScenePropEditRequest() | GenerateSceneRequest():
                 await conn.websocket.send_text(
                     rpc_err(parsed.req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)
                 )
