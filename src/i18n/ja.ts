@@ -231,7 +231,12 @@ const ja = {
         worldModel: {
           download: 'ダウンロード',
           couldNotLoadModelList: 'モデル一覧を読み込めませんでした',
-          deleteLocalCache: 'モデルを削除'
+          deleteLocalCache: 'モデルを削除',
+          custom: 'カスタム...',
+          modelNotFound: 'モデルが見つかりません',
+          checking: '確認中...',
+          couldNotCheckModel: 'モデルを確認できませんでした',
+          removeFromList: 'リストから削除'
         },
         volume: {
           title: '音量',

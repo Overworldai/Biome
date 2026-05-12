@@ -74,6 +74,13 @@ export const settingsSchema = z.object({
   server_url: z.string().default(''),
   engine_mode: z.enum(['standalone', 'server']).default('standalone'),
   engine_model: z.string().default(DEFAULT_WORLD_ENGINE_MODEL),
+  // User-added custom HF repo ids that the picker should surface
+  // alongside the curated Waypoint collection. Local-only setting:
+  // not part of the wire protocol, just remembered between sessions
+  // so the user doesn't have to re-type a custom id every time. The
+  // model picker validates a typed id via `get-models-info` before
+  // promoting it onto this list.
+  custom_models: z.array(z.string()).default([]),
   engine_backend: EngineBackendSchema.default('world_engine'),
   engine_quant: QuantSchema.default('none'),
   cap_inference_fps: z.boolean().default(true),

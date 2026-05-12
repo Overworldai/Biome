@@ -6,6 +6,7 @@ import { ENGINE_MODES, localhostUrl, type EngineBackend, type QuantOption, type 
 import type { TranslationKey } from '../../i18n'
 import { useEngineLifecycle, type LifecycleState } from '../../context/engineLifecycle/engineLifecycleContextValue'
 import { useConnection } from '../../context/streaming/connection'
+import { useSettings } from '../../hooks/settings/settingsContextValue'
 import { normalizeServerUrl, toHealthUrl } from '../../utils/serverUrl'
 import SettingsSection from '../ui/SettingsSection'
 import SettingsToggle from '../ui/SettingsToggle'
@@ -19,7 +20,12 @@ import EngineInstallModal from '../engine/EngineInstallModal'
 
 type MenuModelOption = {
   id: string
-  isLocal: boolean
+  /** `null` means "unknown" — used for freshly-typed custom rows
+   *  between blur-validation completing and the next picker open.
+   *  Picker treats unknown as not-cached for cache-delete affordance
+   *  purposes while keeping the row visually neutral (no download
+   *  badge either). */
+  isLocal: boolean | null
   sizeBytes: number | null
 }
 
@@ -69,6 +75,7 @@ type EngineTabProps = {
 const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   const { settings, active, menuEngineMode, setMenuEngineMode } = props
   const { t } = useTranslation()
+  const { saveSettings } = useSettings()
   const lifecycle = useEngineLifecycle()
   const { isStreaming, serverCapabilities, setServerCapabilities } = useConnection()
   const checkEngine = lifecycle.check
@@ -76,6 +83,10 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
   const configWorldModel = settings.engine_model
   const configServerUrl = settings.server_url
+  // User-curated extra HF repo ids. Stable identity matters here: every
+  // dependent effect threads it through, and a fresh `?? []` literal
+  // each render would retrigger the loader unnecessarily.
+  const savedCustomModels = useMemo(() => settings.custom_models ?? [], [settings.custom_models])
 
   const [menuServerUrl, setMenuServerUrl] = useState(configServerUrl)
   const [menuWorldModel, setMenuWorldModel] = useState(configWorldModel)
@@ -126,6 +137,18 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   ])
   const [menuModelsLoading, setMenuModelsLoading] = useState(false)
   const [menuModelsError, setMenuModelsError] = useState<string | null>(null)
+
+  // Status of the in-flight HF validation for the custom-input text box
+  // (the `Custom...` row in the model picker dropdown). `idle` is the
+  // resting state — the picker treats the value as committed.
+  // `loading` shows a "checking..." hint next to the typed id while
+  // `get-models-info` runs; `error` surfaces the user-facing reason
+  // (gated repo, not found, network) so a typo doesn't silently land
+  // in `settings.custom_models`.
+  const [customModelStatus, setCustomModelStatus] = useState<{
+    state: 'idle' | 'loading' | 'error'
+    error: string | null
+  }>({ state: 'idle', error: null })
 
   const [serverUrlStatus, setServerUrlStatus] = useState<ServerUrlStatus>('idle')
   const [lastValidatedServerUrl, setLastValidatedServerUrl] = useState('')
@@ -318,21 +341,41 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
         const models = await invoke('list-models', serverUrlForModels, menuEngineBackend)
         if (cancelled) return
 
-        // Pin the currently-selected model into the list even if the
-        // server doesn't report it (e.g. user has a stale config from
-        // before the model was retired from the Waypoint collection and
-        // they've since cleared their cache, or the saved model is
-        // incompatible with the in-flight backend so the server
-        // filtered it out). Without this the picker would render with
-        // no selected option. The availability flag below lets the
-        // save-time guard distinguish "pinned because incompatible"
-        // from a legitimate selection.
-        const haveSelected = models.some((m) => m.id === menuWorldModel)
-        const options: MenuModelOption[] = models.map((m) => ({
+        // Saved custom models that the curated `/api/models` didn't
+        // return need a separate metadata round-trip — they're either
+        // outside the Waypoint collection (so `list-models` doesn't
+        // know about them) or have a `model_type` the in-flight
+        // backend filter dropped. Either way, the picker still has to
+        // show them so the user can pick / manage them.
+        const curatedIds = new Set(models.map((m) => m.id))
+        const customIds = savedCustomModels.filter((id) => id.trim().length > 0 && !curatedIds.has(id))
+        const customInfo = customIds.length ? await invoke('get-models-info', customIds, serverUrlForModels) : []
+        if (cancelled) return
+
+        const customOptions: MenuModelOption[] = customInfo.map((m) => ({
           id: m.id,
           isLocal: m.is_local,
           sizeBytes: m.size_bytes
         }))
+
+        // Pin the currently-selected model into the list even if it
+        // sits outside both the curated list and the saved custom set
+        // (e.g. user has a stale config from before the model was
+        // retired from the Waypoint collection and they've since
+        // cleared their cache, or the saved model is incompatible
+        // with the in-flight backend so the server filtered it out).
+        // Without this the picker would render with no selected option.
+        // The availability flag below lets the save-time guard
+        // distinguish "pinned because incompatible / missing" from a
+        // legitimate selection.
+        const haveSelected =
+          models.some((m) => m.id === menuWorldModel) || customOptions.some((m) => m.id === menuWorldModel)
+        const curatedOptions: MenuModelOption[] = models.map((m) => ({
+          id: m.id,
+          isLocal: m.is_local,
+          sizeBytes: m.size_bytes
+        }))
+        const options: MenuModelOption[] = [...curatedOptions, ...customOptions]
         if (!haveSelected && menuWorldModel.trim()) {
           options.unshift({ id: menuWorldModel, isLocal: false, sizeBytes: null })
         }
@@ -353,7 +396,16 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     return () => {
       cancelled = true
     }
-  }, [menuWorldModel, menuEngineMode, menuEngineBackend, serverUrlForModels, serverUrlStatus, t, engineReady])
+  }, [
+    menuWorldModel,
+    menuEngineMode,
+    menuEngineBackend,
+    serverUrlForModels,
+    serverUrlStatus,
+    savedCustomModels,
+    t,
+    engineReady
+  ])
 
   const handleEngineModeChange = (mode: 'server' | 'standalone') => {
     setMenuEngineMode(mode)
@@ -363,7 +415,44 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
 
   const handleWorldModelChange = (model: string) => {
     setMenuWorldModel(model.trim())
+    setCustomModelStatus({ state: 'idle', error: null })
   }
+
+  // Validate a user-typed custom model id against HuggingFace via the
+  // active server's `/api/model-info`. On success, add the id to the
+  // saved-customs list so it sticks around between settings opens; on
+  // failure, surface the reason via `customModelStatus` so the picker
+  // hint slot can show it. The committed id stays as `menuWorldModel`
+  // either way — saving the menu with a transiently-broken custom id
+  // is up to the user (the engine load will surface a clearer error
+  // if it really won't load).
+  const handleCustomModelBlur = useCallback(
+    async (modelId: string) => {
+      if (menuModelOptions.some((m) => m.id === modelId)) return
+      setCustomModelStatus({ state: 'loading', error: null })
+      try {
+        const results = await invoke('get-models-info', [modelId], serverUrlForModels)
+        const info = results[0]
+        if (info && !info.exists) {
+          setCustomModelStatus({ state: 'error', error: info.error ?? t('app.settings.worldModel.modelNotFound') })
+        } else if (info?.error) {
+          setCustomModelStatus({ state: 'error', error: info.error })
+        } else {
+          setCustomModelStatus({ state: 'idle', error: null })
+          setMenuModelOptions((prev) => [
+            ...prev,
+            { id: modelId, isLocal: info?.is_local ?? null, sizeBytes: info?.size_bytes ?? null }
+          ])
+          if (!savedCustomModels.includes(modelId)) {
+            void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
+          }
+        }
+      } catch {
+        setCustomModelStatus({ state: 'error', error: t('app.settings.worldModel.couldNotCheckModel') })
+      }
+    },
+    [menuModelOptions, serverUrlForModels, savedCustomModels, settings, saveSettings, t]
+  )
 
   const handleServerUrlBlur = useCallback(async () => {
     if (!menuServerUrl.trim()) {
@@ -410,6 +499,25 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
     // Update locally first so the UI reflects the action immediately.
     setMenuModelOptions((prev) => prev.map((m) => (m.id === modelId ? { ...m, isLocal: false } : m)))
   }, [showDeleteCacheModal, serverUrlForModels])
+
+  /** Drop a user-added entry from `settings.custom_models`. Distinct
+   *  from cache-delete (handled above) — the row disappears from the
+   *  picker entirely once persisted. If the deleted entry is the
+   *  current selection, fall back to whatever's left in the picker so
+   *  the dropdown doesn't end up rendering an empty selection. */
+  const handleRemoveCustomModel = useCallback(
+    (modelId: string) => {
+      const nextCustom = savedCustomModels.filter((m) => m !== modelId)
+      void saveSettings({ ...settings, custom_models: nextCustom })
+      setMenuModelOptions((prev) => prev.filter((m) => m.id !== modelId))
+      if (menuWorldModel === modelId) {
+        const fallback = menuModelOptions.find((m) => m.id !== modelId)?.id ?? settings.engine_model
+        setMenuWorldModel(fallback)
+        setCustomModelStatus({ state: 'idle', error: null })
+      }
+    },
+    [savedCustomModels, settings, saveSettings, menuModelOptions, menuWorldModel]
+  )
 
   // `reinstallEngine` orchestrates stop → install → start as one unit.
   // The modal stays open across the whole pipeline — including the
@@ -524,21 +632,47 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
             hint={t('app.settings.experience.worldModelDescription')}
           >
             <SettingsSelect
-              options={menuModelOptions.map((model) => ({
-                value: model.id,
-                rawLabel: model.id.replace(/^Overworld\//, ''),
-                prefix: [
-                  model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
-                  model.isLocal ? null : t('app.settings.worldModel.download')
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-                cacheDeletable: model.isLocal,
-                dimmed: !model.isLocal
-              }))}
+              options={[...menuModelOptions]
+                .sort((a, b) => {
+                  // Cached rows up top so the user lands on actionable
+                  // options first; custom (user-added) rows pushed
+                  // below curated ones; ties resolve alphabetically so
+                  // the picker is stable between renders.
+                  const aLocal = a.isLocal === true
+                  const bLocal = b.isLocal === true
+                  if (aLocal !== bLocal) return aLocal ? -1 : 1
+                  const aCustom = savedCustomModels.includes(a.id)
+                  const bCustom = savedCustomModels.includes(b.id)
+                  if (aCustom !== bCustom) return aCustom ? 1 : -1
+                  return a.id.localeCompare(b.id)
+                })
+                .map((model) => {
+                  const isCustom = savedCustomModels.includes(model.id)
+                  return {
+                    value: model.id,
+                    rawLabel: model.id.replace(/^Overworld\//, ''),
+                    prefix: [
+                      model.sizeBytes != null ? formatBytes(model.sizeBytes) : null,
+                      model.isLocal === false ? t('app.settings.worldModel.download') : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                    // Cache-delete is meaningful only for downloaded
+                    // models; `null` means "unknown" (freshly-validated
+                    // custom row) — treat as not-yet-cached to avoid
+                    // offering a delete we can't fulfil.
+                    cacheDeletable: model.isLocal === true,
+                    // Distinct "remove from list" affordance — only
+                    // on user-added rows. Doesn't touch the on-disk
+                    // cache (use cacheDelete for that).
+                    deletable: isCustom,
+                    dimmed: model.isLocal === false
+                  }
+                })}
               value={menuWorldModel}
               onChange={handleWorldModelChange}
               onCacheDelete={(modelId) => setShowDeleteCacheModal(modelId)}
+              onDelete={handleRemoveCustomModel}
               hideSelectedInDropdown
               disabled={
                 menuModelsLoading ||
@@ -548,6 +682,17 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
               disabledTooltip={
                 menuEngineMode === 'standalone' && !engineReady ? standaloneTooltip(lifecycle.state.kind) : undefined
               }
+              allowCustom
+              onCustomBlur={(modelId) => void handleCustomModelBlur(modelId)}
+              customLabel="app.settings.worldModel.custom"
+              rawCustomPrefix={
+                customModelStatus.state === 'loading'
+                  ? t('app.settings.worldModel.checking')
+                  : customModelStatus.state === 'error'
+                    ? (customModelStatus.error ?? t('app.settings.worldModel.modelNotFound'))
+                    : undefined
+              }
+              deleteLabel="app.settings.worldModel.removeFromList"
               cacheDeleteLabel="app.settings.worldModel.deleteLocalCache"
             />
           </SettingsRow>

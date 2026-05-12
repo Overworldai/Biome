@@ -224,7 +224,12 @@ const he = {
         worldModel: {
           download: 'הורדה',
           couldNotLoadModelList: 'לא ניתן לטעון את רשימת המודלים',
-          deleteLocalCache: 'מחק את המודל'
+          deleteLocalCache: 'מחק את המודל',
+          custom: 'מותאם אישית...',
+          modelNotFound: 'המודל לא נמצא',
+          checking: 'בודק...',
+          couldNotCheckModel: 'לא ניתן לבדוק את המודל',
+          removeFromList: 'הסר מהרשימה'
         },
         volume: {
           title: 'עוצמת קול',

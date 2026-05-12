@@ -221,7 +221,12 @@ const zh = {
         worldModel: {
           download: '下载',
           couldNotLoadModelList: '无法加载模型列表',
-          deleteLocalCache: '删除模型'
+          deleteLocalCache: '删除模型',
+          custom: '自定义...',
+          modelNotFound: '未找到模型',
+          checking: '检查中...',
+          couldNotCheckModel: '无法检查模型',
+          removeFromList: '从列表中移除'
         },
         volume: {
           title: '音量',

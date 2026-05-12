@@ -129,6 +129,30 @@ class PickerModel(BaseModel):
     model_type: str | None = None
 
 
+class ModelInfoResponse(BaseModel):
+    """Body of `GET /api/model-info/{model_id}`. Mirrors the `ModelInfo`
+    TS type in `src/types/ipc.ts`. Used by the renderer to validate a
+    user-typed custom model id against HuggingFace before pinning it
+    into the picker — the curated `/api/models` route only knows about
+    repos in the Waypoint collection plus the local cache, so anything
+    else has to round-trip through here for a yes/no on existence,
+    a size estimate, and whether the repo is already cached locally
+    (so the picker can show the cache-delete affordance on custom
+    rows the same as it does on curated ones).
+
+    `exists` carries the yes/no; `error` is the user-facing reason
+    when something's off (gated repo, not found, transient HF failure).
+    Transient failures are returned with `exists=True` so the renderer
+    doesn't lock the user out for a flaky network — they're free to
+    retry."""
+
+    id: str
+    size_bytes: int | None
+    exists: bool
+    is_local: bool
+    error: str | None
+
+
 # Internal cache value; not exposed on a route. Carries the raw size
 # resolution per model id so the picker endpoint can amortise HF lookups
 # across calls without re-fetching for every render.
@@ -233,6 +257,11 @@ def get_waypoint_models_cache(request: Request) -> TtlCache[str, list[str]]:
 
 def get_model_type_cache(request: Request) -> TtlCache[str, str | None]:
     cache: TtlCache[str, str | None] = request.app.state.model_type_cache
+    return cache
+
+
+def get_model_info_cache(request: Request) -> TtlCache[str, "ModelInfoResponse"]:
+    cache: TtlCache[str, ModelInfoResponse] = request.app.state.model_info_cache
     return cache
 
 
@@ -536,6 +565,83 @@ async def list_models(
         for id_ in picker_ids
         if _is_compatible(id_)
     ]
+
+
+@router.get("/api/model-info/{model_id:path}")
+async def get_model_info(
+    model_id: str,
+    cache: Annotated[TtlCache[str, ModelInfoResponse], Depends(get_model_info_cache)],
+) -> ModelInfoResponse:
+    """Validate a user-typed custom model id against HuggingFace.
+
+    Used by the settings panel's "custom model" affordance: the user
+    types a repo id, we check that it exists, gate or no-gate, and
+    report back a size estimate so the picker can show it alongside
+    the curated entries. `/api/models` is the canonical list for the
+    Waypoint collection + local cache; anything outside that has to
+    round-trip through here for the existence yes/no.
+
+    Stable error states (gated, not-found) are cached so a repeated
+    settings-panel open doesn't burn HF requests on the same bad id.
+    Transient failures aren't cached — those should retry naturally.
+    Sizes mirror `_resolve_model_size`'s filter (safetensors-only,
+    diffusers VAE excluded) so a custom row's size aligns with the
+    curated rows on the same picker."""
+    cached = cache.get(model_id)
+    if cached is not None:
+        return cached
+
+    # Targeted cache probe — `try_to_load_from_cache` returning a string
+    # path (vs `None` / the `_CACHED_NO_EXIST` sentinel) is the
+    # huggingface_hub-blessed way to ask "is this repo's config.yaml
+    # actually present on disk" without a full `scan_cache_dir` walk.
+    # We treat the presence of the config as the repo being cached,
+    # mirroring the membership rule `_scan_cache` uses.
+    def _is_locally_cached() -> bool:
+        try:
+            path = try_to_load_from_cache(model_id, "config.yaml")
+        except Exception:  # noqa: BLE001  -- OS-level cache issues; treat as "not cached"
+            return False
+        return isinstance(path, str)
+
+    def _fetch() -> ModelInfoResponse:
+        info = hf_model_info(model_id, files_metadata=True)
+        size_bytes: int | None = None
+        if hasattr(info, "siblings") and info.siblings:
+            seen_blobs: set[str] = set()
+            for s in info.siblings:
+                if s.size is None or not _counts_toward_model_size(s.rfilename):
+                    continue
+                blob_key = getattr(s, "blob_id", None) or s.rfilename
+                if blob_key in seen_blobs:
+                    continue
+                seen_blobs.add(blob_key)
+                size_bytes = (size_bytes or 0) + s.size
+        return ModelInfoResponse(
+            id=model_id,
+            size_bytes=size_bytes,
+            exists=True,
+            is_local=_is_locally_cached(),
+            error=None,
+        )
+
+    try:
+        result = await asyncio.to_thread(_fetch)
+    except GatedRepoError:
+        result = ModelInfoResponse(
+            id=model_id, size_bytes=None, exists=True, is_local=False, error="Private or gated model"
+        )
+    except RepositoryNotFoundError:
+        result = ModelInfoResponse(id=model_id, size_bytes=None, exists=False, is_local=False, error="Model not found")
+    except Exception as e:  # noqa: BLE001  # pyright: ignore[reportUnusedExcept]  -- HF client raises a wide grab-bag (HTTPError/RequestException/HfHubHTTPError) that pyright's stubs don't model; fold them all into a soft response
+        logger.warning(f"model-info error for {model_id}: {e}")
+        # Transient — return without caching so the next call retries.
+        return ModelInfoResponse(
+            id=model_id, size_bytes=None, exists=True, is_local=False, error="Could not check model"
+        )
+
+    cache.set(model_id, result)
+    return result
 
 
 @router.delete("/api/cached-model/{model_id:path}", status_code=204)

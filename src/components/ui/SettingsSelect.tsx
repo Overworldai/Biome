@@ -7,6 +7,10 @@ import { useUISound } from '../../hooks/audio/useUISound'
 type SettingsSelectOptionBase = {
   value: string
   prefix?: string
+  /** Shows a "remove from list" affordance separate from cache deletion.
+   *  Used by the world-model picker for user-added custom rows so the user
+   *  can take them off the picker without also nuking the on-disk cache. */
+  deletable?: boolean
   cacheDeletable?: boolean
   dimmed?: boolean
 }
@@ -18,12 +22,31 @@ type SettingsSelectProps = {
   options: SettingsSelectOption[]
   value: string
   onChange: (value: string) => void
+  /** Fired for options marked `deletable: true`. Distinct from
+   *  `onCacheDelete` — that one removes the on-disk model cache, this
+   *  one removes the entry from the user's curated custom-models list. */
+  onDelete?: (value: string) => void
   onCacheDelete?: (value: string) => void
   disabled?: boolean
   /** Native HTML tooltip shown on hover when `disabled` is true. Used to
    *  explain *why* the control is greyed out (e.g. "install the engine
    *  first"). Ignored when the control is enabled. */
   disabledTooltip?: TranslationKey
+  /** Enables a free-text input mode for typing arbitrary values not in
+   *  the curated options list (custom HF model ids in the world-model
+   *  picker). The dropdown grows a "Custom..." footer that flips into
+   *  text-input mode; on blur the typed value is committed via
+   *  `onChange` and an optional `onCustomBlur` fires for async
+   *  validation. The component auto-toggles back to dropdown when the
+   *  options list catches up to include the committed value. */
+  allowCustom?: boolean
+  onCustomBlur?: (value: string) => void
+  /** Status / hint string rendered alongside the custom input (e.g.
+   *  "checking..." or "model not found"). Raw because it's typically a
+   *  pre-translated dynamic message rather than a TranslationKey. */
+  rawCustomPrefix?: string
+  customLabel?: TranslationKey
+  deleteLabel?: TranslationKey
   cacheDeleteLabel?: TranslationKey
   hideSelectedInDropdown?: boolean
 }
@@ -39,9 +62,15 @@ const SettingsSelect = ({
   options,
   value,
   onChange,
+  onDelete,
   onCacheDelete,
   disabled,
   disabledTooltip,
+  allowCustom,
+  onCustomBlur,
+  rawCustomPrefix,
+  customLabel,
+  deleteLabel,
   cacheDeleteLabel,
   hideSelectedInDropdown
 }: SettingsSelectProps) => {
@@ -49,10 +78,42 @@ const SettingsSelect = ({
   const resolveLabel = (option: SettingsSelectOption) => (option.label ? t(option.label) : option.rawLabel)
   const { playHover, playClick } = useUISound()
   const [isOpen, setIsOpen] = useState(false)
+  // Only start in custom mode if options have actually loaded and the value isn't in them.
+  // Otherwise we'd briefly render the custom input on mount before async-loaded options arrive.
+  const [isCustom, setIsCustom] = useState(
+    () => allowCustom === true && options.length > 0 && !options.some((o) => o.value === value)
+  )
+  const [customValue, setCustomValue] = useState(value)
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const selectedOption = options.find((o) => o.value === value)
+
+  // Track option values to detect when the options list actually changes
+  // content (not just reference identity, which changes every render due to .map()).
+  // Demote from custom back to dropdown when a new option appears matching the
+  // current value (e.g. after validation adds it). Promote to custom when value
+  // changes to something not in options.
+  const prevOptionValuesRef = useRef(new Set(options.map((o) => o.value)))
+  useEffect(() => {
+    if (!allowCustom) return
+    const currentValues = new Set(options.map((o) => o.value))
+    const prevValues = prevOptionValuesRef.current
+    const inOptions = currentValues.has(value)
+    const isNewOption = inOptions && !prevValues.has(value)
+    prevOptionValuesRef.current = currentValues
+    if (isNewOption) {
+      setIsCustom(false)
+    } else if (options.length > 0 && !inOptions) {
+      setIsCustom(true)
+    }
+  }, [allowCustom, options, value])
+
+  // Sync customValue when value changes externally
+  useEffect(() => {
+    setCustomValue(value)
+  }, [value])
 
   const openDropdown = useCallback(() => setIsOpen(true), [])
 
@@ -73,6 +134,14 @@ const SettingsSelect = ({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isOpen])
+
+  const commitCustomValue = () => {
+    const trimmed = customValue.trim()
+    setCustomValue(trimmed)
+    if (trimmed) {
+      onChange(trimmed)
+    }
+  }
 
   const cycleOption = useCallback(
     (delta: 1 | -1) => {
@@ -121,7 +190,7 @@ const SettingsSelect = ({
               type="button"
               className={`
                 min-w-0 flex-1 cursor-pointer rounded-none border-none p-[0.55cqh_1.42cqh] font-serif outline-none
-                ${option.cacheDeletable && onCacheDelete ? '' : 'pr-[4.98cqh]'}
+                ${(option.deletable && onDelete) || (option.cacheDeletable && onCacheDelete) ? '' : 'pr-[4.98cqh]'}
                 bg-transparent text-[2.67cqh] text-inherit
               `}
               onMouseEnter={playHover}
@@ -154,10 +223,116 @@ const SettingsSelect = ({
                 </svg>
               </button>
             )}
+            {option.deletable && onDelete && (
+              <button
+                type="button"
+                className="
+                  flex h-full w-[3.56cqh] cursor-pointer items-center justify-center border-none bg-transparent
+                  text-[rgba(238,244,252,0.45)] transition-colors
+                  hover:text-[rgba(255,120,80,0.95)]
+                "
+                onMouseEnter={playHover}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  playClick()
+                  onDelete(option.value)
+                }}
+                title={deleteLabel ? t(deleteLabel) : undefined}
+              >
+                <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 10" fill="none">
+                  <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
           </div>
         ))}
+      {allowCustom && (
+        <button
+          type="button"
+          className="
+            w-full cursor-pointer rounded-none border-none bg-transparent p-[0.55cqh_1.42cqh] pr-[4.98cqh] font-serif
+            text-[2.67cqh] text-text-modal-muted outline-none
+            hover:bg-[rgba(245,251,255,0.08)]
+          "
+          onClick={() => {
+            playClick()
+            setIsCustom(true)
+            setIsOpen(false)
+          }}
+        >
+          {customLabel ? t(customLabel) : undefined}
+        </button>
+      )}
     </div>
   ) : null
+
+  if (isCustom) {
+    return (
+      <div ref={containerRef} className="relative">
+        <div
+          className={`
+            flex w-full items-stretch rounded-none
+            ${SETTINGS_CONTROL_BASE}
+            p-0
+            ${SETTINGS_OUTLINE_HOVER}
+          `}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
+            className={`
+              min-w-0 flex-1 border-none bg-transparent wrap-break-word outline-none
+              ${SETTINGS_CONTROL_TEXT}
+            `}
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            onPaste={(e) => {
+              e.preventDefault()
+              const pasted = e.clipboardData.getData('text').trim()
+              setCustomValue(pasted)
+            }}
+            onBlur={() => {
+              commitCustomValue()
+              const trimmed = customValue.trim()
+              if (trimmed) onCustomBlur?.(trimmed)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            autoFocus
+          />
+          {rawCustomPrefix && (
+            <span
+              className="
+                flex items-center pr-[1cqh] text-right font-serif text-[2.67cqh] text-[rgba(238,244,252,0.45)] lowercase
+              "
+            >
+              {rawCustomPrefix}
+            </span>
+          )}
+          <button
+            type="button"
+            className="flex w-[3.56cqh] cursor-pointer items-center justify-center border-none bg-surface-btn-primary"
+            onClick={() => {
+              setIsCustom(false)
+              openDropdown()
+            }}
+          >
+            <svg className="h-[1.42cqh] w-[1.42cqh]" viewBox="0 0 10 6" fill="none">
+              <path d="M0 0L5 6L10 0H0Z" fill="rgba(10,14,24,0.95)" />
+            </svg>
+          </button>
+        </div>
+        {dropdownMenu}
+      </div>
+    )
+  }
 
   return (
     <div ref={containerRef} className="relative">

@@ -233,7 +233,12 @@ const goose = {
         worldModel: {
           download: 'download',
           couldNotLoadModelList: 'Could not load model list',
-          deleteLocalCache: 'Delete the model'
+          deleteLocalCache: 'Delete the model',
+          custom: 'Stranger goose...',
+          modelNotFound: 'No goose by that name',
+          checking: 'sniffing around...',
+          couldNotCheckModel: 'Could not sniff out this goose',
+          removeFromList: 'Shoo from the flock'
         },
         volume: {
           title: 'Volume',

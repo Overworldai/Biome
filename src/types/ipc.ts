@@ -42,6 +42,22 @@ export type PickerModel = {
   model_type: string | null
 }
 
+/** Result of validating a user-typed custom model id against
+ *  HuggingFace via `/api/model-info/{id}`. Mirrors `ModelInfoResponse`
+ *  on the server. `exists` is the yes/no the settings panel acts on;
+ *  `error` carries a user-facing reason for the no (gated, not-found)
+ *  or for transient failures where `exists` stays `true` so the user
+ *  isn't locked out by a flaky probe. `is_local` lets the picker show
+ *  the cache-delete affordance on custom rows the same as it does on
+ *  curated ones. */
+export type ModelInfo = {
+  id: string
+  size_bytes: number | null
+  exists: boolean
+  is_local: boolean
+  error: string | null
+}
+
 export type RuntimeDiagnosticsMeta = {
   app_name: string
   app_version: string
@@ -297,6 +313,11 @@ export type IpcCommandMap = {
   // directly — the server is the single source of truth for what's
   // available.
   'list-models': { args: [serverUrl?: string, backend?: EngineBackend]; return: PickerModel[] }
+  // Validate user-typed custom model ids against HuggingFace via the
+  // active server (curated `list-models` only knows the Waypoint
+  // collection + local cache; everything else round-trips here).
+  // Returns one ModelInfo per input id in the same order.
+  'get-models-info': { args: [modelIds: string[], serverUrl?: string]; return: ModelInfo[] }
   'delete-cached-model': { args: [modelId: string, serverUrl?: string]; return: void }
 
   // Engine

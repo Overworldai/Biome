@@ -232,7 +232,12 @@ const en = {
         worldModel: {
           download: 'download',
           couldNotLoadModelList: 'Could not load model list',
-          deleteLocalCache: 'Delete the model'
+          deleteLocalCache: 'Delete the model',
+          custom: 'Custom...',
+          modelNotFound: 'Model not found',
+          checking: 'checking...',
+          couldNotCheckModel: 'Could not check model',
+          removeFromList: 'Remove from list'
         },
         volume: {
           title: 'Volume',
