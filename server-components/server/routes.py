@@ -153,14 +153,19 @@ DEFAULT_WORLD_ENGINE_MODEL = "Overworld/Waypoint-1.5-1B"
 # membership, hence the OR semantics below.
 WAYPOINT_MODEL_TYPES: set[str] = {"waypoint-1", "waypoint-1.5"}
 
-# Per-backend subset of `WAYPOINT_MODEL_TYPES` that the backend can
-# actually load. `world_engine` accepts everything; quark only ships
-# the wp-1.5 implementation today and raises NotImplementedError on
-# wp-1 configs (no TAEHV VAE, different scheduler shape). The picker
-# uses this to filter incompatible models out per the in-flight
-# backend selection — see `/api/models?backend=…`.
-COMPATIBLE_MODEL_TYPES_BY_BACKEND: dict[EngineBackend, set[str]] = {
-    EngineBackend.WORLD_ENGINE: WAYPOINT_MODEL_TYPES,
+# Per-backend support matrix used by the `/api/models?backend=…` filter.
+# `None` is the in-band sentinel for "universal" — the backend accepts
+# any Waypoint variant we'd surface in the picker, including collection
+# entries whose `config.yaml` is missing `model_type:` (treated as
+# trusted-by-curation). A `set[str]` restricts to the listed types and
+# strict-drops unknowns that originate from the curated collection.
+#
+# `world_engine` is universal: the legacy loader handles every Waypoint
+# variant we ship. `quark` is restrictive: it only implements the
+# wp-1.5 path today and raises NotImplementedError on wp-1 configs
+# (no TAEHV VAE, different scheduler shape).
+COMPATIBLE_MODEL_TYPES_BY_BACKEND: dict[EngineBackend, set[str] | None] = {
+    EngineBackend.WORLD_ENGINE: None,
     EngineBackend.QUARK: {"waypoint-1.5"},
 }
 
@@ -493,6 +498,31 @@ async def list_models(
 
     compatible_types = COMPATIBLE_MODEL_TYPES_BY_BACKEND.get(backend) if backend is not None else None
 
+    def _is_compatible(id_: str) -> bool:
+        """Decide whether to surface `id_` for the in-flight backend.
+
+        Behaviour:
+          - no backend requested, or the requested backend is universal
+            (compat set is `None`) → always show
+          - resolved `model_type` is in the backend's compat set → show
+          - resolved `model_type` is outside the compat set → drop
+          - `model_type` couldn't be resolved AND the repo is in the
+            curated `Overworld/waypoint` collection → drop, on the
+            theory that a missing `model_type:` field on a collection
+            entry is a curation gap and surfacing it would just fail
+            at load time on a restrictive backend
+          - `model_type` couldn't be resolved AND the repo is user-
+            provided (cached locally but outside the collection) →
+            pass through; we don't presume to classify third-party /
+            dev variants
+        """
+        if compatible_types is None:
+            return True
+        mt = _model_type(id_)
+        if mt is None:
+            return id_ not in waypoint_collection_ids
+        return mt in compatible_types
+
     return [
         PickerModel(
             id=id_,
@@ -501,9 +531,7 @@ async def list_models(
             model_type=_model_type(id_),
         )
         for id_ in picker_ids
-        # Pass through any row whose model_type couldn't be resolved
-        # so degraded paths don't silently empty the picker.
-        if compatible_types is None or _model_type(id_) is None or _model_type(id_) in compatible_types
+        if _is_compatible(id_)
     ]
 
 
