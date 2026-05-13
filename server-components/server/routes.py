@@ -739,7 +739,28 @@ async def websocket_endpoint(
             return
         websocket.app.state.active_session = conn
 
+        # Phase 4 (`prepare_session`) does most of its heavy work via
+        # `asyncio.to_thread`, which doesn't yield enough for the main
+        # task to notice a client-side WS close until the in-flight
+        # to_thread returns. The two helper tasks below (`log_task`,
+        # `progress_task`) both send periodically; when the WS dies
+        # their next `send_text` raises and they exit. We catch that
+        # via a done callback that cancels the main handler so its
+        # `finally` block can release `active_session` promptly — new
+        # connections then succeed instead of bouncing off the single-
+        # session gate while the orphan warmup finishes on its thread.
+        main_task = asyncio.current_task()
+
+        def on_helper_done(task: asyncio.Task[None]) -> None:
+            if task.cancelled():
+                return  # cancelled by us during teardown — not a disconnect signal
+            if main_task is None or main_task.done():
+                return
+            logger.info("WS helper task ended unexpectedly — cancelling main handler")
+            main_task.cancel()
+
         log_task = asyncio.create_task(stream_logs_to_client(conn))
+        log_task.add_done_callback(on_helper_done)
         progress_task: asyncio.Task[None] | None = None
         # Bound after the startup gate so `teardown`'s callback-clear can no-op
         # safely when we tear down before the engines are ready.
@@ -775,6 +796,7 @@ async def websocket_endpoint(
             await conn.send_message(SystemInfoMessage(**system_monitor.info.model_dump()))
             world_engine.seed_frame = None
             progress_task = asyncio.create_task(conn.run_progress_drain())
+            progress_task.add_done_callback(on_helper_done)
 
             # Phase 3: pre-init message dispatch — wait for an InitRequest that
             # loads a seed frame (or 60 s timeout).
@@ -805,6 +827,11 @@ async def websocket_endpoint(
 
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected")
+        except asyncio.CancelledError:
+            # Tripped by `on_helper_done` when the WS dies during a
+            # `to_thread`-heavy phase. Treat as a clean disconnect: fall
+            # through to `finally` so `active_session` clears immediately.
+            logger.info("WebSocket handler cancelled — client likely disconnected")
         except Exception as e:
             # Uvicorn may surface client close as ClientDisconnected instead
             # of WebSocketDisconnect — treat both as normal disconnects to
