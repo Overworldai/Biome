@@ -12,72 +12,6 @@ import {
 
 const log = createLogger('EngineLifecycle')
 
-/** Cadence of the post-spawn /health probe. Short enough that startup
- *  completes promptly after the server is actually up; long enough that
- *  we don't spam the kernel during a slow first-time torch import. */
-const HEALTH_POLL_INTERVAL_MS = 250
-
-/** /health probe timeout. The server's lazy-init path leaves engines
- *  uninstantiated, so the request itself is cheap — only routing latency
- *  and Python's GIL matter. 2.5 s is comfortable headroom. */
-const HEALTH_PROBE_TIMEOUT_MS = 2500
-
-/** Range of ports we'll try when scanning for an open one. */
-const PORT_SCAN_LIMIT = 1337
-
-const findOpenPort = async (): Promise<number | null> => {
-  for (let i = 0; i < PORT_SCAN_LIMIT; i++) {
-    const candidate = STANDALONE_PORT + i
-    const inUse = await invoke('is-port-in-use', candidate)
-    if (!inUse) return candidate
-  }
-  return null
-}
-
-const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e))
-
-/** Run the spawn + health-poll pipeline and return the resulting state.
- *  Pure — doesn't touch React state — so it can be reused across the
- *  initial-startup and reinstall paths. */
-const startServer = async (): Promise<LifecycleState> => {
-  log.info('Scanning for open port')
-  const port = await findOpenPort()
-  if (port === null) {
-    const msg = `No open port in range ${STANDALONE_PORT}-${STANDALONE_PORT + PORT_SCAN_LIMIT - 1}`
-    log.error(msg)
-    return { kind: 'failed', error: msg }
-  }
-
-  log.info('Starting server on port', port)
-  try {
-    await invoke('start-engine-server', port)
-  } catch (e) {
-    const msg = errorMessage(e)
-    log.error('start-engine-server failed:', msg)
-    return { kind: 'failed', error: msg }
-  }
-
-  const healthUrl = `http://localhost:${port}/health`
-  log.info('Polling /health at', healthUrl)
-  while (true) {
-    const probe = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
-    if (probe.ok) {
-      log.info('Server ready on port', port)
-      return { kind: 'ready' }
-    }
-    const running = await invoke('is-server-running')
-    if (!running) {
-      // Capture the exit tail so the user sees a real error instead of a
-      // generic "didn't become ready".
-      const tail = await invoke('get-last-server-exit-tail')
-      const msg = tail || 'Server exited before becoming ready'
-      log.error('Server died during health poll:', msg)
-      return { kind: 'failed', error: msg }
-    }
-    await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS))
-  }
-}
-
 export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) => {
   const { isStandaloneMode: savedStandalone } = useSettings()
   const engine = useEngineApi()
@@ -145,58 +79,23 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
    *
    *  Idempotent across the pipeline lock; concurrent callers receive
    *  the same promise. */
+  const { checkStatus } = engine
   const restartServer = useCallback(
     (): Promise<LifecycleState> =>
       runExclusive(async () => {
         setState({ kind: 'preparing' })
-        log.info('Restarting server')
-        try {
-          await invoke('stop-engine-server')
-        } catch (e) {
-          log.warn('stop-engine-server during restart failed (likely already stopped):', errorMessage(e))
-        }
-        const result = await startServer()
-        // Refresh status so `isServerRunning` and `serverPort` reflect
-        // the new process rather than the just-killed one.
-        await engine.checkStatus()
-        return result
+        return await restartPipeline(checkStatus)
       }),
-    [runExclusive, engine]
+    [runExclusive, checkStatus]
   )
 
   const reinstallEngine = useCallback(
     (mode: 'fix' | 'nuke' = 'fix'): Promise<LifecycleState> =>
       runExclusive(async () => {
         setState({ kind: 'preparing' })
-
-        // Stop the running server (if any) so the freshly-installed deps
-        // run against a fresh process. No-op when the server isn't
-        // running; the IPC handler is idempotent.
-        log.info('Stopping server before reinstall')
-        try {
-          await invoke('stop-engine-server')
-        } catch (e) {
-          log.warn('stop-engine-server failed (likely already stopped):', errorMessage(e))
-        }
-
-        const command = mode === 'nuke' ? 'nuke-and-reinstall-engine' : 'reinstall-engine'
-        log.info('Running', command)
-        try {
-          await invoke(command)
-        } catch (e) {
-          const msg = errorMessage(e)
-          log.error(`${command} failed:`, msg)
-          return { kind: 'failed', error: msg }
-        }
-
-        const result = await startServer()
-        // Refresh status so the auto-recover effect below sees the
-        // just-spawned server's `isServerRunning=true` rather than the
-        // stale `false` from any pre-spawn check.
-        await engine.checkStatus()
-        return result
+        return await reinstallPipeline(mode, checkStatus)
       }),
-    [runExclusive, engine]
+    [runExclusive, checkStatus]
   )
 
   const ensureReady = useCallback(async (): Promise<LifecycleState> => {
@@ -253,58 +152,10 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
   // toggling engine_mode in settings). The `runExclusive` lock handles
   // StrictMode's dev double-mount and any in-flight reinstall — concurrent
   // calls coalesce on the same pipeline promise.
-  const { checkStatus } = engine
   useEffect(() => {
     void runExclusive(async () => {
-      if (!isStandaloneMode) {
-        // Server mode: no local boot. Stop any local server left over
-        // from a previous standalone session so it doesn't keep running
-        // unused — useEngineRespawn skips this teardown when the user
-        // toggles modes from the main menu (its guard is mid-stream-only),
-        // so the lifecycle has to handle it.
-        log.info('Server mode: skipping local startup orchestration')
-        try {
-          await invoke('stop-engine-server')
-        } catch (e) {
-          log.warn('stop-engine-server during mode switch failed:', errorMessage(e))
-        }
-        return { kind: 'ready' }
-      }
-
-      setState({ kind: 'preparing' })
-      log.info('Unpacking server files')
-      try {
-        await invoke('unpack-server-files', false)
-      } catch (e) {
-        // Unpack is best-effort — a failed copy doesn't gate the rest of
-        // the pipeline, since the next check-engine-status will catch a
-        // missing pyproject.toml / main.py and route us to `not_installed`.
-        log.warn('Server file unpack failed:', errorMessage(e))
-      }
-
-      log.info('Checking engine status')
-      const status = await invoke('check-engine-status', 'startup')
-      if (!status.uv_installed || !status.repo_cloned || !status.dependencies_synced) {
-        log.info('Engine not installed; awaiting user install')
-        return { kind: 'not_installed' }
-      }
-
-      if (status.server_running) {
-        // A previous Biome instance left a managed server alive (most
-        // likely a hot-reload during development). Adopt it instead of
-        // double-booting.
-        log.info('Server already running; adopting')
-        return { kind: 'ready' }
-      }
-
-      const result = await startServer()
-      // Refresh status so the auto-recover effect above sees the
-      // just-spawned server's `isServerRunning=true` rather than the
-      // stale `false` from any pre-spawn check (e.g. StreamingContext's
-      // mount-time `checkEngineStatus`, which runs concurrently and
-      // typically lands before this point).
-      await checkStatus()
-      return result
+      if (isStandaloneMode) setState({ kind: 'preparing' })
+      return await orchestratePipeline(isStandaloneMode, checkStatus)
     })
   }, [isStandaloneMode, runExclusive, checkStatus])
 
@@ -344,4 +195,173 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
   )
 
   return <EngineLifecycleContext.Provider value={value}>{children}</EngineLifecycleContext.Provider>
+}
+
+// --- pipeline internals -----------------------------------------------------
+//
+// Free functions used by the provider above. They take the deps they need
+// (notably `checkStatus`) as explicit arguments so the data flow is visible
+// at the call site; the provider keeps ownership of the lock, refs, and
+// `setState` bookkeeping.
+
+/** Cadence of the post-spawn /health probe. Short enough that startup
+ *  completes promptly after the server is actually up; long enough that
+ *  we don't spam the kernel during a slow first-time torch import. */
+const HEALTH_POLL_INTERVAL_MS = 250
+
+/** /health probe timeout. The server's lazy-init path leaves engines
+ *  uninstantiated, so the request itself is cheap — only routing latency
+ *  and Python's GIL matter. 2.5 s is comfortable headroom. */
+const HEALTH_PROBE_TIMEOUT_MS = 2500
+
+/** Range of ports we'll try when scanning for an open one. */
+const PORT_SCAN_LIMIT = 1337
+
+const findOpenPort = async (): Promise<number | null> => {
+  for (let i = 0; i < PORT_SCAN_LIMIT; i++) {
+    const candidate = STANDALONE_PORT + i
+    const inUse = await invoke('is-port-in-use', candidate)
+    if (!inUse) return candidate
+  }
+  return null
+}
+
+const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+
+/** Best-effort stop of the standalone server. Failures are logged and
+ *  swallowed — the IPC handler is idempotent and there's nothing
+ *  actionable to do if it wasn't running. */
+const stopServer = async (context: string): Promise<void> => {
+  try {
+    await invoke('stop-engine-server')
+  } catch (e) {
+    log.warn(`stop-engine-server during ${context} failed:`, errorMessage(e))
+  }
+}
+
+/** Spawn the server, poll `/health` until it's ready (or the process
+ *  dies), and refresh engine status before returning. The status
+ *  refresh is part of the contract: it keeps `isServerRunning` /
+ *  `serverPort` honest for the auto-recover effect and any consumer
+ *  that reads them right after a state transition. */
+const startServer = async (checkStatus: () => Promise<unknown>): Promise<LifecycleState> => {
+  try {
+    log.info('Scanning for open port')
+    const port = await findOpenPort()
+    if (port === null) {
+      const msg = `No open port in range ${STANDALONE_PORT}-${STANDALONE_PORT + PORT_SCAN_LIMIT - 1}`
+      log.error(msg)
+      return { kind: 'failed', error: msg }
+    }
+
+    log.info('Starting server on port', port)
+    try {
+      await invoke('start-engine-server', port)
+    } catch (e) {
+      const msg = errorMessage(e)
+      log.error('start-engine-server failed:', msg)
+      return { kind: 'failed', error: msg }
+    }
+
+    const healthUrl = `http://localhost:${port}/health`
+    log.info('Polling /health at', healthUrl)
+    while (true) {
+      const probe = await invoke('probe-server-health', healthUrl, HEALTH_PROBE_TIMEOUT_MS)
+      if (probe.ok) {
+        log.info('Server ready on port', port)
+        return { kind: 'ready' }
+      }
+      const running = await invoke('is-server-running')
+      if (!running) {
+        // Capture the exit tail so the user sees a real error instead of a
+        // generic "didn't become ready".
+        const tail = await invoke('get-last-server-exit-tail')
+        const msg = tail || 'Server exited before becoming ready'
+        log.error('Server died during health poll:', msg)
+        return { kind: 'failed', error: msg }
+      }
+      await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS))
+    }
+  } finally {
+    await checkStatus()
+  }
+}
+
+/** Pipeline body for `restartServer`: kill the running process, spawn
+ *  a fresh one. */
+const restartPipeline = async (checkStatus: () => Promise<unknown>): Promise<LifecycleState> => {
+  log.info('Restarting server')
+  await stopServer('restart')
+  return await startServer(checkStatus)
+}
+
+/** Pipeline body for `reinstallEngine`: stop the server, run the
+ *  install command, spawn a fresh server against the new deps. */
+const reinstallPipeline = async (
+  mode: 'fix' | 'nuke',
+  checkStatus: () => Promise<unknown>
+): Promise<LifecycleState> => {
+  // Stop the running server (if any) so the freshly-installed deps
+  // run against a fresh process. No-op when the server isn't running;
+  // the IPC handler is idempotent.
+  log.info('Stopping server before reinstall')
+  await stopServer('reinstall')
+
+  const command = mode === 'nuke' ? 'nuke-and-reinstall-engine' : 'reinstall-engine'
+  log.info('Running', command)
+  try {
+    await invoke(command)
+  } catch (e) {
+    const msg = errorMessage(e)
+    log.error(`${command} failed:`, msg)
+    return { kind: 'failed', error: msg }
+  }
+
+  return await startServer(checkStatus)
+}
+
+/** Pipeline body for the on-mount / mode-switch orchestrate. In server
+ *  mode we only need to stop any leftover local server; in standalone
+ *  mode we unpack files, validate deps, and adopt-or-spawn. */
+const orchestratePipeline = async (
+  isStandaloneMode: boolean,
+  checkStatus: () => Promise<unknown>
+): Promise<LifecycleState> => {
+  if (!isStandaloneMode) {
+    // Server mode: no local boot. Stop any local server left over
+    // from a previous standalone session so it doesn't keep running
+    // unused — useEngineRespawn skips this teardown when the user
+    // toggles modes from the main menu (its guard is mid-stream-only),
+    // so the lifecycle has to handle it.
+    log.info('Server mode: skipping local startup orchestration')
+    await stopServer('mode switch')
+    return { kind: 'ready' }
+  }
+
+  log.info('Unpacking server files')
+  try {
+    await invoke('unpack-server-files', false)
+  } catch (e) {
+    // Unpack is best-effort — a failed copy doesn't gate the rest of
+    // the pipeline, since the next check-engine-status will catch a
+    // missing pyproject.toml / main.py and route us to `not_installed`.
+    log.warn('Server file unpack failed:', errorMessage(e))
+  }
+
+  log.info('Checking engine status')
+  const status = await invoke('check-engine-status', 'startup')
+  if (!status.uv_installed || !status.repo_cloned || !status.dependencies_synced) {
+    log.info('Engine not installed; awaiting user install')
+    return { kind: 'not_installed' }
+  }
+
+  if (status.server_running) {
+    // A previous Biome instance left a managed server alive (most
+    // likely a hot-reload during development). Adopt it instead of
+    // double-booting.
+    log.info('Server already running; adopting')
+    return { kind: 'ready' }
+  }
+
+  return await startServer(checkStatus)
 }
