@@ -189,9 +189,14 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
           return { kind: 'failed', error: msg }
         }
 
-        return await startServer()
+        const result = await startServer()
+        // Refresh status so the auto-recover effect below sees the
+        // just-spawned server's `isServerRunning=true` rather than the
+        // stale `false` from any pre-spawn check.
+        await engine.checkStatus()
+        return result
       }),
-    [runExclusive]
+    [runExclusive, engine]
   )
 
   const ensureReady = useCallback(async (): Promise<LifecycleState> => {
@@ -248,6 +253,7 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
   // toggling engine_mode in settings). The `runExclusive` lock handles
   // StrictMode's dev double-mount and any in-flight reinstall — concurrent
   // calls coalesce on the same pipeline promise.
+  const { checkStatus } = engine
   useEffect(() => {
     void runExclusive(async () => {
       if (!isStandaloneMode) {
@@ -291,9 +297,16 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
         return { kind: 'ready' }
       }
 
-      return await startServer()
+      const result = await startServer()
+      // Refresh status so the auto-recover effect above sees the
+      // just-spawned server's `isServerRunning=true` rather than the
+      // stale `false` from any pre-spawn check (e.g. StreamingContext's
+      // mount-time `checkEngineStatus`, which runs concurrently and
+      // typically lands before this point).
+      await checkStatus()
+      return result
     })
-  }, [isStandaloneMode, runExclusive])
+  }, [isStandaloneMode, runExclusive, checkStatus])
 
   const setDraftStandalone = useCallback((value: boolean | null) => {
     setDraftStandaloneState(value)
