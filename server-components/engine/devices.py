@@ -57,6 +57,7 @@ WORLD_ENGINE_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
 SCENE_AUTHORING_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
 SAFETY_DEVICE = "cpu" if IS_DARWIN_ARM64 else "cuda"
 
+
 # Torch's OOM exception, re-exported under a backend-neutral name.
 # On Apple Silicon there's no ``torch.cuda.OutOfMemoryError`` to alias.
 # A private sentinel class fills the slot so ``except devices.OutOfMemoryError``
