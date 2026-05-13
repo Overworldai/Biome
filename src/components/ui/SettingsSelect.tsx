@@ -18,7 +18,7 @@ type SettingsSelectOptionBase = {
 type SettingsSelectOption = SettingsSelectOptionBase &
   ({ label: TranslationKey; rawLabel?: never } | { label?: never; rawLabel: string })
 
-type SettingsSelectProps = {
+type SettingsSelectBaseProps = {
   options: SettingsSelectOption[]
   value: string
   onChange: (value: string) => void
@@ -32,24 +32,41 @@ type SettingsSelectProps = {
    *  explain *why* the control is greyed out (e.g. "install the engine
    *  first"). Ignored when the control is enabled. */
   disabledTooltip?: TranslationKey
-  /** Enables a free-text input mode for typing arbitrary values not in
-   *  the curated options list (custom HF model ids in the world-model
-   *  picker). The dropdown grows a "Custom..." footer that flips into
-   *  text-input mode; on blur the typed value is committed via
-   *  `onChange` and an optional `onCustomBlur` fires for async
-   *  validation. The component auto-toggles back to dropdown when the
-   *  options list catches up to include the committed value. */
-  allowCustom?: boolean
-  onCustomBlur?: (value: string) => void
-  /** Status / hint string rendered alongside the custom input (e.g.
-   *  "checking..." or "model not found"). Raw because it's typically a
-   *  pre-translated dynamic message rather than a TranslationKey. */
-  rawCustomPrefix?: string
-  customLabel?: TranslationKey
   deleteLabel?: TranslationKey
   cacheDeleteLabel?: TranslationKey
   hideSelectedInDropdown?: boolean
 }
+
+/** Custom-input mode wiring. Required as a group when `allowCustom` is
+ *  true — `customLabel` is what the dropdown's footer says, so it can't
+ *  be left undefined or the picker silently renders a blank row. The
+ *  off branch keeps the field forbidden so callers don't pass it
+ *  unnecessarily. */
+type SettingsSelectCustomProps =
+  | {
+      /** Enables a free-text input mode for typing arbitrary values not in
+       *  the curated options list (custom HF model ids in the world-model
+       *  picker). The dropdown grows a "Custom..." footer that flips into
+       *  text-input mode; on blur the typed value is committed via
+       *  `onChange` and `onCustomBlur` fires for async validation. The
+       *  component auto-toggles back to dropdown when the options list
+       *  catches up to include the committed value. */
+      allowCustom: true
+      customLabel: TranslationKey
+      onCustomBlur?: (value: string) => void
+      /** Status / hint string rendered alongside the custom input (e.g.
+       *  "checking..." or "model not found"). Raw because it's typically
+       *  a pre-translated dynamic message rather than a TranslationKey. */
+      rawCustomPrefix?: string
+    }
+  | {
+      allowCustom?: false
+      customLabel?: never
+      onCustomBlur?: never
+      rawCustomPrefix?: never
+    }
+
+type SettingsSelectProps = SettingsSelectBaseProps & SettingsSelectCustomProps
 
 const OptionContent = ({ displayLabel, prefix }: { displayLabel: string; prefix?: string }) => (
   <span className="flex w-full min-w-0 items-start justify-between gap-[1cqh]">
@@ -260,7 +277,7 @@ const SettingsSelect = ({
             setIsOpen(false)
           }}
         >
-          {customLabel ? t(customLabel) : undefined}
+          {customLabel && t(customLabel)}
         </button>
       )}
     </div>
