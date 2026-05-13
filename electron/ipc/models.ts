@@ -22,6 +22,14 @@ function resolveServerUrl(explicit?: string): string | null {
   return null
 }
 
+/** Percent-encode each `/`-separated segment so HF model ids with reserved
+ *  characters (`#`, `?`, `&`, whitespace) survive the URL round-trip while
+ *  preserving the `org/repo` slash the FastAPI `{model_id:path}` matcher
+ *  consumes. */
+function encodeModelIdPath(modelId: string): string {
+  return modelId.split('/').map(encodeURIComponent).join('/')
+}
+
 async function fetchWithTimeout(
   url: string,
   init?: RequestInit,
@@ -77,7 +85,7 @@ export function registerModelsIpc(): void {
 
     const results = await Promise.allSettled(
       deduped.map(async (id): Promise<ModelInfo> => {
-        const response = await fetchWithTimeout(`${url}/api/model-info/${id}`)
+        const response = await fetchWithTimeout(`${url}/api/model-info/${encodeModelIdPath(id)}`)
         if (!response) return { id, size_bytes: null, exists: true, is_local: false, error: 'Could not reach server' }
         if (!response.ok)
           return { id, size_bytes: null, exists: true, is_local: false, error: `Server returned ${response.status}` }
@@ -95,7 +103,9 @@ export function registerModelsIpc(): void {
   ipcMain.handle('delete-cached-model', async (_event, modelId: string, serverUrl?: string) => {
     const url = resolveServerUrl(serverUrl)
     if (!url) throw new Error('Cannot delete cached model: server is not running')
-    const response = await fetchWithTimeout(`${url}/api/cached-model/${modelId}`, { method: 'DELETE' })
+    const response = await fetchWithTimeout(`${url}/api/cached-model/${encodeModelIdPath(modelId)}`, {
+      method: 'DELETE'
+    })
     if (!response) throw new Error('Cannot delete cached model: could not reach server')
     if (!response.ok) throw new Error(`Cannot delete cached model: server returned ${response.status}`)
   })
