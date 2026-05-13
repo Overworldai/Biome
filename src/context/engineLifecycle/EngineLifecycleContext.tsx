@@ -100,13 +100,19 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
 
   const ensureReady = useCallback(async (): Promise<LifecycleState> => {
     while (true) {
-      const current = stateRef.current
-      if (current.kind === 'ready' || current.kind === 'failed') return current
-      // A pipeline is already running — await it directly.
+      // In-flight check goes before the state check so a freshly-fired
+      // pipeline (e.g. `useEngineRespawn`'s `restartServer()`) wins over
+      // a stale `'ready'` snapshot — `setState({preparing})` inside the
+      // pipeline is async, so `stateRef.current` can still read the old
+      // `'ready'` for a tick after the pipeline kicks off. Without this
+      // order, warm-connect would return ready and attach to the doomed
+      // old process before the new one comes up.
       if (inFlightRef.current) {
         await inFlightRef.current
         continue
       }
+      const current = stateRef.current
+      if (current.kind === 'ready' || current.kind === 'failed') return current
       // not_installed with no pipeline — kick off install. The result lands
       // back through the state-transition useEffect, waking the waiter
       // we registered below on the next loop iteration.

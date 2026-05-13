@@ -73,24 +73,22 @@ export function useEngineRespawn(opts: {
 
     log.info('Process-class settings changed - respawning', { changed })
 
-    // Tear down WS first, then atomically restart the standalone
-    // server (no-op in server mode, and skipped on engine_mode flips
-    // — the lifecycle's own orchestration effect handles those).
-    // Awaiting `restartServer` before transitioning to LOADING is
-    // important: the lifecycle state must be `ready` against the new
-    // process before warm-connect's `ensureReady` returns, otherwise
-    // warm-connect attaches to the doomed-or-dead old process.
-    void (async () => {
-      disconnect()
-      if (isStandaloneMode && !engineModeChanged) {
-        const final = await restartServer()
+    // Tear down WS, fire `restartServer` without awaiting it, and
+    // transition to LOADING immediately so the UI doesn't stall on
+    // the previous portal state while the new server boots. The
+    // loading screen's warm-connect calls `ensureReady`, which awaits
+    // the in-flight pipeline (and `ensureReady` checks in-flight
+    // before stale state, so it can't beat the just-fired restart).
+    disconnect()
+    setEngineError(null)
+    if (isStandaloneMode && !engineModeChanged) {
+      void restartServer().then((final) => {
         if (final.kind !== 'ready') {
           log.error('restartServer failed during respawn:', final.kind)
         }
-      }
-      setEngineError(null)
-      transitionTo(loadingState)
-    })()
+      })
+    }
+    transitionTo(loadingState)
   }, [
     settings,
     portalState,
