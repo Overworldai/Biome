@@ -75,11 +75,10 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const [connectionLost, setConnectionLost] = useState(false)
   const [engineError, setEngineError] = useState<TranslatableError | null>(null)
   // Server-reported capability matrix. Populated by the URL-validation
-  // probe in the settings panel (via `setServerCapabilities` on the
-  // connection context) so the backend / quant dropdowns filter against
-  // what the active server can actually run before streaming starts. In
-  // standalone mode the client-side `predictedCapabilities()` fallback
-  // is good enough until the user fiddles with the URL field.
+  // probe in the settings panel and by the warm-flow probe before each
+  // session starts, so the backend / quant dropdowns filter against
+  // what the active server can actually run. Null until the first
+  // probe completes — dropdowns disable themselves in that window.
   const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null)
 
   const {
