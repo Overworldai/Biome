@@ -426,6 +426,13 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
   // either way — saving the menu with a transiently-broken custom id
   // is up to the user (the engine load will surface a clearer error
   // if it really won't load).
+  //
+  // The immediate save bundles `engine_model: modelId` alongside
+  // `custom_models` so the two settings advance together — leaving
+  // `engine_model` for the Back-click would let a mid-edit app crash
+  // persist a custom id into the list without the corresponding
+  // selection. Other pending menu fields (backend, quant) still wait
+  // for Back; cleaning up that asymmetry is a separate refactor.
   const handleCustomModelBlur = useCallback(
     async (modelId: string) => {
       if (menuModelOptions.some((m) => m.id === modelId)) return
@@ -443,9 +450,10 @@ const EngineTab = forwardRef<EngineTabHandle, EngineTabProps>((props, ref) => {
             ...prev,
             { id: modelId, isLocal: info?.is_local ?? null, sizeBytes: info?.size_bytes ?? null }
           ])
-          if (!savedCustomModels.includes(modelId)) {
-            void saveSettings({ ...settings, custom_models: [...savedCustomModels, modelId] })
-          }
+          const nextCustomModels = savedCustomModels.includes(modelId)
+            ? savedCustomModels
+            : [...savedCustomModels, modelId]
+          void saveSettings({ ...settings, engine_model: modelId, custom_models: nextCustomModels })
         }
       } catch {
         setCustomModelStatus({ state: 'error', error: t('app.settings.worldModel.couldNotCheckModel') })
