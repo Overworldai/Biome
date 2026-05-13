@@ -6,79 +6,54 @@ import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/LoadingFailure')
 
-/** When the loading flow fails (connection errors out or never opens
- *  *and* an engine error has been recorded), stop the standalone Python
- *  server — but only when the lifecycle hasn't yet reached the
- *  ready-to-serve state. Once the lifecycle is `ready`, the server has
- *  bound its port and answered a `/health` probe, so a failure surfaced
- *  here is at the application layer (model load rejected the requested
- *  backend / quant combination, init RPC errored, etc.) and the process
- *  is still healthy. Reaping it would just force a slow re-spawn on the
- *  next attempt and break the retry-after-fixing-settings flow the user
- *  expects. The original kill is preserved for `preparing` / `failed`
- *  cases where the server spawned but never reached ready — leaving
- *  that zombie around would leak the process and let the next loading
- *  attempt race the cleanup.
+/** After an app-layer load failure (model load rejected by the
+ *  backend, init RPC errored), the server has cleanly torn down its
+ *  in-memory engine state (`_unload_engine_sync` runs in every
+ *  exception branch of `WorldEngineManager.load_engine`) and closed
+ *  the WebSocket, but the Python process is still alive and ready to
+ *  accept a fresh session. We just need to re-establish the WS so the
+ *  fix-in-settings retry path has a socket to bootstrap on.
  *
- *  Idempotent within one failure cycle: a `loadingFailureStopHandledRef`
- *  guard prevents the stop from running on every render while
- *  `engineError` is still set. The guard clears once the loading state
- *  recovers. */
+ *  The engine-error overlay persists across this reconnect — the
+ *  lifecycle reducer no longer auto-clears `engineError` on LOADING
+ *  entry, and `useSessionInit` bails the bootstrap while `engineError`
+ *  is set — so the user sees the original error message while the
+ *  system quietly re-attaches behind them. They retry either by
+ *  dismissing the overlay (returning to MAIN_MENU) or by fixing the
+ *  offending setting in-place (clears the error, bootstrap re-fires
+ *  against the still-warm WS).
+ *
+ *  Idempotent within one failure cycle: a `handledRef` guard prevents
+ *  the reconnect from firing on every render while `engineError` is
+ *  still set. The guard clears once the loading state recovers
+ *  (engineError cleared or LOADING exited). */
 export function useLoadingFailureCleanup(opts: {
   portalState: PortalState
   loadingState: PortalState
   connectionStatus: ConnectionStatus
   engineError: TranslatableError | null
-  isStandaloneMode: boolean
-  isServerRunning: boolean
-  /** True when the engine lifecycle is in `ready` state — the server
-   *  has bound its port and answered `/health`. Used to skip the
-   *  process kill for application-layer failures on an otherwise
-   *  healthy server. */
-  engineReady: boolean
-  stopServer: () => Promise<string>
+  /** Re-run the warm-connect flow against the same server (which is
+   *  still alive — we never killed it). The lifecycle reducer only
+   *  fires its own `runLoadingConnection` effect on LOADING *entry*;
+   *  we're already in LOADING when the failure surfaces, so the WS
+   *  won't reconnect on its own without this nudge. */
+  runWarmConnection: () => void
 }): void {
-  const {
-    portalState,
-    loadingState,
-    connectionStatus,
-    engineError,
-    isStandaloneMode,
-    isServerRunning,
-    engineReady,
-    stopServer
-  } = opts
-  const stopHandledRef = useRef(false)
+  const { portalState, loadingState, connectionStatus, engineError, runWarmConnection } = opts
+  const handledRef = useRef(false)
 
   useEffect(() => {
     const loadingFailed =
       portalState === loadingState && (connectionStatus.kind === 'error' || connectionStatus.kind === 'idle')
 
     if (!loadingFailed || !engineError) {
-      stopHandledRef.current = false
+      handledRef.current = false
       return
     }
-    if (!isStandaloneMode || !isServerRunning) return
-    if (engineReady) return
-    if (stopHandledRef.current) return
+    if (handledRef.current) return
 
-    stopHandledRef.current = true
-    ;(async () => {
-      log.info('Loading failure detected - stopping standalone server')
-      try {
-        await stopServer()
-      } catch (err) {
-        log.error('Failed to stop standalone server after loading failure:', err)
-      }
-    })()
-  }, [
-    portalState,
-    loadingState,
-    connectionStatus,
-    engineError,
-    isStandaloneMode,
-    isServerRunning,
-    engineReady,
-    stopServer
-  ])
+    handledRef.current = true
+    log.info('Loading failure detected - reconnecting to existing server')
+    runWarmConnection()
+  }, [portalState, loadingState, connectionStatus, engineError, runWarmConnection])
 }

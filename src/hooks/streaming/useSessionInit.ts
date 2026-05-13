@@ -3,6 +3,7 @@ import { invoke } from '../../bridge'
 import { buildSessionConfig } from '../../context/streaming/sessionConfig'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
+import type { TranslatableError } from '../../i18n'
 import { DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../../types/settings'
 import { getLiveSignature, getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
@@ -43,6 +44,13 @@ export function useSessionInit(opts: {
    *  so the lifecycle reducer doesn't see the parallel disk-side
    *  clamp save as a session-class diff. */
   settings: Settings
+  /** Latest engine error from the server. Bootstrap bails while this
+   *  is set — re-firing it would replay the same broken settings and
+   *  loop. The recovery path (`useLoadingFailureCleanup`) cycles the
+   *  server underneath; the user clears the error by dismissing the
+   *  overlay or by changing settings (the StreamingContext watcher
+   *  clears `engineError` on a session-class diff). */
+  engineError: TranslatableError | null
   sendInit: SendInit
   applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
@@ -58,6 +66,7 @@ export function useSessionInit(opts: {
     isStreaming,
     isStandaloneMode,
     settings,
+    engineError,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -81,6 +90,13 @@ export function useSessionInit(opts: {
     if (portalState !== loadingState) return
     if (!isConnected) return
     if (warmBootstrapSentRef.current) return
+    // Suppress while an engine error is in flight: the WS has just
+    // reconnected to a freshly-restarted server (see
+    // `useLoadingFailureCleanup`) and re-sending the same broken
+    // settings would loop. The bootstrap re-fires once the error is
+    // cleared (user dismisses the overlay or fixes the offending
+    // setting), since `engineError` is in this effect's deps.
+    if (engineError) return
     warmBootstrapSentRef.current = true
 
     const selectedModel = settings?.engine_model || DEFAULT_WORLD_ENGINE_MODEL
@@ -134,6 +150,7 @@ export function useSessionInit(opts: {
     isConnected,
     isStandaloneMode,
     settings,
+    engineError,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame

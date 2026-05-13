@@ -28,7 +28,6 @@ export type StreamingLifecycleEffects = {
   engineErrorDismissed: boolean
   startIntentionalReconnect: boolean
   transitionToLoadingAfterIntentionalDisconnect: boolean
-  clearEngineErrorOnLoadingEntry: boolean
   runLoadingConnection: boolean
   transitionToStreaming: boolean
   teardownForInactivePortalState: boolean
@@ -45,7 +44,6 @@ const emptyEffects = (): StreamingLifecycleEffects => ({
   engineErrorDismissed: false,
   startIntentionalReconnect: false,
   transitionToLoadingAfterIntentionalDisconnect: false,
-  clearEngineErrorOnLoadingEntry: false,
   runLoadingConnection: false,
   transitionToStreaming: false,
   teardownForInactivePortalState: false,
@@ -175,8 +173,13 @@ export const streamingLifecycleReducer = (
     // intentionally tearing down (process respawn from useEngineRespawn,
     // which lives outside this reducer and so can't go through the
     // intentional-restart suppression path).
+    //
+    // `engineError` is *not* cleared here — every path that should clear
+    // it (cancelConnection, reconnectAfterConnectionLost, useEngineRespawn)
+    // does so explicitly before transitioning, and the recovery path
+    // (useLoadingFailureCleanup) deliberately preserves the overlay
+    // across the background respawn's LOADING re-entry.
     next.connectionLostSignaled = false
-    next.effects.clearEngineErrorOnLoadingEntry = true
     next.effects.clearConnectionLost = true
     next.effects.runLoadingConnection = true
   }
@@ -239,6 +242,14 @@ export const streamingLifecycleReducer = (
 
   if (inLoadingState && next.loadingAttempted && isFailedConnection(connectionStatus)) {
     if (next.intentionalRestart !== null) {
+      next.effects.suppressedIntentionalWarmError = true
+    } else if (engineError) {
+      // The engine-error overlay is already up — fired by an
+      // application-layer error the server pushed before tearing down
+      // the WS. The transport-error overlay this branch would normally
+      // raise is redundant noise in that case; let the engine-error
+      // overlay carry the user-facing message and let the recovery
+      // path (useLoadingFailureCleanup) cycle the server underneath.
       next.effects.suppressedIntentionalWarmError = true
     } else {
       const transportError = connectionStatus.kind === 'error' ? connectionStatus.error : null

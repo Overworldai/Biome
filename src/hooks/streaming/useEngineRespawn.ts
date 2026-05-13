@@ -3,6 +3,7 @@ import { ENGINE_MODES, type Settings } from '../../types/settings'
 import { pathsThatDiffer } from '../../utils/settingsClassifier'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { TranslatableError } from '../../i18n'
+import type { LifecycleState } from '../../context/engineLifecycle/engineLifecycleContextValue'
 import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/Respawn')
@@ -14,18 +15,18 @@ const log = createLogger('Streaming/Respawn')
  *  `types/settings.ts` is the single source of truth for which fields
  *  belong here.
  *
- *  When any of them flips mid-stream we tear down: close the WS, stop
- *  the local server (no-op in remote-server mode — there's no process
- *  we own), clear the engine error, and bounce back through LOADING.
- *  The first render establishes the baseline without firing. */
+ *  When any of them flips mid-stream we tear down: close the WS, kick
+ *  off an atomic `restartServer` (no-op in remote-server mode — there's
+ *  no process we own), clear the engine error, and bounce back through
+ *  LOADING. The first render establishes the baseline without firing. */
 export function useEngineRespawn(opts: {
   settings: Settings
   portalState: PortalState
   mainMenuState: PortalState
   loadingState: PortalState
-  isServerRunning: boolean
+  isStandaloneMode: boolean
   disconnect: () => void
-  stopServer: () => Promise<string>
+  restartServer: () => Promise<LifecycleState>
   setEngineError: (err: TranslatableError | null) => void
   transitionTo: (state: PortalState) => void
 }): void {
@@ -34,9 +35,9 @@ export function useEngineRespawn(opts: {
     portalState,
     mainMenuState,
     loadingState,
-    isServerRunning,
+    isStandaloneMode,
     disconnect,
-    stopServer,
+    restartServer,
     setEngineError,
     transitionTo
   } = opts
@@ -61,21 +62,30 @@ export function useEngineRespawn(opts: {
       return
     }
 
-    log.info('Process-class settings changed - respawning server')
+    // `engine_mode` flips are already handled by the lifecycle's own
+    // `isStandaloneMode`-keyed orchestration effect, which stops or
+    // spawns the local server as appropriate. Firing `restartServer`
+    // here too would race that pipeline (both go through `runExclusive`
+    // so it's serialised, not corrupting, but the second one is
+    // redundant and confusing in logs). Tear down the WS and trust
+    // the orchestration effect to settle the lifecycle.
+    const engineModeChanged = changed.includes('engine_mode')
 
-    // Tear down in order, awaiting `stopServer` so the IPC "server
-    // exited" event has propagated to `isServerRunning=false` before
-    // LOADING fires. Without the await, the warm-connect flow reads
-    // stale React state, picks the attach-to-running branch, and
-    // throws "Server exited before becoming ready" while the doomed
-    // server finishes dying.
+    log.info('Process-class settings changed - respawning', { changed })
+
+    // Tear down WS first, then atomically restart the standalone
+    // server (no-op in server mode, and skipped on engine_mode flips
+    // — the lifecycle's own orchestration effect handles those).
+    // Awaiting `restartServer` before transitioning to LOADING is
+    // important: the lifecycle state must be `ready` against the new
+    // process before warm-connect's `ensureReady` returns, otherwise
+    // warm-connect attaches to the doomed-or-dead old process.
     void (async () => {
       disconnect()
-      if (isServerRunning) {
-        try {
-          await stopServer()
-        } catch (err) {
-          log.error('Failed to stop server during respawn:', err)
+      if (isStandaloneMode && !engineModeChanged) {
+        const final = await restartServer()
+        if (final.kind !== 'ready') {
+          log.error('restartServer failed during respawn:', final.kind)
         }
       }
       setEngineError(null)
@@ -86,9 +96,9 @@ export function useEngineRespawn(opts: {
     portalState,
     mainMenuState,
     loadingState,
-    isServerRunning,
+    isStandaloneMode,
     disconnect,
-    stopServer,
+    restartServer,
     setEngineError,
     transitionTo
   ])

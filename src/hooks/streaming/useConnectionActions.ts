@@ -6,22 +6,21 @@ import { createLogger } from '../../utils/logger'
 const log = createLogger('Streaming/Actions')
 
 /** The four user-facing connection-lifecycle actions exposed via
- *  `ConnectionContext`, plus the two cleanup helpers they share.
+ *  `ConnectionContext`. All four close over the same set of imperative
+ *  writes (cancel warm-flow, disconnect, reset session/pause/settings/
+ *  error, transition the portal); centralising them here keeps the
+ *  provider free of the "ten useCallbacks that all close over the same
+ *  things" pattern.
  *
- *  All four close over the same set of imperative writes (cancel
- *  warm-flow, disconnect, reset session/pause/settings/error,
- *  transition the portal). Centralising them here keeps the provider
- *  free of the "ten useCallbacks that all close over the same things"
- *  pattern — and makes it obvious that `cleanupState` is the shared
- *  helper, with `stopServerIfRunning` layered on top for the actions
- *  that should also tear down the standalone process. */
+ *  None of these tear down the standalone server. The Python process
+ *  is a session-long resource — settings menu, model picker, and
+ *  capability probes all rely on a live `/health`. Process-level
+ *  cycling is `EngineLifecycle.restartServer`'s job and only fires for
+ *  env-var / mode changes that genuinely need a fresh process. */
 export function useConnectionActions(opts: {
-  isStandaloneMode: boolean
-  isServerRunning: boolean
   cancelWarmFlow: () => void
   disconnect: () => void
   exitPointerLock: () => void
-  stopServer: () => Promise<string>
   transitionTo: (state: PortalState) => void | Promise<boolean>
   loadingState: PortalState
   mainMenuState: PortalState
@@ -36,18 +35,15 @@ export function useConnectionActions(opts: {
   dismissConnectionLost: () => Promise<void>
   /** User chose "reconnect" on the connection-lost overlay. */
   reconnectAfterConnectionLost: () => Promise<void>
-  /** User cancelled mid-loading. Tears down + returns to main menu. */
+  /** User cancelled mid-loading. Tears down WS + returns to main menu. */
   cancelConnection: () => Promise<void>
   /** Pre-flight cleanup before navigating back to main menu. */
   prepareReturnToMainMenu: () => Promise<void>
 } {
   const {
-    isStandaloneMode,
-    isServerRunning,
     cancelWarmFlow,
     disconnect,
     exitPointerLock,
-    stopServer,
     transitionTo,
     loadingState,
     mainMenuState,
@@ -67,17 +63,6 @@ export function useConnectionActions(opts: {
     resumeSession()
   }, [cancelWarmFlow, exitPointerLock, disconnect, setEngineError, setSettingsOpen, resumeSession])
 
-  const stopServerIfRunning = useCallback(async () => {
-    if (!isStandaloneMode || !isServerRunning) return
-    log.info('Stopping standalone server...')
-    try {
-      await stopServer()
-      log.info('Server stopped')
-    } catch (err) {
-      log.error('Failed to stop server:', err)
-    }
-  }, [isStandaloneMode, isServerRunning, stopServer])
-
   const dismissConnectionLost = useCallback(async () => {
     log.info('Acknowledging connection lost overlay')
     setConnectionLost(false)
@@ -94,15 +79,13 @@ export function useConnectionActions(opts: {
   const cancelConnection = useCallback(async () => {
     log.info('Cancelling connection')
     cleanup()
-    await stopServerIfRunning()
     transitionTo(mainMenuState)
-  }, [cleanup, stopServerIfRunning, transitionTo, mainMenuState])
+  }, [cleanup, transitionTo, mainMenuState])
 
   const prepareReturnToMainMenu = useCallback(async () => {
     log.info('Preparing return to main menu')
     cleanup()
-    await stopServerIfRunning()
-  }, [cleanup, stopServerIfRunning])
+  }, [cleanup])
 
   return { dismissConnectionLost, reconnectAfterConnectionLost, cancelConnection, prepareReturnToMainMenu }
 }

@@ -6,7 +6,6 @@ import type { ServerHealthResult } from '../../types/ipc'
 export type UseEngineResult = {
   status: EngineStatus | null
   checkStatus: () => Promise<EngineStatus | null>
-  stopServer: () => Promise<string>
   probeServerHealth: (healthUrl: string, timeoutMs?: number) => Promise<ServerHealthResult>
   isReady: boolean
   isServerRunning: boolean
@@ -27,13 +26,6 @@ export const useEngineApi = (): UseEngineResult => {
     }
   }, [])
 
-  const stopServer = useCallback(async () => {
-    const result = await invoke('stop-engine-server')
-    const newStatus = await invoke('check-engine-status', 'useEngineApi.stopServer.post')
-    setStatus(newStatus)
-    return result
-  }, [])
-
   const probeServerHealth = useCallback(async (healthUrl: string, timeoutMs?: number): Promise<ServerHealthResult> => {
     try {
       return await invoke('probe-server-health', healthUrl, timeoutMs)
@@ -45,7 +37,6 @@ export const useEngineApi = (): UseEngineResult => {
   return {
     status,
     checkStatus,
-    stopServer,
     probeServerHealth,
     isReady: !!(status?.uv_installed && status?.repo_cloned && status?.dependencies_synced),
     isServerRunning: status?.server_running ?? false,

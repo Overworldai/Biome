@@ -5,7 +5,6 @@ import type { PortalState } from '../portal/portalStateMachine'
 export const LIFECYCLE_EFFECT_ORDER: Array<keyof StreamingLifecycleEffects> = [
   'suppressedIntentionalWarmError',
   'loadingFailureError',
-  'clearEngineErrorOnLoadingEntry',
   'runLoadingConnection',
   'startIntentionalReconnect',
   'transitionToLoadingAfterIntentionalDisconnect',
@@ -88,7 +87,6 @@ export const createStreamingLifecycleEffectHandlers = ({
         }
       }
     },
-    clearEngineErrorOnLoadingEntry: () => setEngineError(null),
     runLoadingConnection: () => runWarmConnection(),
     startIntentionalReconnect: () => {
       log.info('Engine settings changed while streaming - reconnecting to start a fresh session')

@@ -56,10 +56,6 @@ export type EngineLifecycleContextValue = {
   serverLogPath: string | null
   /** Re-poll Electron's `check-engine-status`. */
   check: () => Promise<EngineStatus | null>
-  /** Stop the running server. Used by mode-switch / loading-failure
-   *  teardown paths that want to kill the process without going through
-   *  a full reinstall. Idempotent — no-op when nothing's running. */
-  stopServer: () => Promise<string>
   /** Probe a server's `/health` endpoint. Returns reachability (`ok`),
    *  the server's `ServerCapabilities` payload when present, and the
    *  `launched_from_standalone` flag the settings UI uses to refuse a
@@ -84,6 +80,18 @@ export type EngineLifecycleContextValue = {
    *  Concurrent calls coalesce — the second caller awaits the first's
    *  pipeline rather than starting a parallel install. */
   reinstallEngine: (mode?: 'fix' | 'nuke') => Promise<LifecycleState>
+  /** Atomic kill+spawn of the standalone server, against the already-
+   *  installed engine. Stops the running process (no-op if not
+   *  running), spawns a fresh one, polls `/health`, refreshes
+   *  `isRunning` / `serverLogPath`. The state moves through `preparing`
+   *  and lands on `ready` or `failed`. Concurrent calls coalesce
+   *  through the same pipeline lock as the other lifecycle methods.
+   *
+   *  The kill and spawn are deliberately fused into one verb: the rest
+   *  of the app relies on the standalone server being available for
+   *  `/health`, model picker, and capability probes, so exposing a
+   *  separate "stop" would invite breakage of that invariant. */
+  restartServer: () => Promise<LifecycleState>
   /** Wait until the server reaches a terminal state (`ready` or `failed`)
    *  and return that state.
    *

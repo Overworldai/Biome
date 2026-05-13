@@ -130,6 +130,40 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
     }
   }, [])
 
+  /** Atomic kill+spawn of the standalone server. Stops the running
+   *  process (no-op if not running), spawns a fresh one, polls
+   *  `/health`, and refreshes the engine status snapshot so consumers
+   *  see the new port and `isServerRunning` immediately. Skips the
+   *  reinstall steps that `reinstallEngine` does — the deps are still
+   *  valid, only the process needs cycling.
+   *
+   *  The kill and the spawn are deliberately fused into a single verb:
+   *  exposing a separate "stop" would invite callers to leave the
+   *  server dead, breaking the "standalone server is always running"
+   *  invariant the rest of the app relies on (settings menu, model
+   *  picker, capability probe all need a live `/health`).
+   *
+   *  Idempotent across the pipeline lock; concurrent callers receive
+   *  the same promise. */
+  const restartServer = useCallback(
+    (): Promise<LifecycleState> =>
+      runExclusive(async () => {
+        setState({ kind: 'preparing' })
+        log.info('Restarting server')
+        try {
+          await invoke('stop-engine-server')
+        } catch (e) {
+          log.warn('stop-engine-server during restart failed (likely already stopped):', errorMessage(e))
+        }
+        const result = await startServer()
+        // Refresh status so `isServerRunning` and `serverPort` reflect
+        // the new process rather than the just-killed one.
+        await engine.checkStatus()
+        return result
+      }),
+    [runExclusive, engine]
+  )
+
   const reinstallEngine = useCallback(
     (mode: 'fix' | 'nuke' = 'fix'): Promise<LifecycleState> =>
       runExclusive(async () => {
@@ -188,6 +222,27 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
   const abortReinstall = useCallback(async (): Promise<void> => {
     await invoke('abort-engine-install')
   }, [])
+
+  // Reconcile `state.kind === 'ready'` with whether the server is
+  // *actually* running. The state machine can drift from reality if
+  // the server crashes on its own — there are no longer any callers
+  // that intentionally kill it without going through `restartServer`
+  // (which keeps the state honest), but a Python crash, OOM kill,
+  // user-side `pkill`, etc. would all leave `state.kind === 'ready'`
+  // pointing at a dead process. Auto-recover by firing a fresh
+  // `restartServer`. Gated on `engine.status !== null` so the very
+  // first probe (which races mount) doesn't trip the recovery before
+  // status is known. The `runExclusive` lock means concurrent
+  // restarts coalesce — once `state.kind` moves to `'preparing'`,
+  // this effect re-runs and bails on the kind check.
+  useEffect(() => {
+    if (!isStandaloneMode) return
+    if (state.kind !== 'ready') return
+    if (engine.status === null) return
+    if (engine.isServerRunning) return
+    log.warn('Standalone server not running while lifecycle state is ready - auto-recovering')
+    void restartServer().catch((err) => log.error('Auto-recover restart failed:', errorMessage(err)))
+  }, [isStandaloneMode, state.kind, engine.status, engine.isServerRunning, restartServer])
 
   // Fires on mount and whenever `isStandaloneMode` flips (e.g. user
   // toggling engine_mode in settings). The `runExclusive` lock handles
@@ -252,9 +307,9 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
       isRunning: engine.isServerRunning,
       serverLogPath: engine.serverLogPath,
       check: engine.checkStatus,
-      stopServer: engine.stopServer,
       probeServerHealth: engine.probeServerHealth,
       reinstallEngine,
+      restartServer,
       ensureReady,
       abortReinstall,
       setDraftStandalone
@@ -266,9 +321,9 @@ export const EngineLifecycleProvider = ({ children }: { children: ReactNode }) =
       engine.isServerRunning,
       engine.serverLogPath,
       engine.checkStatus,
-      engine.stopServer,
       engine.probeServerHealth,
       reinstallEngine,
+      restartServer,
       ensureReady,
       abortReinstall,
       setDraftStandalone
