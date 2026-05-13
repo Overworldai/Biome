@@ -18,6 +18,7 @@ import { useInputLoop } from '../../hooks/streaming/useInputLoop'
 import { usePauseState } from '../../hooks/streaming/usePauseState'
 import { usePointerLock } from '../../hooks/streaming/usePointerLock'
 import { useSceneEdit } from '../../hooks/streaming/useSceneEdit'
+import { useClampedSettings } from '../../hooks/streaming/useClampedSettings'
 import { useSessionInit } from '../../hooks/streaming/useSessionInit'
 import { useStreamingLifecycle } from '../../hooks/streaming/useStreamingLifecycle'
 import { useWarmConnection } from '../../hooks/streaming/useWarmConnection'
@@ -37,7 +38,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   const { state, states, transitionTo } = usePortal()
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const { settings, isStandaloneMode } = useSettings()
+  const { settings: rawSettings, isStandaloneMode, saveSettings } = useSettings()
   const lifecycle = useEngineLifecycle()
   const { stopServer, isRunning: isServerRunning, check: checkEngineStatus, probeServerHealth } = lifecycle
   const {
@@ -80,6 +81,15 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
   // what the active server can actually run. Null until the first
   // probe completes — dropdowns disable themselves in that window.
   const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null)
+
+  // Saved settings clamped against the server's matrix. Every consumer
+  // inside this provider reads `settings` (the effective view) rather
+  // than `rawSettings` so the wire config, the lifecycle signatures,
+  // and the persisted-on-disk values all see the same `engine_backend`
+  // / `engine_quant`. The hook also writes the clamped values back to
+  // disk on first divergence so menu opens don't keep surfacing the
+  // delta as a no-op restart prompt.
+  const settings = useClampedSettings(rawSettings, serverCapabilities, saveSettings)
 
   const {
     preConnectionStage,
@@ -149,7 +159,6 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isStreaming,
     isStandaloneMode,
     settings,
-    serverCapabilities,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame

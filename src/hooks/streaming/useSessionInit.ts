@@ -3,7 +3,6 @@ import { invoke } from '../../bridge'
 import { buildSessionConfig } from '../../context/streaming/sessionConfig'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
-import type { ServerCapabilities } from '../../types/ipc'
 import { DEFAULT_WORLD_ENGINE_MODEL, type Settings } from '../../types/settings'
 import { getLiveSignature, getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
@@ -37,12 +36,13 @@ export function useSessionInit(opts: {
   isConnected: boolean
   isStreaming: boolean
   isStandaloneMode: boolean
+  /** The *effective* settings produced by `useClampedSettings` —
+   *  `engine_backend` / `engine_quant` have already been clamped
+   *  against the active server's capability matrix. The bootstrap
+   *  sends them as-is on the wire and signs `lastApplied` off them
+   *  so the lifecycle reducer doesn't see the parallel disk-side
+   *  clamp save as a session-class diff. */
   settings: Settings
-  /** Per-config support sets the active server reports, threaded
-   *  through to `buildSessionConfig` so stale saved values (quant,
-   *  backend) get clamped on the wire instead of silently overridden
-   *  by the server. */
-  serverCapabilities: ServerCapabilities | null
   sendInit: SendInit
   applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
@@ -58,7 +58,6 @@ export function useSessionInit(opts: {
     isStreaming,
     isStandaloneMode,
     settings,
-    serverCapabilities,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -74,8 +73,6 @@ export function useSessionInit(opts: {
   // re-fire the init.
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const serverCapabilitiesRef = useRef(serverCapabilities)
-  serverCapabilitiesRef.current = serverCapabilities
 
   // Bootstrap each new LOADING websocket session deterministically:
   // send model + seed together so server applies model first and can load seed
@@ -107,9 +104,10 @@ export function useSessionInit(opts: {
         setPlaceholderFrame(new Blob([bytes], { type: 'image/jpeg' }))
       }
 
-      // Set lastApplied before await so the lifecycle machine doesn't
-      // see a stale mismatch during the re-render triggered by
-      // applyInitResponse.
+      // Settings is already the effective view (post-clamp), so this
+      // signature matches what'll be on disk after the parallel
+      // `useClampedSettings` save propagates. No race, no spurious
+      // intentional reconnect.
       setLastApplied(getRestartSignatures(settings))
 
       // App version — embedded into recording metadata so MP4s carry a
@@ -118,7 +116,7 @@ export function useSessionInit(opts: {
       const diag = await invoke('get-runtime-diagnostics-meta').catch(() => null)
       const biomeVersion = diag?.app_version
 
-      const config = await buildSessionConfig(settings, isStandaloneMode, serverCapabilities)
+      const config = await buildSessionConfig(settings, isStandaloneMode)
       const metrics = await sendInit({
         model: selectedModel,
         config,
@@ -136,7 +134,6 @@ export function useSessionInit(opts: {
     isConnected,
     isStandaloneMode,
     settings,
-    serverCapabilities,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -163,7 +160,7 @@ export function useSessionInit(opts: {
     if (!isStreaming || !isConnected) return
     const run = async () => {
       const current = settingsRef.current
-      const config = await buildSessionConfig(current, isStandaloneMode, serverCapabilitiesRef.current)
+      const config = await buildSessionConfig(current, isStandaloneMode)
       await sendInit({
         model: current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
         config
@@ -177,7 +174,7 @@ export function useSessionInit(opts: {
       const result = await invoke('get-seed-image-base64', filename)
       if (!result) return
       lastSeedRef.current = { filename, imageData: result.base64 }
-      const config = await buildSessionConfig(settingsRef.current, isStandaloneMode, serverCapabilitiesRef.current)
+      const config = await buildSessionConfig(settingsRef.current, isStandaloneMode)
       const metrics = await sendInit({
         model: settingsRef.current.engine_model || DEFAULT_WORLD_ENGINE_MODEL,
         config,

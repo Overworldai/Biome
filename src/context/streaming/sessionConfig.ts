@@ -3,32 +3,20 @@ import type { SessionConfig } from '../../types/protocol.generated'
 import type { ServerCapabilities } from '../../types/ipc'
 import type { EngineBackend, QuantOption, Settings } from '../../types/settings'
 
-/** Build the wire-canonical `SessionConfig` from current settings. Sent
- *  in every InitRequest — the server diffs each field against current
- *  state and reconfigures the deltas. The renderer's `'none'` quant
- *  sentinel maps to `undefined` (omitted on the wire); the server reads
- *  that as no-quantization. Recording is gated to standalone mode,
- *  matching what the server expects to receive.
+/** Clamp saved `engine_backend` / `engine_quant` against what the
+ *  active server reports it can run. Backend resolves first because
+ *  the quant set is keyed off the post-clamp backend (`capabilities.quants`
+ *  is per-backend). Returns the saved values unchanged when capabilities
+ *  are unknown (no probe yet) or when the saved values are already valid.
  *
- *  `serverCapabilities` (when present) is the post-probe view of what
- *  the active server can actually run; we clamp every saved value
- *  whose set is reported there (`engine_backend`, `engine_quant`) so a
- *  stale setting can't ask for something the server will silently
- *  override or reject (e.g. `intw8a8` / `world_engine` saved on a CUDA
- *  box that's now connected to an Apple-Silicon remote). The settings
- *  file isn't touched — the EngineTab filters handle UI-side
- *  correction the next time the user visits. */
-export const buildSessionConfig = async (
+ *  Internal to `useClampedSettings`, which is the single seam where
+ *  this policy is applied — every consumer downstream of that hook
+ *  reads the already-clamped settings, so `buildSessionConfig`,
+ *  `useSessionInit` etc. never re-run the policy and can't drift. */
+export const clampToCapabilities = (
   settings: Settings,
-  isStandaloneMode: boolean,
   serverCapabilities: ServerCapabilities | null
-): Promise<SessionConfig> => {
-  const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
-  const videoOutputDir = recordingEnabled
-    ? ((await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')) ?? null)
-    : null
-  // Backend clamp first, then quant — the quant set is keyed off the
-  // post-clamp backend, since `capabilities.quants` is per-backend.
+): { engine_backend: EngineBackend; engine_quant: QuantOption } => {
   const savedBackend = settings.engine_backend ?? 'world_engine'
   const engine_backend: EngineBackend =
     serverCapabilities && !serverCapabilities.backends.includes(savedBackend)
@@ -36,11 +24,32 @@ export const buildSessionConfig = async (
       : savedBackend
   const savedQuant = settings.engine_quant ?? 'none'
   const backendQuants = serverCapabilities?.quants[engine_backend]
-  const quant: QuantOption =
+  const engine_quant: QuantOption =
     backendQuants && !backendQuants.includes(savedQuant) ? (backendQuants[0] ?? 'none') : savedQuant
+  return { engine_backend, engine_quant }
+}
+
+/** Build the wire-canonical `SessionConfig` from current settings. Sent
+ *  in every InitRequest — the server diffs each field against current
+ *  state and reconfigures the deltas. The renderer's `'none'` quant
+ *  sentinel maps to `undefined` (omitted on the wire); the server reads
+ *  that as no-quantization. Recording is gated to standalone mode,
+ *  matching what the server expects to receive.
+ *
+ *  Expects `settings` to already be the *effective* settings produced
+ *  by `useClampedSettings` — i.e. `engine_backend` and `engine_quant`
+ *  have already been clamped against the active server's capability
+ *  matrix. This function trusts that contract and does no clamping
+ *  of its own. */
+export const buildSessionConfig = async (settings: Settings, isStandaloneMode: boolean): Promise<SessionConfig> => {
+  const recordingEnabled = isStandaloneMode && (settings.recording?.enabled ?? false)
+  const videoOutputDir = recordingEnabled
+    ? ((await invoke('resolve-video-dir', settings.recording?.output_dir ?? '')) ?? null)
+    : null
+  const engine_quant: QuantOption = settings.engine_quant ?? 'none'
   return {
-    quant: quant !== 'none' ? quant : undefined,
-    engine_backend,
+    quant: engine_quant !== 'none' ? engine_quant : undefined,
+    engine_backend: settings.engine_backend ?? 'world_engine',
     scene_authoring: settings.scene_authoring_enabled ?? false,
     action_logging: settings.debug_overlays?.action_logging ?? false,
     video_recording: recordingEnabled,
