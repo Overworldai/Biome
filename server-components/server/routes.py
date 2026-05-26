@@ -33,7 +33,7 @@ import contextlib
 import os
 import shutil
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 import structlog
 import yaml
@@ -68,6 +68,9 @@ from server.session.workers import run_session
 from server.startup import ServerStartup
 from util.server_logging import stream_logs_to_client
 from util.system_info import SystemMonitor
+
+if TYPE_CHECKING:
+    import uvicorn
 
 logger = structlog.stdlib.get_logger(__name__)
 router = APIRouter()
@@ -289,6 +292,40 @@ async def health(request: Request, startup: Annotated[ServerStartup, Depends(get
         capabilities=supported_capabilities(),
         launched_from_standalone=launched_from_standalone,
     )
+
+
+class ShutdownResponse(BaseModel):
+    status: Literal["shutting_down", "already_shutting_down"]
+
+
+class ShutdownUnavailableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("uvicorn_server is not attached to app.state; cannot signal graceful shutdown")
+
+
+@router.post("/shutdown")
+async def shutdown(request: Request) -> ShutdownResponse:
+    """Signal the uvicorn server to exit on its next tick. The route returns
+    before the loop actually unwinds so the launcher gets an HTTP 200; the
+    lifespan teardown then runs as uvicorn drains. Localhost-only because
+    that's how the server is bound — any local process can also `kill -9`
+    us, so this isn't a new attack surface.
+
+    No-op (idempotent `already_shutting_down`) if the flag is already set,
+    so a launcher that retries doesn't see a confusing error."""
+    server_obj = getattr(request.app.state, "uvicorn_server", None)
+    if server_obj is None:
+        # Lifespan-loaded apps under `uvicorn.run(app)` don't expose the
+        # Server object; main.py wires one up explicitly precisely so this
+        # endpoint works. If we ever lose that wiring, fail loudly rather
+        # than silently no-op'ing the launcher's only graceful path.
+        raise ShutdownUnavailableError
+    server = cast("uvicorn.Server", server_obj)
+    if server.should_exit:
+        return ShutdownResponse(status="already_shutting_down")
+    logger.info("Shutdown requested via /shutdown endpoint")
+    server.should_exit = True
+    return ShutdownResponse(status="shutting_down")
 
 
 def _read_model_type(path: str) -> str | None:

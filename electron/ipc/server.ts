@@ -7,13 +7,7 @@ import path from 'node:path'
 import { getEngineDir, getHfHomeDir, getHfHubCacheDir } from '../lib/paths.js'
 import { getUvBinaryPath, getUvEnvVars, getBundledPythonIncludeDir } from '../lib/uv.js'
 import { getHiddenWindowOptions } from '../lib/platform.js'
-import {
-  getServerState,
-  setServerProcess,
-  setServerReady,
-  clearServerState,
-  stopServerSync
-} from '../lib/serverState.js'
+import { getServerState, setServerProcess, setServerReady, clearServerState, stopServer } from '../lib/serverState.js'
 import { copyServerComponentFiles } from '../lib/serverFiles.js'
 import { parseLogLine } from '../lib/logRecord.js'
 import { getLogger } from '../lib/logger.js'
@@ -114,9 +108,19 @@ export function registerServerIpc(): void {
       '--launched-from-standalone'
     ]
 
-    // python on win32 seems to have issues with --parent-pid correctly detecting parent pid and kills itself
-    const serverArgs =
-      process.platform === 'win32' ? baseServerArgs : [...baseServerArgs, '--parent-pid', String(process.pid)]
+    // Parent-process watchdog: the Python server force-exits if this Electron
+    // process disappears. On Windows we also pass our process-creation time
+    // so the watchdog can defeat PID recycling — without it, a freshly spawned
+    // OS process inheriting our PID would look "alive" to the server even
+    // though Biome itself is long gone.
+    const parentStartTimeSec = Date.now() / 1000 - process.uptime()
+    const serverArgs = [
+      ...baseServerArgs,
+      '--parent-pid',
+      String(process.pid),
+      '--parent-start-time',
+      parentStartTimeSec.toFixed(3)
+    ]
 
     // Spawn the server
     const child = spawn(uvBinary, serverArgs, {
@@ -186,8 +190,8 @@ export function registerServerIpc(): void {
     return `Server started on port ${port} (PID: ${pid})`
   })
 
-  ipcMain.handle('stop-engine-server', () => {
-    const result = stopServerSync()
+  ipcMain.handle('stop-engine-server', async () => {
+    const result = await stopServer()
     if (!result) {
       return 'Server already stopped'
     }

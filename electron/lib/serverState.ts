@@ -36,7 +36,7 @@ export function clearServerState(): void {
   state.ready = false
 }
 
-/** Synchronously stop the running server process tree */
+/** Synchronously stop the running server process tree (force-kill path). */
 export function stopServerSync(): string | null {
   if (!state.process) {
     return null
@@ -71,4 +71,67 @@ export function stopServerSync(): string | null {
   clearServerState()
   log.info('Server stopped successfully')
   return pid ? `Server stopped (PID: ${pid})` : 'Server stopped'
+}
+
+/**
+ * Stop the running server. First asks the server to shut itself down via
+ * `POST /shutdown` so the FastAPI lifespan teardown runs (releasing GPU
+ * memory, finalising recordings). Falls back to `stopServerSync` if the
+ * HTTP request fails or the process hasn't exited within `gracePeriodMs`.
+ *
+ * Use this for any user-initiated or app-quit shutdown. Reserve
+ * `stopServerSync` for emergency paths (uncaughtException, hard crash)
+ * where there's no time to be polite.
+ */
+export async function stopServer({ gracePeriodMs = 10000 }: { gracePeriodMs?: number } = {}): Promise<string | null> {
+  const proc = state.process
+  const port = state.port
+  if (!proc) {
+    return null
+  }
+  const pid = proc.pid
+
+  // If the process is already dead but `clearServerState` hasn't been
+  // invoked yet (e.g. exit handler not yet fired), short-circuit.
+  if (proc.exitCode !== null) {
+    clearServerState()
+    return pid ? `Server already exited (PID: ${pid})` : 'Server already exited'
+  }
+
+  // Set up the exit-detection promise before issuing the request so we
+  // can't miss the event if the server exits before we start awaiting.
+  const exitedNaturally = new Promise<boolean>((resolve) => {
+    const onExit = () => resolve(true)
+    proc.once('exit', onExit)
+    setTimeout(() => {
+      proc.removeListener('exit', onExit)
+      resolve(false)
+    }, gracePeriodMs).unref()
+  })
+
+  if (port !== null) {
+    log.info('Requesting graceful shutdown', { fields: { pid: pid ?? -1, port } })
+    try {
+      await fetch(`http://127.0.0.1:${port}/shutdown`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(500)
+      })
+    } catch (e) {
+      // Server may already be dying or unreachable — fall through to the
+      // process-exit wait, which will time out quickly and force-kill.
+      log.warning('Shutdown request failed, will wait for exit then force-kill', {
+        exception: e instanceof Error ? e.message : String(e)
+      })
+    }
+  }
+
+  const exited = await exitedNaturally
+  if (exited) {
+    log.info('Server exited gracefully', { fields: { pid: pid ?? -1 } })
+    clearServerState()
+    return pid ? `Server stopped gracefully (PID: ${pid})` : 'Server stopped gracefully'
+  }
+
+  log.warning('Graceful shutdown timed out, forcing kill', { fields: { pid: pid ?? -1, gracePeriodMs } })
+  return stopServerSync()
 }

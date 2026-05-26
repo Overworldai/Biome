@@ -2,7 +2,7 @@ import { app, BrowserWindow, net, protocol, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { registerAllIpc } from './ipc/index.js'
-import { stopServerSync } from './lib/serverState.js'
+import { getServerState, stopServer, stopServerSync } from './lib/serverState.js'
 import { getBackgroundsDir } from './ipc/backgrounds.js'
 import { getCurrentRecordingsDir } from './ipc/recordings.js'
 import { getLogger } from './lib/logger.js'
@@ -185,23 +185,49 @@ app.on('activate', () => {
   }
 })
 
-app.on('before-quit', () => {
-  log.info('App quitting, stopping server')
-  stopServerSync()
+// `before-quit` re-fires after we call `app.quit()` (and may re-fire if the
+// user triggers quit again while shutdown is in flight). `complete` lets the
+// final pass through unchanged so Electron actually tears the window down;
+// `inFlight` swallows any extra mid-shutdown events without re-launching a
+// second `stopServer`.
+let serverShutdownComplete = false
+let serverShutdownInFlight = false
+
+app.on('before-quit', (event) => {
+  if (serverShutdownComplete) return
+  if (!getServerState().process) return
+  if (serverShutdownInFlight) {
+    event.preventDefault()
+    return
+  }
+
+  event.preventDefault()
+  serverShutdownInFlight = true
+  log.info('App quitting, stopping server gracefully')
+
+  void stopServer().finally(() => {
+    serverShutdownComplete = true
+    app.quit()
+  })
 })
+
+// On a CTRL+C / SIGTERM the OS gives us limited time before it force-kills us,
+// so use a tight grace budget — the server's lifespan teardown is best-effort.
+const signalGracePeriodMs = 1500
 
 process.on('SIGINT', () => {
   log.info('Received SIGINT, stopping server')
-  stopServerSync()
-  process.exit(0)
+  void stopServer({ gracePeriodMs: signalGracePeriodMs }).finally(() => process.exit(0))
 })
 
 process.on('SIGTERM', () => {
   log.info('Received SIGTERM, stopping server')
-  stopServerSync()
-  process.exit(0)
+  void stopServer({ gracePeriodMs: signalGracePeriodMs }).finally(() => process.exit(0))
 })
 
+// uncaughtException leaves the event loop in an undefined state — async I/O
+// (including the graceful HTTP request) can't be trusted to make progress.
+// Sync force-kill is the only safe path here.
 process.on('uncaughtException', (err) => {
   log.error('Uncaught exception, stopping server', {
     exception: err instanceof Error ? (err.stack ?? err.message) : String(err)
