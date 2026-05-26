@@ -17,6 +17,7 @@ import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+import psutil
 import structlog
 
 import util.server_logging  # noqa: F401  # pyright: ignore[reportUnusedImport]  -- side-effect: install TeeStream + crash hooks before any logging happens
@@ -39,6 +40,10 @@ class StartupConfig:
     before the lifespan body itself runs."""
 
     parent_pid: int | None = None
+    # Epoch seconds for the parent's process-creation time, as reported by
+    # the launcher. Paired with `parent_pid` to defend against PID recycling
+    # on Windows: a recycled PID matches, but the creation time won't.
+    parent_start_time: float | None = None
     # True when the launching Biome instance is in standalone mode and
     # owns this process's lifecycle — set via `--launched-from-standalone`
     # so the renderer can refuse to point itself at a server it would
@@ -47,10 +52,22 @@ class StartupConfig:
     launched_from_standalone: bool = False
 
 
-# If launched with --parent-pid, poll the parent PID and exit if it dies.
+# If launched with --parent-pid, poll the parent and exit if it dies.
 # Linux's prctl(PR_SET_PDEATHSIG) is the kernel-level fallback we'd ideally
 # use, but Python doesn't expose it portably; the polling watchdog covers
-# both Linux and Windows.
+# both Linux and Windows. On Windows the bare `os.kill(pid, 0)` check is
+# unreliable in the face of PID recycling — kernel reuses PIDs aggressively
+# and the new occupant can be running as a different user — so when the
+# launcher passes `--parent-start-time` we additionally compare the parent's
+# process-creation time via psutil.
+
+
+# Tolerance for clock skew between the launcher's clock and the kernel's
+# recorded process-creation timestamp. Process-creation times sit at
+# millisecond precision; one second is generous enough to absorb the
+# stringification round-trip and any small drift, while still being well
+# below the gap any recycled PID would exhibit.
+_PARENT_START_TIME_TOLERANCE_SEC = 1.0
 
 
 class ParentWatchdog:
@@ -58,26 +75,42 @@ class ParentWatchdog:
     parent dies. Constructed in `__main__` (one-shot startup check),
     then run as an asyncio task by the lifespan (continuous polling)."""
 
-    def __init__(self, parent_pid: int) -> None:
+    def __init__(self, parent_pid: int, parent_start_time: float | None = None) -> None:
         self.parent_pid = parent_pid
+        self.parent_start_time = parent_start_time
+
+    def _parent_alive(self) -> bool:
+        """True iff a process with the parent's PID exists and (when
+        `parent_start_time` is known) has a matching creation timestamp."""
+        try:
+            proc = psutil.Process(self.parent_pid)
+        except psutil.NoSuchProcess:
+            return False
+        if self.parent_start_time is None:
+            return True
+        try:
+            create_time = proc.create_time()
+        except psutil.NoSuchProcess:
+            return False
+        except psutil.AccessDenied:
+            # Process exists but we can't read its metadata. Treat as alive
+            # rather than self-exit on a transient permission glitch.
+            return True
+        return abs(create_time - self.parent_start_time) <= _PARENT_START_TIME_TOLERANCE_SEC
 
     def check_alive_or_exit(self) -> None:
         """Synchronous one-shot check at startup, in case the parent
         is already gone by the time we get here."""
-        try:
-            os.kill(self.parent_pid, 0)
-        except OSError:
-            logger.error("Parent process is already gone, shutting down", parent_pid=self.parent_pid)  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
+        if not self._parent_alive():
+            logger.error("Parent process is already gone, shutting down", parent_pid=self.parent_pid)
             os._exit(1)
 
     async def run(self) -> None:
         """Continuous polling. Run as an asyncio task from the lifespan."""
         while True:
             await asyncio.sleep(2)
-            try:
-                os.kill(self.parent_pid, 0)  # signal 0 = existence check
-            except OSError:
-                logger.error("Parent process is gone, shutting down", parent_pid=self.parent_pid)  # noqa: TRY400  -- OSError is a "parent gone" signal, not a real exception; traceback is noise
+            if not self._parent_alive():
+                logger.error("Parent process is gone, shutting down", parent_pid=self.parent_pid)
                 os._exit(1)
 
 
@@ -166,7 +199,7 @@ async def lifespan(app: FastAPI):
     cfg: StartupConfig = app.state.startup_config
     watchdog_task = None
     if cfg.parent_pid is not None:
-        watchdog_task = asyncio.create_task(ParentWatchdog(cfg.parent_pid).run())
+        watchdog_task = asyncio.create_task(ParentWatchdog(cfg.parent_pid, cfg.parent_start_time).run())
 
     yield
 
@@ -197,6 +230,15 @@ if __name__ == "__main__":
         "--parent-pid", type=int, default=None, help="PID of parent process; server exits if parent dies"
     )
     parser.add_argument(
+        "--parent-start-time",
+        type=float,
+        default=None,
+        help=(
+            "Epoch-seconds creation timestamp of the parent process. When paired with --parent-pid, used to guard"
+            " against PID recycling: a recycled PID won't match the original parent's creation time."
+        ),
+    )
+    parser.add_argument(
         "--launched-from-standalone",
         action="store_true",
         help=(
@@ -208,21 +250,30 @@ if __name__ == "__main__":
 
     app.state.startup_config = StartupConfig(
         parent_pid=args.parent_pid,
+        parent_start_time=args.parent_start_time,
         launched_from_standalone=args.launched_from_standalone,
     )
     if args.parent_pid is not None:
-        logger.info("Monitoring parent process", parent_pid=args.parent_pid)
-        ParentWatchdog(args.parent_pid).check_alive_or_exit()
+        logger.info("Monitoring parent process", parent_pid=args.parent_pid, parent_start_time=args.parent_start_time)
+        ParentWatchdog(args.parent_pid, args.parent_start_time).check_alive_or_exit()
+
+    # Construct the uvicorn Server explicitly (rather than via `uvicorn.run`)
+    # so the `/shutdown` route can flip `should_exit` on the live instance,
+    # giving the lifespan teardown a chance to run before the launcher
+    # falls back to SIGKILL.
+    config = uvicorn.Config(
+        app,
+        host=args.host,
+        port=args.port,
+        ws_ping_interval=300,
+        ws_ping_timeout=300,
+        log_config=None,
+    )
+    server = uvicorn.Server(config)
+    app.state.uvicorn_server = server
 
     try:
-        uvicorn.run(
-            app,
-            host=args.host,
-            port=args.port,
-            ws_ping_interval=300,
-            ws_ping_timeout=300,
-            log_config=None,
-        )
+        server.run()
     except BaseException:
         logger.exception("Fatal exception at server entrypoint")
         raise
