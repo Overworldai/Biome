@@ -572,6 +572,14 @@ class WorldEngineManager:
                     backend_quant = _QUARK_QUANT_MAP[requested_quant]
                 except KeyError as e:
                     raise QuarkUnsupportedQuantError(requested_quant) from e
+                # Apple Silicon has no native fp8, so quark forces all-bf16
+                # regardless of what we pass. But quark reads `quant=None` as
+                # "default → fp8" and emits a RuntimeWarning when it rewrites
+                # that to bf16. We only advertise `Quant.NONE` on Metal anyway,
+                # so make the bf16 intent explicit to keep the engine logs
+                # clean (quark returns `"bf16"` unchanged, no warning).
+                if IS_DARWIN_ARM64 and backend_quant is None:
+                    backend_quant = "bf16"
             else:
                 backend_quant = requested_quant
 

@@ -11,6 +11,23 @@ const log = getLogger('electron.settings')
 const SETTINGS_FILENAME = 'settings.json'
 const LEGACY_CONFIG_FILENAME = 'config.json'
 
+// Apple Silicon has no CUDA, so the legacy `world_engine` backend can't even
+// import there — the server advertises `quark` only (see manager.py's
+// `IS_DARWIN_ARM64` gate in `supported_capabilities`). The client setting
+// defaults to `world_engine` for every platform, so without this a Mac would
+// try to launch the engine on a backend that can't load (and the
+// capability-based clamp only kicks in *after* a server reports `/health`,
+// which is too late for a standalone launch). Pin the setting to `quark` here
+// so it propagates to the server via the InitRequest. Mirrors the server gate.
+const IS_APPLE_SILICON = process.platform === 'darwin' && process.arch === 'arm64'
+
+function normalizeForPlatform(settings: Settings): { settings: Settings; changed: boolean } {
+  if (IS_APPLE_SILICON && settings.engine_backend !== 'quark') {
+    return { settings: { ...settings, engine_backend: 'quark' }, changed: true }
+  }
+  return { settings, changed: false }
+}
+
 function getSettingsPath(): string {
   const configDir = getConfigDir()
   if (!fs.existsSync(configDir)) {
@@ -161,10 +178,11 @@ function loadSettings(settingsPath: string): { settings: Settings; dirty: boolea
 export function readSettingsSync(): Settings {
   const settingsPath = getSettingsPath()
   const { settings, dirty } = loadSettings(settingsPath)
-  if (dirty) {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+  const { settings: normalized, changed } = normalizeForPlatform(settings)
+  if (dirty || changed) {
+    fs.writeFileSync(settingsPath, JSON.stringify(normalized, null, 2))
   }
-  return settings
+  return normalized
 }
 
 /** Env vars injected into any uv / python subprocess when offline mode is on.
@@ -195,12 +213,12 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('read-default-settings', () => {
-    return settingsSchema.parse({})
+    return normalizeForPlatform(settingsSchema.parse({})).settings
   })
 
   ipcMain.handle('write-settings', (_event, settings: Settings) => {
     const settingsPath = getSettingsPath()
-    const validated = settingsSchema.parse(settings)
+    const validated = normalizeForPlatform(settingsSchema.parse(settings)).settings
     fs.writeFileSync(settingsPath, JSON.stringify(validated, null, 2))
   })
 
