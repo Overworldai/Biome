@@ -109,18 +109,8 @@ export function registerServerIpc(): void {
     ]
 
     // Parent-process watchdog: the Python server force-exits if this Electron
-    // process disappears. On Windows we also pass our process-creation time
-    // so the watchdog can defeat PID recycling — without it, a freshly spawned
-    // OS process inheriting our PID would look "alive" to the server even
-    // though Biome itself is long gone.
-    const parentStartTimeSec = Date.now() / 1000 - process.uptime()
-    const serverArgs = [
-      ...baseServerArgs,
-      '--parent-pid',
-      String(process.pid),
-      '--parent-start-time',
-      parentStartTimeSec.toFixed(3)
-    ]
+    // process disappears.
+    const serverArgs = [...baseServerArgs, '--parent-pid', String(process.pid)]
 
     // Spawn the server
     const child = spawn(uvBinary, serverArgs, {

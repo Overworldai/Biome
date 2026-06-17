@@ -489,7 +489,14 @@ async def _fetch_waypoint_ids(cache: TtlCache[str, list[str]]) -> list[str]:
 
     async def fetcher() -> list[str]:
         def _fetch() -> list[str]:
-            collection = get_collection(WAYPOINT_COLLECTION_SLUG)
+            # `token=False` forces an anonymous request. The collection is
+            # public curated metadata, so listing it must not depend on
+            # whatever HF token the host happens to have cached — a
+            # fine-grained/restricted token (e.g. one scoped only for
+            # uploads) authenticates but lacks "read collections" and gets
+            # a 403, whereas anonymous access succeeds. Decoupling from the
+            # ambient token keeps the picker populated for every user.
+            collection = get_collection(WAYPOINT_COLLECTION_SLUG, token=False)
             return [item.item_id for item in collection.items if item.item_type == "model"]
 
         fetched = await asyncio.to_thread(_fetch)
