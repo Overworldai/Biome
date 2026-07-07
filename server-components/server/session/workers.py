@@ -275,10 +275,16 @@ async def run_sender(conn: Connection) -> None:
             conn.frame_ready.clear()
             while not conn.frame_queue.empty():
                 payload = conn.frame_queue.get_nowait()
-                if isinstance(payload, bytes):
-                    await conn.websocket.send_bytes(payload)
-                else:
-                    await conn.send_message(payload)
+                if not conn.running:
+                    break
+                try:
+                    if isinstance(payload, bytes):
+                        await conn.websocket.send_bytes(payload)
+                    else:
+                        await conn.send_message(payload)
+                except Exception:  # noqa: BLE001
+                    conn.running = False
+                    return
         except Exception:
             logger.exception("Sender error")
             conn.running = False
