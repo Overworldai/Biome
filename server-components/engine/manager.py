@@ -140,6 +140,21 @@ class QuantUnsupportedError(RuntimeError):
     with the engine's `quant` field as a param."""
 
 
+class IncompatibleHardwareError(RuntimeError):
+    """Raised before model load when the requested backend cannot run on
+    this host at all — currently only `world_engine` on Apple Silicon. A
+    product-facing incompatibility, not a transient device error, so
+    callers surface it as a typed server message rather than letting it
+    land as a crash mid-warmup. Owns its message (ruff `TRY003`)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The world_engine backend requires an NVIDIA GPU and cannot run on Apple Silicon. Switch to the "
+            "quark backend (local inference needs M5-class Apple hardware), or point Biome at a remote "
+            "NVIDIA server in Settings."
+        )
+
+
 class EngineNotLoadedError(RuntimeError):
     """Raised when an operation requires the WorldEngine but no model is
     currently loaded. Use `WorldEngineManager.is_loaded` to gate calls."""
@@ -481,6 +496,15 @@ class WorldEngineManager:
             requested_model = model_uri.strip()
             requested_quant = quant or None  # Normalize empty string to None
             requested_backend: EngineBackend = backend
+
+            # Legacy `world_engine` targets CUDA. On Apple Silicon `devices.py`
+            # forces `WORLD_ENGINE_DEVICE="cpu"`, so the load itself succeeds and
+            # the failure only lands minutes later in warmup: `_cache_pass` is
+            # wrapped in `@torch.compile(fullgraph=True)` around `flex_attention`,
+            # which inductor has no CPU lowering for. Fail fast here with
+            # something the user can act on instead.
+            if IS_DARWIN_ARM64 and requested_backend == EngineBackend.WORLD_ENGINE:
+                raise IncompatibleHardwareError
 
             model_unchanged = requested_model == self.model_uri
             quant_unchanged = requested_quant == self.quant

@@ -397,6 +397,7 @@ const zh = {
           serverStartupFailed: '服务器启动失败：{{message}}',
           timeoutWaitingForSeed: '等待初始种子超时',
           initFailed: '会话初始化失败',
+          incompatibleHardware: '不支持的引擎/backend 组合。{{message}}',
           sceneAuthoringModelLoadFailed: '场景创作模型加载失败：{{message}}',
           sceneEditSafetyRejected: '场景编辑被拒绝：请求未通过内容安全检查。',
           generateSceneSafetyRejected: '场景生成被拒绝：请求未通过内容安全检查。',

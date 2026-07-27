@@ -99,6 +99,7 @@ class MessageId(StrEnum):
     SERVER_STARTUP_FAILED = "app.server.error.serverStartupFailed"
     TIMEOUT_WAITING_FOR_SEED = "app.server.error.timeoutWaitingForSeed"
     INIT_FAILED = "app.server.error.initFailed"
+    INCOMPATIBLE_HARDWARE = "app.server.error.incompatibleHardware"
     QUANT_UNSUPPORTED_GPU = "app.server.error.quantUnsupportedGpu"
     SCENE_AUTHORING_MODEL_LOAD_FAILED = "app.server.error.sceneAuthoringModelLoadFailed"
     SCENE_AUTHORING_EMPTY_PROMPT = "app.server.error.sceneAuthoringEmptyPrompt"

@@ -413,6 +413,7 @@ const ja = {
           serverStartupFailed: 'サーバーの起動に失敗しました: {{message}}',
           timeoutWaitingForSeed: '初期シードの待機がタイムアウトしました',
           initFailed: 'セッションの初期化に失敗しました',
+          incompatibleHardware: 'サポートされていないエンジン/backend の組み合わせです。{{message}}',
           sceneAuthoringModelLoadFailed: 'シーンオーサリングモデルの読み込みに失敗しました: {{message}}',
           sceneEditSafetyRejected:
             'シーン編集が拒否されました：リクエストがコンテンツ安全性チェックに合格しませんでした。',

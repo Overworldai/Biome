@@ -163,6 +163,7 @@ export const StreamingProvider = ({ children }: { children: ReactNode }) => {
     isStandaloneMode,
     settings,
     engineError,
+    setEngineError,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame

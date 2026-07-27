@@ -6,6 +6,8 @@ import { createLogger } from '../../utils/logger'
 
 const log = createLogger('Streaming/LoadingFailure')
 
+const NON_RECOVERABLE_LOADING_ERRORS = new Set(['app.server.error.serverBusy', 'app.server.error.incompatibleHardware'])
+
 /** After an app-layer load failure (model load rejected by the
  *  backend, init RPC errored), the server has cleanly torn down its
  *  in-memory engine state (`_unload_engine_sync` runs in every
@@ -52,9 +54,16 @@ export function useLoadingFailureCleanup(opts: {
     // producing a tight retry loop. Surface the error to the user
     // instead; the server-side disconnect watcher will free the slot
     // shortly so a manual retry can succeed.
-    const isServerBusy = engineError?.translationKey === 'app.server.error.serverBusy'
+    //
+    // INCOMPATIBLE_HARDWARE is terminal for the current settings too.
+    // The server keeps the pre-init socket open after reporting it, so
+    // we only land here once its 60s seed timeout closes the connection
+    // underneath a still-visible overlay. Reconnecting then is pointless:
+    // `useSessionInit` suppresses bootstrap while the error is set, so the
+    // fresh socket just idles into the same timeout, over and over.
+    const skipRecoveryReconnect = !!engineError && NON_RECOVERABLE_LOADING_ERRORS.has(engineError.translationKey)
 
-    if (!loadingFailed || !engineError || isServerBusy) {
+    if (!loadingFailed || !engineError || skipRecoveryReconnect) {
       handledRef.current = false
       return
     }

@@ -44,6 +44,7 @@ export const MessageIdSchema = z.enum([
   'app.server.error.serverStartupFailed',
   'app.server.error.timeoutWaitingForSeed',
   'app.server.error.initFailed',
+  'app.server.error.incompatibleHardware',
   'app.server.error.quantUnsupportedGpu',
   'app.server.error.sceneAuthoringModelLoadFailed',
   'app.server.error.sceneAuthoringEmptyPrompt',
