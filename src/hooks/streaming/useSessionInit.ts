@@ -3,7 +3,8 @@ import { invoke } from '../../bridge'
 import { buildSessionConfig } from '../../context/streaming/sessionConfig'
 import type { PortalState } from '../../context/portal/portalStateMachine'
 import type { InitRequest, InitResponseData } from '../../types/protocol.generated'
-import type { TranslatableError } from '../../i18n'
+import { TranslatableError } from '../../i18n'
+import { RpcError } from '../../lib/wsRpc'
 import { DEFAULT_ENGINE_MODEL, type Settings } from '../../types/settings'
 import { getLiveSignature, getRestartSignatures, type RestartSignatures } from '../../utils/settingsClassifier'
 import { createLogger } from '../../utils/logger'
@@ -51,6 +52,11 @@ export function useSessionInit(opts: {
    *  overlay or by changing settings (the StreamingContext watcher
    *  clears `engineError` on a session-class diff). */
   engineError: TranslatableError | null
+  /** Surface a failed init RPC as the engine error. The server's parallel
+   *  `error` push reaches the reducer via `connectionStatus`, but by then
+   *  the socket has closed and the reducer sees a plain connection failure
+   *  — so the RPC rejection is the only carrier of the precise message. */
+  setEngineError: (err: TranslatableError) => void
   sendInit: SendInit
   applyInitResponse: (metrics: InitResponseData) => void
   setPlaceholderFrame: (frame: Blob | string | null) => void
@@ -67,6 +73,7 @@ export function useSessionInit(opts: {
     isStandaloneMode,
     settings,
     engineError,
+    setEngineError,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame
@@ -143,7 +150,14 @@ export function useSessionInit(opts: {
       applyInitResponse(metrics)
     }
 
-    bootstrap().catch((err) => log.error('Bootstrap failed:', err))
+    bootstrap().catch((err) => {
+      log.error('Bootstrap failed:', err)
+      if (err instanceof RpcError && err.errorId) {
+        const params: Record<string, string> =
+          err.message && err.message !== err.errorId ? { message: err.message } : {}
+        setEngineError(new TranslatableError(err.errorId, params))
+      }
+    })
   }, [
     portalState,
     loadingState,
@@ -151,6 +165,7 @@ export function useSessionInit(opts: {
     isStandaloneMode,
     settings,
     engineError,
+    setEngineError,
     sendInit,
     applyInitResponse,
     setPlaceholderFrame

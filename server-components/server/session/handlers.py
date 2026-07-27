@@ -283,7 +283,32 @@ async def run_preinit_handshake(
             case InitRequest() as req:
                 # init RPC: response is deferred until after warmup/session init completes
                 conn.init_req_id = req.req_id
-                ready, _ = await handle_init(conn, world_engine, safety_checker, req)
+                # Local import: keeps the heavy `engine.manager` off the
+                # module-load path — same rationale as the warmup catch
+                # site in `prepare_session`.
+                from engine.manager import IncompatibleHardwareError
+
+                try:
+                    ready, _ = await handle_init(conn, world_engine, safety_checker, req)
+                except IncompatibleHardwareError as e:
+                    logger.error("Incompatible hardware for requested engine backend", error=str(e))  # noqa: TRY400  -- product-facing config error, not a crash: no traceback to log
+                    # The check runs before any engine state is touched, so the
+                    # session stays usable: ack the deferred init and keep
+                    # waiting, exactly like the `not ready` branch below. Do
+                    # *not* tear the socket down — a close in the same tick
+                    # reaches the client's lifecycle reducer before the RPC
+                    # rejection does, and the precise message loses to a
+                    # generic "connection lost".
+                    await conn.send_error(message_id=MessageId.INCOMPATIBLE_HARDWARE, message=str(e))
+                    await conn.websocket.send_text(
+                        rpc_err(
+                            conn.init_req_id,
+                            error_id=MessageId.INCOMPATIBLE_HARDWARE,
+                            error=str(e),
+                        ).model_dump_json(exclude_none=True)
+                    )
+                    conn.init_req_id = None
+                    continue
                 if not ready:
                     await conn.websocket.send_text(
                         rpc_err(conn.init_req_id, error_id=MessageId.INIT_FAILED).model_dump_json(exclude_none=True)

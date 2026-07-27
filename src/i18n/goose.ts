@@ -415,6 +415,7 @@ const goose = {
           serverStartupFailed: 'Server startup failed: {{message}}',
           timeoutWaitingForSeed: 'Timeout waiting for initial seed',
           initFailed: 'Honk! Session initialization failed',
+          incompatibleHardware: 'Unsupported engine/backend combination. {{message}}',
           sceneAuthoringModelLoadFailed: 'Pond authoring model failed to load: {{message}}',
           sceneEditSafetyRejected: 'Scene edit rejected: the request did not pass the content safety check.',
           generateSceneSafetyRejected: 'Scene generation rejected: the request did not pass the content safety check.',

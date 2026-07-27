@@ -403,6 +403,7 @@ const he = {
           serverStartupFailed: 'הפעלת השרת נכשלה: {{message}}',
           timeoutWaitingForSeed: 'תם הזמן להמתנה ל-seed ההתחלתי',
           initFailed: 'אתחול הסשן נכשל',
+          incompatibleHardware: 'שילוב המנוע/backend אינו נתמך. {{message}}',
           sceneAuthoringModelLoadFailed: 'טעינת מודל יצירת הסצנות נכשלה: {{message}}',
           sceneEditSafetyRejected: 'עריכת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
           generateSceneSafetyRejected: 'יצירת הסצנה נדחתה: הבקשה לא עברה את בדיקת הבטיחות.',
